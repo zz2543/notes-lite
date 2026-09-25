@@ -152,9 +152,63 @@ final class PlumeTextView: NSTextView {
     }
 
     override func setFrameSize(_ newSize: NSSize) {
-        let widthChanged = newSize.width != frame.width
-        super.setFrameSize(newSize)
+        var size = newSize
+        // Mid-edit, NSLayoutManager briefly reports a used rect far shorter than the text
+        // (seen: 3224pt for a 5258pt note). Shrinking to it makes NSClipView clamp the scroll
+        // offset, which reads as the view jumping up and gliding back on every Return.
+        if heightHeld, size.height < frame.height { size.height = frame.height }
+        let widthChanged = size.width != frame.width
+        super.setFrameSize(size)
         if widthChanged { coordinator?.layoutChanged() }
+    }
+
+    private var heightHeld = false
+
+    /// Runs a text or attribute edit without letting the view shrink midway, then fits it once.
+    func holdingHeight(_ edit: () -> Void) {
+        let outer = !heightHeld
+        heightHeld = true
+        edit()
+        if outer { releaseHeightSoon() }
+    }
+
+    /// The used rect is still stale right after an edit, even after ensureLayout; it settles
+    /// by the next main-queue turn, so the hold is released and the height fitted only then.
+    private func releaseHeightSoon() {
+        guard !fitScheduled else { return }
+        fitScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            fitScheduled = false
+            heightHeld = false
+            fitHeightToLayout()
+        }
+    }
+
+    private var fitScheduled = false
+
+    private func fitHeightToLayout() {
+        guard let lm = layoutManager, let tc = textContainer else { return }
+        lm.ensureLayout(for: tc)
+        let h = max(minSize.height, lm.usedRect(for: tc).height + topInset + bottomInset)
+        if abs(h - frame.height) > 0.5 { setFrameSize(NSSize(width: frame.width, height: h)) }
+    }
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        let ok = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+        if ok { heightHeld = true }
+        return ok
+    }
+
+    override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
+        let ok = super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings)
+        if ok { heightHeld = true }
+        return ok
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        if heightHeld { releaseHeightSoon() }
     }
 
     override func keyDown(with event: NSEvent) {
@@ -620,24 +674,26 @@ struct EditorView: NSViewRepresentable {
             let bodySize: CGFloat = F == .mono ? 15.5 : 17
             let body = F.nsFont(size: bodySize)
 
-            storage.beginEditing()
-            let full = NSRange(location: 0, length: storage.length)
-            storage.setAttributes([.font: body, .foregroundColor: Theme.NS.ink], range: full)
-            let dimOthers = style.dim && active != nil
-            let lines = storage.string.components(separatedBy: "\n")
-            var loc = 0
-            for (i, text) in lines.enumerated() {
-                let len = (text as NSString).length
-                let range = NSRange(location: loc, length: len)
-                let full = NSRange(location: loc, length: len + (i < lines.count - 1 ? 1 : 0))
-                styleLine(text, range: range, fullRange: full, line: i, isActive: i == active,
-                          dimmed: dimOthers && i != active, font: F, bodySize: bodySize)
-                loc += full.length
-            }
-            storage.endEditing()
-            if let lm = tv.layoutManager {
-                lm.invalidateGlyphs(forCharacterRange: full, changeInLength: 0, actualCharacterRange: nil)
-                lm.invalidateLayout(forCharacterRange: full, actualCharacterRange: nil)
+            tv.holdingHeight {
+                storage.beginEditing()
+                let full = NSRange(location: 0, length: storage.length)
+                storage.setAttributes([.font: body, .foregroundColor: Theme.NS.ink], range: full)
+                let dimOthers = style.dim && active != nil
+                let lines = storage.string.components(separatedBy: "\n")
+                var loc = 0
+                for (i, text) in lines.enumerated() {
+                    let len = (text as NSString).length
+                    let range = NSRange(location: loc, length: len)
+                    let line = NSRange(location: loc, length: len + (i < lines.count - 1 ? 1 : 0))
+                    styleLine(text, range: range, fullRange: line, line: i, isActive: i == active,
+                              dimmed: dimOthers && i != active, font: F, bodySize: bodySize)
+                    loc += line.length
+                }
+                storage.endEditing()
+                if let lm = tv.layoutManager {
+                    lm.invalidateGlyphs(forCharacterRange: full, changeInLength: 0, actualCharacterRange: nil)
+                    lm.invalidateLayout(forCharacterRange: full, actualCharacterRange: nil)
+                }
             }
             tv.typingAttributes = [.font: body, .foregroundColor: Theme.NS.ink, .paragraphStyle: paragraph(for: .p, font: body, first: false, active: true)]
             tv.needsDisplay = true
