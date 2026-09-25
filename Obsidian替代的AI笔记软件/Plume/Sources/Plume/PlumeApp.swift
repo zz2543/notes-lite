@@ -7,27 +7,49 @@ struct PlumeApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("Plume") {
-            ContentView(model: model)
-                .frame(minWidth: 720, minHeight: 480)
+        Window("Plume", id: "main") {
+            MainWindow(model: model)
+                .frame(minWidth: 760, minHeight: 480)
+                #if DEBUG
+                .background(SnapshotWindowHider())
+                #endif
                 .onAppear { delegate.model = model }
         }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1320, height: 840)
+        .defaultSize(width: 1280, height: 820)
+        .windowToolbarStyle(.unified)
         .commands {
+            SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("新建笔记") { model.newNote() }.keyboardShortcut("n")
                 Button("打开库…") { model.chooseVault() }.keyboardShortcut("o")
             }
-            CommandGroup(replacing: .appSettings) {
-                Button("设置…") { model.openSettings(.editor) }.keyboardShortcut(",")
-            }
-            CommandMenu("视图") {
+            CommandGroup(after: .sidebar) {
+                Button(model.agentPanel ? "隐藏 Agent 面板" : "显示 Agent 面板") { model.toggleAgent() }.keyboardShortcut("j")
                 Button("命令面板") { model.palette ? (model.palette = false) : model.openPalette() }.keyboardShortcut("k")
-                Button(model.zen ? "退出专注模式" : "专注模式") { model.toggleZen() }.keyboardShortcut(".")
-                Button("侧边栏") { model.toggleSidebar() }.keyboardShortcut("\\")
-                Button("Agent 面板") { model.toggleAgent() }.keyboardShortcut("j")
+                Button(model.zen ? "退出专注模式" : "进入专注模式") { model.toggleZen() }.keyboardShortcut(".")
+                Divider()
+                Toggle("打字机滚动", isOn: $model.typewriter)
+                Toggle("段落聚焦", isOn: $model.dim)
+                Toggle("Tab 行内续写", isOn: $model.ghostOn)
+                Picker("正文字体", selection: $model.font) {
+                    ForEach(EditorFont.allCases) { Text($0.cardLabel).tag($0) }
+                }
+                Divider()
             }
+            CommandMenu("Agent") {
+                Button("让 Claude Code 总结当前笔记") { model.runAgent(prompt: "总结这篇笔记，在开头加一段摘要", agent: .claude) }
+                Button("让 Codex 整理当前笔记的待办") { model.runAgent(prompt: "整理这篇笔记的待办，合并重复项", agent: .codex) }
+                Divider()
+                Button("审阅待定改动") { model.reviewNext() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(model.pending.isEmpty)
+                Button("停止运行") { model.sessions.filter { $0.running && $0.source == .app }.forEach(model.stopAgent) }
+                    .disabled(!model.sessions.contains { $0.running && $0.source == .app })
+            }
+        }
+
+        Settings {
+            SettingsView(model: model)
         }
     }
 }
@@ -36,15 +58,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
     private var monitor: Any?
 
+    private var snapshotMode: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["PLUME_SNAPSHOT"] != nil
+        #else
+        false
+        #endif
+    }
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if snapshotMode { NSApp.setActivationPolicy(.accessory) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        if snapshotMode {
+            // The window is only a bitmap source; keep it invisible and noninteractive.
+            for w in NSApp.windows { w.alphaValue = 0; w.ignoresMouseEvents = true }
+        } else {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
         // Esc closes overlays, then leaves zen mode when nothing is being edited.
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             guard e.keyCode == 53, let m = self?.model else { return e }
             if m.palette { m.palette = false; return nil }
-            if m.settings { m.settings = false; return nil }
-            if m.zen, !(NSApp.keyWindow?.firstResponder is NSTextView) { m.zen = false; return nil }
+            if m.zen, !(NSApp.keyWindow?.firstResponder is NSTextView) { m.toggleZen(); return nil }
             return e
         }
         #if DEBUG
@@ -60,11 +98,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             guard let m = self?.model else { return }
             m.onboardingStep = nil
+            PlumeTextView.forceCaret = true
             DebugScenario.apply(scenario, to: m)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                guard let w = NSApp.windows.first(where: { $0.isVisible }), let v = w.contentView?.superview ?? w.contentView,
+            let delay = Double(ProcessInfo.processInfo.environment["PLUME_SNAPSHOT_DELAY"] ?? "") ?? 2.5
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                DebugScenario.textView()?.updateCaret(animated: false)
+                guard let w = NSApp.orderedWindows.first(where: { $0.isVisible }) ?? NSApp.windows.first(where: { $0.isVisible }), let v = w.contentView?.superview ?? w.contentView,
                       let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(2) }
                 v.cacheDisplay(in: v.bounds, to: rep)
+                // cacheDisplay skips CALayer sublayers; paint the caret so its placement shows.
+                if let tv = DebugScenario.textView(), tv.caret.opacity > 0, let ctx = NSGraphicsContext(bitmapImageRep: rep) {
+                    let r = tv.convert(tv.caret.frame, to: v)
+                    NSGraphicsContext.saveGraphicsState()
+                    NSGraphicsContext.current = ctx
+                    let flipped = v.isFlipped ? r : CGRect(x: r.minX, y: r.minY, width: r.width, height: r.height)
+                    NSColor.controlAccentColor.setFill()
+                    NSBezierPath(roundedRect: flipped, xRadius: 1.25, yRadius: 1.25).fill()
+                    NSGraphicsContext.restoreGraphicsState()
+                }
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
                 exit(0)
             }
@@ -79,23 +130,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Transparent title bar with content underneath, so the sidebar runs to the top like the design.
-struct WindowConfigurator: NSViewRepresentable {
-    let zen: Bool
+#if DEBUG
+/// Hides the scene as soon as SwiftUI attaches it to a window, before the delayed capture.
+private struct SnapshotWindowHider: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { SnapshotHostView() }
+    func updateNSView(_ view: NSView, context: Context) {}
 
-    func makeNSView(context: Context) -> NSView { NSView() }
-
-    func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async {
-            guard let w = view.window else { return }
-            w.titlebarAppearsTransparent = true
-            w.titleVisibility = .hidden
-            w.styleMask.insert(.fullSizeContentView)
-            w.isMovableByWindowBackground = true
-            w.backgroundColor = Theme.NS.paper
-            for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-                w.standardWindowButton(b)?.superview?.animator().alphaValue = zen ? 0 : 1
-            }
+    private final class SnapshotHostView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard ProcessInfo.processInfo.environment["PLUME_SNAPSHOT"] != nil else { return }
+            window?.alphaValue = 0
+            window?.ignoresMouseEvents = true
         }
     }
 }
+#endif

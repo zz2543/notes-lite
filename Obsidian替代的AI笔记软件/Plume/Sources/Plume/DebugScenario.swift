@@ -55,10 +55,34 @@ enum DebugScenario {
         case "palette": m.openPalette(); m.paletteQuery = parts.count > 2 ? parts[2] : ""
         case "settings": m.openSettings(parts.count > 2 ? SettingsTab(rawValue: parts[2]) ?? .agent : .agent)
         case "onboarding": m.onboardingStep = Int(parts.count > 2 ? parts[2] : "0") ?? 0
-        case "zen": m.zen = true; m.requestFocus(caret: 40)
+        case "zen": m.toggleZen(); m.requestFocus(caret: 40)
+        case "fakerun":
+            if parts.count > 2 { m.requestFocus(caret: 5) }
+            m.debugSimulateRun(rel: rel, append: "\n- [ ] 模拟 agent 追加\n")
         case "run":
             m.agentPanel = true
             m.runAgent(prompt: parts.count > 2 ? parts[2] : "在这篇笔记末尾追加一行：测试完成。", agent: .claude)
+        case "markdown":
+            m.agentPanel = true
+            let s = AgentSession(agent: .claude, source: .app, title: "Markdown 预览")
+            s.apply([.user("总结这篇笔记"), .text("""
+            # 本周进展
+
+            已完成 **编辑器优化**，详情见 [项目文档](https://example.com)。
+
+            - 支持 Markdown 回复
+            - 保持审阅状态
+              - 避免误触
+
+            > 下一步：验证快照和真实运行。
+
+            ```swift
+            let status = "待审阅"
+            print(status)
+            ```
+            """)])
+            m.sessions.append(s)
+            m.activeSessionID = s.id
         default: break
         }
     }

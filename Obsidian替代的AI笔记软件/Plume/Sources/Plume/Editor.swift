@@ -141,7 +141,7 @@ final class PlumeTextView: NSTextView {
         let pad: CGFloat = w < 700 ? 20 : 48
         let side = max(pad, (w - style.width) / 2)
         if style.typewriter {
-            topInset = visibleHeight * 0.38
+            topInset = visibleHeight * 0.5
             bottomInset = visibleHeight * 0.55
         } else {
             topInset = style.zen ? 96 : 56
@@ -158,6 +158,8 @@ final class PlumeTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
+        pendingTrailSide = event.keyCode == 51 ? .right : event.keyCode == 117 ? .left : nil
+        defer { pendingTrailSide = nil }
         if let c = coordinator {
             if event.keyCode == 48, !event.modifierFlags.contains(.shift) { // Tab
                 c.acceptGhost()
@@ -181,14 +183,211 @@ final class PlumeTextView: NSTextView {
 
     override func becomeFirstResponder() -> Bool {
         let r = super.becomeFirstResponder()
+        resetCaretTrailTracking()
         coordinator?.focusChanged()
+        updateCaret(animated: false)
         return r
     }
 
     override func resignFirstResponder() -> Bool {
         let r = super.resignFirstResponder()
         coordinator?.focusChanged()
+        updateCaret(animated: false)
         return r
+    }
+
+    // MARK: caret
+    //
+    // The system insertion point is hidden and replaced by a thicker, taller layer that
+    // glides to its new position and only blinks after the writer pauses.
+
+    let caret = CALayer()
+    private let caretTrail = CAGradientLayer()
+    private let trailMask = CAGradientLayer()
+    private enum TrailSide { case left, right }
+    private var trailSide: TrailSide = .left
+    private var pendingTrailSide: TrailSide?
+    private var lastObservedCaretLocation: Int?
+    private var blinkTimer: Timer?
+    private var lastMove = Date.distantPast
+    static let caretWidth: CGFloat = 2.5
+    private static let restingTrailOpacity: Float = 0.28
+    private static let trailDuration: CFTimeInterval = 0.8
+
+    func setUpCaret() {
+        wantsLayer = true
+        insertionPointColor = .clear
+        let accent = NSColor.controlAccentColor
+        caretTrail.startPoint = CGPoint(x: 0, y: 0.5)
+        caretTrail.endPoint = CGPoint(x: 1, y: 0.5)
+        caretTrail.locations = [0, 0.45, 1]
+        caretTrail.opacity = 0
+        caretTrail.zPosition = 9
+        caretTrail.actions = ["bounds": NSNull(), "colors": NSNull(), "opacity": NSNull(),
+                              "startPoint": NSNull(), "endPoint": NSNull()]
+        trailMask.startPoint = CGPoint(x: 0.5, y: 0)
+        trailMask.endPoint = CGPoint(x: 0.5, y: 1)
+        trailMask.colors = [NSColor.clear.cgColor, NSColor.white.cgColor,
+                            NSColor.white.cgColor, NSColor.clear.cgColor]
+        trailMask.locations = [0, 0.16, 0.84, 1]
+        caretTrail.mask = trailMask
+        updateTrailColors(accent)
+        caret.cornerRadius = Self.caretWidth / 2
+        caret.backgroundColor = accent.cgColor
+        caret.opacity = 0
+        caret.zPosition = 10
+        caret.actions = ["bounds": NSNull(), "backgroundColor": NSNull()]
+        layer?.addSublayer(caretTrail)
+        layer?.addSublayer(caret)
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.53, repeats: true) { [weak self] _ in self?.blink() }
+    }
+
+    deinit { blinkTimer?.invalidate() }
+
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {}
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            let accent = NSColor.controlAccentColor
+            caret.backgroundColor = accent.cgColor
+            updateTrailColors(accent)
+        }
+    }
+
+    private func updateTrailColors(_ accent: NSColor) {
+        caretTrail.colors = [accent.withAlphaComponent(0).cgColor,
+                             accent.withAlphaComponent(0.18).cgColor,
+                             accent.withAlphaComponent(0.55).cgColor]
+    }
+
+    func resetCaretTrailTracking() {
+        lastObservedCaretLocation = selectedRange().location
+        trailSide = .left
+        caretTrail.removeAnimation(forKey: "movementTrail")
+    }
+
+    override func layout() {
+        super.layout()
+        hideSystemIndicator(in: self)
+    }
+
+    private func hideSystemIndicator(in view: NSView) {
+        for sub in view.subviews {
+            if let ind = sub as? NSTextInsertionIndicator { ind.displayMode = .hidden }
+        }
+    }
+
+    static var forceCaret = false
+
+    private var caretVisible: Bool {
+        window?.firstResponder === self && (window?.isKeyWindow == true || Self.forceCaret) && selectedRange().length == 0 && isEditable
+    }
+
+    private func blink() {
+        guard caretVisible else { caret.opacity = 0; caretTrail.opacity = 0; return }
+        guard Date().timeIntervalSince(lastMove) > 0.65 else {
+            caret.opacity = 1
+            caretTrail.opacity = Self.restingTrailOpacity
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.18)
+        let visible = caret.opacity <= 0.5
+        caret.opacity = visible ? 1 : 0
+        caretTrail.opacity = visible ? Self.restingTrailOpacity : 0
+        CATransaction.commit()
+    }
+
+    /// Caret rect in view coordinates for the current insertion point.
+    private func caretRect() -> CGRect? {
+        guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return nil }
+        let len = storage.length
+        let loc = min(selectedRange().location, len)
+        let origin = textContainerOrigin
+        let fontAt = loc > 0 ? loc - 1 : loc
+        let font = (len > 0 ? storage.attribute(.font, at: min(fontAt, len - 1), effectiveRange: nil) as? NSFont : nil)
+            ?? (typingAttributes[.font] as? NSFont) ?? .systemFont(ofSize: 17)
+        lm.ensureLayout(forCharacterRange: NSRange(location: max(0, loc - 1), length: min(2, len - max(0, loc - 1))))
+        var x: CGFloat
+        var baseline: CGFloat
+        var lineFont = font
+        if len == 0 || (loc == len && lm.extraLineFragmentTextContainer != nil) {
+            let r = lm.extraLineFragmentRect
+            let para = typingAttributes[.paragraphStyle] as? NSParagraphStyle
+            lineFont = (typingAttributes[.font] as? NSFont) ?? font
+            x = r.minX + (para?.firstLineHeadIndent ?? 0)
+            baseline = r.minY + lineFont.ascender
+        } else if loc < len {
+            let gi = lm.glyphIndexForCharacter(at: loc)
+            var eff = NSRange()
+            let frag = lm.lineFragmentRect(forGlyphAt: gi, effectiveRange: &eff)
+            let p = lm.location(forGlyphAt: gi)
+            x = frag.minX + p.x
+            baseline = frag.minY + p.y
+            // At a line start the character's own font decides the height.
+            if let f = storage.attribute(.font, at: loc, effectiveRange: nil) as? NSFont,
+               loc == 0 || (storage.string as NSString).character(at: loc - 1) == 0x0A { lineFont = f }
+        } else {
+            let gi = lm.glyphIndexForCharacter(at: len - 1)
+            var eff = NSRange()
+            let frag = lm.lineFragmentRect(forGlyphAt: gi, effectiveRange: &eff)
+            x = lm.boundingRect(forGlyphRange: NSRange(location: gi, length: 1), in: tc).maxX
+            baseline = frag.minY + lm.location(forGlyphAt: gi).y
+        }
+        let glyphH = lineFont.ascender - lineFont.descender
+        let h = (glyphH * 1.2).rounded()
+        let top = baseline - lineFont.ascender - (h - glyphH) / 2
+        return CGRect(x: origin.x + x - Self.caretWidth / 2, y: origin.y + top, width: Self.caretWidth, height: h)
+    }
+
+    func updateCaret(animated: Bool) {
+        guard caretVisible, let r = caretRect() else {
+            caret.opacity = 0
+            caretTrail.opacity = 0
+            caretTrail.removeAnimation(forKey: "movementTrail")
+            return
+        }
+        let loc = min(selectedRange().location, (string as NSString).length)
+        var moved = false
+        if animated, let pendingTrailSide {
+            trailSide = pendingTrailSide
+            moved = true
+        } else if animated, let previous = lastObservedCaretLocation {
+            if loc > previous { trailSide = .left; moved = true }
+            if loc < previous { trailSide = .right; moved = true }
+        }
+        if animated || lastObservedCaretLocation == nil { lastObservedCaretLocation = loc }
+        lastMove = Date()
+        CATransaction.begin()
+        if animated && caret.opacity > 0 {
+            CATransaction.setAnimationDuration(0.12)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut))
+        } else {
+            CATransaction.setDisableActions(true)
+        }
+        caret.frame = r
+        let lineStart = (string as NSString).lineRange(for: NSRange(location: loc, length: 0)).location
+        let maxWidth = max(24, r.height * 1.25)
+        let width = trailSide == .left
+            ? (loc > lineStart ? min(maxWidth, max(0, r.midX - textContainerOrigin.x)) : 0)
+            : maxWidth
+        caretTrail.startPoint = CGPoint(x: trailSide == .left ? 0 : 1, y: 0.5)
+        caretTrail.endPoint = CGPoint(x: trailSide == .left ? 1 : 0, y: 0.5)
+        caretTrail.frame = CGRect(x: trailSide == .left ? r.midX - width : r.midX,
+                                  y: r.minY - 3, width: width, height: r.height + 6)
+        trailMask.frame = caretTrail.bounds
+        caret.opacity = 1
+        caretTrail.opacity = width > 0 ? Self.restingTrailOpacity : 0
+        CATransaction.commit()
+        if moved && width > 0 && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let trail = CABasicAnimation(keyPath: "opacity")
+            trail.fromValue = 0.9
+            trail.toValue = Self.restingTrailOpacity
+            trail.duration = Self.trailDuration
+            trail.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            caretTrail.add(trail, forKey: "movementTrail")
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -225,8 +424,11 @@ final class PlumeTextView: NSTextView {
 
 /// Keeps the text view exactly as wide as the visible area.
 final class EditorScrollView: NSScrollView {
+    var onTile: (() -> Void)?
+
     override func tile() {
         super.tile()
+        DispatchQueue.main.async { self.onTile?() }
         if let doc = documentView, doc.frame.width != contentView.bounds.width {
             doc.setFrameSize(NSSize(width: contentView.bounds.width, height: doc.frame.height))
         }
@@ -263,8 +465,7 @@ struct EditorView: NSViewRepresentable {
         tv.isGrammarCheckingEnabled = false
         tv.drawsBackground = true
         tv.backgroundColor = Theme.NS.paper
-        tv.insertionPointColor = Theme.NS.accent
-        tv.selectedTextAttributes = [.backgroundColor: Theme.NS.selection]
+        tv.setUpCaret()
         tv.linkTextAttributes = [:]
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
@@ -284,6 +485,7 @@ struct EditorView: NSViewRepresentable {
         scroll.contentView.postsBoundsChangedNotifications = true
         context.coordinator.textView = tv
         context.coordinator.scrollView = scroll
+        scroll.onTile = { [weak coordinator = context.coordinator] in coordinator?.visibleSizeChanged() }
         return scroll
     }
 
@@ -329,6 +531,7 @@ struct EditorView: NSViewRepresentable {
                     tv.undoManager?.removeAllActions()
                     let len = (text as NSString).length
                     tv.setSelectedRange(NSRange(location: min(sel.location, len), length: 0))
+                    tv.resetCaretTrailTracking()
                     if focus == nil || focus!.token == focusToken { tv.scroll(.zero) }
                 }
                 needsRestyle = true
@@ -337,6 +540,8 @@ struct EditorView: NSViewRepresentable {
                 style = s
                 needsRestyle = true
                 layoutChanged()
+                laidOutHeight = -1
+                DispatchQueue.main.async { self.visibleSizeChanged() }
             }
             tv.isEditable = !readOnly
             tv.ghost = ghost
@@ -346,6 +551,7 @@ struct EditorView: NSViewRepresentable {
                     tv.window?.makeFirstResponder(tv)
                     let len = (tv.string as NSString).length
                     tv.setSelectedRange(NSRange(location: min(f.caret, len), length: 0))
+                    tv.resetCaretTrailTracking()
                     self.restyle()
                     self.center(smooth: false)
                 }
@@ -353,9 +559,21 @@ struct EditorView: NSViewRepresentable {
             if needsRestyle { restyle() }
         }
 
+        private var laidOutHeight: CGFloat = -1
+
+        func visibleSizeChanged() {
+            guard let scroll = scrollView, style != nil else { return }
+            let h = scroll.contentView.bounds.height
+            guard h > 0, h != laidOutHeight else { return }
+            laidOutHeight = h
+            layoutChanged()
+            center(smooth: false)
+        }
+
         func layoutChanged() {
             guard let tv = textView, let style, let scroll = scrollView else { return }
             tv.updateInsets(style: style, visibleHeight: scroll.contentView.bounds.height)
+            tv.updateCaret(animated: false)
         }
 
         func focusChanged() {
@@ -398,7 +616,6 @@ struct EditorView: NSViewRepresentable {
             defer { restyling = false }
             let active = currentLine()
             activeLine = active
-            let ns = storage.string as NSString
             let F = style.font
             let bodySize: CGFloat = F == .mono ? 15.5 : 17
             let body = F.nsFont(size: bodySize)
@@ -424,6 +641,7 @@ struct EditorView: NSViewRepresentable {
             }
             tv.typingAttributes = [.font: body, .foregroundColor: Theme.NS.ink, .paragraphStyle: paragraph(for: .p, font: body, first: false, active: true)]
             tv.needsDisplay = true
+            tv.updateCaret(animated: true)
         }
 
         private func paragraph(for type: BlockType, font: NSFont, first: Bool, active: Bool) -> NSParagraphStyle {
@@ -523,6 +741,7 @@ struct EditorView: NSViewRepresentable {
         // MARK: text changes
 
         func textDidChange(_ notification: Notification) {
+            textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText() else { return }
             model.editorDidChange(tv.string)
             restyle()
@@ -532,6 +751,7 @@ struct EditorView: NSViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
+            textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText(), !restyling else { return }
             if currentLine() != activeLine { restyle() }
             updateSlash()
@@ -695,6 +915,7 @@ struct EditorView: NSViewRepresentable {
 
         func center(smooth: Bool) {
             guard let tv = textView, let scroll = scrollView, let lm = tv.layoutManager, let tc = tv.textContainer, let style else { return }
+            lm.ensureLayout(for: tc)
             let loc = min(tv.selectedRange().location, (tv.string as NSString).length)
             let caretRect: CGRect
             if lm.numberOfGlyphs == 0 {
@@ -704,21 +925,25 @@ struct EditorView: NSViewRepresentable {
                 var r = NSRange()
                 var frag = lm.lineFragmentRect(forGlyphAt: gi, effectiveRange: &r)
                 if loc >= (tv.string as NSString).length, lm.extraLineFragmentTextContainer != nil { frag = lm.extraLineFragmentRect }
-                _ = tc
                 caretRect = frag.offsetBy(dx: 0, dy: tv.textContainerOrigin.y)
             }
             let clip = scroll.contentView
             let visible = clip.bounds
+            // NSTextView can have a nonzero origin inside NSClipView. Both the caret
+            // and scroll limits must be measured in the clip view's coordinates.
+            let caretInClip = tv.convert(caretRect, to: clip)
             var target: CGFloat?
             if style.typewriter {
-                target = caretRect.midY - visible.height * 0.42
-            } else if caretRect.maxY > visible.maxY - 60 {
-                target = visible.minY + caretRect.maxY - visible.maxY + 90
-            } else if caretRect.minY < visible.minY + 20 {
-                target = caretRect.minY - 40
+                target = caretInClip.midY - visible.height * 0.5
+            } else if caretInClip.maxY > visible.maxY - 60 {
+                target = visible.minY + caretInClip.maxY - visible.maxY + 90
+            } else if caretInClip.minY < visible.minY + 20 {
+                target = caretInClip.minY - 40
             }
             guard var t = target else { return }
-            t = max(0, min(t, tv.frame.height - visible.height))
+            let minY = tv.frame.minY
+            let maxY = max(minY, tv.frame.maxY - visible.height)
+            t = max(minY, min(t, maxY))
             guard abs(t - visible.minY) > 1 else { return }
             if smooth {
                 NSAnimationContext.runAnimationGroup { ctx in

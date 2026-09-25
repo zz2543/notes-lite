@@ -72,14 +72,20 @@ final class AppModel {
     var editorWidth: CGFloat = 680
 
     // MARK: chrome
-    var sidebar = true
+    var columnVisibility: NavigationSplitViewVisibility = .all
     var agentPanel = true
     var zen = false
     var palette = false
     var paletteQuery = ""
     var paletteSel = 0
-    var settings = false
-    var settingsTab: SettingsTab = .agent
+    var settingsTab: SettingsTab = .editor
+    var sidebarFilter = ""
+    /// Sidebar list selection; choosing a row opens the note.
+    var selection: String? {
+        didSet { if let s = selection, s != activeRel { open(s) } }
+    }
+    @ObservationIgnored var openSettingsAction: (() -> Void)?
+    @ObservationIgnored private var beforeZen: (NavigationSplitViewVisibility, Bool)?
     var onboardingStep: Int?
     var toast: String?
     var openFolders: Set<String> = []
@@ -124,7 +130,13 @@ final class AppModel {
             let found = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, CLIEnvironment.detect($0)) })
             DispatchQueue.main.async { self.cli = found }
         }
-        if let path = defaults.string(forKey: "vaultPath"), FileManager.default.fileExists(atPath: path) {
+        #if DEBUG
+        let snapshotVault = ProcessInfo.processInfo.environment["PLUME_SNAPSHOT"] == nil
+            ? nil : ProcessInfo.processInfo.environment["PLUME_SNAPSHOT_VAULT"]
+        #else
+        let snapshotVault: String? = nil
+        #endif
+        if let path = snapshotVault ?? defaults.string(forKey: "vaultPath"), FileManager.default.fileExists(atPath: path) {
             openVault(URL(fileURLWithPath: path))
         }
         if !defaults.bool(forKey: "onboarded") || vault == nil { onboardingStep = 0 }
@@ -162,7 +174,13 @@ final class AppModel {
         let v = Vault(root: url)
         v.onFilesChanged = { [weak self] rels in self?.filesChanged(rels) }
         vault = v
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["PLUME_SNAPSHOT_VAULT"] == nil {
+            defaults.set(v.rootPath, forKey: "vaultPath")
+        }
+        #else
         defaults.set(v.rootPath, forKey: "vaultPath")
+        #endif
         pending = [:]
         writing = []
         sessions.removeAll { $0.source == .terminal }
@@ -234,6 +252,7 @@ final class AppModel {
         slash = nil
         editorVersion += 1
         palette = false
+        if selection != rel { selection = rel }
         if focus { requestFocus(caret: (editorText as NSString).length) }
         revealInSidebar(rel)
     }
@@ -257,6 +276,9 @@ final class AppModel {
     }
 
     func editorDidChange(_ text: String) {
+        // NSTextView can notify after a model-driven reload. It is not a user edit,
+        // so it must not accept a pending agent review or schedule another save.
+        guard text != editorText else { return }
         let delta = (text as NSString).length - (editorText as NSString).length
         if delta > 0 && delta < 20 { typed.append((Date(), delta)) }
         netTyped += delta
@@ -396,8 +418,8 @@ final class AppModel {
         let s = session!
         if s.title == "新会话" { s.title = String(prompt.prefix(10)) }
         activeSessionID = s.id
+        if zen { toggleZen() }
         agentPanel = true
-        zen = false
         agentInput = ""
         s.items.append(SessionItem(kind: .user(prompt)))
         s.running = true
@@ -439,6 +461,26 @@ final class AppModel {
     }
 
     func stopAgent(_ s: AgentSession) { s.process?.stop() }
+
+    #if DEBUG
+    /// Mimics an agent run without calling a CLI: snapshot, write to disk, finish.
+    func debugSimulateRun(rel: String, append: String) {
+        guard let v = vault else { return }
+        let s = AgentSession(agent: .claude, source: .app, title: "模拟")
+        sessions.append(s)
+        activeSessionID = s.id
+        s.running = true
+        runSnapshots[s.id] = (v.snapshotAll(), nil)
+        writing.insert(rel)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            try? ((v.diskContent(rel) ?? "") + append).write(to: v.url(rel), atomically: true, encoding: .utf8)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                s.running = false
+                self.finishRun(s)
+            }
+        }
+    }
+    #endif
 
     /// Compares the vault with the snapshot taken before the run and queues each changed file.
     private func finishRun(_ s: AgentSession) {
@@ -659,11 +701,48 @@ final class AppModel {
 
     // MARK: chrome actions
 
-    func toggleZen() { zen.toggle(); palette = false }
-    func toggleSidebar() { sidebar.toggle() }
-    func toggleAgent() { agentPanel.toggle(); zen = false }
+    func toggleZen() {
+        palette = false
+        if zen {
+            zen = false
+            if let (cols, agent) = beforeZen { columnVisibility = cols; agentPanel = agent }
+            beforeZen = nil
+        } else {
+            beforeZen = (columnVisibility, agentPanel)
+            zen = true
+            columnVisibility = .detailOnly
+            agentPanel = false
+        }
+    }
+
+    func toggleSidebar() { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
+    func toggleAgent() {
+        if zen { toggleZen() }
+        agentPanel.toggle()
+    }
     func openPalette() { palette = true; paletteQuery = ""; paletteSel = 0 }
-    func openSettings(_ tab: SettingsTab) { settingsTab = tab; settings = true }
+    func openSettings(_ tab: SettingsTab) {
+        settingsTab = tab
+        openSettingsAction?()
+    }
+
+    func reviewNext() {
+        guard let rel = activeRel.flatMap({ pending[$0] != nil ? $0 : nil }) ?? pending.keys.sorted().first else { return }
+        if zen { toggleZen() }
+        open(rel)
+        showDiff = true
+    }
+
+    func trash(_ rel: String) {
+        guard let v = vault else { return }
+        NSWorkspace.shared.recycle([v.url(rel)]) { _, _ in
+            DispatchQueue.main.async {
+                v.scan()
+                self.pending[rel] = nil
+                if rel == self.activeRel, let next = v.notes.first { self.open(next.rel) }
+            }
+        }
+    }
 
     func finishOnboarding() {
         defaults.set(true, forKey: "onboarded")

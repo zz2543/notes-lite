@@ -21,64 +21,73 @@ extension NSColor {
     }
 }
 
-/// Colors from the prototype (oklch values converted to sRGB).
-enum Theme {
-    static let paper = Color(hex: 0xFDFCFA)
-    static let ink = Color(hex: 0x26241F)
-    static let sidebar = Color(hex: 0xEFEDEA)
-    static let sidebarLine = Color(hex: 0xE2DFDA)
-    static let panel = Color(hex: 0xF7F6F3)
-    static let panelLine = Color(hex: 0xEBE8E3)
-    static let hairline = Color(hex: 0xF0EDE9)
-    static let card = Color.white
-    static let cardLine = Color(hex: 0xE6E3DE)
-    static let chip = Color(hex: 0xF0EDE8)
-    static let muted = Color(hex: 0x9D988F)
-    static let muted2 = Color(hex: 0x8E897F)
-    static let muted3 = Color(hex: 0x6F6B64)
-    static let text2 = Color(hex: 0x4A4740)
-    static let text3 = Color(hex: 0x5D5953)
-    static let icon = Color(hex: 0x77736B)
-    static let faint = Color(hex: 0xA5A097)
-    static let slash = Color(hex: 0xC9C4BB)
+extension View {
+    /// Glass belongs to navigation and controls; content surfaces stay readable.
+    @ViewBuilder
+    func plumeControlGlass<S: Shape>(in shape: S) -> some View {
+        if #available(macOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+        }
+    }
 
-    static let accent = Color(hex: 0x3475C4)
-    static let claude = Color(hex: 0xC56A3E)
-    static let claudeText = Color(hex: 0x994920)
-    static let codex = Color(hex: 0x2D333D)
-    static let writingBg = Color(hex: 0xFFF1EA)
-    static let writingLine = Color(hex: 0xF7DFD5)
-    static let writingText = Color(hex: 0x783818)
-    static let delBg = Color(hex: 0xFFE9E6)
-    static let delText = Color(hex: 0x963633)
-    static let addBg = Color(hex: 0xDEF8E2)
-    static let addText = Color(hex: 0x085023)
-    static let plus = Color(hex: 0x196632)
-    static let minus = Color(hex: 0xA03F3C)
-    static let pillBg = Color(hex: 0xDEEDFF)
-    static let pillText = Color(hex: 0x17559B)
-    static let dark = Color(hex: 0x26241F)
-    static let toast = Color(hex: 0x2B2926)
+    @ViewBuilder
+    func plumeGlassButton() -> some View {
+        if #available(macOS 26.0, *) {
+            buttonStyle(.glass)
+        } else {
+            buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    func plumePrimaryButton() -> some View {
+        if #available(macOS 26.0, *) {
+            buttonStyle(.glassProminent)
+        } else {
+            buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+struct PlumeGlassControls<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 8) { content }
+        } else {
+            content
+        }
+    }
+}
+
+/// System colors so the app follows light/dark mode and the user's accent color.
+enum Theme {
+    static let claude = Color(nsColor: NS.claude)
+    static let codex = Color(nsColor: NS.codex)
 
     static func agentColor(_ a: AgentKind) -> Color { a == .claude ? claude : codex }
 
     enum NS {
-        static let ink = NSColor(hex: 0x26241F)
-        static let quote = NSColor(hex: 0x5D5953)
-        static let mark = NSColor(hex: 0xBDB8B0)
-        static let deco = NSColor(hex: 0xA8A39B)
-        static let taskBorder = NSColor(hex: 0xC4BFB7)
-        static let doneText = NSColor(hex: 0xA39E96)
-        static let strike = NSColor(hex: 0xCFCAC2)
-        static let quoteBar = NSColor(hex: 0xE3DFD8)
-        static let hr = NSColor(hex: 0xE4E0DA)
-        static let codeBg = NSColor(hex: 0xF0EEEA)
-        static let ghost = NSColor(hex: 0xB3AEA6)
-        static let ghostPill = NSColor(hex: 0xDCD8D1)
-        static let ghostPillText = NSColor(hex: 0x9A958D)
-        static let accent = NSColor(hex: 0x3475C4)
-        static let selection = NSColor(hex: 0xB7D4F9)
-        static let paper = NSColor(hex: 0xFDFCFA)
+        static let claude = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua]) == .darkAqua ? NSColor(hex: 0xE08A62) : NSColor(hex: 0xC56A3E) }
+        static let codex = NSColor.labelColor
+        static var ink: NSColor { .textColor }
+        static var quote: NSColor { .secondaryLabelColor }
+        static var mark: NSColor { .tertiaryLabelColor }
+        static var deco: NSColor { .secondaryLabelColor }
+        static var taskBorder: NSColor { .tertiaryLabelColor }
+        static var doneText: NSColor { .secondaryLabelColor }
+        static var strike: NSColor { .tertiaryLabelColor }
+        static var quoteBar: NSColor { .quaternaryLabelColor }
+        static var hr: NSColor { .separatorColor }
+        static var codeBg: NSColor { .quaternarySystemFill }
+        static var ghost: NSColor { .placeholderTextColor }
+        static var ghostPill: NSColor { .separatorColor }
+        static var ghostPillText: NSColor { .tertiaryLabelColor }
+        static var accent: NSColor { .controlAccentColor }
+        static var paper: NSColor { .textBackgroundColor }
     }
 }
 
