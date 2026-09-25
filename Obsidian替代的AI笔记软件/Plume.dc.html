@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Plume</title>
+<style>
+html,body{margin:0;height:100%;background:#fdfcfa;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:oklch(0.56 0.14 255)}a:hover{color:oklch(0.48 0.14 255)}
+button{font:inherit;color:inherit}
+::selection{background:oklch(0.86 0.06 255)}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:8px}::-webkit-scrollbar-track{background:transparent}
+</style>
+</helmet>
+<div style="height:100vh;display:flex;overflow:hidden;position:relative;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Helvetica Neue',sans-serif;font-size:13px;color:#26241f;background:#fdfcfa">
+
+<sc-if value="{{ showSidebar }}" hint-placeholder-val="{{ true }}">
+<aside style="width:248px;flex-shrink:0;display:flex;flex-direction:column;background:#efedea;border-right:1px solid #e2dfda">
+  <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 14px 0 16px;flex-shrink:0">
+    <div style="display:flex;gap:8px">
+      <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#febc2e;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)"></div>
+      <div onClick="{{ toggleZen }}" title="专注模式" style="width:12px;height:12px;border-radius:50%;background:#28c840;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);cursor:pointer"></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleSidebar }}" title="隐藏侧边栏 ⌘\" style="width:28px;height:24px;border:0;background:transparent;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#77736b;cursor:pointer" style-hover="background:rgba(0,0,0,.06)">
+      <svg width="16" height="16" viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><line x1="6" y1="2.5" x2="6" y2="13.5"></line></svg>
+    </button>
+  </div>
+  <div style="padding:0 10px 8px">
+    <button onClick="{{ openPalette }}" style="width:100%;height:28px;display:flex;align-items:center;gap:8px;padding:0 9px;border:0;border-radius:7px;background:rgba(0,0,0,.05);color:#8a857c;cursor:pointer;font-size:12.5px" style-hover="background:rgba(0,0,0,.075)">
+      <svg width="13" height="13" viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6"><circle cx="7" cy="7" r="4.8"></circle><line x1="10.5" y1="10.5" x2="14" y2="14"></line></svg>
+      <span style="flex:1;text-align:left">搜索笔记与命令</span>
+      <span style="font-size:11px;color:#a5a097">⌘K</span>
+    </button>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:2px 8px 10px">
+    <div style="font-size:11px;font-weight:600;color:#9d988f;padding:10px 8px 5px">库 · Vault</div>
+    <sc-for list="{{ tree }}" as="r" hint-placeholder-count="9">
+      <div onClick="{{ r.onClick }}" style="{{ r.style }}">
+        <sc-if value="{{ r.isFolder }}"><span style="{{ r.chev }}">›</span></sc-if>
+        <sc-if value="{{ r.isFile }}"><span style="width:10px;height:12px;border:1.2px solid #a9a49b;border-radius:2px;flex-shrink:0;margin:0 2px 0 1px"></span></sc-if>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.label }}</span>
+        <sc-if value="{{ r.writing }}"><span style="font-size:10.5px;color:oklch(0.55 0.13 45)">写入中…</span></sc-if>
+        <sc-if value="{{ r.pendClaude }}"><span title="Claude Code 改动待审阅" style="width:7px;height:7px;border-radius:50%;background:oklch(0.62 0.13 45);flex-shrink:0"></span></sc-if>
+        <sc-if value="{{ r.pendCodex }}"><span title="Codex 改动待审阅" style="width:7px;height:7px;border-radius:50%;background:oklch(0.32 0.02 260);flex-shrink:0"></span></sc-if>
+      </div>
+    </sc-for>
+  </div>
+  <div style="padding:8px;border-top:1px solid #e2dfda;display:grid;gap:1px">
+    <button onClick="{{ openAgentSettings }}" style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border:0;background:transparent;border-radius:6px;cursor:pointer;font-size:12px" style-hover="background:rgba(0,0,0,.05)">
+      <span style="width:7px;height:7px;border-radius:50%;background:oklch(0.62 0.13 45)"></span><span style="flex:1;text-align:left">Claude Code</span><span style="color:#9d988f;font-size:11px">已连接</span>
+    </button>
+    <button onClick="{{ openAgentSettings }}" style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border:0;background:transparent;border-radius:6px;cursor:pointer;font-size:12px" style-hover="background:rgba(0,0,0,.05)">
+      <span style="width:7px;height:7px;border-radius:50%;background:oklch(0.32 0.02 260)"></span><span style="flex:1;text-align:left">Codex</span><span style="color:#9d988f;font-size:11px">终端会话 1</span>
+    </button>
+    <button onClick="{{ openAgentSettings }}" style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border:0;background:transparent;border-radius:6px;cursor:pointer;font-size:12px" style-hover="background:rgba(0,0,0,.05)">
+      <span style="width:7px;color:#8e897f;font-size:11px">⇄</span><span style="flex:1;text-align:left;font-family:ui-monospace,Menlo,monospace;font-size:11px">AGENTS.md · CLAUDE.md</span><span style="color:#9d988f;font-size:11px">同源</span>
+    </button>
+  </div>
+  <div style="display:flex;gap:6px;padding:4px 10px 12px">
+    <button onClick="{{ newNote }}" style="flex:1;height:28px;border:0;border-radius:7px;background:rgba(0,0,0,.06);cursor:pointer;font-size:12.5px" style-hover="background:rgba(0,0,0,.09)">新建笔记</button>
+    <button onClick="{{ openSettings }}" style="height:28px;padding:0 12px;border:0;border-radius:7px;background:rgba(0,0,0,.06);cursor:pointer;font-size:12.5px" style-hover="background:rgba(0,0,0,.09)">设置</button>
+  </div>
+</aside>
+</sc-if>
+
+<main style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative;background:#fdfcfa">
+  <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+  <header style="height:52px;display:flex;align-items:center;gap:10px;padding:0 12px 0 14px;border-bottom:1px solid #f0ede9;flex-shrink:0">
+    <sc-if value="{{ noSidebar }}">
+      <div style="display:flex;gap:8px;margin-right:6px">
+        <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div>
+        <div onClick="{{ toggleZen }}" style="width:12px;height:12px;border-radius:50%;background:#28c840;cursor:pointer"></div>
+      </div>
+      <button onClick="{{ toggleSidebar }}" title="显示侧边栏" style="width:28px;height:24px;border:0;background:transparent;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#77736b;cursor:pointer" style-hover="background:rgba(0,0,0,.05)">
+        <svg width="16" height="16" viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><line x1="6" y1="2.5" x2="6" y2="13.5"></line></svg>
+      </button>
+    </sc-if>
+    <div style="flex:1;min-width:0;display:flex;justify-content:center;align-items:center;gap:6px;font-size:13px;white-space:nowrap;overflow:hidden">
+      <span style="color:#9d988f">{{ folderLabel }}</span><span style="color:#c9c4bb">/</span><span style="font-weight:600">{{ noteTitle }}</span>
+      <sc-if value="{{ isDiff }}"><span style="font-size:11px;padding:1px 7px;border-radius:5px;background:#f0ede8;color:#6f6b64">审阅改动</span></sc-if>
+    </div>
+    <button onClick="{{ openPalette }}" title="⌘K" style="width:30px;height:26px;border:0;background:transparent;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#77736b;cursor:pointer" style-hover="background:rgba(0,0,0,.05)">
+      <svg width="14" height="14" viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.5"><circle cx="7" cy="7" r="4.8"></circle><line x1="10.5" y1="10.5" x2="14" y2="14"></line></svg>
+    </button>
+    <button onClick="{{ toggleAgent }}" title="Agent 面板 ⌘J" style="{{ agentBtnStyle }}">
+      <span>Agent</span>
+      <sc-if value="{{ hasPending }}"><span style="min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:oklch(0.62 0.13 45);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ pendingCount }}</span></sc-if>
+    </button>
+  </header>
+  </sc-if>
+
+  <sc-if value="{{ isEdit }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ showPendingBanner }}">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 18px;background:#f6f4f0;border-bottom:1px solid #ece9e4;font-size:12.5px;flex-shrink:0">
+        <span style="{{ bannerDot }}"></span>
+        <span style="flex:1;min-width:0;color:#4a4740">{{ bannerText }}</span>
+        <button onClick="{{ openDiff }}" style="height:24px;padding:0 11px;border:0;border-radius:6px;background:#26241f;color:#fff;cursor:pointer;font-size:12px">审阅</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ showWritingBanner }}">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 18px;background:oklch(0.97 0.02 45);border-bottom:1px solid oklch(0.92 0.03 45);font-size:12.5px;color:oklch(0.42 0.1 45);flex-shrink:0">
+        <span style="width:7px;height:7px;border-radius:50%;background:oklch(0.62 0.13 45)"></span>
+        <span>{{ writingText }}</span>
+      </div>
+    </sc-if>
+    <div ref="{{ scRef }}" data-blank="1" onMouseDown="{{ onScDown }}" style="flex:1;overflow-y:auto;position:relative;cursor:text">
+      <div ref="{{ colRef }}" data-blank="1" style="{{ colStyle }}">
+        <sc-for list="{{ blocksView }}" as="b" hint-placeholder-count="8">
+          <div onMouseDown="{{ b.onDown }}" style="{{ b.wrap }}">
+            <sc-if value="{{ b.active }}">
+              <div style="position:relative">
+                <div style="{{ b.textStyle }}" dangerouslySetInnerHTML="{{ b.raw }}"></div>
+                <textarea ref="{{ taRef }}" value="{{ b.text }}" onChange="{{ onChange }}" onKeyDown="{{ onKey }}" onCompositionStart="{{ onCompStart }}" onCompositionEnd="{{ onCompEnd }}" spellCheck="{{ false }}" style="{{ b.taStyle }}"></textarea>
+              </div>
+
+            </sc-if>
+            <sc-if value="{{ b.inactive }}">
+              <div style="{{ b.textStyle }}" dangerouslySetInnerHTML="{{ b.html }}"></div>
+            </sc-if>
+          </div>
+        </sc-for>
+        <sc-if value="{{ slashOpen }}">
+          <div style="position:absolute;left:{{ slashLeft }}px;top:{{ slashTop }}px;width:260px;z-index:20;background:rgba(252,251,249,.98);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.08);padding:5px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;font-size:13px;font-weight:400;line-height:1.3">
+            <sc-for list="{{ slashList }}" as="sm">
+              <div onMouseDown="{{ sm.pick }}" style="{{ sm.style }}">
+                <span style="flex:1">{{ sm.label }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;opacity:.6">{{ sm.hint }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isDiff }}">
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 28px;border-bottom:1px solid #ece9e4;flex-shrink:0;flex-wrap:wrap">
+      <span style="{{ bannerDot }}"></span>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:13.5px;font-weight:600">{{ diffTitle }}</div>
+        <div style="font-size:12px;color:#8e897f;margin-top:2px">{{ diffSub }}</div>
+      </div>
+      <button onClick="{{ closeDiff }}" style="height:28px;padding:0 12px;border:0;border-radius:7px;background:transparent;cursor:pointer;color:#6f6b64" style-hover="background:rgba(0,0,0,.05)">稍后</button>
+      <button onClick="{{ rejectAll }}" style="height:28px;padding:0 12px;border:1px solid #e0dcd6;border-radius:7px;background:#fff;cursor:pointer">全部还原</button>
+      <button onClick="{{ applyDiff }}" style="height:28px;padding:0 14px;border:0;border-radius:7px;background:#26241f;color:#fff;cursor:pointer;font-weight:500">接受并写入</button>
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <div style="{{ diffCol }}">
+        <sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="8">
+          <sc-if value="{{ d.isCtx }}"><div style="display:grid;grid-template-columns:22px 1fr;padding:3px 10px;color:#6f6b64;white-space:pre-wrap"><span style="color:#cfcac2">·</span><span>{{ d.text }}</span></div></sc-if>
+          <sc-if value="{{ d.isDel }}"><div style="display:grid;grid-template-columns:22px 1fr;padding:3px 10px;background:oklch(0.955 0.03 25);color:oklch(0.47 0.13 25);white-space:pre-wrap;border-radius:4px"><span>−</span><span style="text-decoration:line-through;text-decoration-color:oklch(0.47 0.13 25 / .45)">{{ d.text }}</span></div></sc-if>
+          <sc-if value="{{ d.isAdd }}"><div style="display:grid;grid-template-columns:22px 1fr;padding:3px 10px;background:oklch(0.955 0.04 150);color:oklch(0.38 0.1 150);white-space:pre-wrap;border-radius:4px"><span>+</span><span>{{ d.text }}</span></div></sc-if>
+          <sc-if value="{{ d.isBar }}">
+            <div style="display:flex;align-items:center;gap:8px;margin:6px 0 18px;padding-left:32px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;font-size:12px;color:#8e897f">
+              <span style="flex:1">{{ d.label }}</span>
+              <sc-if value="{{ d.undecided }}">
+                <button onClick="{{ d.reject }}" style="height:24px;padding:0 10px;border:1px solid #e0dcd6;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">还原</button>
+                <button onClick="{{ d.accept }}" style="height:24px;padding:0 10px;border:0;border-radius:6px;background:oklch(0.56 0.14 255);color:#fff;cursor:pointer;font-size:12px">接受</button>
+              </sc-if>
+              <sc-if value="{{ d.decided }}">
+                <span style="color:#4a4740">{{ d.stText }}</span>
+                <button onClick="{{ d.undo }}" style="height:24px;padding:0 8px;border:0;background:transparent;cursor:pointer;font-size:12px;color:oklch(0.56 0.14 255)">撤销</button>
+              </sc-if>
+            </div>
+          </sc-if>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <footer style="{{ statusStyle }}" style-hover="opacity:1">
+    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9d988f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex-shrink:1">{{ pathLabel }}</span>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:2px;flex-shrink:0">
+      <button onClick="{{ toggleTypewriter }}" style="{{ twBtn }}">打字机</button>
+      <button onClick="{{ toggleDim }}" style="{{ dimBtn }}">聚焦</button>
+      <button onClick="{{ toggleGhost }}" style="{{ ghostBtn }}">Tab 续写</button>
+      <span style="width:1px;height:12px;background:#e2dfda;margin:0 6px"></span>
+      <sc-for list="{{ fontSeg }}" as="f"><button onClick="{{ f.pick }}" style="{{ f.style }}">{{ f.label }}</button></sc-for>
+      <span style="width:1px;height:12px;background:#e2dfda;margin:0 6px"></span>
+      <button onClick="{{ toggleZen }}" style="{{ zenBtn }}">{{ zenLabel }}</button>
+    </div>
+    <div style="flex:1"></div>
+    <span style="font-size:11.5px;color:#8e897f;white-space:nowrap;font-variant-numeric:tabular-nums;flex-shrink:0">{{ statsLabel }}</span>
+  </footer>
+
+  <sc-if value="{{ zen }}">
+    <button onClick="{{ toggleZen }}" style="position:absolute;top:14px;right:16px;height:24px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:#b0aba3;cursor:pointer;font-size:11.5px;opacity:.7" style-hover="opacity:1;background:rgba(0,0,0,.04);color:#6f6b64">退出专注 ⌘.</button>
+  </sc-if>
+</main>
+
+<sc-if value="{{ showAgent }}" hint-placeholder-val="{{ true }}">
+<aside style="{{ agentStyle }}">
+  <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 12px 0 16px;border-bottom:1px solid #ebe8e3;flex-shrink:0">
+    <span style="font-weight:600;font-size:13px">Agent</span>
+    <span style="font-size:11px;color:#9d988f;font-family:ui-monospace,Menlo,monospace">cwd ~/Vault</span>
+    <div style="flex:1"></div>
+    <button onClick="{{ newSession }}" style="height:24px;padding:0 9px;border:0;border-radius:6px;background:rgba(0,0,0,.05);cursor:pointer;font-size:12px" style-hover="background:rgba(0,0,0,.08)">新会话</button>
+  </div>
+  <div style="display:flex;gap:6px;padding:10px 12px;overflow-x:auto;border-bottom:1px solid #ebe8e3;flex-shrink:0">
+    <sc-for list="{{ sessionChips }}" as="c" hint-placeholder-count="2">
+      <button onClick="{{ c.pick }}" style="{{ c.style }}">
+        <sc-if value="{{ c.isClaude }}"><span style="width:6px;height:6px;border-radius:50%;background:oklch(0.62 0.13 45);flex-shrink:0"></span></sc-if>
+        <sc-if value="{{ c.isCodex }}"><span style="width:6px;height:6px;border-radius:50%;background:oklch(0.32 0.02 260);flex-shrink:0"></span></sc-if>
+        <span style="white-space:nowrap">{{ c.title }}</span>
+        <sc-if value="{{ c.external }}"><span style="font-size:10px;padding:0 4px;border-radius:3px;background:#e9e6e1;color:#6f6b64">终端</span></sc-if>
+      </button>
+    </sc-for>
+  </div>
+  <div style="padding:10px 16px 0;font-size:11.5px;color:#8e897f;flex-shrink:0">{{ sessMeta }}</div>
+  <div style="flex:1;overflow-y:auto;padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px;min-height:0">
+    <sc-if value="{{ sessEmpty }}">
+      <div style="margin:auto 8px;text-align:center;color:#8e897f;font-size:12.5px;line-height:1.7;text-wrap:pretty">描述一个任务。Claude Code 或 Codex 会直接读写库里的 Markdown 文件，每次改动都进入审阅，可逐段接受或还原。</div>
+    </sc-if>
+    <sc-for list="{{ sessItems }}" as="it" hint-placeholder-count="4">
+      <sc-if value="{{ it.isUser }}"><div style="align-self:flex-end;max-width:88%;background:#fff;border:1px solid #e6e3de;border-radius:10px;padding:8px 11px;font-size:13px;line-height:1.55">{{ it.text }}</div></sc-if>
+      <sc-if value="{{ it.isStep }}">
+        <div style="display:flex;align-items:center;gap:8px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#7d786f">
+          <span style="{{ it.dot }}"></span><span>{{ it.text }}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ it.isAgent }}"><div style="font-size:13px;line-height:1.65;color:#26241f;text-wrap:pretty">{{ it.text }}</div></sc-if>
+      <sc-if value="{{ it.isChange }}">
+        <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+          <span style="width:10px;height:12px;border:1.2px solid #a9a49b;border-radius:2px;flex-shrink:0"></span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.title }}</div>
+            <div style="display:flex;gap:8px;font-size:11px;margin-top:2px;font-family:ui-monospace,Menlo,monospace">
+              <span style="color:oklch(0.45 0.11 150)">+{{ it.plus }}</span><span style="color:oklch(0.5 0.13 25)">−{{ it.minus }}</span><span style="color:#9d988f;font-family:-apple-system,sans-serif">{{ it.status }}</span>
+            </div>
+          </div>
+          <sc-if value="{{ it.pendingNow }}"><button onClick="{{ it.open }}" style="height:24px;padding:0 10px;border:0;border-radius:6px;background:#26241f;color:#fff;cursor:pointer;font-size:12px">审阅</button></sc-if>
+        </div>
+      </sc-if>
+    </sc-for>
+  </div>
+  <div style="padding:12px;border-top:1px solid #ebe8e3;flex-shrink:0">
+    <div style="background:#fff;border:1px solid #e3e0da;border-radius:12px;padding:10px 12px;display:grid;gap:8px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px">
+        <span style="padding:1px 6px;border-radius:4px;background:#f0ede8;color:#5d5953;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis">@{{ noteTitle }}.md</span>
+        <span style="padding:1px 6px;border-radius:4px;background:#f0ede8;color:#5d5953;font-family:ui-monospace,Menlo,monospace;white-space:nowrap">AGENTS.md</span>
+      </div>
+      <textarea value="{{ ain }}" onChange="{{ onAin }}" onKeyDown="{{ onAinKey }}" placeholder="让 agent 修改当前笔记…  ↵ 发送" rows="3" style="border:0;outline:none;resize:none;font:13px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;color:#26241f;background:transparent;padding:0"></textarea>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="display:flex;background:#f0ede8;border-radius:7px;padding:2px">
+          <sc-for list="{{ agentSeg }}" as="g"><button onClick="{{ g.pick }}" style="{{ g.style }}">{{ g.label }}</button></sc-for>
+        </div>
+        <div style="flex:1"></div>
+        <button onClick="{{ sendAgent }}" style="height:26px;padding:0 12px;border:0;border-radius:7px;background:oklch(0.56 0.14 255);color:#fff;cursor:pointer;font-size:12px;font-weight:500">发送 ↵</button>
+      </div>
+    </div>
+  </div>
+</aside>
+</sc-if>
+
+<sc-if value="{{ palette }}">
+  <div onMouseDown="{{ onPalBg }}" style="position:absolute;inset:0;z-index:50;background:rgba(30,28,25,.12);display:flex;justify-content:center;align-items:flex-start;padding-top:13vh">
+    <div style="width:min(560px,92%);background:rgba(252,251,249,.985);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.2),0 0 0 1px rgba(0,0,0,.08);overflow:hidden">
+      <input ref="{{ pRef }}" value="{{ pq }}" onChange="{{ onPq }}" onKeyDown="{{ onPKey }}" placeholder="搜索笔记，或输入命令…" style="width:100%;border:0;outline:none;background:transparent;font:17px -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;padding:16px 18px;border-bottom:1px solid #ece9e4;color:#26241f">
+      <div style="max-height:360px;overflow-y:auto;padding:6px">
+        <sc-for list="{{ palList }}" as="p">
+          <div onMouseDown="{{ p.run }}" onMouseEnter="{{ p.hover }}" style="{{ p.style }}">
+            <sc-if value="{{ p.isNote }}"><span style="width:10px;height:12px;flex-shrink:0;border:1.2px solid currentColor;border-radius:2px;opacity:.45"></span></sc-if>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.label }}</span>
+            <span style="font-size:11.5px;opacity:.6">{{ p.hint }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ palEmpty }}"><div style="padding:18px;text-align:center;color:#9d988f">没有匹配项 · ↵ 新建「{{ pq }}」</div></sc-if>
+      </div>
+      <div style="display:flex;gap:14px;padding:8px 14px;border-top:1px solid #ece9e4;font-size:11px;color:#9d988f"><span>↑↓ 选择</span><span>↵ 执行</span><span>esc 关闭</span></div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ settings }}">
+  <div onMouseDown="{{ onSetBg }}" style="position:absolute;inset:0;z-index:50;background:rgba(30,28,25,.16);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:min(780px,100%);height:min(560px,100%);background:#fbfaf8;border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.22),0 0 0 1px rgba(0,0,0,.08);display:flex;overflow:hidden">
+      <div style="width:190px;flex-shrink:0;background:#f1efeb;border-right:1px solid #e4e1dc;padding:14px 10px;display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;gap:8px;padding:2px 6px 16px">
+          <div onClick="{{ closeSettings }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57;cursor:pointer"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#dcd9d4"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#dcd9d4"></div>
+        </div>
+        <sc-for list="{{ setTabs }}" as="t"><button onClick="{{ t.pick }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+      </div>
+      <div style="flex:1;min-width:0;overflow-y:auto;padding:24px 28px 32px">
+        <sc-if value="{{ tabAgent }}">
+          <div style="font-size:18px;font-weight:600">Agent 与 CLI</div>
+          <p style="margin:6px 0 20px;color:#6f6b64;line-height:1.65;max-width:520px;text-wrap:pretty">Plume 不托管模型。库就是磁盘上的一个文件夹，Claude Code 和 Codex 在里面直接读写 .md；Plume 负责看见、审阅和还原每一次改动。</p>
+          <div style="font-size:11px;font-weight:600;color:#9d988f;margin-bottom:8px">工作区</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #e6e3de;border-radius:9px;margin-bottom:20px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;flex:1">~/Documents/Vault</span>
+            <span style="font-size:11.5px;color:#9d988f">7 篇笔记 · git 已启用</span>
+            <button style="height:24px;padding:0 10px;border:1px solid #e0dcd6;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">在 Finder 中显示</button>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:#9d988f;margin-bottom:8px">已检测到的 CLI</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:20px">
+            <sc-for list="{{ cliCards }}" as="k">
+              <div style="padding:12px 14px;background:#fff;border:1px solid #e6e3de;border-radius:10px;display:grid;gap:6px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="{{ k.dot }}"></span>
+                  <span style="font-weight:600;flex:1">{{ k.name }}</span>
+                  <button onClick="{{ k.toggle }}" style="{{ k.track }}"><span style="{{ k.knob }}"></span></button>
+                </div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8e897f">{{ k.path }}</div>
+                <div style="font-size:11.5px;color:#6f6b64">{{ k.status }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:#9d988f;margin-bottom:8px">衔接</div>
+          <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px;margin-bottom:20px">
+            <sc-for list="{{ agentRows }}" as="r">
+              <div style="{{ r.rowStyle }}">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:500">{{ r.label }}</div>
+                  <div style="font-size:11.5px;color:#8e897f;margin-top:2px;line-height:1.5">{{ r.desc }}</div>
+                </div>
+                <button onClick="{{ r.toggle }}" style="{{ r.track }}"><span style="{{ r.knob }}"></span></button>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:#9d988f;margin-bottom:8px">Agent 写入之后</div>
+          <div style="display:flex;background:#efece8;border-radius:8px;padding:2px;width:max-content">
+            <sc-for list="{{ reviewSeg }}" as="v"><button onClick="{{ v.pick }}" style="{{ v.style }}">{{ v.label }}</button></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabEditor }}">
+          <div style="font-size:18px;font-weight:600;margin-bottom:18px">编辑器</div>
+          <div style="font-size:11px;font-weight:600;color:#9d988f;margin-bottom:8px">正文字体</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px">
+            <sc-for list="{{ fontCards }}" as="f">
+              <button onClick="{{ f.pick }}" style="{{ f.style }}">
+                <span style="{{ f.sample }}">专注，是一种选择。</span>
+                <span style="font-size:11.5px;color:#8e897f">{{ f.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:#9d988f;margin-bottom:8px">专注与输入</div>
+          <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px">
+            <sc-for list="{{ editorRows }}" as="r">
+              <div style="{{ r.rowStyle }}">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:500">{{ r.label }}</div>
+                  <div style="font-size:11.5px;color:#8e897f;margin-top:2px;line-height:1.5">{{ r.desc }}</div>
+                </div>
+                <button onClick="{{ r.toggle }}" style="{{ r.track }}"><span style="{{ r.knob }}"></span></button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabKeys }}">
+          <div style="font-size:18px;font-weight:600;margin-bottom:18px">快捷键</div>
+          <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px">
+            <sc-for list="{{ keyRows }}" as="r">
+              <div style="display:flex;align-items:center;padding:10px 14px;border-top:1px solid #f0ede9">
+                <span style="flex:1">{{ r.label }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;padding:2px 7px;border:1px solid #e3e0da;border-radius:5px;color:#5d5953">{{ r.key }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ onboarding }}">
+  <div style="position:absolute;inset:0;z-index:60;background:rgba(30,28,25,.3);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:min(600px,100%);background:#fbfaf8;border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.28),0 0 0 1px rgba(0,0,0,.08);padding:36px 40px 24px;display:flex;flex-direction:column;gap:22px">
+      <sc-if value="{{ ob0 }}">
+        <div>
+          <div style="font-size:12px;color:#9d988f;margin-bottom:10px">欢迎使用 Plume</div>
+          <div style="font:600 26px/1.3 'New York','Iowan Old Style','Songti SC',Georgia,serif;letter-spacing:-.01em">你的笔记，就是一个文件夹。</div>
+          <p style="margin:12px 0 0;color:#5d5953;line-height:1.7;font-size:13.5px;text-wrap:pretty">Plume 直接编辑磁盘上的 Markdown 文件——没有数据库，没有私有格式。Claude Code 和 Codex 也在同一个文件夹里工作，你们看到的永远是同一份文字。</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #e6e3de;border-radius:10px">
+          <span style="width:16px;height:13px;border:1.4px solid #8e897f;border-radius:3px"></span>
+          <div style="flex:1"><div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">~/Documents/Vault</div><div style="font-size:11.5px;color:#8e897f;margin-top:2px">7 篇笔记 · 3 个文件夹 · git 仓库</div></div>
+          <button style="height:26px;padding:0 12px;border:1px solid #e0dcd6;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;white-space:nowrap;flex-shrink:0">更换…</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ ob1 }}">
+        <div>
+          <div style="font-size:12px;color:#9d988f;margin-bottom:10px">2 / 3</div>
+          <div style="font:600 26px/1.3 'New York','Iowan Old Style','Songti SC',Georgia,serif">让两个 agent 读同一份规则。</div>
+          <p style="margin:12px 0 0;color:#5d5953;line-height:1.7;font-size:13.5px;text-wrap:pretty">Plume 在库根目录写入 AGENTS.md，CLAUDE.md 只引用它。无论你在 Plume 里还是终端里启动 agent，上下文都一致。</p>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+          <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px;padding:12px 14px;display:grid;gap:8px;font-size:12.5px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.62 0.13 45)"></span><span style="flex:1">claude</span><span style="color:oklch(0.45 0.11 150)">✓ 已检测</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.32 0.02 260)"></span><span style="flex:1">codex</span><span style="color:oklch(0.45 0.11 150)">✓ 已检测</span></div>
+            <div style="font-size:11.5px;color:#8e897f;line-height:1.5">终端里在库内运行的会话会自动出现在 Agent 面板。</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px;padding:12px 14px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.8;color:#5d5953;white-space:pre">Vault/
+├─ AGENTS.md
+├─ CLAUDE.md  → @AGENTS.md
+├─ 项目/
+└─ 写作/</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ ob2 }}">
+        <div>
+          <div style="font-size:12px;color:#9d988f;margin-bottom:10px">3 / 3</div>
+          <div style="font:600 26px/1.3 'New York','Iowan Old Style','Songti SC',Georgia,serif">选一种写字的感觉。</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+          <sc-for list="{{ fontCards }}" as="f">
+            <button onClick="{{ f.pick }}" style="{{ f.style }}">
+              <span style="{{ f.sample }}">专注，是一种选择。</span>
+              <span style="font-size:11.5px;color:#8e897f">{{ f.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e3de;border-radius:10px">
+          <sc-for list="{{ obRows }}" as="r">
+            <div style="{{ r.rowStyle }}">
+              <div style="flex:1;min-width:0"><div style="font-weight:500">{{ r.label }}</div><div style="font-size:11.5px;color:#8e897f;margin-top:2px">{{ r.desc }}</div></div>
+              <button onClick="{{ r.toggle }}" style="{{ r.track }}"><span style="{{ r.knob }}"></span></button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <div style="display:flex;align-items:center;gap:8px;padding-top:4px">
+        <div style="display:flex;gap:6px;flex:1"><sc-for list="{{ obDots }}" as="o"><span style="{{ o.style }}"></span></sc-for></div>
+        <button onClick="{{ obSkip }}" style="height:30px;padding:0 12px;border:0;background:transparent;color:#8e897f;cursor:pointer">跳过</button>
+        <sc-if value="{{ obHasBack }}"><button onClick="{{ obBack }}" style="height:30px;padding:0 14px;border:1px solid #e0dcd6;border-radius:8px;background:#fff;cursor:pointer">上一步</button></sc-if>
+        <button onClick="{{ obNext }}" style="height:30px;padding:0 16px;border:0;border-radius:8px;background:#26241f;color:#fff;cursor:pointer;font-weight:500">{{ obNextLabel }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}">
+  <div style="position:absolute;left:50%;bottom:48px;transform:translateX(-50%);z-index:70;background:#2b2926;color:#fff;font-size:12.5px;padding:8px 14px;border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.2);white-space:nowrap">{{ toast }}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;editorWidth&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:680,&quot;min&quot;:560,&quot;max&quot;:860,&quot;step&quot;:20,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;showOnboarding&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const ACC='oklch(0.56 0.14 255)', CL='oklch(0.62 0.13 45)', CX='oklch(0.32 0.02 260)';
+const FONTS={serif:'"New York","Iowan Old Style","Songti SC",Georgia,serif',sans:'-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif',mono:'ui-monospace,"SF Mono",Menlo,"PingFang SC",monospace'};
+const AG={claude:'Claude Code',codex:'Codex'};
+const PREFIX=/^(#{1,3} |- \[[ xX]\] |[-*] |\d+\. |> )/;
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const btype=t=>/^### /.test(t)?'h3':/^## /.test(t)?'h2':/^# /.test(t)?'h1':/^- \[[ xX]\] /.test(t)?'task':/^[-*] /.test(t)?'li':/^\d+\. /.test(t)?'ol':/^> /.test(t)?'quote':/^-{3,}$/.test(t)?'hr':t===''?'empty':'p';
+function inline(s){let h=esc(s);const codes=[];h=h.replace(/`([^`]+)`/g,(m,c)=>{codes.push(c);return '\u0001'+(codes.length-1)+'\u0001'});
+h=h.replace(/\*\*(.+?)\*\*/g,'<strong style="font-weight:650">$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>')
+.replace(/\[\[(.+?)\]\]/g,'<span data-link="$1" style="color:'+ACC+';cursor:pointer;border-bottom:1px solid oklch(0.56 0.14 255 / .3)">$1</span>')
+.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<span style="color:'+ACC+';text-decoration:underline">$1</span>');
+return h.replace(/\u0001(\d+)\u0001/g,(m,i)=>'<code style="font-family:ui-monospace,Menlo,monospace;font-size:.84em;background:#f0eeea;padding:1px 5px;border-radius:4px">'+codes[i]+'</code>');}
+const G=t=>'<span style="color:#bdb8b0">'+t+'</span>';
+function rawHtml(t){if(/^-{3,}$/.test(t))return G(esc(t));const m=t.match(PREFIX);const pre=m?m[0]:'';const rest=esc(t.slice(pre.length)).replace(/(\*\*|\*|`|\[\[|\]\])/g,x=>G(x));return (pre?G(esc(pre)):'')+rest;}
+function renderHtml(t,type){const c=t.replace(PREFIX,'');
+if(type==='hr')return '<div data-deco="1" style="height:1px;background:#e4e0da;margin:14px 0"></div>';
+if(type==='empty')return '<br>';
+if(type==='li')return '<span data-deco="1" style="position:absolute;left:-17px;color:#a8a39b">•</span>'+inline(c);
+if(type==='ol')return '<span data-deco="1" style="position:absolute;left:-22px;color:#a8a39b;font-variant-numeric:tabular-nums">'+parseInt(t)+'.</span>'+inline(c);
+if(type==='task'){const on=/^- \[[xX]\]/.test(t);return '<span data-deco="1" data-task="1" style="position:absolute;left:-22px;top:.5em;width:14px;height:14px;border-radius:4px;box-sizing:border-box;border:1.5px solid '+(on?ACC:'#c4bfb7')+';background:'+(on?ACC:'transparent')+';cursor:pointer;color:#fff;font:700 10px/11px -apple-system,sans-serif;text-align:center">'+(on?'✓':'')+'</span>'+(on?'<span style="color:#a39e96;text-decoration:line-through;text-decoration-color:#cfcac2">'+inline(c)+'</span>':inline(c));}
+return inline(c);}
+function rawIdx(t,vis){const m=t.match(PREFIX);let i=m?m[0].length:0,v=0;while(i<t.length&&v<vis){const two=t.substr(i,2);if(two==='**'||two==='[['||two===']]'){i+=2;continue}if(t[i]==='*'||t[i]==='`'){i++;continue}i++;v++}return i;}
+function caretVis(el,x,y){const r=document.caretRangeFromPoint&&document.caretRangeFromPoint(x,y);if(!r||!el.contains(r.startContainer))return null;let off=0;const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){if(n.parentElement.closest('[data-deco]'))continue;if(n===r.startContainer)return off+r.startOffset;off+=n.length}return null;}
+function countWords(blocks){const t=blocks.map(b=>b.replace(PREFIX,'').replace(/[*`\[\]#>]/g,'')).join(' ');const cjk=(t.match(/[\u4e00-\u9fff]/g)||[]).length;const lat=(t.replace(/[\u4e00-\u9fff]/g,' ').match(/[A-Za-z0-9][A-Za-z0-9.,%]*/g)||[]).length;return cjk+lat;}
+const GH_MID=['，这也是这一轮最需要被验证的地方。','，同时留出足够的时间做回归测试。','，结论需要在周五前同步给团队。'];
+const GH_NEW=['下一步是把这些结论写进发布说明。','这件事值得单独开一篇笔记展开。','换句话说，简单比完整更重要。'];
+const SLASH=[{label:'一级标题',hint:'#',key:'h1',prefix:'# '},{label:'二级标题',hint:'##',key:'h2',prefix:'## '},{label:'三级标题',hint:'###',key:'h3',prefix:'### '},{label:'列表',hint:'-',key:'list',prefix:'- '},{label:'待办',hint:'- [ ]',key:'todo',prefix:'- [ ] '},{label:'引用',hint:'>',key:'quote',prefix:'> '},{label:'分割线',hint:'---',key:'hr',hr:true},{label:'让 Claude Code 续写',hint:'agent',key:'claude',ai:'claude'},{label:'让 Codex 整理本页',hint:'agent',key:'codex',ai:'codex'}];
+const NOTES={
+plan:{title:'2.0 发布计划',folder:'项目',blocks:['# 2.0 发布计划','目标是在 **10 月 20 日** 前开启公开测试，重点验证 [[同步引擎]] 在大型库下的稳定性。','## 里程碑','- [x] 冻结功能范围','- [ ] 完成离线同步的冲突合并','- [ ] 内测用户扩大到 500 人','- [ ] 官网与更新日志','## 风险','> 超过 20,000 篇笔记的库，首次索引需要 90 秒以上。','索引改为增量之后，冷启动预计降到 12 秒以内，需要在 `M2 Air` 上复测。','## 备注','和设计团队对一次新手引导的文案，*尤其是* 关于 agent 权限的那一步。']},
+weekly:{title:'周报 W39',folder:'项目',blocks:['# 周报 · 第 39 周','## 本周完成','- 编辑器输入延迟从 16ms 降到 6ms','- 修复中文输入法下的光标跳动','## 数据','活跃用户 3,200，周留存 41%。','## 下周','- 发布 0.9 beta']},
+focus:{title:'关于专注',folder:'写作',blocks:['# 关于专注','专注不是屏蔽一切，而是让此刻正在写的这一句话，比其余所有东西都更清晰。','好的写作工具应该在你下笔时退后，在你需要时出现。它不该催促你，也不该替你说话。','## 输入的节奏','打字机滚动让视线停在同一高度。段落聚焦把注意力收拢到一段之内。剩下的，交给手指。']},
+diary:{title:'2026-09-25',folder:'日记',blocks:['# 9 月 25 日 · 周五','早上把索引问题拆成了三个小任务，交给 Codex 跑了第一个。','下午读完了 [[关于专注]] 的初稿，删掉了三分之一。']},
+inbox:{title:'收件箱',folder:'',blocks:['# 收件箱','- 调研：CRDT 在纯文本上的合并粒度','- 给 [[2.0 发布计划]] 补一张时间线']},
+agentsmd:{title:'AGENTS',folder:'',file:true,blocks:['# AGENTS.md','这个库是我的个人笔记。所有 agent 请遵守：','- 只修改被要求的文件，保持纯 Markdown','- 链接统一使用 [[双链]] 语法','- 新的想法追加到 [[收件箱]]','- 不要改动 `日记/` 下的内容']},
+claudemd:{title:'CLAUDE',folder:'',file:true,blocks:['# CLAUDE.md','@AGENTS.md','> 由 Plume 维护，与 AGENTS.md 同源。请直接编辑 [[AGENTS]]。']}};
+const SESSIONS=[
+{id:'s1',agent:'codex',source:'终端',title:'更新周报数据',live:true,items:[{k:'user',text:'把周报的数据更新到 metrics/w39.csv 的最新值'},{k:'step',text:'读取 AGENTS.md'},{k:'step',text:'读取 metrics/w39.csv'},{k:'step',text:'写入 项目/周报 W39.md'},{k:'agent',text:'数据段落已更新（活跃 +8.7%，留存 43%），并在“下周”补了一条跟进项。'},{k:'change',note:'weekly',plus:2,minus:1}]},
+{id:'s2',agent:'claude',source:'应用内',title:'风险段落',items:[{k:'user',text:'风险那段写清楚了吗？'},{k:'step',text:'读取 项目/2.0 发布计划.md'},{k:'step',text:'搜索 [[同步引擎]] · 2 处反向链接'},{k:'agent',text:'现象和预期都写清楚了，但缺复测的负责人和日期。需要我补上吗？'}]}];
+
+class Component extends DCLogic {
+  state={notes:NOTES,active:'plan',ab:-1,view:'edit',open:{项目:true,写作:true,日记:false},sidebar:true,agent:true,zen:false,
+    typewriter:true,dim:true,font:'serif',ghostOn:true,ghost:'',palette:false,pq:'',ps:0,settings:false,stab:'agent',ob:-1,slashSel:0,
+    sessions:SESSIONS,as:'s1',ain:'',apick:'claude',writing:null,toast:'',tick:0,
+    pending:{weekly:{by:'codex',source:'终端',hunks:[{start:5,del:1,add:['活跃用户 3,480（+8.7%），周留存 43%，数据来自 `metrics/w39.csv`。'],st:'pending'},{start:8,del:0,add:['- 跟进留存提升的原因分析'],st:'pending'}]}},
+    cfg:{syncCtx:true,watchExt:true,mcp:true,snapshot:true,review:'queue',claudeOn:true,codexOn:true}};
+  taRef=React.createRef(); colRef=React.createRef(); scRef=React.createRef(); pRef=React.createRef(); typed=[]; net=0;
+  componentDidMount(){window.addEventListener('keydown',this.onGK);window.addEventListener('resize',this.onRS);const w=window.innerWidth;this.setState({w,agent:w>=1100,sidebar:w>=720});this.iv=setInterval(()=>this.setState(s=>({tick:s.tick+1})),5000);
+    let first=false;try{first=!localStorage.getItem('plume_ob_v1')}catch(e){} if(this.props.showOnboarding||first)this.setState({ob:0});}
+  onRS=()=>this.setState({w:window.innerWidth});
+  componentWillUnmount(){window.removeEventListener('keydown',this.onGK);window.removeEventListener('resize',this.onRS);clearInterval(this.iv);clearTimeout(this.gt);clearTimeout(this.tt);(this.timers||[]).forEach(clearTimeout);}
+  componentDidUpdate(pp0,ps0){const pp=this._pp||this.props,ps=this._ps||this.state;this._ps=this.state;this._pp=this.props;
+    if(this.needFocus&&this.taRef.current){const ta=this.taRef.current;ta.focus();const c=Math.min(this.pendingCaret??ta.value.length,ta.value.length);ta.setSelectionRange(c,c);this.needFocus=false;this.center(true);}
+    else if(this.taRef.current&&ps.notes!==this.state.notes&&ps.ab===this.state.ab)this.center(false);
+    {const t=this.taRef.current,c=this.colRef.current;if(t&&c&&this.slashItems(t.value)){const r=t.getBoundingClientRect(),cr=c.getBoundingClientRect();const top=Math.round(r.bottom-cr.top+6),left=Math.round(r.left-cr.left);if(top!==this.state.slashTop||left!==this.state.slashLeft)this.setState({slashTop:top,slashLeft:left});}}
+    if(this.state.palette&&!ps.palette&&this.pRef.current)this.pRef.current.focus();
+    if(this.props.showOnboarding&&!pp.showOnboarding)this.setState({ob:0});
+    if((ps.active!==this.state.active||ps.view!==this.state.view)&&this.scRef.current&&this.state.ab<0)this.scRef.current.scrollTop=0;
+  }
+  center(smooth){const sc=this.scRef.current,ta=this.taRef.current;if(!sc||!ta)return;const r=ta.getBoundingClientRect(),sr=sc.getBoundingClientRect();let t;
+    if(this.state.typewriter)t=sc.scrollTop+(r.top+r.height/2)-(sr.top+sr.height*0.42);
+    else if(r.bottom>sr.bottom-60)t=sc.scrollTop+r.bottom-sr.bottom+90;else if(r.top<sr.top+20)t=sc.scrollTop+r.top-sr.top-40;else return;
+    if(Math.abs(t-sc.scrollTop)>1)sc.scrollTo({top:t,behavior:smooth?'smooth':'auto'});}
+  blocks(){return this.state.notes[this.state.active].blocks;}
+  showToast(m){clearTimeout(this.tt);this.setState({toast:m});this.tt=setTimeout(()=>this.setState({toast:''}),2600);}
+  commit(nb,ab,caret){this.pendingCaret=caret;this.needFocus=true;this.setState(s=>({notes:{...s.notes,[s.active]:{...s.notes[s.active],blocks:nb}},ab,ghost:'',slashSel:0}));}
+  activate(i,caret){this.pendingCaret=caret;this.needFocus=true;this.setState({ab:i,ghost:'',slashSel:0});}
+  slashItems(t){if(!t||t[0]!=='/'||t.includes(' '))return null;const q=t.slice(1).toLowerCase();const l=SLASH.filter(x=>!q||x.label.includes(q)||x.key.includes(q));return l.length?l:null;}
+  applySlash(it){const i=this.state.ab,nb=[...this.blocks()];
+    if(it.ai){nb[i]='';this.commit(nb,i,0);this.setState({agent:true,zen:false});this.runAgent(it.ai==='claude'?'根据上下文续写，保持我的语气':'整理这篇笔记的结构和待办',it.ai);return;}
+    if(it.hr){nb[i]='---';nb.splice(i+1,0,'');this.commit(nb,i+1,0);return;}
+    nb[i]=it.prefix;this.commit(nb,i,it.prefix.length);}
+  onCompStart=()=>{this.composing=true};
+  onCompEnd=()=>{this.composing=false};
+  onChange=e=>{const i=this.state.ab,b=this.blocks(),old=b[i],v=e.target.value,d=v.length-old.length;
+    if(d>0&&d<20)this.typed.push({t:Date.now(),n:d});this.net+=d;
+    if(v.includes('\n')){const parts=v.split('\n'),nb=[...b];nb.splice(i,1,...parts);this.commit(nb,i+parts.length-1,parts[parts.length-1].length);return;}
+    const nb=[...b];nb[i]=v;clearTimeout(this.gt);
+    this.setState(s=>({notes:{...s.notes,[s.active]:{...s.notes[s.active],blocks:nb}},ghost:'',slashSel:v[0]==='/'?s.slashSel:0}));
+    const atEnd=e.target.selectionStart===v.length;
+    if(this.state.ghostOn&&atEnd&&btype(v)==='p'&&v.length>6&&v[0]!=='/'&&!/\s$/.test(v))
+      this.gt=setTimeout(()=>{if(this.composing||this.state.ab!==i||this.blocks()[i]!==v)return;this.gi=(this.gi||0)+1;const L=/[。！？.!?]$/.test(v)?GH_NEW:GH_MID;this.setState({ghost:L[this.gi%L.length]});},1100);};
+  onKey=e=>{const ne=e.nativeEvent;if(ne.isComposing||e.keyCode===229)return;
+    const i=this.state.ab,b=this.blocks(),t=b[i],ta=e.target,s=ta.selectionStart,en=ta.selectionEnd;
+    const sl=this.slashItems(t);
+    if(sl){if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const n=sl.length;this.setState(st=>({slashSel:(st.slashSel+(e.key==='ArrowDown'?1:n-1))%n}));return;}
+      if(e.key==='Enter'){e.preventDefault();this.applySlash(sl[Math.min(this.state.slashSel,sl.length-1)]);return;}
+      if(e.key==='Escape'){e.preventDefault();const nb=[...b];nb[i]='';this.commit(nb,i,0);return;}}
+    if(e.key==='Tab'){e.preventDefault();if(this.state.ghost){const nb=[...b];nb[i]=t+this.state.ghost;this.net+=this.state.ghost.length;this.commit(nb,i,nb[i].length);}return;}
+    if(e.key==='ArrowRight'&&this.state.ghost&&s===t.length&&e.metaKey){e.preventDefault();const nb=[...b];nb[i]=t+this.state.ghost;this.commit(nb,i,nb[i].length);return;}
+    const lh=parseFloat(getComputedStyle(ta).lineHeight)||28,single=ta.scrollHeight<lh*1.6;
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();const type=btype(t),m=t.match(PREFIX);
+      const pre=m&&['li','task','ol'].includes(type)?(type==='task'?'- [ ] ':type==='ol'?(parseInt(t)+1)+'. ':m[0]):'';
+      if(pre&&t===m[0]){const nb=[...b];nb[i]='';this.commit(nb,i,0);return;}
+      const nb=[...b];nb[i]=t.slice(0,s);nb.splice(i+1,0,pre+t.slice(en));this.commit(nb,i+1,pre.length);return;}
+    if(e.key==='Backspace'&&s===0&&en===0&&i>0){e.preventDefault();const nb=[...b],p=nb[i-1];nb[i-1]=p+t;nb.splice(i,1);this.commit(nb,i-1,p.length);return;}
+    if(e.key==='ArrowUp'&&i>0&&(s===0||single)){e.preventDefault();this.activate(i-1,Math.min(s,b[i-1].length));return;}
+    if(e.key==='ArrowDown'&&i<b.length-1&&(s===t.length||single)){e.preventDefault();this.activate(i+1,Math.min(s,b[i+1].length));return;}
+    if(e.key==='Escape'){e.preventDefault();ta.blur();this.setState({ab:-1,ghost:''});}
+    if(this.state.ghost&&e.key!=='Shift')this.setState({ghost:''});};
+  toggleTask(i){const b=this.blocks(),t=b[i],nb=[...b];nb[i]=/^- \[[xX]\] /.test(t)?t.replace(/^- \[[xX]\] /,'- [ ] '):t.replace(/^- \[ \] /,'- [x] ');this.setState(s=>({notes:{...s.notes,[s.active]:{...s.notes[s.active],blocks:nb}}}));}
+  onBlockDown=i=>e=>{const tg=e.target;if(tg.closest&&tg.closest('[data-task]')){e.preventDefault();this.toggleTask(i);return;}
+    const lk=tg.closest&&tg.closest('[data-link]');if(lk&&i!==this.state.ab){e.preventDefault();this.openByTitle(lk.getAttribute('data-link'));return;}
+    if(i===this.state.ab)return;e.preventDefault();const t=this.blocks()[i];const v=caretVis(e.currentTarget,e.clientX,e.clientY);this.activate(i,v==null?t.length:rawIdx(t,v));};
+  onScDown=e=>{if(!e.target.getAttribute||!e.target.getAttribute('data-blank'))return;e.preventDefault();const b=this.blocks(),last=b.length-1;
+    if(b[last]!==''){this.commit([...b,''],last+1,0);}else this.activate(last,0);};
+  openNote=id=>this.setState({active:id,ab:-1,view:'edit',ghost:'',palette:false});
+  openByTitle(title){const n=this.state.notes,id=Object.keys(n).find(k=>n[k].title===title);if(id)return this.openNote(id);
+    const nid='n'+Date.now();this.setState(s=>({notes:{...s.notes,[nid]:{title,folder:'',blocks:['# '+title,'']}},active:nid,view:'edit'}));this.activate(1,0);this.showToast('已创建 '+title+'.md');}
+  newNote=()=>{const nid='n'+Date.now();this.setState(s=>({notes:{...s.notes,[nid]:{title:'未命名',folder:'',blocks:['# 未命名','']}},active:nid,view:'edit',palette:false}));this.activate(1,0);};
+  makeHunks(b){const hs=b.filter(t=>/^## /.test(t)).map(t=>t.slice(3)).slice(0,3);
+    return [{start:1,del:0,add:['> **摘要**：本文围绕'+(hs.length?hs.join('、'):'一个尚未展开的想法')+'展开，结论与待定事项见文末。'],st:'pending'},{start:b.length,del:0,add:['## 下一步','- [ ] 确认结论与负责人','- [ ] 把未决问题放进 [[收件箱]]'],st:'pending'}];}
+  applyHunks(b,hs){const nb=[...b];hs.map((h,i)=>({...h,i})).filter(h=>h.st==='acc').sort((a,c)=>c.start-a.start||c.i-a.i).forEach(h=>nb.splice(h.start,h.del,...h.add));return nb;}
+  runAgent(prompt,agent){const nid=this.state.active,note=this.state.notes[nid],path=(note.folder?note.folder+'/':'')+note.title+'.md';
+    let sid=this.state.as;const cur=this.state.sessions.find(x=>x.id===sid);const fresh=!cur||cur.source!=='应用内'||cur.agent!==agent||cur.running;
+    if(fresh)sid='s'+Date.now();
+    this.setState(s=>{const base=fresh?[...s.sessions,{id:sid,agent,source:'应用内',title:prompt.slice(0,10),items:[]}]:s.sessions;
+      return {sessions:base.map(x=>x.id===sid?{...x,running:true,items:[...x.items,{k:'user',text:prompt}]}:x),as:sid,agent:true,ain:''};});
+    const push=(it,extra)=>this.setState(s=>({sessions:s.sessions.map(x=>x.id===sid?{...x,items:[...x.items.map(y=>y.k==='step'?{...y,run:false}:y),...(it?[it]:[])]}:x),...(typeof extra==='function'?extra(s):extra||{})}));
+    const reply=agent==='claude'?'我在开头加了一段摘要，并在文末整理出“下一步”。改动已写入工作区，确认后生效。':'Done — 摘要与下一步已写入 '+note.title+'.md，等你审阅。';
+    const auto=this.state.cfg.review==='auto';
+    const T=[[350,()=>push({k:'step',text:'读取 AGENTS.md',run:true})],[900,()=>push({k:'step',text:'读取 '+path,run:true})],
+      [1600,()=>push({k:'step',text:'搜索反向链接 · 3 处引用',run:true},{writing:nid})],[2500,()=>push({k:'step',text:'写入 '+path,run:true})],
+      [3300,()=>push({k:'agent',text:reply},s=>{const hs=this.makeHunks(s.notes[nid].blocks);
+        if(auto)return {writing:null,notes:{...s.notes,[nid]:{...s.notes[nid],blocks:this.applyHunks(s.notes[nid].blocks,hs.map(h=>({...h,st:'acc'})))}}};
+        return {writing:null,pending:{...s.pending,[nid]:{by:agent,source:'应用内',hunks:hs}}};})],
+      [3350,()=>{push({k:'change',note:nid,plus:4,minus:0});this.setState(s=>({sessions:s.sessions.map(x=>x.id===sid?{...x,running:false}:x)}));this.showToast(auto?AG[agent]+' 已写入 '+note.title+'.md':AG[agent]+' 修改了 '+note.title+'.md · 待审阅');}]];
+    this.timers=(this.timers||[]).concat(T.map(([ms,f])=>setTimeout(f,ms)));}
+  sendAgent=()=>{const p=this.state.ain.trim();if(!p)return;this.runAgent(p,this.state.apick);};
+  setHunk=(idx,st)=>this.setState(s=>{const p=s.pending[s.active];return {pending:{...s.pending,[s.active]:{...p,hunks:p.hunks.map((h,i)=>i===idx?{...h,st}:h)}}};});
+  finishDiff(all){const s=this.state,p=s.pending[s.active];if(!p)return;const hs=p.hunks.map(h=>all?{...h,st:all}:(h.st==='pending'?{...h,st:'acc'}:h));
+    const nb=this.applyHunks(s.notes[s.active].blocks,hs),acc=hs.filter(h=>h.st==='acc').length;const pend={...s.pending};delete pend[s.active];
+    this.setState({notes:{...s.notes,[s.active]:{...s.notes[s.active],blocks:nb}},pending:pend,view:'edit',ab:-1});
+    const title=s.notes[s.active].title;this.showToast(acc?'已写入 '+title+'.md · 接受 '+acc+' 处'+(s.cfg.snapshot?' · 快照 '+Math.random().toString(16).slice(2,9):''):'已还原到 agent 写入前的版本');}
+  onGK=e=>{const m=e.metaKey||e.ctrlKey,k=e.key;
+    if(m&&k.toLowerCase()==='k'){e.preventDefault();this.setState(s=>({palette:!s.palette,pq:'',ps:0}));}
+    else if(m&&k==='.'){e.preventDefault();this.toggleZen();}
+    else if(m&&k==='\\'){e.preventDefault();this.toggleSidebar();}
+    else if(m&&k.toLowerCase()==='j'){e.preventDefault();this.toggleAgent();}
+    else if(m&&k===','){e.preventDefault();this.setState({settings:true});}
+    else if(m&&k.toLowerCase()==='n'){e.preventDefault();this.newNote();}
+    else if(k==='Escape'){if(this.state.palette)this.setState({palette:false});else if(this.state.settings)this.setState({settings:false});else if(this.state.zen&&this.state.ab<0&&!e.defaultPrevented)this.setState({zen:false});}};
+  toggleZen=()=>this.setState(s=>({zen:!s.zen,palette:false}));
+  toggleSidebar=()=>this.setState(s=>({sidebar:!s.sidebar}));
+  toggleAgent=()=>this.setState(s=>({agent:!s.agent,zen:false}));
+  seg(on,small){return {height:small?22:24,padding:small?'0 8px':'0 12px',border:0,borderRadius:small?5:6,cursor:'pointer',fontSize:small?11.5:12,whiteSpace:'nowrap',background:on?'#fff':'transparent',color:on?'#26241f':'#8e897f',boxShadow:on?'0 1px 2px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.06)':'none',fontWeight:on?500:400};}
+  pill(on){return {height:22,padding:'0 8px',border:0,borderRadius:5,cursor:'pointer',fontSize:11.5,whiteSpace:'nowrap',background:on?'oklch(0.94 0.03 255)':'transparent',color:on?'oklch(0.45 0.13 255)':'#8e897f'};}
+  tg(on,toggle){return {toggle,track:{width:32,height:19,borderRadius:10,border:0,padding:0,background:on?ACC:'#dcd9d4',position:'relative',transition:'background .2s',flexShrink:0,cursor:'pointer'},knob:{position:'absolute',top:2,left:on?15:2,width:15,height:15,borderRadius:'50%',background:'#fff',boxShadow:'0 1px 2px rgba(0,0,0,.25)',transition:'left .2s'}};}
+  renderVals(){
+    const s=this.state,vw=s.w||window.innerWidth,note=s.notes[s.active],b=note.blocks,FF=FONTS[s.font],W=this.props.editorWidth??680;
+    const pend=s.pending[s.active],isDiff=s.view==='diff'&&!!pend,hasActive=s.ab>=0&&!isDiff;
+    const activeText=hasActive?b[s.ab]:null,sl=hasActive?this.slashItems(activeText):null;
+    const blocksView=b.map((t,i)=>{const type=btype(t),active=i===s.ab,h=type[0]==='h'&&type!=='hr';
+      const ts={fontFamily:FF,fontSize:type==='h1'?30:type==='h2'?22:type==='h3'?18:s.font==='mono'?15.5:17,lineHeight:h?1.35:1.8,fontWeight:type==='h1'?700:type==='h2'?650:type==='h3'?620:400,letterSpacing:type==='h1'?'-0.012em':0,color:type==='quote'?'#5d5953':'#26241f',whiteSpace:'pre-wrap',wordBreak:'break-word',margin:0,padding:0,position:'relative',minHeight:'1.4em'};
+      const list=['li','task','ol'].includes(type);
+      return {text:t,active,inactive:!active,textStyle:ts,
+        taStyle:{...ts,position:'absolute',left:0,top:0,width:'100%',height:'100%',border:0,outline:'none',background:'transparent',color:'transparent',caretColor:ACC,resize:'none',overflow:'hidden',display:'block'},
+        raw:{__html:rawHtml(t)+(active&&s.ghost?'<span style="color:#b3aea6">'+esc(s.ghost)+'</span><span style="display:inline-block;margin-left:8px;padding:0 5px;border:1px solid #dcd8d1;border-radius:4px;font:500 10px/16px -apple-system,sans-serif;color:#9a958d;vertical-align:3px">Tab</span>':'')+'\u200b'},
+        html:{__html:renderHtml(t,type)},
+        wrap:{position:'relative',paddingLeft:list&&!active?26:list?0:type==='quote'?18:0,marginTop:type==='h1'?(i===0?0:30):type==='h2'?30:type==='h3'?22:0,marginBottom:type==='h1'?16:type==='h2'?10:type==='h3'?6:list?2:12,borderLeft:type==='quote'?'3px solid #e3dfd8':'none',opacity:s.dim&&hasActive&&!active?0.26:1,transition:'opacity .35s ease'},
+        onDown:this.onBlockDown(i)};});
+    const words=countWords(b),now=Date.now(),pace=this.typed.filter(x=>now-x.t<60000).reduce((a,x)=>a+x.n,0);
+    const pendIds=Object.keys(s.pending),pendingCount=pendIds.length;
+    const tree=[];const rowS=(sel,depth)=>({display:'flex',alignItems:'center',gap:6,height:28,padding:'0 8px 0 '+(8+depth*14)+'px',borderRadius:6,cursor:'default',fontSize:13,background:sel?'rgba(0,0,0,.075)':'transparent',color:'#26241f',fontWeight:sel?500:400});
+    const fileRow=(id,depth)=>{const n=s.notes[id],p=s.pending[id];tree.push({label:n.file?n.title+'.md':n.title,isFile:true,style:rowS(id===s.active,depth),onClick:()=>this.openNote(id),writing:s.writing===id,pendClaude:p&&p.by==='claude',pendCodex:p&&p.by==='codex'});};
+    ['项目','写作','日记'].forEach(f=>{const o=s.open[f];tree.push({label:f,isFolder:true,chev:{display:'inline-block',width:10,color:'#9d988f',transform:o?'rotate(90deg)':'none',transition:'transform .15s',fontSize:14,lineHeight:'10px',textAlign:'center'},style:rowS(false,0),onClick:()=>this.setState(st=>({open:{...st.open,[f]:!st.open[f]}}))});
+      if(o)Object.keys(s.notes).filter(k=>s.notes[k].folder===f).forEach(k=>fileRow(k,1));});
+    Object.keys(s.notes).filter(k=>!s.notes[k].folder).forEach(k=>fileRow(k,0));
+    const sess=s.sessions.find(x=>x.id===s.as)||s.sessions[0];
+    const sessItems=(sess?sess.items:[]).map(it=>({isUser:it.k==='user',isStep:it.k==='step',isAgent:it.k==='agent',isChange:it.k==='change',text:it.text,
+      dot:{width:6,height:6,borderRadius:'50%',flexShrink:0,background:it.run?ACC:'#c9c4bb',boxShadow:it.run?'0 0 0 3px oklch(0.56 0.14 255 / .15)':'none'},
+      title:it.note&&s.notes[it.note]?s.notes[it.note].title+'.md':'',plus:it.plus,minus:it.minus,pendingNow:!!(it.note&&s.pending[it.note]),status:it.note&&s.pending[it.note]?'待审阅':'已处理',
+      open:()=>this.setState({active:it.note,view:'diff',ab:-1,zen:false})}));
+    const P=[{label:'新建笔记',hint:'⌘N',run:this.newNote},{label:s.zen?'退出专注模式':'进入专注模式',hint:'⌘.',run:this.toggleZen},
+      {label:'打字机滚动：'+(s.typewriter?'关闭':'开启'),run:()=>this.setState(x=>({typewriter:!x.typewriter}))},{label:'段落聚焦：'+(s.dim?'关闭':'开启'),run:()=>this.setState(x=>({dim:!x.dim}))},
+      {label:'切换字体：衬线 / 无衬线 / 等宽',run:()=>this.setState(x=>({font:{serif:'sans',sans:'mono',mono:'serif'}[x.font]}))},
+      {label:'让 Claude Code 总结当前笔记',hint:'Agent',run:()=>this.runAgent('总结这篇笔记，在开头加摘要','claude')},
+      {label:'让 Codex 整理当前笔记的待办',hint:'Agent',run:()=>this.runAgent('整理这篇笔记的待办，合并重复项','codex')},
+      ...(pendingCount?[{label:'审阅待定改动（'+pendingCount+'）',hint:'Diff',run:()=>this.setState({active:pendIds[0],view:'diff',ab:-1})}]:[]),
+      {label:'Agent 与 CLI 设置',hint:'⌘,',run:()=>this.setState({settings:true,stab:'agent'})},{label:'重新运行新手引导',run:()=>this.setState({ob:0})}].map(x=>({...x,isCmd:true}));
+    const N=Object.keys(s.notes).map(k=>({label:s.notes[k].file?s.notes[k].title+'.md':s.notes[k].title,hint:s.notes[k].folder||'库',isCmd:false,run:()=>this.openNote(k),isNote:true}));
+    const q=s.pq.trim().toLowerCase();const all=q?[...N,...P].filter(x=>x.label.toLowerCase().includes(q)||(x.hint||'').toLowerCase().includes(q)):[...N.slice(0,4),...P];
+    const psel=Math.min(s.ps,Math.max(0,all.length-1));
+    const palList=all.map((x,i)=>({...x,style:{display:'flex',alignItems:'center',gap:10,height:36,padding:'0 12px',borderRadius:7,cursor:'default',fontSize:13.5,background:i===psel?ACC:'transparent',color:i===psel?'#fff':'#26241f'},
+      hover:()=>this.setState({ps:i}),run:e=>{e&&e.preventDefault&&e.preventDefault();this.setState({palette:false});x.run();}}));
+    this.palAll=palList;
+    let diffRows=[];if(pend){const hs=pend.hunks.map((h,i)=>({...h,i}));let skip=0;
+      for(let i=0;i<=b.length;i++){hs.filter(h=>h.start===i).forEach(h=>{if(h.st!=='acc')b.slice(i,i+h.del).forEach(t=>diffRows.push(h.st==='rej'?{isCtx:true,text:t}:{isDel:true,text:t}));
+        if(h.st!=='rej')h.add.forEach(t=>diffRows.push({isAdd:true,text:t}));skip=Math.max(skip,h.del);
+        diffRows.push({isBar:true,label:'改动 '+(h.i+1)+' · +'+h.add.length+' −'+h.del,undecided:h.st==='pending',decided:h.st!=='pending',stText:h.st==='acc'?'已接受':'已还原',accept:()=>this.setHunk(h.i,'acc'),reject:()=>this.setHunk(h.i,'rej'),undo:()=>this.setHunk(h.i,'pending')});});
+        if(i<b.length){if(skip>0)skip--;else diffRows.push({isCtx:true,text:b[i]});}}}
+    const plus=pend?pend.hunks.reduce((a,h)=>a+h.add.length,0):0,minus=pend?pend.hunks.reduce((a,h)=>a+h.del,0):0;
+    const agentOf=pend?AG[pend.by]:'',src=pend?(pend.source==='终端'?'在终端中':'在 Plume 中'):'';
+    const fontCard=k=>({label:{serif:'衬线 · New York',sans:'无衬线 · SF Pro',mono:'等宽 · SF Mono'}[k],pick:()=>this.setState({font:k}),
+      style:{display:'grid',gap:8,textAlign:'left',padding:'14px 14px 12px',borderRadius:10,cursor:'pointer',background:'#fff',border:s.font===k?'1.5px solid '+ACC:'1px solid #e6e3de',boxShadow:s.font===k?'0 0 0 3px oklch(0.56 0.14 255 / .12)':'none'},
+      sample:{fontFamily:FONTS[k],fontSize:k==='mono'?14:16,color:'#26241f',lineHeight:1.5}});
+    const rowStyle={display:'flex',alignItems:'center',gap:14,padding:'11px 14px',borderTop:'1px solid #f0ede9'};
+    const edRows=[{label:'打字机滚动',desc:'当前行始终停在视线高度',...this.tg(s.typewriter,()=>this.setState(x=>({typewriter:!x.typewriter})))},
+      {label:'段落聚焦',desc:'淡化正在编辑之外的段落',...this.tg(s.dim,()=>this.setState(x=>({dim:!x.dim})))},
+      {label:'Tab 行内续写',desc:'停顿约 1 秒后给出灰色建议，Tab 接受，继续输入即忽略',...this.tg(s.ghostOn,()=>this.setState(x=>({ghostOn:!x.ghostOn,ghost:''})))}].map(r=>({...r,rowStyle}));
+    const cf=(k,label,desc)=>({label,desc,rowStyle,...this.tg(s.cfg[k],()=>this.setState(x=>({cfg:{...x.cfg,[k]:!x.cfg[k]}})))});
+    return {
+      showSidebar:s.sidebar&&!s.zen,noSidebar:!s.sidebar,showToolbar:!s.zen,showAgent:s.agent&&!s.zen,zen:s.zen,
+      agentStyle:(()=>{const ov=vw<1100;return {width:ov?Math.min(340,vw-24):340,flexShrink:0,display:'flex',flexDirection:'column',background:'#f7f6f3',borderLeft:'1px solid #e7e4df',minHeight:0,...(ov?{position:'absolute',right:0,top:0,bottom:0,zIndex:30,boxShadow:'-12px 0 40px rgba(0,0,0,.12)'}:{})};})(),
+      tree,noteTitle:note.title,folderLabel:note.folder||'Vault',isEdit:!isDiff,isDiff,hasPending:pendingCount>0,pendingCount,
+      agentBtnStyle:{height:26,padding:'0 10px',border:0,borderRadius:6,display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:12.5,fontWeight:500,background:s.agent?'rgba(0,0,0,.07)':'transparent',color:'#3d3a35'},
+      showPendingBanner:!!pend&&!isDiff&&!s.zen,bannerDot:{width:8,height:8,borderRadius:'50%',flexShrink:0,background:pend&&pend.by==='codex'?CX:CL},
+      bannerText:pend?agentOf+' '+src+'修改了此文件 · '+pend.hunks.length+' 处改动待审阅':'',
+      showWritingBanner:s.writing===s.active&&!isDiff,writingText:(()=>{const r=s.sessions.find(x=>x.running);return (r?AG[r.agent]:'Agent')+' 正在写入此文件，你的输入会在它完成后合并';})(),
+      openDiff:()=>this.setState({view:'diff',ab:-1}),closeDiff:()=>this.setState({view:'edit'}),applyDiff:()=>this.finishDiff(null),rejectAll:()=>this.finishDiff('rej'),
+      diffTitle:agentOf+' '+src+'修改了 '+note.title+'.md',diffSub:'+'+plus+' −'+minus+' · 文件已在磁盘上改动，还原会恢复到写入前的快照',diffRows,
+      diffCol:{maxWidth:W+40,margin:'0 auto',padding:'28px 32px 120px',fontFamily:FF,fontSize:15,lineHeight:1.75},
+      scRef:this.scRef,taRef:this.taRef,colRef:this.colRef,slashTop:s.slashTop||0,slashLeft:s.slashLeft||0,pRef:this.pRef,onScDown:this.onScDown,onChange:this.onChange,onKey:this.onKey,onCompStart:this.onCompStart,onCompEnd:this.onCompEnd,
+      colStyle:{position:'relative',maxWidth:W+96,margin:'0 auto',padding:s.typewriter?'38vh '+(vw<700?20:48)+'px 55vh':(s.zen?'96px':'56px')+' '+(vw<700?20:48)+'px 40vh',minHeight:'100%'},
+      blocksView,slashOpen:!!sl,
+      slashList:(sl||[]).map((x,i)=>({...x,pick:e=>{e.preventDefault();this.applySlash(x);},style:{display:'flex',alignItems:'center',gap:10,height:30,padding:'0 10px',borderRadius:6,cursor:'default',background:i===Math.min(s.slashSel,(sl||[]).length-1)?ACC:'transparent',color:i===Math.min(s.slashSel,(sl||[]).length-1)?'#fff':(x.ai?(x.ai==='claude'?'oklch(0.5 0.12 45)':CX):'#26241f')}})),
+      statusStyle:{height:30,flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'0 14px',borderTop:s.zen?'1px solid transparent':'1px solid #f0ede9',opacity:s.zen?0:1,transition:'opacity .3s',background:'#fdfcfa',overflow:'hidden'},
+      pathLabel:'~/Vault/'+(note.folder?note.folder+'/':'')+note.title+'.md · 已保存',
+      twBtn:this.pill(s.typewriter),dimBtn:this.pill(s.dim),ghostBtn:this.pill(s.ghostOn),zenBtn:this.pill(s.zen),zenLabel:s.zen?'退出专注':'专注 ⌘.',
+      toggleTypewriter:()=>this.setState(x=>({typewriter:!x.typewriter})),toggleDim:()=>this.setState(x=>({dim:!x.dim})),toggleGhost:()=>this.setState(x=>({ghostOn:!x.ghostOn,ghost:''})),
+      fontSeg:['serif','sans','mono'].map(k=>({label:{serif:'衬线',sans:'无衬线',mono:'等宽'}[k],pick:()=>this.setState({font:k}),style:this.seg(s.font===k,true)})),
+      statsLabel:words.toLocaleString()+' 字 · 约 '+Math.max(1,Math.ceil(words/400))+' 分钟'+(this.net>0?' · 本次 +'+this.net:'')+(pace>0?' · '+pace+' 字/分':''),
+      toggleZen:this.toggleZen,toggleSidebar:this.toggleSidebar,toggleAgent:this.toggleAgent,newNote:this.newNote,
+      openPalette:()=>this.setState({palette:true,pq:'',ps:0}),openSettings:()=>this.setState({settings:true,stab:'editor'}),openAgentSettings:()=>this.setState({settings:true,stab:'agent'}),
+      newSession:()=>{const id='s'+Date.now();this.setState(x=>({sessions:[...x.sessions,{id,agent:x.apick,source:'应用内',title:'新会话',items:[]}],as:id}));},
+      sessionChips:s.sessions.map(x=>({title:x.title,isClaude:x.agent==='claude',isCodex:x.agent==='codex',external:x.source==='终端',pick:()=>this.setState({as:x.id}),
+        style:{display:'flex',alignItems:'center',gap:6,height:26,padding:'0 10px',borderRadius:7,border:0,cursor:'pointer',fontSize:12,flexShrink:0,background:x.id===(sess&&sess.id)?'#fff':'transparent',boxShadow:x.id===(sess&&sess.id)?'0 1px 2px rgba(0,0,0,.1),0 0 0 .5px rgba(0,0,0,.08)':'none',color:'#3d3a35'}})),
+      sessMeta:sess?(AG[sess.agent]+' · '+(sess.source==='终端'?'终端 pid 48213 · '+(s.cfg.watchExt?'监听中':'未监听'):'应用内会话')+(sess.running?' · 运行中':'')):'',
+      sessItems,sessEmpty:!sessItems.length,
+      ain:s.ain,onAin:e=>this.setState({ain:e.target.value}),onAinKey:e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing&&e.keyCode!==229){e.preventDefault();this.sendAgent();}},sendAgent:this.sendAgent,
+      agentSeg:['claude','codex'].map(k=>({label:AG[k],pick:()=>this.setState({apick:k}),style:this.seg(s.apick===k,true)})),
+      palette:s.palette,pq:s.pq,palList,palEmpty:!palList.length,onPq:e=>this.setState({pq:e.target.value,ps:0}),
+      onPKey:e=>{const n=this.palAll.length;if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(n)this.setState(x=>({ps:(Math.min(x.ps,n-1)+(e.key==='ArrowDown'?1:n-1))%n}));}
+        else if(e.key==='Enter'){e.preventDefault();if(n)this.palAll[Math.min(this.state.ps,n-1)].run();else if(this.state.pq.trim()){this.setState({palette:false});this.openByTitle(this.state.pq.trim());}}
+        else if(e.key==='Escape'){e.preventDefault();this.setState({palette:false});}},
+      onPalBg:e=>{if(e.target===e.currentTarget)this.setState({palette:false});},
+      settings:s.settings,closeSettings:()=>this.setState({settings:false}),onSetBg:e=>{if(e.target===e.currentTarget)this.setState({settings:false});},
+      setTabs:[['editor','编辑器'],['agent','Agent 与 CLI'],['keys','快捷键']].map(([k,l])=>({label:l,pick:()=>this.setState({stab:k}),style:{height:28,textAlign:'left',padding:'0 10px',border:0,borderRadius:6,cursor:'pointer',fontSize:13,background:s.stab===k?'rgba(0,0,0,.08)':'transparent',fontWeight:s.stab===k?500:400}})),
+      tabAgent:s.stab==='agent',tabEditor:s.stab==='editor',tabKeys:s.stab==='keys',
+      cliCards:[['claudeOn','Claude Code','/opt/homebrew/bin/claude',CL],['codexOn','Codex','/usr/local/bin/codex',CX]].map(([k,name,path,c])=>({name,path,dot:{width:8,height:8,borderRadius:'50%',background:c},status:s.cfg[k]?'已启用 · 读取 '+(k==='claudeOn'?'CLAUDE.md → AGENTS.md':'AGENTS.md'):'已停用',...this.tg(s.cfg[k],()=>this.setState(x=>({cfg:{...x.cfg,[k]:!x.cfg[k]}})))})),
+      agentRows:[cf('syncCtx','AGENTS.md 与 CLAUDE.md 同源','CLAUDE.md 只包含 @AGENTS.md，两个 agent 读同一份规则'),cf('watchExt','监听终端会话','在库内运行的 claude / codex 会话出现在 Agent 面板，改动实时进入审阅'),cf('mcp','Vault MCP 服务','向 agent 提供双链、标签与全文搜索 · plume mcp --stdio'),cf('snapshot','写入前 git 快照','每次 agent 写入前自动提交，任何改动都能一键还原')],
+      reviewSeg:[['queue','进入审阅队列'],['auto','直接接受']].map(([k,l])=>({label:l,pick:()=>this.setState(x=>({cfg:{...x.cfg,review:k}})),style:this.seg(s.cfg.review===k)})),
+      fontCards:['serif','sans','mono'].map(fontCard),editorRows:edRows,obRows:edRows.slice(0,2),
+      keyRows:[['命令面板','⌘K'],['专注模式','⌘.'],['侧边栏','⌘\\'],['Agent 面板','⌘J'],['新建笔记','⌘N'],['斜杠命令','/'],['接受续写','Tab'],['设置','⌘,']].map(([label,key])=>({label,key})),
+      onboarding:s.ob>=0,ob0:s.ob===0,ob1:s.ob===1,ob2:s.ob===2,obHasBack:s.ob>0,obNextLabel:s.ob===2?'开始写作':'继续',
+      obDots:[0,1,2].map(i=>({style:{width:i===s.ob?18:6,height:6,borderRadius:3,background:i===s.ob?'#26241f':'#d8d4ce',transition:'width .2s'}})),
+      obBack:()=>this.setState(x=>({ob:x.ob-1})),
+      obNext:()=>{if(s.ob===2){try{localStorage.setItem('plume_ob_v1','1')}catch(e){}this.setState({ob:-1});this.activate(1,b[1]?b[1].length:0);}else this.setState(x=>({ob:x.ob+1}));},
+      obSkip:()=>{try{localStorage.setItem('plume_ob_v1','1')}catch(e){}this.setState({ob:-1});},
+      toast:s.toast,hasToast:!!s.toast};
+  }
+}
+</script>
+</body>
+</html>
