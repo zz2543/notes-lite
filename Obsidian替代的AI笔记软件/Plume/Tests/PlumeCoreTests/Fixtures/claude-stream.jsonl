@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7","cwd":"/vault"}
+{"type":"assistant","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01T24ZdW6dHSSqz8F5AxWuTq","name":"Read","input":{"file_path":"/vault/note.md"}}]}}
+{"type":"user","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7","message":{"role":"user","content":[{"tool_use_id":"toolu_01T24ZdW6dHSSqz8F5AxWuTq","type":"tool_result","content":"1\t# Test\n2\t\n3\thello world\n4\t"}]}}
+{"type":"assistant","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01V5q6R1Kiz2F8jQcTSAYX1z","name":"Edit","input":{"replace_all":false,"file_path":"/vault/note.md","old_string":"hello world\n","new_string":"hello world\n再见"}}]}}
+{"type":"user","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7","message":{"role":"user","content":[{"tool_use_id":"toolu_01V5q6R1Kiz2F8jQcTSAYX1z","type":"tool_result","content":"The file /vault/note.md has been updated successfully. (file state is current in your context — no need to Read it back)"}]}}
+{"type":"assistant","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7","message":{"role":"assistant","content":[{"type":"text","text":"完成。已在 note.md 末尾追加\"再见\"。"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"完成。已在 note.md 末尾追加\"再见\"。","session_id":"d9298c2a-5ae7-41de-a351-d597543ffcc7"}
