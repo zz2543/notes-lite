@@ -21,46 +21,21 @@ extension NSColor {
     }
 }
 
-extension View {
-    /// Glass belongs to navigation and controls; content surfaces stay readable.
-    @ViewBuilder
-    func plumeControlGlass<S: Shape>(in shape: S) -> some View {
-        if #available(macOS 26.0, *) {
-            glassEffect(.regular, in: shape)
-        } else {
-            background(.regularMaterial, in: shape)
-        }
-    }
-
-    @ViewBuilder
-    func plumeGlassButton() -> some View {
-        if #available(macOS 26.0, *) {
-            buttonStyle(.glass)
-        } else {
-            buttonStyle(.bordered)
-        }
-    }
-
-    @ViewBuilder
-    func plumePrimaryButton() -> some View {
-        if #available(macOS 26.0, *) {
-            buttonStyle(.glassProminent)
-        } else {
-            buttonStyle(.borderedProminent)
-        }
-    }
-}
-
-struct PlumeGlassControls<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 8) { content }
-        } else {
-            content
-        }
-    }
+/// Liquid Glass layout rules used across the app.
+///
+/// Glass is reserved for the layer that floats above content — toolbars, banners, the
+/// composer, menus, the palette. Content itself (the page, diff lines, replies) stays on
+/// plain surfaces so text keeps full contrast. Radii shrink as elements nest, so inner
+/// shapes stay concentric with the glass that holds them.
+enum Metrics {
+    /// Palette, onboarding artwork: the outermost floating surfaces.
+    static let panelRadius: CGFloat = 26
+    /// Composer, slash menu, hunk cards.
+    static let cardRadius: CGFloat = 18
+    /// Rows inside a card or panel (selection highlights, inner fills).
+    static let rowRadius: CGFloat = 10
+    /// Gap between floating glass and the edge of the area it floats over.
+    static let floatInset: CGFloat = 12
 }
 
 /// System colors so the app follows light/dark mode and the user's accent color.
@@ -69,6 +44,7 @@ enum Theme {
     static let codex = Color(nsColor: NS.codex)
 
     static func agentColor(_ a: AgentKind) -> Color { a == .claude ? claude : codex }
+    static func agentSymbol(_ a: AgentKind) -> String { a == .claude ? "sparkle" : "terminal" }
 
     enum NS {
         static let claude = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua]) == .darkAqua ? NSColor(hex: 0xE08A62) : NSColor(hex: 0xC56A3E) }
@@ -88,6 +64,42 @@ enum Theme {
         static var ghostPillText: NSColor { .tertiaryLabelColor }
         static var accent: NSColor { .controlAccentColor }
         static var paper: NSColor { .textBackgroundColor }
+    }
+}
+
+extension View {
+    /// A floating glass surface with continuous corners.
+    func floatingGlass(radius: CGFloat = Metrics.cardRadius, tint: Color? = nil, interactive: Bool = false) -> some View {
+        glassEffect(.regular.tint(tint).interactive(interactive), in: .rect(cornerRadius: radius, style: .continuous))
+    }
+
+    /// A floating glass capsule — banners, toasts, status.
+    func glassCapsule(tint: Color? = nil, interactive: Bool = false) -> some View {
+        glassEffect(.regular.tint(tint).interactive(interactive), in: .capsule)
+    }
+
+    /// A quiet, non-glass container for content that sits on the page.
+    func contentCard(radius: CGFloat = Metrics.rowRadius + 4) -> some View {
+        background(.fill.quinary, in: .rect(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+    }
+}
+
+/// Selection highlight used by lists drawn inside glass (palette, slash menu).
+struct RowHighlight: View {
+    let on: Bool
+    var body: some View {
+        RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
+            .fill(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
+    }
+}
+
+/// Small rounded tag, e.g. the files an agent request will carry.
+struct TagLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.icon.imageScale(.small); configuration.title }
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(.fill.tertiary, in: .capsule)
     }
 }
 

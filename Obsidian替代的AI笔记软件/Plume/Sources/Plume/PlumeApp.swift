@@ -68,6 +68,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         if snapshotMode { NSApp.setActivationPolicy(.accessory) }
+        #if DEBUG
+        switch ProcessInfo.processInfo.environment["PLUME_APPEARANCE"] {
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: break
+        }
+        #endif
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -76,7 +83,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for w in NSApp.windows { w.alphaValue = 0; w.ignoresMouseEvents = true }
         } else {
             NSApp.setActivationPolicy(.regular)
+            #if DEBUG
+            // Automated visual checks open the window without taking the keyboard from the user.
+            // SwiftUI still activates the app when the window appears, so hand focus straight
+            // back and keystrokes meant for other apps never land in this window.
+            if ProcessInfo.processInfo.environment["PLUME_BACKGROUND"] != nil {
+                NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                    NSApp.deactivate()
+                }
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            #else
             NSApp.activate(ignoringOtherApps: true)
+            #endif
         }
         // Esc closes overlays, then leaves zen mode when nothing is being edited.
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
@@ -86,7 +106,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return e
         }
         #if DEBUG
-        if let out = ProcessInfo.processInfo.environment["PLUME_SNAPSHOT"] { snapshot(to: out) }
+        let env = ProcessInfo.processInfo.environment
+        if let out = env["PLUME_SNAPSHOT"] {
+            snapshot(to: out)
+        } else if let scenario = env["PLUME_SCENARIO"] {
+            // Same scenarios in a live window, for checks that need real glass rendering.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let m = self?.model else { return }
+                DebugScenario.apply(scenario, to: m)
+            }
+        }
         #endif
     }
 

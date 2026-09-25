@@ -42,7 +42,7 @@ struct AgentMarkdownReply: View {
                     }
                     .padding(9)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    .background(.fill.quaternary, in: .rect(cornerRadius: Metrics.rowRadius, style: .continuous))
                 case .rule:
                     Divider().padding(.vertical, 3)
                 }

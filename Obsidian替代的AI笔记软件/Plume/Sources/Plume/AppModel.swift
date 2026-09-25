@@ -131,8 +131,8 @@ final class AppModel {
             DispatchQueue.main.async { self.cli = found }
         }
         #if DEBUG
-        let snapshotVault = ProcessInfo.processInfo.environment["PLUME_SNAPSHOT"] == nil
-            ? nil : ProcessInfo.processInfo.environment["PLUME_SNAPSHOT_VAULT"]
+        // A scratch vault for snapshots and manual checks; never saved as the user's vault.
+        let snapshotVault = ProcessInfo.processInfo.environment["PLUME_SNAPSHOT_VAULT"]
         #else
         let snapshotVault: String? = nil
         #endif
@@ -715,7 +715,6 @@ final class AppModel {
         }
     }
 
-    func toggleSidebar() { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
     func toggleAgent() {
         if zen { toggleZen() }
         agentPanel.toggle()
