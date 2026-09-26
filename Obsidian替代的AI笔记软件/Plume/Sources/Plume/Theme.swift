@@ -136,3 +136,44 @@ enum EditorFont: String, CaseIterable, Identifiable {
 
     func swiftUIFont(size: CGFloat) -> Font { Font(nsFont(size: size)) }
 }
+
+/// True while an input method (Pinyin, Kana…) holds uncommitted text in the focused field.
+/// Keys pressed then belong to the input method, not to the view's shortcuts.
+func imeComposing() -> Bool {
+    ((NSApp.currentEvent?.window ?? NSApp.keyWindow)?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true
+}
+
+/// The official app icon of each agent, copied from the Claude and Codex apps.
+///
+/// Looks up the SwiftPM resource bundle by hand: `Bundle.module` only checks beside the
+/// executable and the `.app` root, while `scripts/bundle.sh` puts it in Contents/Resources.
+struct AgentLogo: View {
+    let agent: AgentKind
+    @Environment(\.colorScheme) private var scheme
+
+    private static let bundle: Bundle = {
+        let name = "Plume_Plume.bundle"
+        let bases = [Bundle.main.resourceURL, Bundle.main.bundleURL, Bundle.main.executableURL?.deletingLastPathComponent()]
+        for case let base? in bases {
+            if let b = Bundle(url: base.appendingPathComponent(name)) { return b }
+        }
+        return .main
+    }()
+
+    private static func image(_ name: String) -> NSImage? {
+        Self.bundle.url(forResource: name, withExtension: "png").flatMap(NSImage.init(contentsOf:))
+    }
+
+    private static let claude = image("agent-claude")
+    private static let codex = image("agent-codex")
+    private static let codexDark = image("agent-codex-dark")
+
+    var body: some View {
+        let img = agent == .claude ? Self.claude : (scheme == .dark ? Self.codexDark : Self.codex)
+        if let img {
+            Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: Theme.agentSymbol(agent)).foregroundStyle(Theme.agentColor(agent))
+        }
+    }
+}

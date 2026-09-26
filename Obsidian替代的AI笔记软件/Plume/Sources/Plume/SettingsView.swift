@@ -83,6 +83,8 @@ struct EditorSettings: View {
 
 struct AgentSettings: View {
     @Bindable var model: AppModel
+    @State private var toolState = PlumeTool.installState
+    @State private var toolError: String?
 
     var body: some View {
         Form {
@@ -115,6 +117,106 @@ struct AgentSettings: View {
                 cliRow(.codex, on: $model.codexOn)
             }
 
+            Section {
+                LabeledContent("连接") {
+                    Label(model.server != nil ? "正在监听" : "未监听（可能已有另一个 Plume 在运行）",
+                          systemImage: model.server != nil ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        .foregroundStyle(model.server != nil ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                }
+                LabeledContent("终端中使用") {
+                    HStack {
+                        switch toolState {
+                        case .installed:
+                            Text("~/.local/bin/plume").foregroundStyle(.secondary)
+                            Button("移除") { PlumeTool.uninstall(); toolState = PlumeTool.installState }
+                        case .missing:
+                            Button("安装 plume 命令") {
+                                do { try PlumeTool.install(); toolError = nil } catch { toolError = "安装失败：\(error.localizedDescription)" }
+                                toolState = PlumeTool.installState
+                            }
+                        case let .other(path):
+                            Text("~/.local/bin/plume 已被占用：\((path as NSString).abbreviatingWithTildeInPath)")
+                                .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                }
+                if let toolError { Text(toolError).font(.caption).foregroundStyle(.red) }
+                Toggle(isOn: $model.mcpOn) {
+                    Text("给 agent 挂载 Plume 工具（MCP）")
+                    Text("Plume 启动的 Claude Code 和 Codex 可以直接调用 propose_edit、ask_user 等工具：修改附理由、拿不准时向你提问。关闭后只能通过 plume 命令使用。")
+                }
+            } header: {
+                Text("plume 命令")
+            } footer: {
+                Text("Plume 启动的 agent 自动就能用 plume 查询当前笔记、选区、反链和待办。安装后，在终端里运行的 agent 也能用。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                if model.userCommands.isEmpty {
+                    Text("没有自定义命令").foregroundStyle(.secondary)
+                }
+                ForEach(model.userCommands, id: \.key) { c in
+                    LabeledContent {
+                        Text("/" + c.key).font(.callout.monospaced()).foregroundStyle(.secondary)
+                    } label: {
+                        Label {
+                            Text(c.title)
+                            Text("\(c.agent.displayName) · " + ["selection": "作用于选区", "note": "作用于当前笔记", "vault": "作用于整个库"][c.scope.rawValue, default: ""])
+                        } icon: {
+                            Image(systemName: c.icon).foregroundStyle(Theme.agentColor(c.agent))
+                        }
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("打开命令文件夹") { reveal(".plume/commands") }.disabled(model.vault == nil)
+                }
+            } header: {
+                Text("自定义命令")
+            } footer: {
+                Text("库里 .plume/commands/ 下的每个 .md 文件是一条命令，出现在 ⌘K、斜杠菜单和 Agent 菜单里；agent 也能用 run_command 调用。文件开头写 title、agent、scope，正文是提示词，可用 {{selection}} {{note}} {{path}} {{line}} {{date}}。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("允许自动化运行", isOn: $model.automationsOn)
+                LabeledContent("每天最多") {
+                    Stepper("\(model.automationDailyLimit) 次（今天已运行 \(model.automationRunsToday) 次）",
+                            value: $model.automationDailyLimit, in: 1...200)
+                        .id(model.tick)
+                }
+                if model.automations.isEmpty {
+                    Text("没有自动化。把 .plume/automations/ 里的示例文件去掉 .example 后缀即可试用。").foregroundStyle(.secondary)
+                }
+                ForEach(model.automations, id: \.id) { a in
+                    Toggle(isOn: Binding(get: { model.isApproved(a) }, set: { model.setApproved(a, $0) })) {
+                        Text(a.title)
+                        Text("\(a.on.joined(separator: "、"))" + (a.match.map { " · \($0)" } ?? " · 所有笔记")
+                             + " · 静默 \(a.debounce) 秒后由 \(a.agent.displayName) 运行")
+                    }
+                    .id("\(a.id)-\(model.tick)")
+                }
+                HStack {
+                    Spacer()
+                    Button("打开自动化文件夹") { reveal(".plume/automations") }.disabled(model.vault == nil)
+                }
+            } header: {
+                Text("自动化")
+            } footer: {
+                Text("自动化在库里发生某件事（例如保存收件箱）后自动运行。它只能提交修改提案，不能直接改文件，每处改动都要你审阅。每条自动化需要你在这里启用；文件内容一旦变化（包括随 git 拉取的改动），需要重新启用。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                ForEach(AgentKind.allCases, id: \.self) { modelRow($0) }
+            } header: {
+                Text("模型")
+            } footer: {
+                Text("选“默认”时沿用 CLI 自己的配置。也可以填写完整的模型名，例如 claude-opus-5-5。切换后，已有会话继续时会换用新模型。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("衔接") {
                 Toggle(isOn: $model.syncContext) {
                     Text("AGENTS.md 与 CLAUDE.md 同源")
@@ -139,6 +241,41 @@ struct AgentSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func modelRow(_ k: AgentKind) -> some View {
+        let binding = Binding(get: { model.agentModel[k] ?? "" },
+                              set: { model.agentModel[k] = $0.trimmingCharacters(in: .whitespaces) })
+        return LabeledContent {
+            HStack(spacing: 8) {
+                TextField("模型名", text: binding, prompt: Text(model.modelName("", for: k)))
+                    .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
+                    .frame(width: 170)
+                Menu {
+                    Picker("模型", selection: binding) {
+                        ForEach(AgentBar.options(model, k), id: \.self) { id in
+                            Text(model.modelName(id, for: k)).tag(id)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+        } label: {
+            Label(k.displayName, systemImage: Theme.agentSymbol(k))
+        }
+    }
+
+    private func reveal(_ rel: String) {
+        guard let v = model.vault else { return }
+        let u = v.root.appendingPathComponent(rel)
+        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(u)
     }
 
     private func cliRow(_ k: AgentKind, on: Binding<Bool>) -> some View {

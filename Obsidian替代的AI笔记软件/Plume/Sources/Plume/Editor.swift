@@ -212,6 +212,7 @@ final class PlumeTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
+        listExitCaret = nil
         pendingTrailSide = event.keyCode == 51 ? .right : event.keyCode == 117 ? .left : nil
         defer { pendingTrailSide = nil }
         if let c = coordinator {
@@ -222,6 +223,21 @@ final class PlumeTextView: NSTextView {
             if !ghost.isEmpty, event.keyCode != 56, event.keyCode != 60 { c.dropGhost() }
         }
         super.keyDown(with: event)
+    }
+
+    /// Caret left by Return on an empty list item, until the next key press.
+    var listExitCaret: Int?
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        // Some input methods (WeType) continue lists on their own: right after Plume clears an
+        // empty "- " they see a blank line under a list item and type the marker back in.
+        if let caret = listExitCaret {
+            listExitCaret = nil
+            let text = (string as? NSAttributedString)?.string ?? string as? String ?? ""
+            if replacementRange.location == NSNotFound, selectedRange() == NSRange(location: caret, length: 0),
+               Markdown.blockType(text).isList, Markdown.prefixLength(text) == (text as NSString).length { return }
+        }
+        super.insertText(string, replacementRange: replacementRange)
     }
 
     override func doCommand(by selector: Selector) {
@@ -265,7 +281,6 @@ final class PlumeTextView: NSTextView {
     private var blinkTimer: Timer?
     private var lastMove = Date.distantPast
     static let caretWidth: CGFloat = 2.5
-    private static let restingTrailOpacity: Float = 0.28
     private static let trailDuration: CFTimeInterval = 0.8
 
     func setUpCaret() {
@@ -342,14 +357,11 @@ final class PlumeTextView: NSTextView {
         guard caretVisible else { caret.opacity = 0; caretTrail.opacity = 0; return }
         guard Date().timeIntervalSince(lastMove) > 0.65 else {
             caret.opacity = 1
-            caretTrail.opacity = Self.restingTrailOpacity
             return
         }
         CATransaction.begin()
         CATransaction.setAnimationDuration(0.18)
-        let visible = caret.opacity <= 0.5
-        caret.opacity = visible ? 1 : 0
-        caretTrail.opacity = visible ? Self.restingTrailOpacity : 0
+        caret.opacity = caret.opacity <= 0.5 ? 1 : 0
         CATransaction.commit()
     }
 
@@ -432,12 +444,13 @@ final class PlumeTextView: NSTextView {
                                   y: r.minY - 3, width: width, height: r.height + 6)
         trailMask.frame = caretTrail.bounds
         caret.opacity = 1
-        caretTrail.opacity = width > 0 ? Self.restingTrailOpacity : 0
+        // The glow only exists while the caret travels; at rest it is fully gone.
+        caretTrail.opacity = 0
         CATransaction.commit()
         if moved && width > 0 && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let trail = CABasicAnimation(keyPath: "opacity")
             trail.fromValue = 0.9
-            trail.toValue = Self.restingTrailOpacity
+            trail.toValue = 0
             trail.duration = Self.trailDuration
             trail.timingFunction = CAMediaTimingFunction(name: .easeOut)
             caretTrail.add(trail, forKey: "movementTrail")
@@ -809,6 +822,7 @@ struct EditorView: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText(), !restyling else { return }
+            model.editorSelection = tv.selectedRange()
             if currentLine() != activeLine { restyle() }
             updateSlash()
             if tv.selectedRange().length == 0 { center(smooth: true) }
@@ -841,7 +855,7 @@ struct EditorView: NSViewRepresentable {
         // MARK: slash menu
 
         func updateSlash() {
-            guard let tv = textView, isFocused, let info = lineInfo(), let items = SlashItem.matching(info.text),
+            guard let tv = textView, isFocused, let info = lineInfo(), let items = SlashItem.matching(info.text, commands: model.userCommands),
                   let lm = tv.layoutManager, let tc = tv.textContainer, let scroll = scrollView else {
                 if model.slash != nil { model.slash = nil }
                 return
@@ -860,9 +874,9 @@ struct EditorView: NSViewRepresentable {
         func applySlash(_ item: SlashItem) {
             guard let tv = textView, let info = lineInfo() else { return }
             model.slash = nil
-            if let agent = item.ai {
+            if let key = item.command, let cmd = model.userCommand(named: key) {
                 tv.insertText("", replacementRange: info.range)
-                model.runAgent(prompt: agent == .claude ? "根据上下文续写这篇笔记，保持我的语气" : "整理这篇笔记的结构和待办", agent: agent)
+                do { try model.runUserCommand(cmd, input: nil) } catch let e as RPCError { model.showToast(e.message) } catch {}
                 return
             }
             if item.hr {
@@ -896,6 +910,7 @@ struct EditorView: NSViewRepresentable {
                 if let cont = Markdown.continuation(for: info.text) {
                     if cont.exit {
                         tv.insertText("", replacementRange: info.range)
+                        tv.listExitCaret = info.range.location
                     } else {
                         tv.insertText("\n" + cont.prefix, replacementRange: tv.selectedRange())
                     }

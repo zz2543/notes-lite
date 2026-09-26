@@ -5,6 +5,8 @@ import PlumeCore
 
 enum SessionSource: Equatable {
     case app, terminal
+    /// Started by an automation file; it may only propose changes, never write them.
+    case automation
 }
 
 struct SessionItem: Identifiable, Equatable {
@@ -14,6 +16,10 @@ struct SessionItem: Identifiable, Equatable {
         case agent(String)
         case change(rel: String, plus: Int, minus: Int)
         case error(String)
+        /// The agent asked the user something (see `AppModel.questions`).
+        case question(UUID)
+        /// The outcome of a review with rejections, ready to send back to the agent.
+        case feedback(rel: String, message: String, sent: Bool)
     }
     let id = UUID()
     var kind: Kind
@@ -28,9 +34,15 @@ final class AgentSession: Identifiable {
     var items: [SessionItem] = []
     var running = false
     var cliSessionID: String?
+    /// The model of the latest run started from Plume, nil when unknown (CLI default).
+    var model: String?
+    /// The thinking level of that run, nil when the model has none or it's unknown.
+    var effort: String?
     /// Terminal sessions: the CLI process we found running inside the vault.
     var pid: Int32?
     var alive = true
+    /// The automation this run belongs to, when an automation started it.
+    var automationID: String?
     @ObservationIgnored var transcript: URL?
     @ObservationIgnored var transcriptStamp: Date?
     @ObservationIgnored var changeItems: [SessionItem] = []

@@ -24,6 +24,8 @@ final class Vault {
     @ObservationIgnored private(set) var known: [String: String] = [:]
     @ObservationIgnored private var watcher: FileWatcher?
     @ObservationIgnored var onFilesChanged: (([String]) -> Void)?
+    /// `.plume/commands` or `.plume/automations` changed.
+    @ObservationIgnored var onPlumeFilesChanged: (() -> Void)?
 
     init(root: URL) {
         self.root = root.standardizedFileURL.resolvingSymlinksInPath()
@@ -136,8 +138,11 @@ final class Vault {
 
     private func handleEvents(_ paths: [String]) {
         scan()
-        let rels = Set(paths.map(relative).filter { $0.lowercased().hasSuffix(".md") })
+        let all = Set(paths.map(relative))
+        // Hidden folders are not notes; Plume's own config lives in one of them.
+        let rels = all.filter { $0.lowercased().hasSuffix(".md") && !$0.split(separator: "/").contains { $0.hasPrefix(".") } }
         if !rels.isEmpty { onFilesChanged?(Array(rels)) }
+        if all.contains(where: { $0.hasPrefix(".plume/commands") || $0.hasPrefix(".plume/automations") }) { onPlumeFilesChanged?() }
     }
 }
 

@@ -12,9 +12,23 @@ struct PendingReview {
     var proposed: [String]
     var hunks: [Hunk]
     var snapshot: String?
+    /// Set for a proposal: the file still holds `baseline` and only accepted hunks get written.
+    /// Nil for a change the agent already wrote, where rejecting restores the baseline.
+    var proposalID: String?
+    var reason: String?
+    /// The agent's reason for each hunk, same indexes as `hunks`.
+    var notes: [String?] = []
+    /// The user's reason for rejecting each hunk.
+    var feedback: [String?] = []
+    /// The Plume session that made the change, for sending the review's outcome back.
+    var sessionID: UUID?
+    /// The proposal creates the note.
+    var isNew = false
 
-    var plus: Int { hunks.reduce(0) { $0 + $1.add.count } }
-    var minus: Int { hunks.reduce(0) { $0 + $1.del } }
+    var isProposal: Bool { proposalID != nil }
+
+    var plus: Int { hunks.reduce(0) { $0 + LineDiff.counts($1, base: baseline).plus } }
+    var minus: Int { hunks.reduce(0) { $0 + LineDiff.counts($1, base: baseline).minus } }
 }
 
 enum ReviewMode: String { case queue, auto }
@@ -27,6 +41,9 @@ struct SlashItem: Identifiable, Equatable {
     var prefix: String = ""
     var hr = false
     var ai: AgentKind?
+    /// Runs this vault command (`.plume/commands/<key>.md`) instead of inserting markup.
+    var command: String?
+    var icon: String?
     var id: String { key }
 
     static let all: [SlashItem] = [
@@ -37,14 +54,16 @@ struct SlashItem: Identifiable, Equatable {
         SlashItem(label: "待办", hint: "- [ ]", key: "todo", prefix: "- [ ] "),
         SlashItem(label: "引用", hint: ">", key: "quote", prefix: "> "),
         SlashItem(label: "分割线", hint: "---", key: "hr", hr: true),
-        SlashItem(label: "让 Claude Code 续写", hint: "agent", key: "claude", ai: .claude),
-        SlashItem(label: "让 Codex 整理本页", hint: "agent", key: "codex", ai: .codex),
     ]
 
-    static func matching(_ line: String) -> [SlashItem]? {
+    /// Markup items, then `commands` (the vault's own agent commands).
+    static func matching(_ line: String, commands: [UserCommand] = []) -> [SlashItem]? {
         guard line.hasPrefix("/"), !line.contains(" ") else { return nil }
         let q = line.dropFirst().lowercased()
-        let l = all.filter { q.isEmpty || $0.label.lowercased().contains(q) || $0.key.contains(q) }
+        let extra = commands.map { c in
+            SlashItem(label: c.title, hint: "/" + c.key, key: "cmd." + c.key, ai: c.agent, command: c.key, icon: c.icon)
+        }
+        let l = (all + extra).filter { q.isEmpty || $0.label.lowercased().contains(q) || $0.key.lowercased().contains(q) }
         return l.isEmpty ? nil : l
     }
 }
@@ -69,11 +88,25 @@ final class AppModel {
     var reviewMode: ReviewMode = .queue { didSet { save("review", reviewMode.rawValue) } }
     var claudeOn = true { didSet { save("claudeOn", claudeOn) } }
     var codexOn = true { didSet { save("codexOn", codexOn) } }
+    /// Give runs Plume's MCP tools (propose_edit, ask_user, …) besides the `plume` command.
+    var mcpOn = true { didSet { save("mcpOn", mcpOn) } }
+    /// Master switch for `.plume/automations/`.
+    var automationsOn = true { didSet { save("automationsOn", automationsOn) } }
+    var automationDailyLimit = 20 { didSet { save("automationLimit", automationDailyLimit) } }
+    /// Model per agent; "" means whatever the CLI is configured to use.
+    var agentModel: [AgentKind: String] = [:] {
+        didSet { for k in AgentKind.allCases { save("model." + k.rawValue, agentModel[k] ?? "") } }
+    }
+    /// Thinking level per agent; "" means the CLI's own default for the chosen model.
+    var agentEffort: [AgentKind: String] = [:] {
+        didSet { for k in AgentKind.allCases { save("effort." + k.rawValue, agentEffort[k] ?? "") } }
+    }
     var editorWidth: CGFloat = 680
 
     // MARK: chrome
     var columnVisibility: NavigationSplitViewVisibility = .all
     var agentPanel = true
+    var modelPickerOpen = false
     var zen = false
     var palette = false
     var paletteQuery = ""
@@ -100,8 +133,30 @@ final class AppModel {
     var editorVersion = 0
     var dirty = false
     var focusRequest: (caret: Int, token: Int)?
+    /// The editor's selection (UTF-16), read by agents through `plume context`. Not observed:
+    /// nothing on screen depends on it.
+    @ObservationIgnored var editorSelection = NSRange(location: 0, length: 0) {
+        didSet { if editorSelection != oldValue { selectionChanged() } }
+    }
     var ghost = ""
     var slash: SlashState?
+
+    /// Links, headings and tasks of the open vault, for agents' queries.
+    @ObservationIgnored var index: VaultIndex?
+    /// Answers the `plume` command; nil until started or when another Plume already answers.
+    @ObservationIgnored var server: AgentServer?
+    /// Agents waiting (`propose --wait`) for the user to finish reviewing a proposal, by proposal id.
+    @ObservationIgnored var proposalWaiters: [String: [AppCommand.Reply]] = [:]
+    /// Questions agents asked, by id; answered ones stay so the transcript can show the answer.
+    var questions: [UUID: AgentQuestion] = [:]
+    @ObservationIgnored var questionReplies: [UUID: AppCommand.Reply] = [:]
+    /// `plume watch` clients: the events each wants (nil: all but the opt-in ones) and where to send them.
+    @ObservationIgnored var subscribers: [UUID: (events: Set<String>?, send: (Data) -> Void)] = [:]
+    @ObservationIgnored var selectionEventWork: DispatchWorkItem?
+    /// The vault's own commands and automations, from `.plume/`.
+    var userCommands: [UserCommand] = []
+    var automations: [Automation] = []
+    @ObservationIgnored var automationTimers: [String: DispatchWorkItem] = [:]
 
     // MARK: agents
     var cli: [AgentKind: CLIInfo] = [:]
@@ -109,6 +164,11 @@ final class AppModel {
     var activeSessionID: UUID?
     var agentInput = ""
     var agentPick: AgentKind = .claude
+    var modelChoices: [AgentKind: [AgentModel]] = [:]
+    /// What each CLI runs when Plume passes no model, when we can tell.
+    var modelFallback: [AgentKind: String] = [:]
+    var effortFallback: [AgentKind: String] = [:]
+    var modelsListedBy: [AgentKind: String] = [:]
     var pending: [String: PendingReview] = [:]
     var writing: Set<String> = []
 
@@ -129,6 +189,11 @@ final class AppModel {
         DispatchQueue.global(qos: .userInitiated).async {
             let found = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, CLIEnvironment.detect($0)) })
             DispatchQueue.main.async { self.cli = found }
+        }
+        refreshModels()
+        // The CLIs rewrite their model lists as they update; pick that up whenever Plume comes back.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.refreshModels()
         }
         #if DEBUG
         // A scratch vault for snapshots and manual checks; never saved as the user's vault.
@@ -160,6 +225,15 @@ final class AppModel {
         reviewMode = ReviewMode(rawValue: defaults.string(forKey: "pref.review") ?? "") ?? .queue
         claudeOn = b("claudeOn", true)
         codexOn = b("codexOn", true)
+        mcpOn = b("mcpOn", true)
+        automationsOn = b("automationsOn", true)
+        automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
+        agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
+            ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
+        })
+        agentEffort = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
+            ($0, defaults.string(forKey: "pref.effort." + $0.rawValue) ?? "")
+        })
     }
 
     // MARK: vault
@@ -174,6 +248,10 @@ final class AppModel {
         let v = Vault(root: url)
         v.onFilesChanged = { [weak self] rels in self?.filesChanged(rels) }
         vault = v
+        index = VaultIndex(root: v.root)
+        ensurePlumeFolder()
+        v.onPlumeFilesChanged = { [weak self] in self?.loadVaultConfig() }
+        loadVaultConfig()
         #if DEBUG
         if ProcessInfo.processInfo.environment["PLUME_SNAPSHOT_VAULT"] == nil {
             defaults.set(v.rootPath, forKey: "vaultPath")
@@ -183,6 +261,7 @@ final class AppModel {
         #endif
         pending = [:]
         writing = []
+        loadProposals()
         sessions.removeAll { $0.source == .terminal }
         if syncContext { ensureContextFiles() }
         if v.notes.filter({ !$0.isAgentFile }).isEmpty {
@@ -214,6 +293,15 @@ final class AppModel {
     - 新的想法追加到 [[收件箱]]
     - 不要改动 `日记/` 下的内容
 
+    ## Plume 命令
+    在库目录里可以运行 `plume`（`plume help` 查看全部）：
+    - `plume context`：用户当前打开的笔记、选中的文字、光标所在标题
+    - `plume search <词>`、`plume backlinks <笔记>`、`plume tasks`：搜索、反链、全库待办
+    - `plume open <笔记> --line N`：在 Plume 里打开给用户看
+    - `plume propose <笔记> --content - --reason 理由`：提交修改，用户逐段审阅后才写入
+    - `plume ask "问题" --options A,B`：拿不准时直接问用户
+    - `plume reviews`：用户最近接受和拒绝了哪些修改、为什么
+
     """
 
     static let claudeTemplate = """
@@ -232,6 +320,17 @@ final class AppModel {
         v.scan()
     }
 
+    /// `.plume/` marks the folder as a vault for the `plume` command and holds Plume's own files.
+    func ensurePlumeFolder() {
+        guard let v = vault else { return }
+        let dir = v.root.appendingPathComponent(".plume")
+        let ignore = dir.appendingPathComponent(".gitignore")
+        guard !FileManager.default.fileExists(atPath: ignore.path) else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Commands and automations belong with the vault; proposals and caches do not.
+        try? "proposals/\nindex/\n".write(to: ignore, atomically: true, encoding: .utf8)
+    }
+
     var contextInSync: Bool {
         guard let v = vault, let c = v.diskContent("CLAUDE.md") else { return false }
         return c.contains("@AGENTS.md") && FileManager.default.fileExists(atPath: v.url("AGENTS.md").path)
@@ -246,6 +345,7 @@ final class AppModel {
         if rel != activeRel { flushSave() }
         activeRel = rel
         editorText = v.read(rel)
+        editorSelection = NSRange(location: 0, length: 0)
         if pending[rel] == nil { showDiff = false }
         dirty = false
         clearGhost()
@@ -255,6 +355,7 @@ final class AppModel {
         if selection != rel { selection = rel }
         if focus { requestFocus(caret: (editorText as NSString).length) }
         revealInSidebar(rel)
+        emit("note.opened", source: "user", ["path": .string(rel)])
     }
 
     func revealInSidebar(_ rel: String) {
@@ -307,6 +408,7 @@ final class AppModel {
         switch v.write(rel, editorText) {
         case .ok:
             dirty = false
+            emit("note.saved", source: "user", ["path": .string(rel)])
         case let .conflict(disk):
             // Someone else wrote the file after we last read it: theirs wins, ours goes to review.
             let mine = editorText
@@ -335,6 +437,7 @@ final class AppModel {
         guard let v = vault else { return }
         flushSave()
         let rel = v.create(title: "未命名", content: "# 未命名\n")
+        emit("note.created", source: "user", ["path": .string(rel)])
         palette = false
         open(rel)
         requestFocus(caret: ("# 未命名\n" as NSString).length)
@@ -398,19 +501,81 @@ final class AppModel {
 
     func agentEnabled(_ k: AgentKind) -> Bool { k == .claude ? claudeOn : codexOn }
 
-    func runAgent(prompt: String, agent: AgentKind) {
+    /// Re-reads each CLI's model list and defaults off the main thread.
+    func refreshModels() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let models = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, CLIEnvironment.models($0)) })
+            DispatchQueue.main.async {
+                let choices = models.mapValues(\.choices)
+                if choices != self.modelChoices { self.modelChoices = choices }
+                self.modelFallback = models.compactMapValues(\.fallback)
+                self.effortFallback = models.compactMapValues(\.fallbackEffort)
+                self.modelsListedBy = models.compactMapValues(\.listedBy)
+            }
+        }
+    }
+
+    func models(_ k: AgentKind) -> [AgentModel] { modelChoices[k] ?? k.builtinModels }
+
+    /// Set when the model list came from a newer client than the CLI Plume runs, e.g. the Codex app.
+    func staleCLIWarning(_ k: AgentKind) -> String? {
+        guard let listed = modelsListedBy[k], let cliVersion = cli[k]?.version,
+              versionIsOlder(cliVersion, than: listed) else { return nil }
+        return "模型列表来自 \(k.displayName) \(listed)，而 Plume 调用的 \(cliVersion) 较旧，新模型可能无法运行。升级 \(k.executable) 命令行后即可使用。"
+    }
+
+    /// Human name for a model id; "" is the CLI default.
+    func modelName(_ id: String, for k: AgentKind) -> String {
+        if id.isEmpty { return modelFallback[k].map { "默认（\(modelName($0, for: k))）" } ?? "默认" }
+        return models(k).find(id)?.name ?? id
+    }
+
+    /// The name of the model the next run uses, without the "默认（…）" wrapper.
+    func modelLabel(_ k: AgentKind) -> String {
+        let id = agentModel[k] ?? ""
+        if id.isEmpty, let f = modelFallback[k] { return modelName(f, for: k) }
+        return modelName(id, for: k)
+    }
+
+    /// The model the next run of `k` uses, if it's one we know.
+    func currentModel(_ k: AgentKind) -> AgentModel? {
+        let id = agentModel[k] ?? ""
+        return models(k).find(id.isEmpty ? modelFallback[k] ?? "" : id)
+    }
+
+    /// Thinking levels the next run's model offers. Unknown model: the common levels.
+    func effortLevels(_ k: AgentKind) -> [String] {
+        currentModel(k)?.efforts ?? ["low", "medium", "high", "xhigh", "max"]
+    }
+
+    /// The level Plume passes on the command line: the user's pick, fitted to the model; "" to leave it to the CLI.
+    func effortArgument(_ k: AgentKind) -> String {
+        let pick = agentEffort[k] ?? ""
+        guard !pick.isEmpty else { return "" }
+        return Effort.clamp(pick, to: effortLevels(k)) ?? ""
+    }
+
+    /// The level the next run actually thinks at, as far as we can tell.
+    func effectiveEffort(_ k: AgentKind) -> String? {
+        let levels = effortLevels(k)
+        guard !levels.isEmpty else { return nil }
+        let arg = effortArgument(k)
+        if !arg.isEmpty { return arg }
+        if let f = effortFallback[k] { return Effort.clamp(f, to: levels) }
+        return currentModel(k)?.defaultEffort
+    }
+
+    /// Starts a run the user asked for. `target` continues that session (sending review feedback
+    /// back, say); otherwise the active session is reused when it fits, or a new one begins.
+    func runAgent(prompt: String, agent: AgentKind, model: String? = nil, effort: String? = nil, in target: AgentSession? = nil) {
         let prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, let v = vault else { return }
-        guard agentEnabled(agent) else { showToast(agent.displayName + " 已在设置中停用"); return }
-        guard let exe = cli[agent]?.path ?? CLIEnvironment.locate(agent.executable) else {
-            showToast("没有找到 " + agent.executable + " 命令")
+        guard !prompt.isEmpty, vault != nil else { return }
+        var session = target ?? activeSession
+        if let t = target, t.running {
+            showToast("\(t.agent.displayName) 还在运行，等它结束再发送")
             return
         }
-        flushSave()
-        clearGhost()
-
-        var session = activeSession
-        if session == nil || session!.source != .app || session!.agent != agent || session!.running {
+        if target == nil, session == nil || session!.source != .app || session!.agent != agent || session!.running {
             let s = AgentSession(agent: agent, source: .app, title: String(prompt.prefix(10)))
             sessions.append(s)
             session = s
@@ -421,22 +586,50 @@ final class AppModel {
         if zen { toggleZen() }
         agentPanel = true
         agentInput = ""
+        launch(s, prompt: prompt, model: model, effort: effort)
+    }
+
+    /// Runs `prompt` in `s`, resuming the CLI's own session when there is one. Automation
+    /// sessions run read-only: their only way to change a note is a proposal.
+    @discardableResult
+    func launch(_ s: AgentSession, prompt: String, model: String? = nil, effort: String? = nil) -> Bool {
+        let agent = s.agent
+        guard let v = vault else { return false }
+        guard agentEnabled(agent) else { showToast(agent.displayName + " 已在设置中停用"); return false }
+        guard let exe = cli[agent]?.path ?? CLIEnvironment.locate(agent.executable) else {
+            showToast("没有找到 " + agent.executable + " 命令")
+            return false
+        }
+        flushSave()
+        clearGhost()
         s.items.append(SessionItem(kind: .user(prompt)))
         s.running = true
+        let model = model ?? agentModel[agent] ?? ""
+        let effort = effort ?? effortArgument(agent)
+        s.model = model.isEmpty ? modelFallback[agent] : model
+        s.effort = effort.isEmpty ? effectiveEffort(agent) : effort
+        let readOnly = s.source == .automation
 
-        let git = gitSnapshot ? Git.snapshot(v.root, message: "Plume: snapshot before \(agent.displayName)") : nil
+        let git = gitSnapshot && !readOnly ? Git.snapshot(v.root, message: "Plume: snapshot before \(agent.displayName)") : nil
         runSnapshots[s.id] = (v.snapshotAll(), git)
 
-        let noteRel = activeRel ?? ""
-        let context = "你在 Plume 笔记库中工作，当前目录就是库的根目录，库里的笔记都是 Markdown 文件。" +
-            (noteRel.isEmpty ? "" : "用户当前打开的笔记是 \(noteRel)，“这篇笔记”“当前笔记”指的就是它。") +
-            "遵守 AGENTS.md 中的约定。直接修改文件即可，Plume 会把改动交给用户审阅。"
-        let args = AgentProcess.arguments(kind: agent, prompt: prompt, context: context, root: v.rootPath,
-                                          resume: s.cliSessionID)
+        let tool = PlumeTool.prepare()
+        var env = ["PLUME_SESSION": s.id.uuidString]
+        if let tool { env["PATH"] = tool.path }
+        if let server { env["PLUME_SOCK"] = server.path }
+        let mcp: AgentArguments.MCP? = mcpOn && tool != nil
+            ? AgentArguments.MCP(command: PlumeTool.managedLink.path, env: env.filter { $0.key != "PATH" }) : nil
+        // Claude Code gives up on a tool call after its own default; questions may wait longer.
+        if mcp != nil { env["MCP_TOOL_TIMEOUT"] = "900000" }
+        let context = agentContext(tool: tool != nil, mcp: mcp != nil, readOnly: readOnly)
+        let args = AgentArguments.build(kind: agent, prompt: prompt, context: context, root: v.rootPath,
+                                        resume: s.cliSessionID, model: model, effort: effort, socket: server?.path,
+                                        version: cli[agent]?.version, mcp: mcp, readOnly: readOnly)
         let proc = AgentProcess(kind: agent)
         s.process = proc
+        emit("session.started", source: eventSource(for: s), ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue)])
         do {
-            try proc.start(executable: exe, arguments: args, cwd: v.root, onEvents: { [weak self, weak s] events in
+            try proc.start(executable: exe, arguments: args, cwd: v.root, env: env, onEvents: { [weak self, weak s] events in
                 guard let self, let s else { return }
                 for w in s.apply(events) {
                     let rel = v.relative(w)
@@ -452,12 +645,38 @@ final class AppModel {
                 s.running = false
                 s.process = nil
                 self.finishRun(s)
+                self.emit("session.finished", source: self.eventSource(for: s),
+                          ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue), "status": JSONValue(Int(status))])
             })
+            return true
         } catch {
             s.items.append(SessionItem(kind: .error("无法启动 \(exe)：\(error.localizedDescription)")))
             s.running = false
             runSnapshots[s.id] = nil
+            return false
         }
+    }
+
+    /// What every run is told about Plume, beyond the user's prompt.
+    func agentContext(tool: Bool, mcp: Bool, readOnly: Bool) -> String {
+        let noteRel = activeRel ?? ""
+        var parts = ["你在 Plume 笔记库中工作，当前目录就是库的根目录，库里的笔记都是 Markdown 文件。"]
+        if !noteRel.isEmpty, !readOnly { parts.append("用户当前打开的笔记是 \(noteRel)，“这篇笔记”“当前笔记”指的就是它。") }
+        if mcp {
+            parts.append("Plume 提供了一组工具（plume 服务器）：context 查看用户选中的文字和光标所在标题；search、backlinks、outline、tasks 查询笔记库；"
+                + "propose_edit 提交修改，改动进入用户的逐段审阅，每处都要写明理由；ask_user 在拿不准时直接问用户；open 把笔记打开给用户看。")
+        } else if tool {
+            parts.append("可以运行 `plume` 命令：`plume context` 查看用户选中的文字和光标位置，`plume search`、`plume backlinks`、`plume tasks` 查询笔记库，"
+                + "`plume propose <笔记> --content - --reason 理由` 提交修改供用户审阅，`plume ask \"问题\"` 向用户提问；`plume help` 列出全部命令。")
+        }
+        if readOnly {
+            parts.append("这是自动化任务，你不能直接修改文件：所有修改都必须用 propose_edit（或 plume propose）提交，逐处写明理由，由用户审阅。")
+        } else {
+            parts.append(mcp || tool ? "修改笔记优先用 propose_edit 提交；也可以直接修改文件，Plume 会把改动交给用户审阅。"
+                                     : "直接修改文件即可，Plume 会把改动交给用户审阅。")
+        }
+        parts.append("遵守 AGENTS.md 中的约定。")
+        return parts.joined()
     }
 
     func stopAgent(_ s: AgentSession) { s.process?.stop() }
@@ -496,7 +715,8 @@ final class AppModel {
             changed.append(rel)
             let base = pending[rel]?.baseline ?? Markdown.lines(v.knownContent(rel) ?? before ?? "")
             queueReview(rel: rel, baseline: base,
-                        proposed: after, by: s.agent, source: .app, snapshot: snap.git, session: s)
+                        proposed: after, by: s.agent, source: s.source, snapshot: snap.git, session: s)
+            emit("note.changed", source: eventSource(for: s), ["path": .string(rel)])
         }
         for rel in writing where !changed.contains(rel) { v.acknowledge(rel, content: v.diskContent(rel)) }
         writing.removeAll()
@@ -506,7 +726,8 @@ final class AppModel {
         if let first = changed.first {
             let name = (first as NSString).lastPathComponent
             let more = changed.count > 1 ? " 等 \(changed.count) 个文件" : ""
-            showToast(reviewMode == .auto ? "\(s.agent.displayName) 已写入 \(name)\(more)" : "\(s.agent.displayName) 修改了 \(name)\(more) · 待审阅")
+            let auto = reviewMode == .auto && s.source != .automation
+            showToast(auto ? "\(s.agent.displayName) 已写入 \(name)\(more)" : "\(s.agent.displayName) 修改了 \(name)\(more) · 待审阅")
         }
     }
 
@@ -516,18 +737,21 @@ final class AppModel {
         v.acknowledge(rel, content: proposed)
         let after = Markdown.lines(proposed)
         let hunks = LineDiff.hunks(from: baseline, to: after)
-        let plus = hunks.reduce(0) { $0 + $1.add.count }, minus = hunks.reduce(0) { $0 + $1.del }
+        let counts = hunks.map { LineDiff.counts($0, base: baseline) }
+        let plus = counts.reduce(0) { $0 + $1.plus }, minus = counts.reduce(0) { $0 + $1.minus }
         let item = SessionItem(kind: .change(rel: rel, plus: plus, minus: minus))
         if let session {
             if session.source == .terminal { session.changeItems.append(item) }
             session.items.append(item)
         }
-        if hunks.isEmpty || reviewMode == .auto {
+        // A proposal for this note no longer matches the file the agent just wrote.
+        if let old = pending[rel], old.isProposal { markStale(old) }
+        if hunks.isEmpty || (reviewMode == .auto && session?.source != .automation) {
             pending[rel] = nil
             return
         }
         pending[rel] = PendingReview(rel: rel, by: by, source: source, baseline: baseline, proposed: after,
-                                     hunks: hunks, snapshot: snapshot)
+                                     hunks: hunks, snapshot: snapshot, sessionID: session?.id)
     }
 
     private func reloadActiveFromDisk() {
@@ -556,6 +780,8 @@ final class AppModel {
                 writing.insert(rel)
                 continue
             }
+            let outside = watchTerminal ? mostRecentTerminalSession().map(eventSource) ?? "external" : "external"
+            emit(disk == nil ? "note.deleted" : "note.changed", source: outside, ["path": .string(rel)])
             guard let disk else {
                 // Deleted.
                 v.acknowledge(rel, content: nil)
@@ -591,30 +817,6 @@ final class AppModel {
         guard let rel = activeRel, var p = pending[rel], p.hunks.indices.contains(i) else { return }
         p.hunks[i].state = state
         pending[rel] = p
-    }
-
-    /// `all`: accept or reject everything; nil accepts whatever is still undecided.
-    func finishReview(all: HunkState?) {
-        guard let v = vault, let rel = activeRel, let p = pending[rel] else { return }
-        let hunks = p.hunks.map { h -> Hunk in
-            var h = h
-            if let all { h.state = all } else if h.state == .pending { h.state = .accepted }
-            return h
-        }
-        let result = LineDiff.apply(hunks, to: p.baseline).joined(separator: "\n")
-        let accepted = hunks.filter { $0.state == .accepted }.count
-        v.forceWrite(rel, result)
-        pending[rel] = nil
-        showDiff = false
-        editorText = result
-        dirty = false
-        editorVersion += 1
-        let name = (rel as NSString).lastPathComponent
-        if accepted > 0 {
-            showToast("已写入 \(name) · 接受 \(accepted) 处" + (p.snapshot.map { " · 快照 " + $0 } ?? ""))
-        } else {
-            showToast("已还原到 agent 写入前的版本")
-        }
     }
 
     // MARK: terminal sessions
@@ -738,6 +940,7 @@ final class AppModel {
             DispatchQueue.main.async {
                 v.scan()
                 self.pending[rel] = nil
+                self.emit("note.deleted", source: "user", ["path": .string(rel)])
                 if rel == self.activeRel, let next = v.notes.first { self.open(next.rel) }
             }
         }

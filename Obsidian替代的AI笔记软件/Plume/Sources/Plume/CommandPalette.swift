@@ -19,27 +19,14 @@ struct CommandPalette: View {
 
     private var entries: [PaletteEntry] {
         let m = model
-        var cmds: [PaletteEntry] = [
-            .init(id: "new", section: .commands, label: "新建笔记", hint: "⌘N", icon: "square.and.pencil", run: m.newNote),
-            .init(id: "zen", section: .commands, label: m.zen ? "退出专注模式" : "进入专注模式", hint: "⌘.", icon: "arrow.up.left.and.arrow.down.right", run: m.toggleZen),
-            .init(id: "tw", section: .commands, label: "打字机滚动：" + (m.typewriter ? "关闭" : "开启"), hint: "", icon: "text.aligncenter") { m.typewriter.toggle() },
-            .init(id: "dim", section: .commands, label: "段落聚焦：" + (m.dim ? "关闭" : "开启"), hint: "", icon: "text.line.first.and.arrowtriangle.forward") { m.dim.toggle() },
-            .init(id: "font", section: .commands, label: "切换字体：衬线 / 无衬线 / 等宽", hint: m.font.shortLabel, icon: "textformat") { m.font = m.font.next },
-            .init(id: "sum", section: .commands, label: "让 Claude Code 总结当前笔记", hint: "Agent", icon: "sparkle", tint: Theme.claude) {
-                m.runAgent(prompt: "总结这篇笔记，在开头加一段摘要", agent: .claude)
-            },
-            .init(id: "todo", section: .commands, label: "让 Codex 整理当前笔记的待办", hint: "Agent", icon: "terminal") {
-                m.runAgent(prompt: "整理这篇笔记的待办，合并重复项", agent: .codex)
-            },
-        ]
-        if !m.pending.isEmpty {
-            cmds.append(.init(id: "review", section: .commands, label: "审阅待定改动（\(m.pending.count)）", hint: "⇧⌘R", icon: "checklist", run: m.reviewNext))
+        let cmds: [PaletteEntry] = CommandRegistry.all(m).compactMap { c in
+            guard let p = c.palette, p.visible(m) else { return nil }
+            return PaletteEntry(id: c.spec.id, section: .commands, label: p.label(m), hint: p.hint, icon: p.icon, tint: p.tint) {
+                c.perform(m, CommandCall()) { result in
+                    if case let .failure(e) = result { m.showToast(e.message) }
+                }
+            }
         }
-        cmds += [
-            .init(id: "settings", section: .commands, label: "Agent 与 CLI 设置", hint: "⌘,", icon: "gearshape") { m.openSettings(.agent) },
-            .init(id: "vault", section: .commands, label: "打开其他库…", hint: "⌘O", icon: "folder", run: m.chooseVault),
-            .init(id: "ob", section: .commands, label: "重新运行新手引导", hint: "", icon: "hand.wave") { m.onboardingStep = 0 },
-        ]
         let notes = (m.vault?.notes ?? []).map { n in
             PaletteEntry(id: "n:" + n.rel, section: .notes, label: n.displayName, hint: n.folder,
                          icon: n.isAgentFile ? "doc.badge.gearshape" : "doc.text") {
@@ -90,10 +77,11 @@ struct CommandPalette: View {
                 .font(.system(size: 22))
                 .focused($focused)
                 .onChange(of: model.paletteQuery) { _, _ in model.paletteSel = 0 }
-                .onKeyPress(.downArrow) { move(1, list.count); return .handled }
-                .onKeyPress(.upArrow) { move(-1, list.count); return .handled }
-                .onKeyPress(.escape) { model.palette = false; return .handled }
+                .onKeyPress(.downArrow) { if imeComposing() { return .ignored }; move(1, list.count); return .handled }
+                .onKeyPress(.upArrow) { if imeComposing() { return .ignored }; move(-1, list.count); return .handled }
+                .onKeyPress(.escape) { if imeComposing() { return .ignored }; model.palette = false; return .handled }
                 .onKeyPress(.return) {
+                    if imeComposing() { return .ignored }
                     model.palette = false
                     if list.isEmpty {
                         let q = model.paletteQuery.trimmingCharacters(in: .whitespaces)

@@ -97,6 +97,56 @@ final class LineDiffTests: XCTestCase {
         let hs = LineDiff.hunks(from: ["x"], to: ["> 摘要", "x"])
         XCTAssertEqual(hs, [Hunk(start: 0, del: 0, add: ["> 摘要"])])
     }
+
+    func testRewriteAcrossBlankLinesIsOneHunk() {
+        let old = ["# 标题", "", "旧段一", "", "旧段二", "", "## 下一节", "保留"]
+        let new = ["# 新标题", "", "新段一", "", "新段二", "", "## 下一节", "保留"]
+        let hs = LineDiff.hunks(from: old, to: new)
+        XCTAssertEqual(hs, [Hunk(start: 0, del: 5, add: ["# 新标题", "", "新段一", "", "新段二"])])
+        XCTAssertEqual(LineDiff.apply(hs, to: old, pendingAs: .accepted), new)
+        XCTAssertEqual(LineDiff.counts(hs[0], base: old).plus, 3)
+        XCTAssertEqual(LineDiff.counts(hs[0], base: old).minus, 3)
+        // Blank lines inside the hunk stay context; each paragraph sits next to its original.
+        XCTAssertEqual(LineDiff.rows(base: old, hunks: hs).prefix(5), [
+            .deleted("# 标题"), .added("# 新标题", changed: [2..<3]),
+            .context(""),
+            .deleted("旧段一", changed: [0..<1]), .added("新段一", changed: [0..<1]),
+        ])
+    }
+
+    func testEditsSeparatedByTextStayApart() {
+        XCTAssertEqual(LineDiff.hunks(from: ["a", "b", "c", "d"], to: ["A", "b", "C", "d"]).count, 2)
+    }
+
+    func testInlineMarksWords() {
+        let m = LineDiff.inline("the quick brown fox", "the slow brown fox")
+        XCTAssertEqual(m?.old, [4..<9])
+        XCTAssertEqual(m?.new, [4..<8])
+        XCTAssertEqual(LineDiff.inline("活跃用户 3,200", "活跃用户 3,480")?.new, [7..<10])
+        // Nothing in common worth marking.
+        XCTAssertNil(LineDiff.inline("完全不同的一句话", "another line entirely"))
+    }
+
+    func testUnrelatedLinesAreNotPaired() {
+        let rows = LineDiff.rows(base: ["苹果香蕉"], hunks: LineDiff.hunks(from: ["苹果香蕉"], to: ["hello"]))
+        XCTAssertEqual(rows, [.deleted("苹果香蕉"), .added("hello"), .bar(hunk: 0)])
+    }
+
+    func testFoldsLongUnchangedRuns() {
+        let old = (0..<20).map { "line \($0)" }
+        var new = old
+        new[10] = "changed"
+        let hs = LineDiff.hunks(from: old, to: new)
+        let rows = LineDiff.rows(base: old, hunks: hs, context: 2)
+        XCTAssertEqual(rows.first, .gap(line: 0, count: 8))
+        XCTAssertEqual(rows[1...2], [.context("line 8"), .context("line 9")])
+        XCTAssertEqual(rows.last, .gap(line: 13, count: 7))
+        let open = LineDiff.rows(base: old, hunks: hs, context: 2, expanded: [0])
+        XCTAssertEqual(open.first, .context("line 0"))
+        // Short runs are never folded.
+        XCTAssertFalse(LineDiff.rows(base: ["a", "b", "c"], hunks: LineDiff.hunks(from: ["a", "b", "c"], to: ["a", "b", "C"]), context: 1)
+            .contains { if case .gap = $0 { true } else { false } })
+    }
 }
 
 final class AgentEventTests: XCTestCase {
@@ -145,5 +195,92 @@ final class AgentEventTests: XCTestCase {
         var buf = Data("{\"a\":1}\n{\"b\":".utf8)
         XCTAssertEqual(JSONLines.drain(&buf).count, 1)
         XCTAssertEqual(String(data: buf, encoding: .utf8), "{\"b\":")
+    }
+}
+
+final class AgentModelTests: XCTestCase {
+    func testCodexCacheKeepsListedModelsByPriority() {
+        let json = """
+        {"models":[
+          {"slug":"gpt-6-sol","display_name":"GPT-6-Sol","visibility":"list","priority":2},
+          {"slug":"gpt-reserve","display_name":"GPT-Reserve","visibility":"hide","priority":1},
+          {"slug":"gpt-6-astra","display_name":"GPT-6-Astra","visibility":"list","priority":1}
+        ]}
+        """
+        let models = CodexModels.parseCache(Data(json.utf8))
+        XCTAssertEqual(models.map(\.id), ["gpt-6-astra", "gpt-6-sol"])
+        XCTAssertEqual(models.first?.name, "GPT-6-Astra")
+        XCTAssertEqual(CodexModels.parseCache(Data("not json".utf8)), [])
+    }
+
+    func testCodexConfiguredModel() {
+        let toml = """
+        model_reasoning_effort = "high"
+        model = "gpt-6-sol"
+
+        [profiles.fast]
+        model = "gpt-6-luna"
+        """
+        XCTAssertEqual(CodexModels.configuredModel(toml), "gpt-6-sol")
+        XCTAssertEqual(CodexModels.configuredEffort(toml), "high")
+        XCTAssertNil(CodexModels.configuredModel("[tui]\nmodel = \"x\""))
+    }
+
+    func testCodexCacheReadsReasoningLevels() {
+        let json = """
+        {"models":[{"slug":"gpt-6-sol","display_name":"GPT-6-Sol","description":"Workhorse","priority":1,
+          "default_reasoning_level":"medium",
+          "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"high"},{"effort":"ultra"}]}]}
+        """
+        let m = CodexModels.parseCache(Data(json.utf8)).first
+        XCTAssertEqual(m?.efforts, ["low", "medium", "high", "ultra"])
+        XCTAssertEqual(m?.defaultEffort, "medium")
+        XCTAssertEqual(m?.detail, "Workhorse")
+    }
+
+    func testClaudeCatalogKeepsFullNamesAndEfforts() {
+        let json = """
+        {"version":2,"catalog":{"surface":"cc","config":{"id":"cc","models":[
+          {"id":"claude-opus-5-5","name":"Opus 5.5","short_name":"Opus","description":"Most capable","section":"main",
+           "thinking":{"type":"effort","effort_options":[{"id":"low","name":"Low"},
+             {"id":"medium","name":"Medium","badge":{"message":"Default","variant":"neutral"}},{"id":"max","name":"Max"}]}},
+          {"id":"claude-haiku-4-5-20251001","name":"Haiku 4.5","short_name":"Haiku","section":"main","thinking":{"type":"none"}},
+          {"id":"claude-opus-5","name":"Opus 5","short_name":"Opus","section":"overflow",
+           "thinking":{"type":"effort","effort_options":[{"id":"high","name":"High"}]}}
+        ]}}}
+        """
+        let models = ClaudeModels.parseCatalog(Data(json.utf8))
+        XCTAssertEqual(models.map(\.name), ["Opus 5.5", "Haiku 4.5", "Opus 5"])
+        XCTAssertEqual(models[0].efforts, ["low", "medium", "max"])
+        XCTAssertEqual(models[0].defaultEffort, "medium")
+        XCTAssertEqual(models[1].efforts, [])
+        XCTAssertFalse(models[2].primary)
+        // `--model opus` is the newest primary Opus; exact ids still win.
+        XCTAssertEqual(models.find("opus")?.id, "claude-opus-5-5")
+        XCTAssertEqual(models.find("claude-opus-5")?.name, "Opus 5")
+        XCTAssertNil(models.find("gpt-6"))
+        XCTAssertEqual(ClaudeModels.parseCatalog(Data("[]".utf8)), [])
+    }
+
+    func testClaudeSettingsDefaults() {
+        let conf = ClaudeModels.configured(Data(#"{"model":"opus","effortLevel":"high","theme":"dark"}"#.utf8))
+        XCTAssertEqual(conf.model, "opus")
+        XCTAssertEqual(conf.effort, "high")
+        XCTAssertNil(ClaudeModels.configured(Data("{}".utf8)).model)
+    }
+
+    func testVersionComparison() {
+        XCTAssertTrue(versionIsOlder("codex-cli 0.148.0", than: "0.155.0"))
+        XCTAssertFalse(versionIsOlder("codex-cli 0.155.0", than: "0.155.0"))
+        XCTAssertFalse(versionIsOlder("2.1.282 (Claude Code)", than: "2.1.9"))
+        XCTAssertFalse(versionIsOlder("unknown", than: "0.1.0"))
+    }
+
+    func testEffortClampsToNearestOfferedLevel() {
+        XCTAssertEqual(Effort.clamp("high", to: ["low", "medium", "high"]), "high")
+        XCTAssertEqual(Effort.clamp("xhigh", to: ["low", "medium", "high", "max"]), "high")
+        XCTAssertEqual(Effort.clamp("ultra", to: ["low", "max"]), "max")
+        XCTAssertNil(Effort.clamp("high", to: []))
+        XCTAssertEqual(Effort.name("xhigh"), "超高")
     }
 }

@@ -44,6 +44,38 @@ enum CLIEnvironment {
         return CLIInfo(path: p, version: v)
     }
 
+    /// What `kind` offers, read fresh from the CLI's own files each call.
+    struct Models {
+        var choices: [AgentModel]
+        /// Model and thinking level the CLI uses when Plume passes none, when we can tell.
+        var fallback: String?
+        var fallbackEffort: String?
+        /// Version of the client that wrote the list, when it says.
+        var listedBy: String?
+    }
+
+    static func models(_ kind: AgentKind) -> Models {
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+        switch kind {
+        case .claude:
+            let dir = home.appendingPathComponent(".claude")
+            let catalog = ClaudeModels.latestCatalog(in: dir.appendingPathComponent("cache/model-catalog"))
+                .flatMap { try? Data(contentsOf: $0) }
+                .map(ClaudeModels.parseCatalog) ?? []
+            let conf = (try? Data(contentsOf: dir.appendingPathComponent("settings.json"))).map(ClaudeModels.configured)
+            return Models(choices: catalog.isEmpty ? kind.builtinModels : catalog,
+                          fallback: conf?.model, fallbackEffort: conf?.effort)
+        case .codex:
+            let dir = home.appendingPathComponent(".codex")
+            let data = try? Data(contentsOf: dir.appendingPathComponent("models_cache.json"))
+            let cached = data.map(CodexModels.parseCache) ?? []
+            let toml = try? String(contentsOf: dir.appendingPathComponent("config.toml"), encoding: .utf8)
+            return Models(choices: cached, fallback: toml.flatMap(CodexModels.configuredModel),
+                          fallbackEffort: toml.flatMap(CodexModels.configuredEffort),
+                          listedBy: data.flatMap(CodexModels.cacheClientVersion))
+        }
+    }
+
     /// Runs a short command and returns stdout, or nil on timeout/failure.
     @discardableResult
     static func run(_ exe: String, _ args: [String], cwd: URL? = nil, timeout: TimeInterval = 10) -> String? {
@@ -108,30 +140,16 @@ final class AgentProcess {
 
     init(kind: AgentKind) { self.kind = kind }
 
-    static func arguments(kind: AgentKind, prompt: String, context: String, root: String, resume: String?) -> [String] {
-        switch kind {
-        case .claude:
-            var a = ["-p", prompt, "--output-format", "stream-json", "--verbose",
-                     "--permission-mode", "acceptEdits", "--append-system-prompt", context]
-            if let resume { a += ["--resume", resume] }
-            return a
-        case .codex:
-            let full = context + "\n\n" + prompt
-            if let resume {
-                return ["exec", "resume", resume, "--json", "--skip-git-repo-check",
-                        "-c", "sandbox_mode=\"workspace-write\"", full]
-            }
-            return ["exec", "--json", "-s", "workspace-write", "--skip-git-repo-check", "-C", root, full]
-        }
-    }
-
-    func start(executable: String, arguments: [String], cwd: URL,
+    /// `env` is added to the CLI's environment; a `PATH` there is put in front of the usual one.
+    func start(executable: String, arguments: [String], cwd: URL, env extra: [String: String] = [:],
                onEvents: @escaping ([AgentEvent]) -> Void,
                onExit: @escaping (_ status: Int32, _ stderr: String, _ sawFinish: Bool) -> Void) throws {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.currentDirectoryURL = cwd
-        process.environment = CLIEnvironment.environment
+        var env = CLIEnvironment.environment
+        for (k, v) in extra { env[k] = k == "PATH" ? v + ":" + (env["PATH"] ?? "") : v }
+        process.environment = env
         process.standardInput = FileHandle.nullDevice
         let out = Pipe(), err = Pipe()
         process.standardOutput = out

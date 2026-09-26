@@ -59,8 +59,9 @@ struct NoteDetail: View {
                     Banner(tint: pending.by.map(Theme.agentColor) ?? .secondary) {
                         Image(systemName: "doc.badge.clock")
                     } text: {
-                        let where_ = pending.source == .terminal ? "在终端中" : "在 Plume 中"
-                        Text("\(agentLabel(pending.by)) \(where_)修改了此文件 \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
+                        let where_ = pending.source == .terminal ? "在终端中" : pending.source == .automation ? "在自动化中" : "在 Plume 中"
+                        let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
+                        Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
                     } action: {
                         Button("审阅") { model.showDiff = true }
                             .buttonStyle(.glassProminent)
@@ -140,9 +141,10 @@ extension NoteDetail {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("稍后", systemImage: "clock") { model.showDiff = false }
                     .help("稍后审阅 ⎋")
-                Button("全部还原", systemImage: "arrow.uturn.backward") { model.finishReview(all: .rejected) }
+                let proposal = model.activePending?.isProposal == true
+                Button(proposal ? "全部拒绝" : "全部还原", systemImage: "arrow.uturn.backward") { model.finishReview(all: .rejected) }
                     .labelStyle(.titleAndIcon)
-                    .help("还原到 agent 写入前的版本")
+                    .help(proposal ? "不采纳这份提案，文件保持不变" : "还原到 agent 写入前的版本")
             }
             ToolbarSpacer(.fixed, placement: .primaryAction)
             ToolbarItem(placement: .primaryAction) {
@@ -195,7 +197,7 @@ struct SlashMenu: View {
                 let sel = i == min(state.selection, state.items.count - 1)
                 if item.ai != nil, i > 0, state.items[i - 1].ai == nil { Divider().padding(.vertical, 3).padding(.horizontal, 8) }
                 HStack(spacing: 10) {
-                    Image(systemName: Self.icon(item.key))
+                    Image(systemName: item.icon ?? Self.icon(item.key))
                         .frame(width: 18)
                         .foregroundStyle(sel ? AnyShapeStyle(.white) : item.ai.map { AnyShapeStyle(Theme.agentColor($0)) } ?? AnyShapeStyle(.secondary))
                     Text(item.label).frame(maxWidth: .infinity, alignment: .leading)

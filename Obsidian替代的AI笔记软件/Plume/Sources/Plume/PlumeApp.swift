@@ -1,4 +1,5 @@
 import AppKit
+import PlumeCore
 import SwiftUI
 
 @main
@@ -37,9 +38,12 @@ struct PlumeApp: App {
                 Divider()
             }
             CommandMenu("Agent") {
-                Button("让 Claude Code 总结当前笔记") { model.runAgent(prompt: "总结这篇笔记，在开头加一段摘要", agent: .claude) }
-                Button("让 Codex 整理当前笔记的待办") { model.runAgent(prompt: "整理这篇笔记的待办，合并重复项", agent: .codex) }
-                Divider()
+                ForEach(model.userCommands, id: \.key) { c in
+                    Button(c.title) {
+                        do { try model.runUserCommand(c, input: nil) } catch let e as RPCError { model.showToast(e.message) } catch {}
+                    }
+                }
+                if !model.userCommands.isEmpty { Divider() }
                 Button("审阅待定改动") { model.reviewNext() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(model.pending.isEmpty)
@@ -55,7 +59,9 @@ struct PlumeApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var model: AppModel?
+    var model: AppModel? {
+        didSet { if !snapshotMode { model?.startServer() } }
+    }
     private var monitor: Any?
 
     private var snapshotMode: Bool {
@@ -156,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         model?.flushSave()
+        model?.server?.stop()
     }
 }
 

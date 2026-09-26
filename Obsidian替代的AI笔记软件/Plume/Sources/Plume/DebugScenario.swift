@@ -52,6 +52,72 @@ enum DebugScenario {
             s.items.append(SessionItem(kind: .change(rel: m.activeRel!, plus: 4, minus: 1)))
             m.sessions.append(s)
             m.activeSessionID = s.id
+        case "proposal":
+            // A proposal with reasons, one hunk already rejected with the user's reason.
+            let s = AgentSession(agent: .claude, source: .app, title: "精简措辞")
+            m.sessions.append(s)
+            m.activeSessionID = s.id
+            let lines = Markdown.lines(m.editorText)
+            let edits: [JSONValue] = [
+                ["old": .string(lines[1]), "new": .string("> 摘要：2.0 在 10 月 20 日前完成内测。"), "reason": "开头先交代结论，读者不用读完全文"],
+                ["old": .string(lines[lines.count - 2]), "new": "冷启动目标：10 秒以内。", "reason": "把主观判断改成可验证的目标"],
+            ]
+            m.propose(CommandCall(params: ["note": .string(m.activeRel!), "edits": .array(edits), "reason": "精简措辞，让每段先说结论"],
+                                  session: s)) { _ in }
+            m.setHunk(1, .rejected)
+            m.setFeedback(1, "这里需要保留原来的解释")
+            m.showDiff = parts.count < 3 || parts[2] != "panel"
+            if !m.showDiff {
+                s.apply([.user("把这篇笔记精简一下"), .text("我提交了两处修改，等你审阅。")])
+                let q = AgentQuestion(id: UUID(), sessionID: s.id, agent: .claude, question: "摘要放在标题下面，还是单独一节？",
+                                      options: ["标题下面", "单独一节"], allowText: true)
+                m.questions[q.id] = q
+                s.items.append(SessionItem(kind: .question(q.id)))
+                s.items.append(SessionItem(kind: .feedback(rel: m.activeRel!, message: "我审阅了你的修改：接受 1 处，拒绝 1 处。", sent: false)))
+                m.agentPanel = true
+            }
+        case "ime":
+            // Return while Pinyin is composing must commit the candidate, not send; plain Return must send.
+            m.agentPanel = true
+            m.claudeOn = false  // a send then only shows a toast instead of running the CLI
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) else { return }
+                func views(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(views) }
+                let composer = views(w.contentView!.superview ?? w.contentView!).compactMap { $0 as? NSTextField }
+                    .first { $0.placeholderString?.hasPrefix("让 ") == true }
+                guard let composer, w.makeFirstResponder(composer), let field = w.firstResponder as? NSTextView else {
+                    print("IME: composer not found"); return
+                }
+                func enter() {
+                    let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: w.windowNumber,
+                                             context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+                    w.sendEvent(e)
+                }
+                m.agentInput = "测试"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    field.setMarkedText("zhong", selectedRange: NSRange(location: 5, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+                    enter()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        print("IME composing: marked=\(field.hasMarkedText()) toast=\(m.toast ?? "nil")")
+                        field.unmarkText()
+                        m.toast = nil
+                        m.agentInput = "测试"
+                        enter()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            print("IME plain: toast=\(m.toast ?? "nil")")
+                            m.claudeOn = true
+                            exit(0)
+                        }
+                    }
+                }
+            }
+        case "models":
+            m.agentPanel = true
+            if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agentPick = k }
+            m.modelPickerOpen = true
+        case "agent":
+            m.agentPanel = true
+            if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agentPick = k }
         case "palette": m.openPalette(); m.paletteQuery = parts.count > 2 ? parts[2] : ""
         case "settings": m.openSettings(parts.count > 2 ? SettingsTab(rawValue: parts[2]) ?? .agent : .agent)
         case "onboarding": m.onboardingStep = Int(parts.count > 2 ? parts[2] : "0") ?? 0
