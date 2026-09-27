@@ -11,6 +11,17 @@ public enum Render {
         case "notes": return (r["notes"]?.array ?? []).compactMap { $0["path"]?.string }.joined(separator: "\n")
         case "outline": return outline(r)
         case "skim": return skim(r)
+        case "data":
+            let cs = r["collections"]?.array ?? []
+            if cs.isEmpty { return "还没有数据集合。用 twain data add <集合> --record '{…}' 新建。" }
+            return cs.map { "\($0["name"]?.string ?? "")  \($0["count"]?.int ?? 0) 条  字段：\(($0["fields"]?.array ?? []).compactMap(\.string).joined(separator: ", "))" }
+                .joined(separator: "\n")
+        case "data.add", "data.import": return "已向 \(r["collection"]?.string ?? "") 添加 \(r["added"]?.int ?? 0) 条记录"
+        case "data.query":
+            if let days = r["days"]?.array {
+                return days.map { "\($0["date"]?.string ?? "")  \($0["value"]?.number.map { String(format: "%g", $0) } ?? "—")" }.joined(separator: "\n")
+            }
+            return (r["records"]?.array ?? []).map { $0.text() }.joined(separator: "\n")
         case "read": return read(r)
         case "tasks": return tasks(r)
         case "commands": return commands(r)

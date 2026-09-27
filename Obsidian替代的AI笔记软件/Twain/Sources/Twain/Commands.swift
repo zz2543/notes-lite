@@ -332,6 +332,14 @@ enum CommandRegistry {
         AppCommand(spec: TwainCommands.watch) { m, call, reply in m.watch(call, reply: reply) },
         AppCommand(spec: TwainCommands.annotate) { m, call in try m.annotateCommand(call) },
         AppCommand(spec: TwainCommands.cards) { m, call in try m.cardsCommand(call) },
+    ] + TwainCommands.dataCommands.map { spec in
+        AppCommand(spec: spec) { m, call in
+            guard let v = m.vault else { throw RPCError(RPCError.noVault, "共笔没有打开任何库") }
+            let r = try DataQueries.run(spec.id, call.params, root: v.root)
+            if spec.effect == .write { m.dataChanged(r["collection"]?.string ?? "", added: r["added"]?.int ?? 0, source: call.session.map(m.eventSource) ?? "external") }
+            return r
+        }
+    } + [
         AppCommand(spec: TwainCommands.annotations) { m, call in try m.annotationsCommand(call) },
         AppCommand(spec: TwainCommands.commands) { m, _ in
             ["commands": .array(exposed(m).map(\.spec.json))]

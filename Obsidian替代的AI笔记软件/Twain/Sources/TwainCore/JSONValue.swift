@@ -23,6 +23,13 @@ public enum JSONValue: Equatable, Sendable {
         default: return nil
         }
     }
+    public var number: Double? {
+        switch self {
+        case let .number(n): return n
+        case let .string(s): return Double(s)
+        default: return nil
+        }
+    }
     public var array: [JSONValue]? { if case let .array(a) = self { return a }; return nil }
     public var object: [String: JSONValue]? { if case let .object(o) = self { return o }; return nil }
     public var isNull: Bool { self == .null }

@@ -215,6 +215,8 @@ final class AppModel {
     /// The vault's pipelines (`.twain/pipelines/`) and the runs in progress (`Pipelines.swift`).
     var pipelines: [Pipeline] = []
     var pipelineRuns: [UUID: PipelineRun] = [:]
+    /// Bumped whenever a data collection changes, so spaces redraw their charts.
+    var dataVersion = 0
     /// 问库 desks (`ResearchDesk.swift`) and the one shown in place of a note.
     var desks: [ResearchDesk] = []
     var openDesk: String?
@@ -333,6 +335,7 @@ final class AppModel {
         warmCompanion()
         openDesk = nil
         loadDesks()
+        importInbox()
     }
 
     static let welcomeNote = """
@@ -619,6 +622,13 @@ final class AppModel {
     func twainFilesChanged(_ paths: Set<String>) {
         if paths.contains(where: { $0.hasPrefix(".twain/annotations") }) { loadAnnotations() }
         if paths.contains(where: { $0.hasPrefix(".twain/pipelines") }) { loadPipelines() }
+        if paths.contains(where: { $0.hasPrefix(".twain/inbox/") && !$0.contains("/已导入") }) { importInbox() }
+        if paths.contains(where: { $0.hasPrefix(".twain/data/") }) { dataVersion += 1 }
+    }
+
+    func dataChanged(_ collection: String, added: Int, source: String) {
+        dataVersion += 1
+        if added > 0 { emit("data.added", source: source, ["collection": .string(collection), "count": JSONValue(added)]) }
     }
 
     /// What Twain keeps about a note outside it (summary, annotations) follows the note when it moves.

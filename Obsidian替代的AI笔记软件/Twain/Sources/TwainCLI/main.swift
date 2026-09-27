@@ -70,7 +70,11 @@ let caller = RPCCaller(session: env["TWAIN_SESSION"], pid: getppid(), vault: vau
 /// Answers `spec` from the files alone.
 func offline(_ spec: CommandSpec, _ params: [String: JSONValue]) throws -> JSONValue {
     if spec.id == "commands" { return ["commands": .array(TwainCommands.all.map(\.json))] }
-    guard !spec.needsApp, VaultQueries.ids.contains(spec.id) else {
+    if DataQueries.ids.contains(spec.id) {
+        guard let root = vaultRoot else { throw RPCError(RPCError.appNotRunning, "当前目录不在任何库里（找不到 .twain/）") }
+        return try DataQueries.run(spec.id, params, root: root)
+    }
+    guard !spec.needsApp, VaultQueries.ids.contains(spec.id) || DataQueries.ids.contains(spec.id) else {
         throw RPCError(RPCError.appNotRunning, "共笔没有运行，\(spec.id) 需要打开共笔")
     }
     guard let root = vaultRoot else {
@@ -105,7 +109,7 @@ func invoke(_ spec: CommandSpec, _ params: [String: JSONValue]) -> Result<JSONVa
     case let .success(resp):
         if let e = resp.error {
             // The app has a different vault open: read commands can still answer from this one.
-            if e.code == RPCError.otherVault, !spec.needsApp, VaultQueries.ids.contains(spec.id) {
+            if e.code == RPCError.otherVault, !spec.needsApp, VaultQueries.ids.contains(spec.id) || DataQueries.ids.contains(spec.id) {
                 return attempt { try offline(spec, params) }
             }
             return .failure(e)
@@ -115,7 +119,7 @@ func invoke(_ spec: CommandSpec, _ params: [String: JSONValue]) -> Result<JSONVa
         return attempt { try offline(spec, params) }
     case .failure(.denied):
         // Read commands still work from the files; the rest need the socket the sandbox blocks.
-        if !spec.needsApp, VaultQueries.ids.contains(spec.id) { return attempt { try offline(spec, params) } }
+        if !spec.needsApp, VaultQueries.ids.contains(spec.id) || DataQueries.ids.contains(spec.id) { return attempt { try offline(spec, params) } }
         return .failure(RPCError(RPCError.appNotRunning,
                                  "连接共笔被拒绝：当前环境（很可能是 agent 的沙箱）不允许访问本地 socket \(socketPath)"))
     case let .failure(.broken(why)):
@@ -150,7 +154,9 @@ if args.first == "mcp" {
 
 // MARK: twain <command>
 
-let id = args.removeFirst()
+var id = args.removeFirst()
+// `twain data add sleep …` reads as the command data.add.
+if id == "data", let sub = args.first, ["add", "query", "import"].contains(sub) { id = "data." + args.removeFirst() }
 if args.contains("--help") || args.contains("-h") {
     if let spec = TwainCommands.spec(id) { out(spec.help); exit(0) }
 }

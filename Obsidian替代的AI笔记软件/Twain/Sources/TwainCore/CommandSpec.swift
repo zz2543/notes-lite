@@ -264,7 +264,7 @@ public enum TwainCommands {
         "commands", "列出所有可用命令，包括 app 里注册的。", effect: .read, needsApp: false)
 
     public static let all: [CommandSpec] = [context, notes, search, skim, read, backlinks, outline, tasks, open, reveal, notify,
-                                            propose, ask, reviews, run, watch, commands, annotate, annotations, cards]
+                                            propose, ask, reviews, run, watch, commands, annotate, annotations, cards] + dataCommands
 
     public static func spec(_ id: String) -> CommandSpec? { all.first { $0.id == id } }
 
@@ -293,6 +293,10 @@ public enum TwainEvents {
         ("session.started", "共笔中的 agent 会话开始运行"),
         ("session.finished", "agent 会话运行结束"),
         ("selection.changed", "用户的选区变化（需显式订阅，节流 500 毫秒）"),
+        ("data.added", "数据集合新增了记录（collection、count）"),
+        ("note.imported", "外部程序通过接口导入了一篇笔记"),
+        ("annotation.created", "agent 在笔记上留下了批注"),
+        ("annotation.resolved", "用户处理了一条批注"),
     ]
     public static var names: [String] { all.map(\.0) }
     /// Sent only to those who ask for them by name.
