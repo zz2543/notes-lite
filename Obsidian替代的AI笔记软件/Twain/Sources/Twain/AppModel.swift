@@ -135,7 +135,13 @@ final class AppModel {
             guard let s = selection, s != activeRel else { return }
             if s.hasPrefix("desk:") {
                 flushSave()
+                activeSpace = nil
+                openDesk = nil
                 openDesk = String(s.dropFirst(5))
+                return
+            }
+            if s.hasPrefix("space:") {
+                openSpace(String(s.dropFirst(6)))
                 return
             }
             if s.hasPrefix("dir:") {
@@ -221,6 +227,10 @@ final class AppModel {
     @ObservationIgnored let http = HTTPGateway()
     /// Bumped whenever a data collection changes, so spaces redraw their charts.
     var dataVersion = 0
+    /// Plugins in `.twain/plugins/` and the space shown in place of a note (`Spaces.swift`).
+    var plugins: [Plugin] = []
+    var activeSpace: String?
+    var newSpaceSheet = false
     /// 问库 desks (`ResearchDesk.swift`) and the one shown in place of a note.
     var desks: [ResearchDesk] = []
     var openDesk: String?
@@ -311,6 +321,7 @@ final class AppModel {
         vault = v
         index = VaultIndex(root: v.root)
         ensureTwainFolder()
+        loadPlugins()
         v.onTwainFilesChanged = { [weak self] paths in
             if paths.contains(where: { $0.hasPrefix(".twain/commands") || $0.hasPrefix(".twain/automations") }) { self?.loadVaultConfig() }
             self?.twainFilesChanged(paths)
@@ -420,6 +431,7 @@ final class AppModel {
         }
         activeRel = rel
         openDesk = nil
+        activeSpace = nil
         unreadable = Self.unreadableReason(v.url(rel))
         editorText = unreadable == nil ? v.read(rel) : ""
         if unreadable != nil { v.acknowledge(rel, content: nil) }
@@ -628,6 +640,7 @@ final class AppModel {
     func twainFilesChanged(_ paths: Set<String>) {
         if paths.contains(where: { $0.hasPrefix(".twain/annotations") }) { loadAnnotations() }
         if paths.contains(where: { $0.hasPrefix(".twain/pipelines") }) { loadPipelines() }
+        if paths.contains(where: { $0.hasPrefix(".twain/plugins") }) { loadPlugins(); loadPipelines(); loadVaultConfig() }
         if paths.contains(where: { $0.hasPrefix(".twain/inbox/") && !$0.contains("/已导入") }) { importInbox() }
         if paths.contains(where: { $0.hasPrefix(".twain/data/") }) { dataVersion += 1 }
     }
@@ -892,6 +905,7 @@ final class AppModel {
                                      : "直接修改文件即可，共笔会把改动交给用户审阅。")
         }
         parts.append("遵守 AGENTS.md 中的约定。")
+        if let r = spaceRules(for: activeRel) { parts.append("\n这篇笔记属于空间「\(r.name)」，另外遵守它的约定：\n" + r.rules) }
         return parts.joined()
     }
 

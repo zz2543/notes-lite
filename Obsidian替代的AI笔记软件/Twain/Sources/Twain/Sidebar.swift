@@ -6,6 +6,20 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $model.selection) {
+            if model.vault != nil {
+                Section("空间") {
+                    ForEach(model.spaces, id: \.id) { p in
+                        Label(p.name, systemImage: p.icon).tag("space:" + p.id)
+                            .contextMenu {
+                                Button("停用", systemImage: "pause.circle") { model.setPluginEnabled(p, false) }
+                            }
+                    }
+                    Button { model.newSpaceSheet = true } label: {
+                        Label("新建空间…", systemImage: "plus.square.dashed").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             if let v = model.vault {
                 Section {
                     let q = model.sidebarFilter.trimmingCharacters(in: .whitespaces)
@@ -65,6 +79,7 @@ struct SidebarView: View {
             return .handled
         }
         .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
+        .sheet(isPresented: $model.newSpaceSheet) { NewSpaceSheet(model: model) }
         .safeAreaBar(edge: .bottom) {
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {

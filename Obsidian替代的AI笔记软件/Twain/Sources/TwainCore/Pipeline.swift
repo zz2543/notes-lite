@@ -44,6 +44,8 @@ public struct Pipeline: Equatable, Sendable {
     public var icon: String
     public var steps: [Step]
     public var file: String
+    /// Optional MCP tools the run gets (`annotate`, `cards`).
+    public var tools: [String] = []
 
     /// Whether starting it needs the user to type something first (`{{input}}`).
     public var needsInput: Bool { steps.contains { Template.uses($0.prompt, "input") } }
@@ -91,6 +93,7 @@ public struct Pipeline: Equatable, Sendable {
         return Pipeline(key: key.isEmpty ? stem : key, title: f["title"] ?? stem, agent: agent,
                         model: f["model"].flatMap { $0.isEmpty ? nil : $0 },
                         scope: UserCommand.Scope(rawValue: f["scope"] ?? "") ?? .note,
-                        icon: f["icon"] ?? "arrow.triangle.branch", steps: steps, file: file)
+                        icon: f["icon"] ?? "arrow.triangle.branch", steps: steps, file: file,
+                        tools: (f["tools"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
     }
 }

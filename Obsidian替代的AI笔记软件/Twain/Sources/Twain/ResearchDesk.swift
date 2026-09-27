@@ -59,6 +59,7 @@ extension AppModel {
         let d = ResearchDesk(id: String(UUID().uuidString.prefix(8)).lowercased(), question: "", scope: "", cards: [],
                              draft: nil, session: nil, created: Date())
         saveDesk(d)
+        activeSpace = nil
         openDesk = d.id
         selection = "desk:" + d.id
     }

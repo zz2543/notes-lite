@@ -153,7 +153,7 @@ extension AppModel {
                 .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
                 .compactMap { u in (try? String(contentsOf: u, encoding: .utf8)).map { (v.relative(u.path), $0) } }
         }
-        userCommands = read(commandsDir).compactMap { UserCommand.parse(file: $0.0, text: $0.1) }
+        userCommands = (read(commandsDir) + pluginFiles("commands")).compactMap { UserCommand.parse(file: $0.0, text: $0.1) }
         let before = automations
         automations = read(automationsDir).compactMap { Automation.parse(file: $0.0, text: $0.1) }
         loadPipelines()

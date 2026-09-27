@@ -243,6 +243,14 @@ enum CommandRegistry {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: poll)
         },
+        AppCommand(spec: CommandSpec("debug.space", "（调试）用模板新建空间", effect: .write, params: [
+            ParamSpec("template", required: true, positional: true, help: "模板 id"),
+            ParamSpec("folder", help: "文件夹"),
+        ])) { m, call in
+            guard let t = SpaceTemplate.all.first(where: { $0.id == call.params["template"]?.string }) else { throw RPCError(RPCError.notFound, "没有这个模板") }
+            let id = try m.installTemplate(t, name: t.name, folder: call.params["folder"]?.string ?? t.folder)
+            return ["space": .string(id)]
+        },
         AppCommand(spec: CommandSpec("debug.answer", "（调试）替用户回答最近的问题", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "回答"),
         ])) { m, call in
@@ -258,7 +266,13 @@ enum CommandRegistry {
     #endif
 
     /// Built-in commands plus the vault's own (`.twain/commands/`, `.twain/pipelines/`).
-    static func all(_ m: AppModel) -> [AppCommand] { builtin + m.userCommands.map(userCommand) + m.pipelines.map(pipelineCommand) }
+    static func all(_ m: AppModel) -> [AppCommand] {
+        builtin + m.userCommands.map(userCommand) + m.pipelines.map(pipelineCommand) + m.spaces.map(spaceCommand)
+    }
+
+    static func spaceCommand(_ p: Plugin) -> AppCommand {
+        ui("space." + p.id, "打开空间「\(p.name)」", PaletteInfo(label: { _ in "空间：" + p.name }, icon: p.icon)) { $0.openSpace(p.id) }
+    }
 
     static func pipelineCommand(_ p: Pipeline) -> AppCommand {
         AppCommand(spec: CommandSpec("pipeline." + p.key, p.title, effect: .propose),
@@ -404,6 +418,8 @@ enum CommandRegistry {
         ui("review.next", "打开下一处待审阅的改动", agents: true,
            PaletteInfo(label: { "审阅待定改动（\($0.pending.count)）" }, hint: "⇧⌘R", icon: "checklist",
                        visible: { !$0.pending.isEmpty })) { $0.reviewNext() },
+        ui("space.new", "新建一个空间（日记、自律、子弹笔记、LLM Wiki 或空白）",
+           PaletteInfo(label: { _ in "新建空间…" }, icon: "plus.square.dashed")) { $0.newSpaceSheet = true },
         ui("desk.new", "问库：向整个笔记库提一个问题，答案是一组带出处的卡片",
            PaletteInfo(label: { _ in "问库：向笔记库提问" }, hint: "⇧⌘A", icon: "rectangle.stack.badge.person.crop")) { $0.newDesk() },
         ui("companion", "开关伴写：停笔时页边偶尔出现一句提问或思路（小模型）",

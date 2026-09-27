@@ -32,6 +32,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
   <key>LSHasLocalizedDisplayName</key><true/>
+  <key>CFBundleURLTypes</key>
+  <array><dict>
+    <key>CFBundleURLName</key><string>app.twain.notes</string>
+    <key>CFBundleURLSchemes</key><array><string>twain</string></array>
+  </dict></array>
 </dict>
 </plist>
 PLIST

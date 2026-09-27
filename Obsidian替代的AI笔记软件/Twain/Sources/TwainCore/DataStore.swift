@@ -26,13 +26,13 @@ public final class DataStore {
 
     func url(_ name: String) -> URL { dir.appendingPathComponent(name + ".jsonl") }
 
-    static let iso: ISO8601DateFormatter = {
+    public static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
 
-    static let day: DateFormatter = {
+    public static let day: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")

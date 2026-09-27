@@ -93,7 +93,7 @@ extension AppModel {
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
         pipelines = files.compactMap { u in
             (try? String(contentsOf: u, encoding: .utf8)).flatMap { Pipeline.parse(file: v.relative(u.path), text: $0) }
-        }
+        } + pluginFiles("pipelines").compactMap { Pipeline.parse(file: $0.0, text: $0.1) }
     }
 
     func pipeline(named name: String) -> Pipeline? {
@@ -132,6 +132,7 @@ extension AppModel {
         let vars = try templateVars(scope: p.scope, title: p.title, input: input)
         flushSave()
         let s = AgentSession(agent: p.agent, source: .app, title: "流水线 · " + p.title)
+        s.extraTools = p.tools
         sessions.append(s)
         activeSessionID = s.id
         var run = PipelineRun(pipeline: p, sessionID: s.id, vars: vars)

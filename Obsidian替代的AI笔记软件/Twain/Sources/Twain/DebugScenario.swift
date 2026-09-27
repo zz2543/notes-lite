@@ -13,9 +13,14 @@ enum DebugScenario {
         return NSApp.windows.compactMap { $0.contentView.flatMap(find) }.first
     }
 
+    static func apply2(_ parts: [String], _ m: AppModel) {
+        if parts.count > 1 { m.openSpace(parts[1]) }
+    }
+
     static func apply(_ name: String, to m: AppModel) {
         let parts = name.split(separator: ":").map(String.init)
         let rel = parts.count > 1 ? parts[1] : "项目/2.0 发布计划.md"
+        if parts.first == "space" { apply2(parts, m); return }
         if m.vault?.note(rel) != nil { m.open(rel) }
         switch parts.first ?? "" {
         case "focus":
@@ -36,6 +41,8 @@ enum DebugScenario {
                     else { tv.insertText(s, replacementRange: tv.selectedRange()) }
                 }
             }
+        case "space":
+            if parts.count > 1 { m.openSpace(parts[1]) }
         case "desk":
             if let d = m.desks.first(where: { !$0.cards.isEmpty }) { m.selection = "desk:" + d.id }
         case "reply":
