@@ -393,6 +393,8 @@ final class AppModel {
     }
 
     func requestFocus(caret: Int) {
+        // The editor applies it on the next turn; agents asking right away see it already.
+        editorSelection = NSRange(location: min(caret, (editorText as NSString).length), length: 0)
         focusToken += 1
         focusRequest = (caret, focusToken)
     }

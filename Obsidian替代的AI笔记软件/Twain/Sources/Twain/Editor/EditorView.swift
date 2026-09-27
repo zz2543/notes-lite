@@ -104,7 +104,9 @@ struct EditorView: NSViewRepresentable {
                     storage.endEditing()
                     tv.undoManager?.removeAllActions()
                     let len = (text as NSString).length
-                    tv.setSelectedRange(NSRange(location: min(sel.location, len), length: 0))
+                    // A pending focus request already says where the caret goes.
+                    let pendingCaret = focus.flatMap { $0.token != focusToken ? $0.caret : nil }
+                    tv.setSelectedRange(NSRange(location: min(pendingCaret ?? sel.location, len), length: 0))
                     tv.resetCaretTrailTracking()
                     if focus == nil || focus!.token == focusToken { tv.scroll(.zero) }
                 }
