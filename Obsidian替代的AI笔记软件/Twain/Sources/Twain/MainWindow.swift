@@ -1,8 +1,8 @@
 import TwainCore
 import SwiftUI
 
-/// The single document window: floating glass sidebar, then one of three workspaces —
-/// the page with the agent beside it, the agent with the page beside it, or the desk.
+/// The single document window: floating glass sidebar, then whatever the middle shows —
+/// a page with the agent beside it, a conversation with its draft beside it, or every task.
 struct MainWindow: View {
     @Bindable var model: AppModel
     @Environment(\.openSettings) private var openSettings
@@ -12,30 +12,49 @@ struct MainWindow: View {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
         } detail: {
-            switch model.workspace {
-            case .write:
+            switch model.center {
+            case .note:
                 NoteDetail(model: model)
                     .inspector(isPresented: $model.agentPanel) {
                         AgentInspector(model: model)
                             .inspectorColumnWidth(min: 300, ideal: 360, max: 520)
                     }
-            case .agent:
-                AgentStage(model: model)
-                    .inspector(isPresented: $model.notePanel) {
-                        NoteDetail(model: model, embedded: true)
-                            .inspectorColumnWidth(min: 360, ideal: 480, max: 760)
-                    }
-            case .desk:
-                Workbench(model: model)
+            case let .thread(id):
+                if let s = model.sessions.first(where: { $0.id == id }) {
+                    ThreadView(model: model, session: s)
+                        .inspector(isPresented: $model.draftPanel) {
+                            DraftPanel(model: model, session: s)
+                                .inspectorColumnWidth(min: 360, ideal: 480, max: 760)
+                        }
+                } else {
+                    ContentUnavailableView("这段对话已经不在了", systemImage: "bubble.left.and.exclamationmark.bubble.right")
+                }
+            case .tasks:
+                TasksPage(model: model)
             }
         }
         .toolbar {
-            ToolbarItem(placement: .principal) { WorkspacePicker(model: model) }
+            ToolbarItemGroup(placement: .navigation) {
+                ControlGroup {
+                    Button("后退", systemImage: "chevron.backward", action: model.goBack)
+                        .disabled(model.backStack.isEmpty)
+                        .help("后退 ⌘[")
+                    Button("前进", systemImage: "chevron.forward", action: model.goForward)
+                        .disabled(model.forwardStack.isEmpty)
+                        .help("前进 ⌘]")
+                }
+            }
         }
         .toolbar(model.zen ? .hidden : .automatic, for: .windowToolbar)
         .overlay {
             if model.palette {
                 CommandPalette(model: model)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .overlay {
+            if model.taskBar {
+                TaskBar(model: model)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
@@ -47,7 +66,8 @@ struct MainWindow: View {
             }
         }
         .animation(.snappy(duration: 0.22), value: model.palette)
-        .animation(.snappy(duration: 0.25), value: model.workspace)
+        .animation(.snappy(duration: 0.22), value: model.taskBar)
+        .animation(.snappy(duration: 0.25), value: model.center)
         .animation(.snappy(duration: 0.25), value: model.toast)
         .sheet(isPresented: Binding(get: { model.onboardingStep != nil }, set: { if !$0 { model.onboardingStep = nil } })) {
             OnboardingSheet(model: model)

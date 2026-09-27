@@ -43,6 +43,13 @@ final class AgentSession: Identifiable {
     var alive = true
     /// The automation this run belongs to, when an automation started it.
     var automationID: String?
+    /// A conversation's draft note: the agent writes it without review, the user finishes it into a note.
+    var isThread = false
+    var draftRel: String?
+    var draftDone = false
+    /// A rewrite of a passage in the page: read-only, its reply is the replacement text.
+    var inline = false
+    let started = Date()
     @ObservationIgnored var transcript: URL?
     @ObservationIgnored var transcriptStamp: Date?
     @ObservationIgnored var changeItems: [SessionItem] = []

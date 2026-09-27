@@ -26,13 +26,14 @@ struct TwainApp: App {
                 Button("打开库…") { model.chooseVault() }.keyboardShortcut("o")
             }
             CommandGroup(after: .sidebar) {
-                ForEach(Workspace.allCases) { w in
-                    Toggle(w.title + "模式", isOn: Binding(get: { model.workspace == w }, set: { if $0 { model.setWorkspace(w) } }))
-                        .keyboardShortcut(w.key)
-                }
+                Button("后退") { model.goBack() }.keyboardShortcut("[")
+                    .disabled(model.backStack.isEmpty)
+                Button("前进") { model.goForward() }.keyboardShortcut("]")
+                    .disabled(model.forwardStack.isEmpty)
+                Button("全部任务") { model.showTasks() }.keyboardShortcut("t", modifiers: [.command, .shift])
                 Divider()
                 Button(model.sidePanelLabel) { model.toggleSidePanel() }.keyboardShortcut("j")
-                    .disabled(model.workspace == .desk)
+                    .disabled(model.center == .tasks)
                 Button("命令面板") { model.palette ? (model.palette = false) : model.openPalette() }.keyboardShortcut("k")
                 Button(model.zen ? "退出专注模式" : "进入专注模式") { model.toggleZen() }.keyboardShortcut(".")
                 Divider()
@@ -45,15 +46,18 @@ struct TwainApp: App {
                 Divider()
             }
             CommandMenu("Agent") {
+                Button("新任务…") { model.taskBar ? (model.taskBar = false) : model.openTaskBar() }.keyboardShortcut("l")
+                Button("新对话") { model.newThread() }.keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("逐篇审阅待处理") { model.reviewNext() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(model.pending.isEmpty)
+                Divider()
                 ForEach(model.userCommands, id: \.key) { c in
                     Button(c.title) {
                         do { try model.runUserCommand(c, input: nil) } catch let e as RPCError { model.showToast(e.message) } catch {}
                     }
                 }
                 if !model.userCommands.isEmpty { Divider() }
-                Button("审阅待定改动") { model.reviewNext() }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .disabled(model.pending.isEmpty)
                 Button("停止运行") { model.sessions.filter { $0.running && $0.source == .app }.forEach(model.stopAgent) }
                     .disabled(!model.sessions.contains { $0.running && $0.source == .app })
             }
@@ -115,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             guard e.keyCode == 53, let m = self?.model else { return e }
             if m.palette { m.palette = false; return nil }
+            if m.taskBar { m.taskBar = false; return nil }
             if m.zen, !(NSApp.keyWindow?.firstResponder is NSTextView) { m.toggleZen(); return nil }
             return e
         }

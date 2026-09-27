@@ -1,15 +1,15 @@
 import TwainCore
 import SwiftUI
 
-/// The page itself, or the review of an agent's changes to it. In the writing workspace it is
-/// the detail column; `embedded`, it is the page panel beside the agent's conversation.
+/// The page itself, or the review of an agent's changes to it. Usually the middle of the window;
+/// `embedded`, it is the draft beside a conversation, which leaves reviews to the middle.
 struct NoteDetail: View {
     @Bindable var model: AppModel
     var embedded = false
 
     var body: some View {
         let pend = model.activePending
-        let reviewing = model.showDiff && pend != nil
+        let reviewing = model.showDiff && pend != nil && !embedded
         let content = Group {
             if reviewing, let pend {
                 ReviewView(model: model, review: pend)
@@ -23,11 +23,11 @@ struct NoteDetail: View {
         // One continuous sheet of paper from the window's top edge down; the toolbar
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())
-        .toolbar { toolbar(reviewing: reviewing) }
         if embedded {
             content
         } else {
             content
+                .toolbar { toolbar(reviewing: reviewing) }
                 .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
                 .navigationTitle(model.activeNote?.displayName ?? "共笔")
                 .navigationSubtitle(model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
@@ -84,7 +84,7 @@ struct NoteDetail: View {
                         let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
                         Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
                     } action: {
-                        Button("审阅") { model.showDiff = true }
+                        Button("审阅") { model.review(pending.rel) }
                             .buttonStyle(.glassProminent)
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -159,9 +159,19 @@ extension NoteDetail {
     @ToolbarContentBuilder
     fileprivate func toolbar(reviewing: Bool) -> some ToolbarContent {
         if reviewing {
+            if let p = model.reviewProgress {
+                ToolbarItem(placement: .primaryAction) {
+                    Text("第 \(p.index) / \(p.total) 篇").font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .help("处理完这篇会自动打开下一篇；全部处理完回到刚才的位置")
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("稍后", systemImage: "clock") { model.showDiff = false }
-                    .help("稍后审阅 ⎋")
+                Button("稍后", systemImage: "clock") {
+                    if model.reviewReturn != nil { model.endReviewFlow(done: false) } else { model.showDiff = false }
+                }
+                .help(model.reviewReturn != nil ? "稍后再审阅，回到刚才的位置" : "稍后审阅")
                 let proposal = model.activePending?.isProposal == true
                 Button(proposal ? "全部拒绝" : "全部还原", systemImage: "arrow.uturn.backward") { model.finishReview(all: .rejected) }
                     .labelStyle(.titleAndIcon)
@@ -174,41 +184,17 @@ extension NoteDetail {
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
             }
-        } else if embedded {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Toggle(isOn: $model.followAgent) {
-                    Label("跟随 Agent", systemImage: "scope")
-                }
-                .help(model.followAgent ? "Agent 开始写入哪篇笔记，这里就打开哪篇（点按关闭）" : "开启后，agent 写入的笔记会在这里自动打开")
-                Button("在写作模式中打开", systemImage: "arrow.up.left.and.arrow.down.right") { model.setWorkspace(.write) }
-                    .help("在写作模式中编辑这篇笔记 ⌘1")
-                    .disabled(model.activeRel == nil)
-            }
         } else {
-            if !model.pending.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: model.reviewNext) {
-                        Label("审阅 \(model.pending.values.reduce(0) { $0 + $1.hunks.count }) 处改动", systemImage: "checklist")
-                            .labelStyle(.titleAndIcon)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .help("审阅 agent 的改动 ⇧⌘R")
-                }
-                ToolbarSpacer(.fixed, placement: .primaryAction)
-            }
+            CommonTools(model: model)
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("专注模式", systemImage: "arrow.up.left.and.arrow.down.right", action: model.toggleZen)
                     .help("专注模式 ⌘.")
-                Button("命令面板", systemImage: "magnifyingglass", action: model.openPalette)
-                    .help("搜索笔记与命令 ⌘K")
             }
-        }
-        if !embedded {
             ToolbarSpacer(.fixed, placement: .primaryAction)
-            ToolbarItem(placement: .primaryAction) {
-                Button("Agent", systemImage: "sidebar.trailing", action: model.toggleSidePanel)
-                    .help("Agent 面板 ⌘J")
-            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button("旁注", systemImage: "sidebar.trailing", action: model.toggleSidePanel)
+                .help("Agent 旁注 ⌘J")
         }
     }
 }

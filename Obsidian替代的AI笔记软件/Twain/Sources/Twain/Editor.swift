@@ -249,6 +249,8 @@ final class TwainTextView: NSTextView {
         let p = convert(event.locationInWindow, from: nil)
         if let c = coordinator, c.handleClick(at: p, event: event) { return }
         super.mouseDown(with: event)
+        // NSTextView tracks the drag inside mouseDown; the selection is final only now.
+        coordinator?.updateFloaters()
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -558,11 +560,11 @@ struct EditorView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
-        // Beside the agent the page is mostly watched, not typed into: keep it top-aligned.
-        let style = EditorStyle(font: model.font, typewriter: model.typewriter && model.workspace != .agent, dim: model.dim,
+        // Beside a conversation the draft is mostly watched, not typed into: keep it top-aligned.
+        let style = EditorStyle(font: model.font, typewriter: model.typewriter && model.center == .note, dim: model.dim,
                                 zen: model.zen, width: model.editorWidth)
         c.sync(version: model.editorVersion, text: model.editorText, style: style,
-               ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest)
+               ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest, inline: model.inline)
     }
 
     // MARK: Coordinator
@@ -583,13 +585,21 @@ struct EditorView: NSViewRepresentable {
             NotificationCenter.default.addObserver(forName: .twainApplySlash, object: nil, queue: .main) { [weak self] n in
                 if let item = n.object as? SlashItem { self?.applySlash(item) }
             }
+            NotificationCenter.default.addObserver(forName: .twainApplyInline, object: nil, queue: .main) { [weak self] _ in
+                self?.applyInline()
+            }
         }
 
         var storage: NSTextStorage? { textView?.textStorage }
 
-        func sync(version v: Int, text: String, style s: EditorStyle, ghost: String, readOnly: Bool, focus: (caret: Int, token: Int)?) {
+        func sync(version v: Int, text: String, style s: EditorStyle, ghost: String, readOnly: Bool, focus: (caret: Int, token: Int)?,
+                  inline: InlineEdit?) {
             guard let tv = textView, let storage else { return }
             var needsRestyle = false
+            if inline != shownInline {
+                shownInline = inline
+                needsRestyle = true
+            }
             if v != version {
                 version = v
                 if tv.string != text {
@@ -629,6 +639,7 @@ struct EditorView: NSViewRepresentable {
         }
 
         private var laidOutHeight: CGFloat = -1
+        private var shownInline: InlineEdit?
 
         func visibleSizeChanged() {
             guard let scroll = scrollView, style != nil else { return }
@@ -643,11 +654,13 @@ struct EditorView: NSViewRepresentable {
             guard let tv = textView, let style, let scroll = scrollView else { return }
             tv.updateInsets(style: style, visibleHeight: scroll.contentView.bounds.height)
             tv.updateCaret(animated: false)
+            updateFloaters()
         }
 
         func focusChanged() {
             DispatchQueue.main.async {
                 self.restyle()
+                self.updateFloaters()
                 if self.textView?.window?.firstResponder !== self.textView {
                     self.model.slash = nil
                     self.model.clearGhost()
@@ -704,6 +717,7 @@ struct EditorView: NSViewRepresentable {
                               dimmed: dimOthers && i != active, font: F, bodySize: bodySize)
                     loc += line.length
                 }
+                markInline()
                 storage.endEditing()
                 if let lm = tv.layoutManager {
                     lm.invalidateGlyphs(forCharacterRange: full, changeInLength: 0, actualCharacterRange: nil)
@@ -713,6 +727,7 @@ struct EditorView: NSViewRepresentable {
             tv.typingAttributes = [.font: body, .foregroundColor: Theme.NS.ink, .paragraphStyle: paragraph(for: .p, font: body, first: false, active: true)]
             tv.needsDisplay = true
             tv.updateCaret(animated: true)
+            updateFloaters()
         }
 
         private func paragraph(for type: BlockType, font: NSFont, first: Bool, active: Bool) -> NSParagraphStyle {
@@ -825,7 +840,7 @@ struct EditorView: NSViewRepresentable {
             textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText(), !restyling else { return }
             model.editorSelection = tv.selectedRange()
-            if currentLine() != activeLine { restyle() }
+            if currentLine() != activeLine { restyle() } else { updateFloaters() }
             updateSlash()
             if tv.selectedRange().length == 0 { center(smooth: true) }
         }
@@ -891,6 +906,14 @@ struct EditorView: NSViewRepresentable {
         /// Keyboard commands. Returns true when handled.
         func handle(_ sel: Selector) -> Bool {
             guard let tv = textView else { return false }
+            if let ie = model.inline, ie.rel == model.activeRel {
+                // Return takes the rewrite while the caret is still at the passage; Escape drops it anywhere.
+                if sel == #selector(NSResponder.cancelOperation(_:)) { model.rejectInline(); return true }
+                if sel == #selector(NSResponder.insertNewline(_:)), ie.proposed != nil, let r = model.locateInline(in: tv.string) {
+                    let caret = tv.selectedRange()
+                    if caret.location >= r.location, NSMaxRange(caret) <= NSMaxRange(r) { applyInline(); return true }
+                }
+            }
             if let s = model.slash {
                 switch sel {
                 case #selector(NSResponder.moveDown(_:)):
@@ -982,6 +1005,151 @@ struct EditorView: NSViewRepresentable {
             guard toggled != text, tv.shouldChangeText(in: NSRange(location: r.location, length: 6), replacementString: String(toggled.prefix(6))) else { return }
             tv.textStorage?.replaceCharacters(in: NSRange(location: r.location, length: 6), with: String(toggled.prefix(6)))
             tv.didChangeText()
+        }
+
+        // MARK: agent work in the page
+
+        private var selectionHost: NSHostingView<AnyView>?
+        private var inlineHost: NSHostingView<AnyView>?
+        private var pillHost: NSHostingView<AnyView>?
+        /// Space kept open under the rewritten paragraph for its card.
+        private var inlineReserve: CGFloat = 120
+
+        /// Rect of `r` in text-view coordinates.
+        private func rect(for r: NSRange) -> CGRect? {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer, lm.numberOfGlyphs > 0 else { return nil }
+            let gr = lm.glyphRange(forCharacterRange: NSRange(location: r.location, length: max(1, r.length)), actualCharacterRange: nil)
+            lm.ensureLayout(forGlyphRange: gr)
+            return lm.boundingRect(forGlyphRange: gr, in: tc).offsetBy(dx: tv.textContainerOrigin.x, dy: tv.textContainerOrigin.y)
+        }
+
+        private func host(_ existing: inout NSHostingView<AnyView>?, _ view: AnyView) -> NSHostingView<AnyView>? {
+            guard let tv = textView else { return nil }
+            if let h = existing {
+                h.rootView = view
+                return h
+            }
+            let h = NSHostingView(rootView: view)
+            tv.addSubview(h)
+            existing = h
+            return h
+        }
+
+        private func drop(_ h: inout NSHostingView<AnyView>?) {
+            h?.removeFromSuperview()
+            h = nil
+        }
+
+        /// Places the selection bar, the rewrite card and the task pill where they belong now.
+        func updateFloaters() {
+            layoutInline()
+            layoutSelectionBar()
+            layoutTaskPill()
+        }
+
+        /// Whether the keyboard is in one of our floating views (typing into the bar's field).
+        private func focusInside(_ h: NSView?) -> Bool {
+            guard let h, let fr = textView?.window?.firstResponder as? NSView else { return false }
+            return fr.isDescendant(of: h)
+        }
+
+        private func layoutSelectionBar() {
+            guard let tv = textView else { return }
+            let ns = tv.string as NSString
+            let sel = NSIntersectionRange(tv.selectedRange(), NSRange(location: 0, length: ns.length))
+            let keep = focusInside(selectionHost)
+            let hasText = !ns.substring(with: sel).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let wanted = keep || (isFocused && hasText && NSEvent.pressedMouseButtons == 0 && !tv.hasMarkedText())
+            guard wanted, model.inline == nil, model.activeRel != nil, !model.editorReadOnly, model.slash == nil,
+                  let r = rect(for: keep ? (model.selectionBar?.range ?? sel) : sel),
+                  let h = host(&selectionHost, AnyView(SelectionActions(model: model))) else {
+                drop(&selectionHost)
+                if model.selectionBar != nil { model.selectionBar = nil }
+                return
+            }
+            let size = h.fittingSize
+            var y = r.minY - size.height - 8
+            if y < tv.visibleRect.minY + 4 { y = r.maxY + 8 }
+            let x = min(max(r.minX - 6, 8), max(8, tv.bounds.width - size.width - 8))
+            h.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
+            if !keep, model.selectionBar?.range != sel { model.selectionBar = SelectionBar(range: sel) }
+        }
+
+        /// Marks the passage under rewrite and opens room under its paragraph for the card.
+        private func markInline() {
+            guard let storage, let ie = model.inline, ie.rel == model.activeRel, let r = model.locateInline(in: storage.string) else { return }
+            if ie.running {
+                storage.addAttribute(.backgroundColor, value: Theme.NS.accent.withAlphaComponent(0.14), range: r)
+            } else if ie.proposed != nil {
+                storage.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                                       .strikethroughColor: NSColor.systemRed.withAlphaComponent(0.7),
+                                       .backgroundColor: NSColor.systemRed.withAlphaComponent(0.08)], range: r)
+            }
+            let ns = storage.string as NSString
+            let para = ns.paragraphRange(for: NSRange(location: max(r.location, NSMaxRange(r) - 1), length: 0))
+            guard para.length > 0, let style = storage.attribute(.paragraphStyle, at: para.location, effectiveRange: nil) as? NSParagraphStyle,
+                  let p = style.mutableCopy() as? NSMutableParagraphStyle else { return }
+            p.paragraphSpacing += inlineReserve
+            storage.addAttribute(.paragraphStyle, value: p, range: para)
+        }
+
+        private func layoutInline() {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer, let ie = model.inline,
+                  ie.rel == model.activeRel, let r = model.locateInline(in: tv.string) else {
+                drop(&inlineHost)
+                return
+            }
+            let ns = tv.string as NSString
+            let para = ns.paragraphRange(for: NSRange(location: max(r.location, NSMaxRange(r) - 1), length: 0))
+            let gr = lm.glyphRange(forCharacterRange: NSRange(location: para.location, length: max(1, para.length)), actualCharacterRange: nil)
+            lm.ensureLayout(forGlyphRange: gr)
+            // The last line's fragment ends below the reserved gap; the card sits at the bottom of it.
+            var frag = CGRect.zero
+            lm.enumerateLineFragments(forGlyphRange: gr) { f, _, _, _, _ in frag = f }
+            let width = tc.size.width
+            guard width > 40, let h = host(&inlineHost, AnyView(InlineCard(model: model, width: width))) else { return }
+            let height = h.fittingSize.height
+            h.frame = CGRect(x: tv.textContainerOrigin.x, y: tv.textContainerOrigin.y + frag.maxY - inlineReserve + 4,
+                             width: width, height: height)
+            // Keep exactly the card's height open; restyle once more when it changes.
+            if abs(height + 24 - inlineReserve) > 2 {
+                inlineReserve = height + 24
+                DispatchQueue.main.async { self.restyle() }
+            }
+        }
+
+        /// Applies the accepted rewrite as one undoable edit.
+        func applyInline() {
+            guard let tv = textView, let ie = model.inline, let text = ie.proposed else { return }
+            guard let r = model.locateInline(in: tv.string) else {
+                model.inline = nil
+                model.showToast("原文已经改动，没有替换")
+                return
+            }
+            model.inline = nil
+            tv.window?.makeFirstResponder(tv)
+            tv.insertText(text, replacementRange: r)
+            tv.setSelectedRange(NSRange(location: r.location + (text as NSString).length, length: 0))
+            model.showToast("已替换为\(ie.label)后的文字 · ⌘Z 撤销")
+        }
+
+        private func layoutTaskPill() {
+            guard let tv = textView, isFocused, tv.selectedRange().length == 0, model.inline == nil, model.slash == nil,
+                  let rel = model.activeRel, !model.editorReadOnly, let info = lineInfo(), info.range.length > 0,
+                  Markdown.parseLine(info.text).type == .task, !Markdown.isTaskDone(info.text) else {
+                drop(&pillHost)
+                return
+            }
+            let ns = info.text as NSString
+            let body = ns.substring(from: min(Markdown.parseLine(info.text).prefix.length, ns.length)).trimmingCharacters(in: .whitespaces)
+            guard !body.isEmpty, let r = rect(for: NSRange(location: NSMaxRange(info.range) - 1, length: 1)),
+                  let h = host(&pillHost, AnyView(TaskPill(model: model, rel: rel, line: info.index + 1, text: body))) else {
+                drop(&pillHost)
+                return
+            }
+            let size = h.fittingSize
+            let x = min(r.maxX + 14, tv.bounds.width - size.width - 8)
+            h.frame = CGRect(x: x, y: r.midY - size.height / 2, width: size.width, height: size.height)
         }
 
         // MARK: scrolling
