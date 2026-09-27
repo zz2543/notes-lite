@@ -183,3 +183,14 @@
 **和计划不一样的地方**
 - 实测 `claude -p` 冷启动约 7 秒，偶尔会卡住好几分钟（测到过一次 4 分 37 秒）。所以：所有快速调用都加 `--strict-mcp-config`，并设置超时；摘要改成 3 路并发；伴写用常驻进程，并在开启时预热。
 - MCP 工具数量上限（10 个）保持不变：为此从默认工具里拿掉 `notify` 和 `outline`（CLI 中仍可用），`annotate` 和 `cards` 按需加入（`TWAIN_MCP_EXTRA`）。
+
+### 阶段 C（2026-09-27 完成）
+
+| 项 | 做法 | 验证 |
+|---|---|---|
+| C2 数据集合 | `.twain/data/<集合>.jsonl`，不需要事先定义结构；写入途径有 `twain data add/import/query`、HTTP、往 `.twain/inbox/<集合>/` 放文件（支持 CSV、JSON、JSONL）；按天汇总，时间范围支持 `7d`、`4w` 等写法 | 单元测试（含 CSV 引号与逗号）；CLI 离线读写 |
+| C3 HTTP 网关 | 只监听 127.0.0.1:27182，Bearer 令牌（0600）；`/v1/call/<命令>` 与 CLI、MCP 同一份权限规则；`/v1/data`、`/v1/notes`（同一个 source_id 再次导入时，新版本走修改提案）；`twain://` 链接 | curl 逐个接口验证；已并入 e2e |
+| C4 懂听 GotIt | `integrations/gotit/twain-gotit-sync.py`：只读取懂听自己的数据，通过 HTTP 接口导入；共笔里没有任何针对懂听的代码 | 用懂听真实的节目库：第一次新建，第二次“无变化” |
+| C1 插件与空间 | `.twain/plugins/<id>/manifest.json` 描述空间：文件夹、新条目模板、agent 规则、仪表盘模块、自带的命令和流水线；13 种原生模块，外加 HTML 模块（沙盒 ＋ `window.twain` 桥）；仪表盘可以直接编辑，改动写回 manifest；模板有工作台（默认安装）、日记、自律、子弹笔记、LLM Wiki、空白 | 实机截图：自律（打卡、数字、图表、记一笔）、日记（日历热力图）、工作台；HTML 挂件经桥读取数据后正确渲染；各模板的 manifest 都能解析 |
+| C5 创作者文档 | `docs/plugins.md`：插件结构、模块参数、JS 桥、命令和流水线、数据、HTTP、CLI 与 MCP、事件、链接、完整示例 | 按文档里的示例写 manifest，单元测试通过 |
+| 设置 | 新增“开放”页：接口开关、端口、令牌、数据集合、插件开关、摘要额度、伴写 | 截图 |
