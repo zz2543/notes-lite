@@ -77,8 +77,25 @@ check "unknown commands list the rest" "可用的有：continue、polish"       
 check "sample automation stays off"   "inbox.md.example"                ls "$VAULT/.twain/automations"
 check "twain help watch lists events" "review.resolved"                 "$CLI" help watch
 
+# Phase 4: renaming. A rename carries the [[links]] along; an untitled note takes its heading's name.
+check "rename updates links"          "并更新了 1 处链接"                  "$CLI" debug.rename 项目/同步引擎.md --title 同步方案
+check "renamed file is there"         "# 同步引擎"                        cat "$VAULT/项目/同步方案.md"
+check "old file is gone"              "No such file"                    cat "$VAULT/项目/同步引擎.md"
+check "backlink follows the rename"   "读 [[同步方案]] 的方案"              cat "$VAULT/收件箱.md"
+check "taken names are refused"       "已经有一篇叫「收件箱」的笔记"          "$CLI" debug.rename 新建.md --title 收件箱
+check "slashes are refused"           "不能包含 /"                       "$CLI" debug.rename 新建.md --title a/b
+printf '# 未命名\n' > "$VAULT/未命名.md"; sleep 0.5
+check "untitled note opens"           "已在共笔中打开 未命名.md"            "$CLI" open 未命名
+"$CLI" debug.type $'# 周会记录\n' --caret 3 >/dev/null
+sleep 0.8
+check "still untitled on the heading" "未命名.md"                        ls "$VAULT"
+"$CLI" debug.type $'# 周会记录\n要点' >/dev/null
+sleep 0.8
+check "leaving the heading names it"  "周会记录.md"                      ls "$VAULT"
+check "named note keeps its text"     "要点"                            cat "$VAULT/周会记录.md"
+
 kill $APP 2>/dev/null; wait $APP 2>/dev/null
-check "read commands work offline"    "项目/同步引擎.md:4"              "$CLI" tasks
+check "read commands work offline"    "项目/同步方案.md:4"              "$CLI" tasks
 check "reviews work offline"          "原因：保留原话"                    "$CLI" reviews
 check "app-only commands say so"      "共笔没有运行"                  "$CLI" context
 

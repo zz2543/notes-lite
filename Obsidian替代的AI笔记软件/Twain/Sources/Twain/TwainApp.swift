@@ -22,6 +22,7 @@ struct TwainApp: App {
             SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("新建笔记") { model.newNote() }.keyboardShortcut("n")
+                Button("重命名笔记…") { model.beginRename() }.disabled(model.activeRel == nil)
                 Button("打开库…") { model.chooseVault() }.keyboardShortcut("o")
             }
             CommandGroup(after: .sidebar) {

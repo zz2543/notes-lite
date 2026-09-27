@@ -25,6 +25,22 @@ final class MarkdownTests: XCTestCase {
         XCTAssertNil(Markdown.continuation(for: "plain"))
     }
 
+    func testRenamingWikiLinks() {
+        let text = "见 [[读书笔记]]、[[读书笔记#第一章|第一章]] 和 [[读书笔记甲]]，还有 [[其他]]"
+        let (out, n) = Markdown.renamingWikiLinks(in: text, from: "读书笔记", to: "阅读")
+        XCTAssertEqual(out, "见 [[阅读]]、[[阅读#第一章|第一章]] 和 [[读书笔记甲]]，还有 [[其他]]")
+        XCTAssertEqual(n, 2)
+        XCTAssertEqual(Markdown.renamingWikiLinks(in: "[[Plan]]", from: "plan", to: "Roadmap").text, "[[Roadmap]]")
+        XCTAssertEqual(Markdown.renamingWikiLinks(in: "无链接", from: "a", to: "b").count, 0)
+    }
+
+    func testTitleHeading() {
+        XCTAssertEqual(Markdown.titleHeading("# 读书笔记\n正文"), "读书笔记")
+        XCTAssertNil(Markdown.titleHeading("## 二级\n"))
+        XCTAssertNil(Markdown.titleHeading("# \n"))
+        XCTAssertNil(Markdown.titleHeading("正文"))
+    }
+
     func testToggleTask() {
         XCTAssertEqual(Markdown.toggleTask("- [ ] a"), "- [x] a")
         XCTAssertEqual(Markdown.toggleTask("- [X] a"), "- [ ] a")

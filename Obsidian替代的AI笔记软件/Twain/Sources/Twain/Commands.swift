@@ -113,6 +113,25 @@ enum CommandRegistry {
             m.sendFeedback(item.id, in: s)
             return ["sent": true]
         },
+        AppCommand(spec: CommandSpec("debug.rename", "（调试）像在侧栏里一样重命名一篇笔记", effect: .write, params: [
+            ParamSpec("note", required: true, positional: true, help: "笔记路径"),
+            ParamSpec("title", required: true, help: "新名字"),
+        ])) { m, call in
+            let rel = call.params["note"]?.string ?? ""
+            guard m.renameNote(rel, to: call.params["title"]?.string ?? "") else {
+                throw RPCError(RPCError.invalidParams, m.toast ?? "没有重命名")
+            }
+            return ["toast": JSONValue(m.toast)]
+        },
+        AppCommand(spec: CommandSpec("debug.type", "（调试）像用户在编辑器里输入一样替换当前笔记的正文并移动光标", effect: .write, params: [
+            ParamSpec("text", required: true, positional: true, help: "新正文"),
+            ParamSpec("caret", .int, help: "光标位置（UTF-16），默认在末尾"),
+        ])) { m, call in
+            let text = call.params["text"]?.string ?? ""
+            m.editorDidChange(text)
+            m.editorSelection = NSRange(location: call.params["caret"]?.int ?? (text as NSString).length, length: 0)
+            return ["done": true]
+        },
         AppCommand(spec: CommandSpec("debug.approve", "（调试）像在设置里一样启用一条自动化", effect: .write, params: [
             ParamSpec("id", required: true, positional: true, help: "自动化文件名（不含 .md）"),
         ])) { m, call in
@@ -241,6 +260,8 @@ enum CommandRegistry {
 
     static let paletteCommands: [AppCommand] = [
         ui("note.new", "新建一篇笔记并打开", PaletteInfo(label: { _ in "新建笔记" }, hint: "⌘N", icon: "square.and.pencil")) { $0.newNote() },
+        ui("note.rename", "在侧栏里重命名当前笔记", PaletteInfo(label: { _ in "重命名笔记…" }, icon: "pencil",
+                                                  visible: { $0.activeRel != nil })) { $0.beginRename() },
         ui("zen", "进入或退出专注模式", PaletteInfo(label: { $0.zen ? "退出专注模式" : "进入专注模式" }, hint: "⌘.",
                                           icon: "arrow.up.left.and.arrow.down.right")) { $0.toggleZen() },
         ui("editor.typewriter", "切换打字机滚动", PaletteInfo(label: { "打字机滚动：" + ($0.typewriter ? "关闭" : "开启") },

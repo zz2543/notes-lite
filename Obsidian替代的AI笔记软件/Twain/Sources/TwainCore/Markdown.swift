@@ -164,4 +164,31 @@ public enum Markdown {
     public static func lines(_ text: String) -> [String] {
         text.components(separatedBy: "\n")
     }
+
+    /// `[[旧名]]`, `[[旧名#小节]]`, `[[旧名|别名]]` → the same links to `new`; the count is how many changed.
+    /// Titles match case-insensitively, as links resolve.
+    public static func renamingWikiLinks(in text: String, from old: String, to new: String) -> (text: String, count: Int) {
+        let ns = text as NSString
+        var out = "", last = 0, count = 0
+        for m in wikiRe.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let inner = ns.substring(with: m.range(at: 1))
+            let target = NoteOutline.linkTarget(inner)
+            guard target.localizedCaseInsensitiveCompare(old) == .orderedSame,
+                  let r = inner.range(of: target) else { continue }
+            out += ns.substring(with: NSRange(location: last, length: m.range(at: 1).location - last))
+            out += inner.replacingCharacters(in: r, with: new)
+            last = NSMaxRange(m.range(at: 1))
+            count += 1
+        }
+        guard count > 0 else { return (text, 0) }
+        return (out + ns.substring(from: last), count)
+    }
+
+    /// The text of the first line when it is a `# ` heading.
+    public static func titleHeading(_ text: String) -> String? {
+        let first = text.prefix { $0 != "\n" }
+        guard first.hasPrefix("# ") else { return nil }
+        let t = first.dropFirst(2).trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? nil : t
+    }
 }

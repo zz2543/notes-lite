@@ -128,6 +128,36 @@ final class Vault {
         return rel
     }
 
+    enum RenameError: LocalizedError {
+        case empty, invalid, taken(String)
+        var errorDescription: String? {
+            switch self {
+            case .empty: "名字不能为空"
+            case .invalid: "名字不能包含 / 或 :，也不能以 . 开头"
+            case let .taken(n): "已经有一篇叫「\(n)」的笔记"
+            }
+        }
+    }
+
+    /// Moves `rel` to `title`.md in the same folder and returns the new path. The file keeps
+    /// what we last knew of it, so the move is not mistaken for someone else's edit.
+    func rename(_ rel: String, to title: String) throws -> String {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { throw RenameError.empty }
+        guard !t.contains("/"), !t.contains(":"), !t.hasPrefix(".") else { throw RenameError.invalid }
+        let folder = (rel as NSString).deletingLastPathComponent
+        let new = folder.isEmpty ? t + ".md" : folder + "/" + t + ".md"
+        if new == rel { return rel }
+        // A case-only change is the same file on a case-insensitive disk.
+        if new.lowercased() != rel.lowercased(), FileManager.default.fileExists(atPath: url(new).path) {
+            throw RenameError.taken(t)
+        }
+        try FileManager.default.moveItem(at: url(rel), to: url(new))
+        known[new] = known.removeValue(forKey: rel)
+        scan()
+        return new
+    }
+
     func snapshotAll() -> [String: String] {
         var out: [String: String] = [:]
         for n in notes { out[n.rel] = diskContent(n.rel) }

@@ -267,6 +267,7 @@ public enum TwainEvents {
         ("note.changed", "笔记在共笔之外被修改（终端里的 agent、同步、其他编辑器）"),
         ("note.created", "新建了笔记"),
         ("note.deleted", "删除了笔记"),
+        ("note.renamed", "用户重命名了笔记（from 是原路径）"),
         ("proposal.created", "agent 提交了修改提案"),
         ("review.resolved", "用户处理完一次审阅"),
         ("session.started", "共笔中的 agent 会话开始运行"),

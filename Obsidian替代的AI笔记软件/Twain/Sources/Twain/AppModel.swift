@@ -4,7 +4,7 @@ import TwainCore
 import SwiftUI
 
 struct PendingReview {
-    let rel: String
+    var rel: String
     /// nil when the writer was not an agent we could identify (another editor, sync…).
     let by: AgentKind?
     let source: SessionSource
@@ -113,6 +113,8 @@ final class AppModel {
     var paletteSel = 0
     var settingsTab: SettingsTab = .editor
     var sidebarFilter = ""
+    /// The sidebar row whose name is being edited in place.
+    var renaming: String?
     /// Sidebar list selection; choosing a row opens the note.
     var selection: String? {
         didSet { if let s = selection, s != activeRel { open(s) } }
@@ -136,7 +138,11 @@ final class AppModel {
     /// The editor's selection (UTF-16), read by agents through `twain context`. Not observed:
     /// nothing on screen depends on it.
     @ObservationIgnored var editorSelection = NSRange(location: 0, length: 0) {
-        didSet { if editorSelection != oldValue { selectionChanged() } }
+        didSet {
+            guard editorSelection != oldValue else { return }
+            selectionChanged()
+            DispatchQueue.main.async { [weak self] in self?.adoptHeadingTitle() }
+        }
     }
     var ghost = ""
     var slash: SlashState?
@@ -345,7 +351,10 @@ final class AppModel {
 
     func open(_ rel: String, focus: Bool = false) {
         guard let v = vault else { return }
-        if rel != activeRel { flushSave() }
+        if rel != activeRel {
+            flushSave()
+            adoptHeadingTitle(leaving: true)
+        }
         activeRel = rel
         editorText = v.read(rel)
         editorSelection = NSRange(location: 0, length: 0)
@@ -455,6 +464,79 @@ final class AppModel {
         open(rel)
         requestFocus(caret: (head as NSString).length)
         showToast("已创建 " + (rel as NSString).lastPathComponent)
+    }
+
+    // MARK: rename
+
+    /// Edits the open note's name in its sidebar row.
+    func beginRename() {
+        guard let rel = activeRel, vault?.note(rel) != nil else { return }
+        palette = false
+        sidebarFilter = ""
+        if zen { toggleZen() }
+        columnVisibility = .all
+        revealInSidebar(rel)
+        renaming = rel
+    }
+
+    /// Renames the note's file and the `[[links]]` pointing at it. False when it didn't happen
+    /// (the reason is shown), so an inline editor can stay open.
+    @discardableResult
+    func renameNote(_ rel: String, to title: String) -> Bool {
+        guard let v = vault else { return false }
+        if writing.contains(rel) { showToast("Agent 正在写入这篇笔记，稍后再改名"); return false }
+        if rel == activeRel { flushSave() }
+        let old = NoteRef(rel: rel).title
+        let new: String
+        do { new = try v.rename(rel, to: title) } catch {
+            showToast(error.localizedDescription)
+            return false
+        }
+        guard new != rel else { return true }
+        if var p = pending.removeValue(forKey: rel) { p.rel = new; pending[new] = p }
+        if activeRel == rel { activeRel = new }
+        if selection == rel { selection = new }
+        let name = NoteRef(rel: new).title
+        let links = relink(from: old, to: name)
+        emit("note.renamed", source: "user", ["path": .string(new), "from": .string(rel)])
+        showToast(links > 0 ? "已重命名为「\(name)」，并更新了 \(links) 处链接" : "已重命名为「\(name)」")
+        return true
+    }
+
+    /// Points `[[old]]` links at `new`, unless another note still answers to `old`.
+    private func relink(from old: String, to new: String) -> Int {
+        guard let v = vault, v.note(titled: old) == nil else { return 0 }
+        var total = 0
+        for n in v.notes where pending[n.rel] == nil && !writing.contains(n.rel) {
+            let text = n.rel == activeRel ? editorText : v.diskContent(n.rel) ?? ""
+            let (out, count) = Markdown.renamingWikiLinks(in: text, from: old, to: new)
+            guard count > 0, case .ok = v.write(n.rel, out) else { continue }
+            total += count
+            if n.rel == activeRel {
+                editorText = out
+                editorVersion += 1
+            }
+        }
+        return total
+    }
+
+    /// A note still named 未命名 takes its first heading as its name once the caret leaves
+    /// that heading, or the note is closed.
+    func adoptHeadingTitle(leaving: Bool = false) {
+        guard let v = vault, let rel = activeRel, !writing.contains(rel), pending[rel] == nil,
+              Self.isUntitled(NoteRef(rel: rel).title),
+              let heading = Markdown.titleHeading(editorText), !Self.isUntitled(heading) else { return }
+        let firstLine = (editorText.prefix { $0 != "\n" } as Substring).utf16.count
+        guard leaving || editorSelection.location > firstLine else { return }
+        var name = heading.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        while name.hasPrefix(".") { name.removeFirst() }
+        guard !name.isEmpty else { return }
+        let folder = (rel as NSString).deletingLastPathComponent
+        renameNote(rel, to: NoteRef(rel: v.uniqueRel(title: name, folder: folder)).title)
+    }
+
+    static func isUntitled(_ title: String) -> Bool {
+        title.range(of: #"^未命名( \d+)?$"#, options: .regularExpression) != nil
     }
 
     // MARK: ghost text

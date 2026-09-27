@@ -36,6 +36,32 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // Return renames the selected note, as in Finder.
+        .onKeyPress(.return) {
+            guard model.renaming == nil, let rel = model.selection, model.vault?.note(rel) != nil else { return .ignored }
+            model.renaming = rel
+            return .handled
+        }
+        .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
+        .safeAreaBar(edge: .bottom) {
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button(action: model.newNote) {
+                        Label("新建笔记", systemImage: "square.and.pencil")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .help("新建笔记 ⌘N")
+                    Button { model.openSettings(.agent) } label: {
+                        Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
+                    }
+                    .help("设置 ⌘,")
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+            }
+            .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
+        }
         .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
         .safeAreaBar(edge: .bottom) {
             GlassEffectContainer(spacing: 8) {
@@ -90,7 +116,11 @@ struct NoteRow: View {
         Label {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(note.displayName).lineLimit(1)
+                    if model.renaming == note.rel {
+                        RenameField(model: model, note: note)
+                    } else {
+                        Text(note.displayName).lineLimit(1)
+                    }
                     if showFolder, !note.folder.isEmpty {
                         Text(note.folder).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -113,6 +143,8 @@ struct NoteRow: View {
             Button("在 Finder 中显示", systemImage: "folder") {
                 if let v = model.vault { NSWorkspace.shared.activateFileViewerSelecting([v.url(note.rel)]) }
             }
+            Button("重命名…", systemImage: "pencil") { model.renaming = note.rel }
+                .disabled(model.writing.contains(note.rel))
             if model.pending[note.rel] != nil {
                 Button("审阅改动", systemImage: "checklist") { model.open(note.rel); model.showDiff = true }
             }
@@ -123,6 +155,37 @@ struct NoteRow: View {
             }
             Divider()
             Button("移到废纸篓", systemImage: "trash", role: .destructive) { model.trash(note.rel) }
+        }
+    }
+}
+
+/// The note's name, editable in its row. Return or clicking away renames; Escape cancels.
+struct RenameField: View {
+    @Bindable var model: AppModel
+    let note: NoteRef
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("笔记名", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .focused($focused)
+            .onAppear {
+                text = note.title
+                // A List row can't take focus in the same pass that inserts it.
+                DispatchQueue.main.async { focused = true }
+            }
+            .onSubmit { commit(keepOpen: true) }
+            // The field editor takes Escape before onKeyPress would see it.
+            .onExitCommand { model.renaming = nil }
+            .onChange(of: focused) { _, now in if !now { commit(keepOpen: false) } }
+    }
+
+    /// A rejected name keeps the field open after Return; clicking away just drops it.
+    private func commit(keepOpen: Bool) {
+        guard model.renaming == note.rel else { return }
+        if text == note.title || model.renameNote(note.rel, to: text) || !keepOpen {
+            model.renaming = nil
         }
     }
 }
