@@ -378,7 +378,9 @@ final class AppModel {
     - [ ] 输入 `/` 打开斜杠命令
     - [ ] 按 ⌘K 搜索笔记与命令
     - [ ] 按 ⌘J 打开 Agent 面板，让 Claude Code 或 Codex 修改这篇笔记
-    > Agent 的每一次写入都会进入审阅，可以逐段接受或还原。
+    - [ ] 在侧栏的「空间」里打开工作台，或新建日记、自律、子弹笔记、LLM Wiki 空间
+    - [ ] 在「问库」里提一个问题，agent 会把找到的结论做成卡片
+    > Agent 的每一次写入都会进入审阅，可以逐段接受或还原；让它审阅时，意见会作为批注出现在正文旁边。
 
     """
 
@@ -400,6 +402,13 @@ final class AppModel {
     - `twain propose <笔记> --content - --reason 理由`：提交修改，用户逐段审阅后才写入
     - `twain ask "问题" --options A,B`：拿不准时直接问用户
     - `twain reviews`：用户最近接受和拒绝了哪些修改、为什么
+    - `twain annotate <笔记> --items '[{"quote": 原文, "text": 批注, "kind": "suggestion"}]'`：审阅时在原文旁留批注，不改正文
+    - `twain data add <集合> --record '{"hours": 7.5}'`、`twain data query <集合> --since 7d`：睡眠、运动、打卡等数据
+
+    ## 读库的习惯
+    - 找资料先 `skim`，看准了再 `read` 到需要的层级，不要一上来读全文
+    - 改动一律走 `propose` 并写清理由；只是评论或提问就用 `annotate`
+    - 笔记属于某个空间（日记、自律……）时，共笔会把那个空间的规则一并交给你，照做即可
 
     """
 

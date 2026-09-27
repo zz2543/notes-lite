@@ -35,7 +35,7 @@ twain — 让 agent 使用共笔笔记库的命令行工具
 
 用法：twain <命令> [参数] [--json]
 
-\(TwainCommands.all.map { "  " + $0.id.padding(toLength: 11, withPad: " ", startingAt: 0) + $0.summary }.joined(separator: "\n"))
+\(TwainCommands.all.map { "  " + $0.id.padding(toLength: TwainCommands.all.map(\.id.count).max()! + 2, withPad: " ", startingAt: 0) + $0.summary }.joined(separator: "\n"))
   mcp        以 MCP 服务器方式运行（供 Claude Code、Codex 等 agent 挂载）
 
   twain help <命令>   查看某个命令的参数
