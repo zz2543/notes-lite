@@ -346,7 +346,7 @@ struct OpenSettings: View {
                 LabeledContent("地址") {
                     HStack {
                         let p = model.http.port
-                        Text(p > 0 ? "http://127.0.0.1:\(p)/v1" : (model.http.error ?? "未运行")).foregroundStyle(p > 0 ? .primary : .secondary)
+                        Text(p > 0 ? "http://127.0.0.1:" + String(p) + "/v1" : (model.http.error ?? "未运行")).foregroundStyle(p > 0 ? .primary : .secondary)
                             .textSelection(.enabled).lineLimit(1)
                         TextField("端口", text: $port).frame(width: 70)
                             .onSubmit { if let n = UInt16(port) { model.httpPort = n; model.startHTTP() } }
@@ -363,7 +363,7 @@ struct OpenSettings: View {
                         Button("重置") { token = HTTPGateway.token(reset: true) }
                     }
                 }
-                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:\(model.http.port > 0 ? model.http.port : model.httpPort)/v1/data/sleep")
+                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:" + String(model.http.port > 0 ? model.http.port : model.httpPort) + "/v1/data/sleep")
                     .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             } header: {
                 Text("开放接口")

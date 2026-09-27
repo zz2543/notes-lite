@@ -21,6 +21,7 @@ enum DebugScenario {
         let parts = name.split(separator: ":").map(String.init)
         let rel = parts.count > 1 ? parts[1] : "项目/2.0 发布计划.md"
         if parts.first == "space" { apply2(parts, m); return }
+        if parts.first == "settings" { m.openSettings(SettingsTab(rawValue: parts.count > 1 ? parts[1] : "open") ?? .open); return }
         if m.vault?.note(rel) != nil { m.open(rel) }
         switch parts.first ?? "" {
         case "focus":
