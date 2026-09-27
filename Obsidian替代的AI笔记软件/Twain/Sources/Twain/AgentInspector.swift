@@ -291,9 +291,16 @@ struct AgentBar: View {
         } label: {
             HStack(spacing: 4) {
                 if icon { Image(systemName: "cpu").imageScale(.small) }
-                Text(model.modelLabel(kind)).lineLimit(1).truncationMode(.tail)
-                if let e = model.effectiveEffort(kind) {
-                    Text("· " + Effort.name(e)).lineLimit(1).fixedSize().foregroundStyle(.tertiary)
+                // When the panel is narrow the effort goes first, so the model name stays readable.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) {
+                        Text(model.modelLabel(kind)).lineLimit(1).fixedSize()
+                        if let e = model.effectiveEffort(kind) {
+                            Text("· " + Effort.name(e)).lineLimit(1).fixedSize().foregroundStyle(.tertiary)
+                        }
+                    }
+                    Text(model.modelLabel(kind)).lineLimit(1).fixedSize()
+                    Text(model.modelLabel(kind)).lineLimit(1).truncationMode(.tail)
                 }
                 Image(systemName: "chevron.up.chevron.down").imageScale(.small).foregroundStyle(.tertiary)
             }
