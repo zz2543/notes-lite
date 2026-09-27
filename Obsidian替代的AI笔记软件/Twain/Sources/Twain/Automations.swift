@@ -156,6 +156,7 @@ extension AppModel {
         userCommands = read(commandsDir).compactMap { UserCommand.parse(file: $0.0, text: $0.1) }
         let before = automations
         automations = read(automationsDir).compactMap { Automation.parse(file: $0.0, text: $0.1) }
+        loadPipelines()
         for (id, work) in automationTimers where !automations.contains(where: { $0.id == id && isApproved($0) }) {
             work.cancel()
             automationTimers[id] = nil
@@ -176,24 +177,7 @@ extension AppModel {
     @discardableResult
     func runUserCommand(_ c: UserCommand, input: String?) throws -> AgentSession {
         guard vault != nil else { throw RPCError(RPCError.noVault, "共笔没有打开任何库") }
-        let ns = editorText as NSString
-        let sel = NSIntersectionRange(editorSelection, NSRange(location: 0, length: ns.length))
-        let selected = activeRel == nil ? "" : ns.substring(with: sel)
-        if c.scope != .vault, activeRel == nil {
-            throw RPCError(RPCError.invalidParams, "「\(c.title)」需要先打开一篇笔记")
-        }
-        if c.scope == .selection, selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw RPCError(RPCError.invalidParams, "「\(c.title)」需要先在笔记里选中一段文字")
-        }
-        let rel = activeRel ?? ""
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        let vars = [
-            "selection": selected, "note": editorText, "path": rel,
-            "title": ((rel as NSString).lastPathComponent as NSString).deletingPathExtension,
-            "line": String(EditorContext.position(sel.location, in: ns).line),
-            "date": f.string(from: Date()), "input": input ?? "",
-        ]
+        let vars = try templateVars(scope: c.scope, title: c.title, input: input)
         runAgent(prompt: Template.render(c.prompt, vars), agent: c.agent, model: c.model, effort: c.effort)
         guard let s = activeSession else { throw RPCError(RPCError.internalError, "没能启动 \(c.agent.displayName)") }
         return s

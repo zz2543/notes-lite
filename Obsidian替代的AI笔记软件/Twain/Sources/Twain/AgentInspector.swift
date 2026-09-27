@@ -508,6 +508,8 @@ struct ItemView: View {
             if let q = model.questions[id] { QuestionCard(model: model, question: q) }
         case let .feedback(rel, message, sent):
             FeedbackCard(model: model, session: session, itemID: item.id, rel: rel, message: message, sent: sent)
+        case let .pipeline(id):
+            PipelineCard(model: model, runID: id)
         case let .change(rel, plus, minus):
             let pendingNow = model.pending[rel] != nil
             HStack(spacing: 10) {

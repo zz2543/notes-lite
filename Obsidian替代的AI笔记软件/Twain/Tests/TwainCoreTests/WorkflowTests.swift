@@ -214,3 +214,38 @@ final class MCPLaunchTests: XCTestCase {
         XCTAssertTrue(x.contains(#"mcp_servers.twain.default_tools_approval_mode="approve""#))
     }
 }
+
+final class PipelineTests: XCTestCase {
+    func testParseSteps() {
+        let text = """
+        ---
+        title: 研究并写成文章
+        agent: claude
+        scope: vault
+        ---
+        开头的说明不属于任何一步。
+
+        ## 调研
+        gate: ask
+        围绕 {{input}} 找资料。
+
+        第二段也属于调研。
+        ## 大纲
+        model: sonnet
+        gate：review
+        写大纲，参考 {{prev}}。
+        ## 空步骤
+        gate: none
+        """
+        let p = Pipeline.parse(file: ".twain/pipelines/write.md", text: text)!
+        XCTAssertEqual(p.key, "write")
+        XCTAssertEqual(p.scope, .vault)
+        XCTAssertEqual(p.steps.map(\.title), ["调研", "大纲"])
+        XCTAssertEqual(p.steps[0].gate, .ask)
+        XCTAssertEqual(p.steps[0].prompt, "围绕 {{input}} 找资料。\n\n第二段也属于调研。")
+        XCTAssertEqual(p.steps[1].model, "sonnet")
+        XCTAssertEqual(p.steps[1].gate, .review)
+        XCTAssertTrue(p.needsInput)
+        XCTAssertEqual(Template.render("参考 {{prev}} 和 {{steps.1}}", ["prev": "甲", "steps.1": "乙"]), "参考 甲 和 乙")
+    }
+}

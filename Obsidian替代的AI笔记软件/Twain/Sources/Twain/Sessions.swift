@@ -20,6 +20,8 @@ struct SessionItem: Identifiable, Equatable {
         case question(UUID)
         /// The outcome of a review with rejections, ready to send back to the agent.
         case feedback(rel: String, message: String, sent: Bool)
+        /// A pipeline running in this session: its steps and gate (`AppModel.pipelineRuns`).
+        case pipeline(UUID)
     }
     let id = UUID()
     var kind: Kind
@@ -45,6 +47,10 @@ final class AgentSession: Identifiable {
     var automationID: String?
     /// Optional MCP tools this session's runs get (`annotate` for an AI review).
     var extraTools: [String] = []
+    /// Runs may only read and propose, never write files (reviews, 问库).
+    var readOnly = false
+    /// The 问库 desk this session answers.
+    var deskID: String?
     @ObservationIgnored var transcript: URL?
     @ObservationIgnored var transcriptStamp: Date?
     @ObservationIgnored var changeItems: [SessionItem] = []
@@ -106,7 +112,7 @@ final class AgentSession: Identifiable {
             case let .step(_, t, _): return "> " + t
             case let .change(rel, p, m): return "> 修改 \(rel) +\(p) −\(m)"
             case let .error(t): return "> ⚠︎ " + t
-            case .question, .feedback: return nil
+            case .question, .feedback, .pipeline: return nil
             }
         }.joined(separator: "\n\n")
     }

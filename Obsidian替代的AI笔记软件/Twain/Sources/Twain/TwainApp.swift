@@ -46,6 +46,9 @@ struct TwainApp: App {
                     }
                 }
                 if !model.userCommands.isEmpty { Divider() }
+                Button("问库…") { model.newDesk() }.keyboardShortcut("a", modifiers: [.command, .shift])
+                Button("AI 审阅当前笔记") { model.startAIReview() }.disabled(model.activeRel == nil)
+                Divider()
                 Button("审阅待定改动") { model.reviewNext() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(model.pending.isEmpty)

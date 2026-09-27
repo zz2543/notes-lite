@@ -31,6 +31,7 @@ extension AppModel {
         let agent = agentPick
         let s = AgentSession(agent: agent, source: .app, title: "AI 审阅 · " + NoteRef(rel: rel).title)
         s.extraTools = ["annotate"]
+        s.readOnly = true
         sessions.append(s)
         activeSessionID = s.id
         let prompt = """

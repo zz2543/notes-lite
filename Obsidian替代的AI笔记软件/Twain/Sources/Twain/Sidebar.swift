@@ -27,6 +27,23 @@ struct SidebarView: View {
                         }
                 }
             }
+            Section("问库") {
+                Button(action: model.newDesk) {
+                    Label("向笔记库提问…", systemImage: "rectangle.stack.badge.person.crop")
+                }
+                .buttonStyle(.plain)
+                ForEach(model.desks.filter { !$0.question.isEmpty }.prefix(6)) { d in
+                    Label {
+                        HStack {
+                            Text(d.question).lineLimit(1)
+                            Spacer(minLength: 0)
+                            Text("\(d.cards.filter { $0.state != .discarded }.count)").font(.caption).foregroundStyle(.secondary)
+                        }
+                    } icon: { Image(systemName: "rectangle.stack") }
+                    .tag("desk:" + d.id)
+                    .contextMenu { Button("删除这个问题", systemImage: "trash", role: .destructive) { model.deleteDesk(d.id) } }
+                }
+            }
             Section("Agent") {
                 ForEach(AgentKind.allCases, id: \.self) { k in AgentStatusRow(model: model, kind: k) }
                 Button { model.openSettings(.agent) } label: {

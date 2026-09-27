@@ -9,7 +9,9 @@ struct NoteDetail: View {
         let pend = model.activePending
         let reviewing = model.showDiff && pend != nil
         Group {
-            if reviewing, let pend {
+            if let desk = model.currentDesk {
+                ResearchDeskView(model: model, desk: desk)
+            } else if reviewing, let pend {
                 ReviewView(model: model, review: pend)
             } else {
                 page(pending: pend)
@@ -19,8 +21,9 @@ struct NoteDetail: View {
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .navigationTitle(model.activeNote?.displayName ?? "共笔")
-        .navigationSubtitle(model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
+        .navigationTitle(model.currentDesk != nil ? "问库" : model.activeNote?.displayName ?? "共笔")
+        .navigationSubtitle(model.currentDesk.map { $0.question.isEmpty ? "新问题" : $0.question }
+                            ?? model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
         .toolbar { toolbar(reviewing: reviewing) }
     }
 
@@ -168,7 +171,15 @@ struct StatusPill: View {
 extension NoteDetail {
     @ToolbarContentBuilder
     fileprivate func toolbar(reviewing: Bool) -> some ToolbarContent {
-        if reviewing {
+        if model.currentDesk != nil {
+            ToolbarItem(placement: .primaryAction) {
+                Button("返回笔记", systemImage: "doc.text") {
+                    model.openDesk = nil
+                    if let rel = model.activeRel { model.selection = rel }
+                }
+                .help("回到刚才的笔记")
+            }
+        } else if reviewing {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("稍后", systemImage: "clock") { model.showDiff = false }
                     .help("稍后审阅 ⎋")

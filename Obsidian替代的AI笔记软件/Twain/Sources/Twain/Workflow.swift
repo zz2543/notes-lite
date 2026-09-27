@@ -183,6 +183,7 @@ extension AppModel {
         record.resolve(hunks, feedback: r.feedback)
         if r.by != nil || r.isProposal { proposalStore?.save(record) }
         answerWaiters(record)
+        pipelineReviewsChanged()
         emit("review.resolved", source: "user", ["path": .string(rel), "status": .string(record.status.rawValue),
                                                  "accepted": JSONValue(accepted), "rejected": JSONValue(hunks.count - accepted),
                                                  "proposal": JSONValue(r.proposalID)])

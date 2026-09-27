@@ -133,6 +133,11 @@ final class AppModel {
     var selection: String? {
         didSet {
             guard let s = selection, s != activeRel else { return }
+            if s.hasPrefix("desk:") {
+                flushSave()
+                openDesk = String(s.dropFirst(5))
+                return
+            }
             if s.hasPrefix("dir:") {
                 // A folder without a folder note: selecting it just opens or closes it.
                 let f = String(s.dropFirst(4))
@@ -204,7 +209,15 @@ final class AppModel {
     var modelFallback: [AgentKind: String] = [:]
     var effortFallback: [AgentKind: String] = [:]
     var modelsListedBy: [AgentKind: String] = [:]
-    var pending: [String: PendingReview] = [:]
+    var pending: [String: PendingReview] = [:] {
+        didSet { if pipelineRuns.values.contains(where: { $0.status == .waitingReview }) { pipelineReviewsChanged() } }
+    }
+    /// The vault's pipelines (`.twain/pipelines/`) and the runs in progress (`Pipelines.swift`).
+    var pipelines: [Pipeline] = []
+    var pipelineRuns: [UUID: PipelineRun] = [:]
+    /// 问库 desks (`ResearchDesk.swift`) and the one shown in place of a note.
+    var desks: [ResearchDesk] = []
+    var openDesk: String?
     var writing: Set<String> = []
 
     @ObservationIgnored private var saveWork: DispatchWorkItem?
@@ -318,6 +331,8 @@ final class AppModel {
         companionModel?.stop()
         companionModel = nil
         warmCompanion()
+        openDesk = nil
+        loadDesks()
     }
 
     static let welcomeNote = """
@@ -395,6 +410,7 @@ final class AppModel {
             adoptHeadingTitle(leaving: true)
         }
         activeRel = rel
+        openDesk = nil
         unreadable = Self.unreadableReason(v.url(rel))
         editorText = unreadable == nil ? v.read(rel) : ""
         if unreadable != nil { v.acknowledge(rel, content: nil) }
@@ -602,6 +618,7 @@ final class AppModel {
     /// Twain's own files under `.twain/` changed (plugins, data drops); extended by later features.
     func twainFilesChanged(_ paths: Set<String>) {
         if paths.contains(where: { $0.hasPrefix(".twain/annotations") }) { loadAnnotations() }
+        if paths.contains(where: { $0.hasPrefix(".twain/pipelines") }) { loadPipelines() }
     }
 
     /// What Twain keeps about a note outside it (summary, annotations) follows the note when it moves.
@@ -775,7 +792,7 @@ final class AppModel {
         let effort = effort ?? effortArgument(agent)
         s.model = model.isEmpty ? modelFallback[agent] : model
         s.effort = effort.isEmpty ? effectiveEffort(agent) : effort
-        let readOnly = s.source == .automation
+        let readOnly = s.source == .automation || s.readOnly
 
         let proc = AgentProcess(kind: agent)
         s.process = proc
@@ -926,6 +943,7 @@ final class AppModel {
             let auto = reviewMode == .auto && s.source != .automation
             showToast(auto ? "\(s.agent.displayName) 已写入 \(name)\(more)" : "\(s.agent.displayName) 修改了 \(name)\(more) · 待审阅")
         }
+        pipelineSessionFinished(s)
     }
 
     private func queueReview(rel: String, baseline: [String], proposed: String, by: AgentKind?,

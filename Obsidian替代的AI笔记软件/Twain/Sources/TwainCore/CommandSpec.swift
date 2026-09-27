@@ -264,7 +264,7 @@ public enum TwainCommands {
         "commands", "列出所有可用命令，包括 app 里注册的。", effect: .read, needsApp: false)
 
     public static let all: [CommandSpec] = [context, notes, search, skim, read, backlinks, outline, tasks, open, reveal, notify,
-                                            propose, ask, reviews, run, watch, commands, annotate, annotations]
+                                            propose, ask, reviews, run, watch, commands, annotate, annotations, cards]
 
     public static func spec(_ id: String) -> CommandSpec? { all.first { $0.id == id } }
 

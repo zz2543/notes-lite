@@ -29,7 +29,7 @@ public enum Frontmatter {
 
 /// `{{name}}` placeholders. Unknown names are left as they are, so a typo shows in the prompt.
 public enum Template {
-    static let placeholder = try! NSRegularExpression(pattern: #"\{\{\s*([A-Za-z_]+)\s*\}\}"#)
+    static let placeholder = try! NSRegularExpression(pattern: #"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}"#)
 
     public static func render(_ template: String, _ vars: [String: String]) -> String {
         let ns = template as NSString

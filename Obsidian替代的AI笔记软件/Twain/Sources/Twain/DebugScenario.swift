@@ -36,6 +36,8 @@ enum DebugScenario {
                     else { tv.insertText(s, replacementRange: tv.selectedRange()) }
                 }
             }
+        case "desk":
+            if let d = m.desks.first(where: { !$0.cards.isEmpty }) { m.selection = "desk:" + d.id }
         case "reply":
             let s = AgentSession(agent: .claude, source: .app, title: "续写")
             s.apply([.user("根据上下文续写这篇笔记"), .step(id: "1", text: "读取 AGENTS.md", write: nil), .stepDone(id: "1"),

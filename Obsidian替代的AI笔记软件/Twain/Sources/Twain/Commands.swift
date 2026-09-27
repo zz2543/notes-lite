@@ -100,6 +100,9 @@ enum CommandRegistry {
                 case let .change(rel, p, mi): return ["change": .string("\(rel) +\(p) -\(mi)")]
                 case let .question(id): return ["question": .string(m.questions[id]?.question ?? "")]
                 case let .feedback(rel, _, sent): return ["feedback": .string(rel), "sent": .bool(sent)]
+                case let .pipeline(id):
+                    let r = m.pipelineRuns[id]
+                    return ["pipeline": .string(r?.pipeline.key ?? ""), "step": JSONValue(r?.step ?? 0), "status": .string(r.map { "\($0.status)" } ?? "")]
                 }
             })]
         },
@@ -188,6 +191,58 @@ enum CommandRegistry {
             }
             poll()
         },
+        AppCommand(spec: CommandSpec("debug.pipeline", "（调试）运行流水线或处理它的关口，返回停下时的状态", effect: .write, params: [
+            ParamSpec("action", required: true, positional: true, help: "start / continue / redo / stop / wait"),
+            ParamSpec("name", help: "流水线"), ParamSpec("input", help: "输入"), ParamSpec("model", help: "模型"),
+            ParamSpec("feedback", help: "意见"),
+        ])) { m, call, reply in
+            let action = call.params["action"]?.string ?? ""
+            var id = m.pipelineRuns.values.sorted { $0.step < $1.step }.last?.id
+            do {
+                switch action {
+                case "start":
+                    guard let p = m.pipeline(named: call.params["name"]?.string ?? "") else { throw RPCError(RPCError.notFound, "没有这个流水线") }
+                    _ = try m.runPipeline(p, input: call.params["input"]?.string, model: call.params["model"]?.string)
+                    id = m.pipelineRuns.values.first { $0.status == .running }?.id
+                case "continue":
+                    if let id, let f = call.params["feedback"]?.string, var r = m.pipelineRuns[id], !r.outputs.isEmpty {
+                        r.outputs[r.outputs.count - 1] += "\n\n（用户的意见：\(f)）"
+                        m.pipelineRuns[id] = r
+                    }
+                    if let id { m.advancePipeline(id) }
+                case "redo": if let id { m.redoPipelineStep(id, feedback: call.params["feedback"]?.string ?? "") }
+                case "stop": if let id { m.stopPipeline(id) }
+                default: break
+                }
+            } catch let e as RPCError { return reply(.failure(e)) } catch {}
+            func poll() {
+                guard let id, let r = m.pipelineRuns[id] else { return reply(.failure(RPCError(RPCError.notFound, "没有流水线在运行"))) }
+                if r.status == .running { DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: poll); return }
+                reply(.success(["step": JSONValue(r.step + 1), "status": .string("\(r.status)"), "output": .string(r.outputs.last ?? ""),
+                                "pending": JSONValue(m.pending.keys.sorted())]))
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: poll)
+        },
+        AppCommand(spec: CommandSpec("debug.desk", "（调试）在问库里提问，等 agent 交完卡片", effect: .write, params: [
+            ParamSpec("question", required: true, positional: true, help: "问题"),
+            ParamSpec("scope", help: "folder:… 或 tag:…"), ParamSpec("model", help: "模型"),
+        ])) { m, call, reply in
+            m.newDesk()
+            guard let id = m.openDesk else { return reply(.failure(RPCError(RPCError.internalError, "没能新建"))) }
+            m.ask(desk: id, question: call.params["question"]?.string ?? "", scope: call.params["scope"]?.string ?? "",
+                  model: call.params["model"]?.string)
+            let sid = m.currentDesk?.session
+            func poll() {
+                let s = m.sessions.first { $0.id.uuidString == sid }
+                if s?.running == false, let d = m.desks.first(where: { $0.id == id }) {
+                    reply(.success(["desk": .string(id), "cards": .array(d.cards.map { c in
+                        ["kind": .string(c.kind.rawValue), "title": .string(c.title), "body": .string(c.body),
+                         "sources": .array(c.sources.map { .string($0.path + ":" + ($0.line.map(String.init) ?? "")) })]
+                    }), "said": .string(s?.markdown.suffix(300).description ?? "")]))
+                } else { DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: poll) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: poll)
+        },
         AppCommand(spec: CommandSpec("debug.answer", "（调试）替用户回答最近的问题", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "回答"),
         ])) { m, call in
@@ -202,8 +257,18 @@ enum CommandRegistry {
     static let debugCommands: [AppCommand] = []
     #endif
 
-    /// Built-in commands plus the vault's own (`.twain/commands/`).
-    static func all(_ m: AppModel) -> [AppCommand] { builtin + m.userCommands.map(userCommand) }
+    /// Built-in commands plus the vault's own (`.twain/commands/`, `.twain/pipelines/`).
+    static func all(_ m: AppModel) -> [AppCommand] { builtin + m.userCommands.map(userCommand) + m.pipelines.map(pipelineCommand) }
+
+    static func pipelineCommand(_ p: Pipeline) -> AppCommand {
+        AppCommand(spec: CommandSpec("pipeline." + p.key, p.title, effect: .propose),
+                   palette: PaletteInfo(label: { _ in "流水线：" + p.title }, hint: "\(p.steps.count) 步", icon: p.icon,
+                                        tint: Theme.agentColor(p.agent)),
+                   agents: false) { m, _ in
+            _ = try m.runPipeline(p)
+            return ["done": true]
+        }
+    }
 
     static func command(_ id: String, in m: AppModel) -> AppCommand? { all(m).first { $0.spec.id == id } }
 
@@ -254,14 +319,19 @@ enum CommandRegistry {
         AppCommand(spec: TwainCommands.ask) { m, call, reply in m.ask(call, reply: reply) },
         AppCommand(spec: TwainCommands.run) { m, call in
             let name = call.params["name"]?.string ?? ""
+            if m.userCommand(named: name) == nil, let p = m.pipeline(named: name) {
+                guard let s = try m.runPipeline(p, input: call.params["input"]?.string) else { throw RPCError(RPCError.invalidParams, "没有给出输入") }
+                return ["command": .string(p.key), "session": .string(s.id.uuidString), "agent": .string(p.agent.rawValue), "pipeline": true]
+            }
             guard let cmd = m.userCommand(named: name) else {
-                throw RPCError(RPCError.notFound, "没有自定义命令 \(name)；可用的有：" + m.userCommands.map(\.key).joined(separator: "、"))
+                throw RPCError(RPCError.notFound, "没有自定义命令 \(name)；可用的有：" + (m.userCommands.map(\.key) + m.pipelines.map(\.key)).joined(separator: "、"))
             }
             let s = try m.runUserCommand(cmd, input: call.params["input"]?.string)
             return ["command": .string(cmd.key), "session": .string(s.id.uuidString), "agent": .string(cmd.agent.rawValue)]
         },
         AppCommand(spec: TwainCommands.watch) { m, call, reply in m.watch(call, reply: reply) },
         AppCommand(spec: TwainCommands.annotate) { m, call in try m.annotateCommand(call) },
+        AppCommand(spec: TwainCommands.cards) { m, call in try m.cardsCommand(call) },
         AppCommand(spec: TwainCommands.annotations) { m, call in try m.annotationsCommand(call) },
         AppCommand(spec: TwainCommands.commands) { m, _ in
             ["commands": .array(exposed(m).map(\.spec.json))]
@@ -326,6 +396,8 @@ enum CommandRegistry {
         ui("review.next", "打开下一处待审阅的改动", agents: true,
            PaletteInfo(label: { "审阅待定改动（\($0.pending.count)）" }, hint: "⇧⌘R", icon: "checklist",
                        visible: { !$0.pending.isEmpty })) { $0.reviewNext() },
+        ui("desk.new", "问库：向整个笔记库提一个问题，答案是一组带出处的卡片",
+           PaletteInfo(label: { _ in "问库：向笔记库提问" }, hint: "⇧⌘A", icon: "rectangle.stack.badge.person.crop")) { $0.newDesk() },
         ui("companion", "开关伴写：停笔时页边偶尔出现一句提问或思路（小模型）",
            PaletteInfo(label: { "伴写：" + ($0.companionOn ? "关闭" : "开启") }, icon: "sparkle.text.clipboard")) { $0.toggleCompanion() },
         ui("note.review", "让 agent 审阅当前笔记，在正文旁留下批注（不改动笔记）",
