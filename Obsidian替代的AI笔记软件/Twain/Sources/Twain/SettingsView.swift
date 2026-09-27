@@ -12,11 +12,14 @@ struct SettingsView: View {
             Tab("Agent", systemImage: "sparkles", value: SettingsTab.agent) {
                 AgentSettings(model: model)
             }
+            Tab("开放", systemImage: "puzzlepiece.extension", value: SettingsTab.open) {
+                OpenSettings(model: model)
+            }
             Tab("快捷键", systemImage: "keyboard", value: SettingsTab.keys) {
                 KeySettings()
             }
         }
-        .frame(width: 600)
+        .frame(width: 640)
         .frame(minHeight: 460)
     }
 }
@@ -322,5 +325,130 @@ struct KeySettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Everything that opens Twain up: the local API, data, plugins, and the AI helpers' budgets.
+struct OpenSettings: View {
+    @Bindable var model: AppModel
+    @State private var token = HTTPGateway.token()
+    @State private var reveal = false
+    @State private var port = ""
+    @State private var wanting: Int?
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $model.httpOn) {
+                    Text("启用本地 HTTP 接口")
+                    Text("只监听本机 127.0.0.1，每个请求都要带令牌。其他 app（视频总结、健康数据、快捷指令……）用它导入笔记、写入数据、调用 agent 能用的命令。")
+                }
+                LabeledContent("地址") {
+                    HStack {
+                        let p = model.http.port
+                        Text(p > 0 ? "http://127.0.0.1:\(p)/v1" : (model.http.error ?? "未运行")).foregroundStyle(p > 0 ? .primary : .secondary)
+                            .textSelection(.enabled).lineLimit(1)
+                        TextField("端口", text: $port).frame(width: 70)
+                            .onSubmit { if let n = UInt16(port) { model.httpPort = n; model.startHTTP() } }
+                    }
+                }
+                LabeledContent("令牌") {
+                    HStack {
+                        Text(reveal ? token : String(repeating: "•", count: 20)).font(.callout.monospaced()).textSelection(.enabled).lineLimit(1)
+                        Button(reveal ? "隐藏" : "显示") { reveal.toggle() }
+                        Button("拷贝") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(token, forType: .string)
+                        }
+                        Button("重置") { token = HTTPGateway.token(reset: true) }
+                    }
+                }
+                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:\(model.http.port > 0 ? model.http.port : model.httpPort)/v1/data/sleep")
+                    .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+            } header: {
+                Text("开放接口")
+            } footer: {
+                Text("接口一览和插件写法见 Twain/docs/plugins.md；懂听 GotIt 的接入示例在 integrations/gotit/。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("数据集合") {
+                let cs = model.vault.map { DataStore(vault: $0.root).collections() } ?? []
+                if cs.isEmpty {
+                    Text("还没有数据。twain data add、HTTP 接口，或把 JSON/CSV 丢进 .twain/inbox/<集合>/ 都会建立集合。")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(cs, id: \.name) { c in
+                    LabeledContent(c.name) {
+                        Text("\(c.count) 条 · \(c.fields.filter { $0 != "time" && $0 != "date" }.joined(separator: "、"))")
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                Button("在 Finder 中显示数据文件夹") {
+                    if let v = model.vault {
+                        let d = v.root.appendingPathComponent(".twain/data")
+                        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+                        NSWorkspace.shared.activateFileViewerSelecting([d])
+                    }
+                }
+            }
+            .id(model.dataVersion)
+
+            Section("插件与空间") {
+                let all = allPlugins()
+                ForEach(all, id: \.0) { dir, name, on in
+                    Toggle(isOn: Binding(get: { on }, set: { v in setEnabled(dir, v) })) {
+                        Text(name)
+                        Text(".twain/plugins/" + dir).font(.caption)
+                    }
+                }
+                Button("新建空间…") { model.newSpaceSheet = true }
+            }
+
+            Section {
+                Stepper("AI 摘要每天最多 \(model.summaryDailyLimit) 篇", value: $model.summaryDailyLimit, in: 0...2000, step: 50)
+                LabeledContent("今天已用") { Text("\(model.summariesToday) 篇").foregroundStyle(.secondary) }
+                HStack {
+                    Button(model.summarizing.map { "正在生成 \($0.done)/\($0.total)…" } ?? "为笔记生成 AI 摘要") { model.summarizeNotes() }
+                        .disabled(model.summarizing != nil)
+                    if let wanting { Text("\(wanting) 篇需要").foregroundStyle(.secondary) }
+                }
+                Toggle(isOn: Binding(get: { model.companionOn }, set: { if $0 != model.companionOn { model.toggleCompanion() } })) {
+                    Text("伴写")
+                    Text("停笔时，页边偶尔出现一句提问或思路。用小模型，每分钟最多一次、每小时最多 30 次。")
+                }
+            } header: {
+                Text("AI 助手的用量")
+            } footer: {
+                Text("笔记名片默认从笔记开头提取，不花 token；AI 摘要只给内容变过的长笔记生成，12 篇一批。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            port = String(model.httpPort)
+            model.countNotesWantingSummary { wanting = $0 }
+        }
+    }
+
+    /// Every plugin folder, enabled or not.
+    private func allPlugins() -> [(String, String, Bool)] {
+        guard let dir = model.pluginsDir else { return [] }
+        let fm = FileManager.default
+        return ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []).compactMap { u in
+            guard let data = try? Data(contentsOf: u.appendingPathComponent("manifest.json")),
+                  let p = try? Plugin.parse(dir: u.lastPathComponent, json: data) else { return nil }
+            return (u.lastPathComponent, p.name, !fm.fileExists(atPath: u.appendingPathComponent(".disabled").path))
+        }.sorted { $0.1 < $1.1 }
+    }
+
+    private func setEnabled(_ dir: String, _ on: Bool) {
+        guard let pd = model.pluginsDir else { return }
+        let marker = pd.appendingPathComponent(dir).appendingPathComponent(".disabled")
+        if on { try? FileManager.default.removeItem(at: marker) } else { FileManager.default.createFile(atPath: marker.path, contents: nil) }
+        model.loadPlugins()
+        model.loadPipelines()
+        model.loadVaultConfig()
+        model.tick += 1
     }
 }

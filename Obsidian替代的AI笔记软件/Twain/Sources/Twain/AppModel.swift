@@ -32,7 +32,7 @@ struct PendingReview {
 }
 
 enum ReviewMode: String { case queue, auto }
-enum SettingsTab: String { case editor, agent, keys }
+enum SettingsTab: String { case editor, agent, open, keys }
 
 struct SlashItem: Identifiable, Equatable {
     let label: String
