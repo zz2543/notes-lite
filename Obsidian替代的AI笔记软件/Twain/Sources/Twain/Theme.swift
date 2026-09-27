@@ -110,7 +110,6 @@ enum EditorFont: String, CaseIterable, Identifiable {
     case serif, sans, mono
     var id: String { rawValue }
 
-    var shortLabel: String { ["serif": "衬线", "sans": "无衬线", "mono": "等宽"][rawValue]! }
     var cardLabel: String { ["serif": "衬线 · New York", "sans": "无衬线 · SF Pro", "mono": "等宽 · SF Mono"][rawValue]! }
     var next: EditorFont { self == .serif ? .sans : self == .sans ? .mono : .serif }
 

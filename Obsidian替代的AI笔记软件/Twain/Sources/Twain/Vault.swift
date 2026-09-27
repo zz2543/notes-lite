@@ -246,7 +246,6 @@ final class Vault {
 
     func snapshotAll() -> VaultSnapshot { VaultSnapshot.take(root: root, rels: notes.map(\.rel)) }
 
-    func noteCount(in folder: String) -> Int { tree[folder]?.notes.count ?? 0 }
 
     private func handleEvents(_ paths: [String]) {
         let all = Set(paths.map(relative))
