@@ -160,6 +160,12 @@ final class AppModel {
     }
     var ghost = ""
     var slash: SlashState?
+    /// Annotations on the open note (`Annotations.swift`).
+    var annotations: [Annotation] = []
+    var selectedAnnotation: String?
+    /// Set by the editor: replace a range as an undoable edit, or select one.
+    @ObservationIgnored var applyEditorEdit: ((NSRange, String) -> Void)?
+    @ObservationIgnored var selectEditorRange: ((NSRange) -> Void)?
 
     /// Links, headings and tasks of the open vault, for agents' queries.
     @ObservationIgnored var index: VaultIndex?
@@ -386,6 +392,8 @@ final class AppModel {
         slash = nil
         editorVersion += 1
         palette = false
+        selectedAnnotation = nil
+        loadAnnotations()
         if selection != rel { selection = rel }
         if focus { requestFocus(caret: (editorText as NSString).length) }
         revealInSidebar(rel)
@@ -535,6 +543,7 @@ final class AppModel {
         }
         guard new != rel else { return true }
         if var p = pending.removeValue(forKey: rel) { p.rel = new; pending[new] = p }
+        carryNoteData(from: rel, to: new)
         if activeRel == rel { activeRel = new }
         if selection == rel { selection = new }
         let name = NoteRef(rel: new).title
@@ -577,7 +586,22 @@ final class AppModel {
     }
 
     /// Twain's own files under `.twain/` changed (plugins, data drops); extended by later features.
-    func twainFilesChanged(_ paths: Set<String>) {}
+    func twainFilesChanged(_ paths: Set<String>) {
+        if paths.contains(where: { $0.hasPrefix(".twain/annotations") }) { loadAnnotations() }
+    }
+
+    /// What Twain keeps about a note outside it (summary, annotations) follows the note when it moves.
+    func carryNoteData(from old: String, to new: String) {
+        guard let v = vault, old != new else { return }
+        SummaryStore(vault: v.root).rename(old, to: new)
+        AnnotationStore(vault: v.root).rename(old, to: new)
+    }
+
+    func selectAnnotation(_ id: String) {
+        selectedAnnotation = id
+        guard let a = annotations.first(where: { $0.id == id }), let r = Anchor.locate(a.quote, in: editorText, line: a.line) else { return }
+        selectEditorRange?(r)
+    }
 
     static func isUntitled(_ title: String) -> Bool {
         title.range(of: #"^未命名( \d+)?$"#, options: .regularExpression) != nil
@@ -760,6 +784,7 @@ final class AppModel {
         let agent = s.agent
         let tool = TwainTool.prepare()
         var env = ["TWAIN_SESSION": s.id.uuidString]
+        if !s.extraTools.isEmpty { env["TWAIN_MCP_EXTRA"] = s.extraTools.joined(separator: ",") }
         if let tool { env["PATH"] = tool.path }
         if let server { env["TWAIN_SOCK"] = server.path }
         let mcp: AgentArguments.MCP? = mcpOn && tool != nil

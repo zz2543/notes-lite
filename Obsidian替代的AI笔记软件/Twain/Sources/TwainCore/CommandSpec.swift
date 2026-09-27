@@ -264,12 +264,19 @@ public enum TwainCommands {
         "commands", "列出所有可用命令，包括 app 里注册的。", effect: .read, needsApp: false)
 
     public static let all: [CommandSpec] = [context, notes, search, skim, read, backlinks, outline, tasks, open, reveal, notify,
-                                            propose, ask, reviews, run, watch, commands]
+                                            propose, ask, reviews, run, watch, commands, annotate, annotations]
 
     public static func spec(_ id: String) -> CommandSpec? { all.first { $0.id == id } }
 
+    /// Tools only runs that need them get (an AI review gets `annotate`), so the default set stays small.
+    public static let optionalMCP: Set<String> = ["annotate", "cards"]
+
     /// What agents get over MCP. Kept short on purpose: every tool costs context and attention.
-    public static var mcpTools: [CommandSpec] { all.filter { $0.mcpName != nil } }
+    public static var mcpTools: [CommandSpec] { mcpTools(extra: []) }
+
+    public static func mcpTools(extra: [String]) -> [CommandSpec] {
+        all.filter { $0.mcpName != nil && (!optionalMCP.contains($0.id) || extra.contains($0.id)) }
+    }
 }
 
 /// Events the app reports through `twain watch` and feeds to automations.

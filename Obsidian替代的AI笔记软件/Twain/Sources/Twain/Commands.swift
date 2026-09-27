@@ -152,6 +152,23 @@ enum CommandRegistry {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll)
         },
+        AppCommand(spec: CommandSpec("debug.aireview", "（调试）AI 审阅一篇笔记，等运行结束", effect: .write, params: [
+            ParamSpec("note", required: true, positional: true, help: "笔记"),
+            ParamSpec("model", help: "模型"),
+        ])) { m, call, reply in
+            guard let (index, _) = try? m.freshIndex(), let rel = index.resolve(call.params["note"]?.string ?? "") else {
+                return reply(.failure(RPCError(RPCError.notFound, "找不到笔记")))
+            }
+            m.open(rel)
+            m.startAIReview(model: call.params["model"]?.string)
+            let s = m.activeSession
+            func poll() {
+                if s?.running == false { reply(.success(["annotations": .array(m.annotations.map(\.json)),
+                                                          "transcript": .string(s?.markdown ?? "")])) }
+                else { DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: poll) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: poll)
+        },
         AppCommand(spec: CommandSpec("debug.answer", "（调试）替用户回答最近的问题", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "回答"),
         ])) { m, call in
@@ -225,6 +242,8 @@ enum CommandRegistry {
             return ["command": .string(cmd.key), "session": .string(s.id.uuidString), "agent": .string(cmd.agent.rawValue)]
         },
         AppCommand(spec: TwainCommands.watch) { m, call, reply in m.watch(call, reply: reply) },
+        AppCommand(spec: TwainCommands.annotate) { m, call in try m.annotateCommand(call) },
+        AppCommand(spec: TwainCommands.annotations) { m, call in try m.annotationsCommand(call) },
         AppCommand(spec: TwainCommands.commands) { m, _ in
             ["commands": .array(exposed(m).map(\.spec.json))]
         },
@@ -288,6 +307,11 @@ enum CommandRegistry {
         ui("review.next", "打开下一处待审阅的改动", agents: true,
            PaletteInfo(label: { "审阅待定改动（\($0.pending.count)）" }, hint: "⇧⌘R", icon: "checklist",
                        visible: { !$0.pending.isEmpty })) { $0.reviewNext() },
+        ui("note.review", "让 agent 审阅当前笔记，在正文旁留下批注（不改动笔记）",
+           PaletteInfo(label: { m in "AI 审阅：让 \(m.agentPick.displayName) 批注这篇笔记" }, icon: "text.bubble",
+                       visible: { $0.activeRel != nil && $0.activeNote?.isHTML != true })) { $0.startAIReview() },
+        ui("note.annotations.clear", "忽略当前笔记上的全部批注",
+           PaletteInfo(label: { _ in "忽略全部批注" }, icon: "xmark.bubble", visible: { !$0.visibleAnnotations.isEmpty })) { $0.dismissAllAnnotations() },
         ui("notes.summarize", "为还没有最新摘要的笔记生成 AI 摘要（小模型，分批，每天有上限）",
            PaletteInfo(label: { m in m.summarizing.map { "正在生成摘要 \($0.done)/\($0.total)…" } ?? "为笔记生成 AI 摘要" },
                        icon: "text.badge.star")) { $0.summarizeNotes() },

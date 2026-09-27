@@ -17,7 +17,8 @@ struct EditorView: NSViewRepresentable {
         lm.allowsNonContiguousLayout = true
         storage.addLayoutManager(lm)
         let container = NSTextContainer(size: NSSize(width: 600, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
+        // Sized by the text view (updateInsets), which may keep a rail free on the right.
+        container.widthTracksTextView = false
         container.lineFragmentPadding = 0
         lm.addTextContainer(container)
 
@@ -63,9 +64,13 @@ struct EditorView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
         let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth,
-                                plain: model.activeNote?.isHTML == true)
+                                plain: model.activeNote?.isHTML == true,
+                                rail: model.visibleAnnotations.isEmpty || model.zen ? 0 : AnnotationRail.width)
         c.sync(version: model.editorVersion, text: model.editorText, style: style,
                ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest)
+        // Annotations and the selected one change what the rail and highlights show.
+        _ = (model.annotations, model.selectedAnnotation)
+        c.scheduleRail()
     }
 
     // MARK: Coordinator
@@ -84,6 +89,16 @@ struct EditorView: NSViewRepresentable {
             self.model = model
             super.init()
             styler.resolveEmbed = { [weak model] target in model?.resolveEmbed(target) }
+            model.applyEditorEdit = { [weak self] range, text in
+                guard let tv = self?.textView, NSMaxRange(range) <= (tv.string as NSString).length else { return }
+                tv.window?.makeFirstResponder(tv)
+                tv.insertText(text, replacementRange: range)
+            }
+            model.selectEditorRange = { [weak self] range in
+                guard let self, let tv = self.textView, NSMaxRange(range) <= (tv.string as NSString).length else { return }
+                tv.setSelectedRange(range)
+                tv.scrollRangeToVisible(range)
+            }
             styler.needsRestyle = { [weak self] in self?.restyle() }
             NotificationCenter.default.addObserver(forName: .twainApplySlash, object: nil, queue: .main) { [weak self] n in
                 if let item = n.object as? SlashItem { self?.applySlash(item) }
@@ -151,6 +166,7 @@ struct EditorView: NSViewRepresentable {
         func layoutChanged() {
             guard let tv = textView, let style, let scroll = scrollView else { return }
             tv.updateInsets(style: style, visibleHeight: scroll.contentView.bounds.height)
+            if !model.annotations.isEmpty { scheduleRail() }
             if let tc = tv.textContainer {
                 let before = styler.containerWidth
                 styler.setContainerWidth(tc.size.width)
@@ -213,6 +229,36 @@ struct EditorView: NSViewRepresentable {
             tv.updateCaret(animated: true)
         }
 
+        // MARK: annotations
+
+        private let rail = AnnotationRail()
+        private var railWork: DispatchWorkItem?
+        private var lastHighlights: [NSRange] = []
+
+        /// Re-anchors the annotations and lays out their cards once the current burst of work is done.
+        func scheduleRail() {
+            railWork?.cancel()
+            let w = DispatchWorkItem { [weak self] in self?.layoutRail() }
+            railWork = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: w)
+        }
+
+        private func layoutRail() {
+            guard let tv = textView, let lm = tv.layoutManager as? TwainLayoutManager else { return }
+            let list = model.zen ? [] : model.visibleAnnotations
+            let text = tv.string
+            var anchors: [String: NSRange] = [:]
+            for a in list { if let r = Anchor.locate(a.quote, in: text, line: a.line) { anchors[a.id] = r } }
+            lm.highlights = list.compactMap { a in
+                anchors[a.id].map { ($0, NSColor(AnnotationCard.tint(a.kind)), a.id == model.selectedAnnotation) }
+            }
+            for r in lastHighlights + lm.highlights.map(\.range) where NSMaxRange(r) <= (text as NSString).length {
+                lm.invalidateDisplay(forCharacterRange: r)
+            }
+            lastHighlights = lm.highlights.map(\.range)
+            if list.isEmpty { rail.clear() } else { rail.layout(in: tv, model: model, anchors: anchors, selected: model.selectedAnnotation) }
+        }
+
         // MARK: text changes
 
         func textDidChange(_ notification: Notification) {
@@ -221,6 +267,7 @@ struct EditorView: NSViewRepresentable {
             // A native copy: comparing and slicing a bridged NSString is many times slower.
             model.editorDidChange(String(decoding: Array(tv.string.utf8), as: UTF8.self))
             restyle()
+            if !model.annotations.isEmpty { scheduleRail() }
             updateSlash()
             center(smooth: true)
             schedulePause()

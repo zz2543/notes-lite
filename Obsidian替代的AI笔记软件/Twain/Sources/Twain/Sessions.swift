@@ -43,6 +43,8 @@ final class AgentSession: Identifiable {
     var alive = true
     /// The automation this run belongs to, when an automation started it.
     var automationID: String?
+    /// Optional MCP tools this session's runs get (`annotate` for an AI review).
+    var extraTools: [String] = []
     @ObservationIgnored var transcript: URL?
     @ObservationIgnored var transcriptStamp: Date?
     @ObservationIgnored var changeItems: [SessionItem] = []

@@ -92,6 +92,7 @@ func timeout(_ spec: CommandSpec, _ params: [String: JSONValue]) -> TimeInterval
     switch spec.id {
     case "ask": return TimeInterval((params["timeout"]?.int ?? 600) + 30)
     case "propose" where params["wait"]?.bool == true: return 6 * 3600
+    case _ where spec.id.hasPrefix("debug."): return 900
     default: return 30
     }
 }
@@ -125,7 +126,9 @@ func invoke(_ spec: CommandSpec, _ params: [String: JSONValue]) -> Result<JSONVa
 // MARK: twain mcp
 
 if args.first == "mcp" {
-    let server = MCPServer(version: version) { spec, params in invoke(spec, params) }
+    // A run may be given extra tools (an AI review gets `annotate`) through TWAIN_MCP_EXTRA.
+    let extra = (env["TWAIN_MCP_EXTRA"] ?? "").split(separator: ",").map(String.init)
+    let server = MCPServer(tools: TwainCommands.mcpTools(extra: extra), version: version) { spec, params in invoke(spec, params) }
     let lock = NSLock()
     var buffer = Data()
     let input = FileHandle.standardInput

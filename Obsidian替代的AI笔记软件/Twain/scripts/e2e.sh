@@ -94,8 +94,20 @@ sleep 0.8
 check "leaving the heading names it"  "周会记录.md"                      ls "$VAULT"
 check "named note keeps its text"     "要点"                            cat "$VAULT/周会记录.md"
 
+# Phase 5 (AI-native plan): cards, levels, annotations, folders.
+check "skim shows cards"              "项目/同步方案.md · 用 CRDT 处理冲突。"  "$CLI" skim
+check "read level 2 is an outline"    "2: 冲突处理（"                     "$CLI" read 同步方案 --level 2
+check "read a section with lines"     "3| 用 CRDT 处理冲突。"               "$CLI" read 同步方案 --level 3 --section 冲突处理
+check "annotate anchors a quote"      '"added" : 1'                     "$CLI" annotate 同步方案 --items '[{"quote":"CRDT","text":"为什么选 CRDT？","kind":"question"}]' --json
+check "unknown quotes are reported"   '"missing" : ['                   "$CLI" annotate 同步方案 --items '[{"quote":"不存在的原文","text":"x"}]' --json
+check "annotations lists them"        "为什么选 CRDT？"                  "$CLI" annotations 同步方案 --json
+AID="$("$CLI" annotations 同步方案 --json | sed -n 's/.*"id" : "\([a-z0-9]*\)".*/\1/p' | head -1)"
+check "agents can reply"              '"replied"'                       "$CLI" annotate 同步方案 --reply_to "$AID" --text 因为离线优先 --json
+check "annotations follow a rename"   "因为离线优先"                      bash -c "'$CLI' debug.rename 项目/同步方案.md --title 同步设计 >/dev/null; '$CLI' annotations 同步设计 --json"
+check "summary store follows too"     ""                                ls "$VAULT/.twain"
+
 kill $APP 2>/dev/null; wait $APP 2>/dev/null
-check "read commands work offline"    "项目/同步方案.md:4"              "$CLI" tasks
+check "read commands work offline"    "项目/同步设计.md:4"              "$CLI" tasks
 check "reviews work offline"          "原因：保留原话"                    "$CLI" reviews
 check "app-only commands say so"      "共笔没有运行"                  "$CLI" context
 

@@ -196,6 +196,9 @@ extension NoteDetail {
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                Button("AI 审阅", systemImage: "text.bubble") { model.startAIReview() }
+                    .help("让 \(model.agentPick.displayName) 通读这篇笔记，在正文旁留下批注，不改动笔记")
+                    .disabled(model.activeRel == nil || model.activeNote?.isHTML == true)
                 Button("笔记信息", systemImage: "info.circle") { model.noteInfoOpen.toggle() }
                     .help("笔记的名片：摘要、标签、反链")
                     .disabled(model.activeRel == nil || model.activeNote?.isHTML == true)

@@ -15,9 +15,15 @@ final class TwainTextView: NSTextView {
 
     func updateInsets(style: EditorStyle, visibleHeight: CGFloat) {
         let w = bounds.width
-        let pad: CGFloat = w < 700 ? 20 : 48
+        // A rail on the right holds annotation cards; the text column centers in what is left.
+        let avail = w - style.rail
+        let pad: CGFloat = avail < 700 ? 20 : 48
         // The container starts a gutter left of the text column, so syntax can hang into it.
-        let side = max(0, max(pad, (w - style.width) / 2) - MarkdownStyler.gutter)
+        let side = max(0, max(pad, (avail - style.width) / 2) - MarkdownStyler.gutter)
+        let containerWidth = max(120, avail - 2 * side)
+        if let tc = textContainer, abs(tc.size.width - containerWidth) > 0.5 {
+            tc.size = NSSize(width: containerWidth, height: .greatestFiniteMagnitude)
+        }
         if style.typewriter {
             topInset = visibleHeight * 0.5
             bottomInset = visibleHeight * 0.55

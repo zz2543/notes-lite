@@ -39,6 +39,8 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     var taskHitRects: [(CGRect, Int)] = []
     /// Pictures and videos drawn in place, for clicks.
     var embedHitRects: [(CGRect, Embed)] = []
+    /// Passages with an annotation: a soft marker under the text, stronger for the selected one.
+    var highlights: [(range: NSRange, color: NSColor, selected: Bool)] = []
 
     /// Inline code and highlights: a rounded box around the glyphs instead of the whole line height.
     override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int,
@@ -68,6 +70,21 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         // Whole paragraphs, so a block that starts above the dirty rect still draws its part.
         let paras = (storage.string as NSString).paragraphRange(for: chars)
         let width = container.size.width
+        for h in highlights where NSIntersectionRange(h.range, paras).length > 0 && NSMaxRange(h.range) <= storage.length {
+            let gr = glyphRange(forCharacterRange: h.range, actualCharacterRange: nil)
+            enumerateEnclosingRects(forGlyphRange: gr, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: container) { rect, _ in
+                let font = (storage.attribute(.font, at: h.range.location, effectiveRange: nil) as? NSFont) ?? .systemFont(ofSize: 17)
+                let spacing = (storage.attribute(.paragraphStyle, at: h.range.location, effectiveRange: nil) as? NSParagraphStyle)?.lineSpacing ?? 0
+                // The rect spans the line with its spacing below; mark just the glyph band.
+                let r = rect.offsetBy(dx: origin.x, dy: origin.y)
+                let bandH = font.ascender - font.descender + 2
+                let band = CGRect(x: r.minX - 1, y: r.minY + max(0, (r.height - spacing - bandH) / 2), width: r.width + 2, height: bandH)
+                h.color.withAlphaComponent(h.selected ? 0.28 : 0.13).setFill()
+                NSBezierPath(roundedRect: band, xRadius: 3, yRadius: 3).fill()
+                h.color.withAlphaComponent(h.selected ? 0.9 : 0.55).setFill()
+                CGRect(x: band.minX, y: band.maxY - 1.5, width: band.width, height: 1.5).fill()
+            }
+        }
         storage.enumerateAttribute(.twainDeco, in: paras) { value, range, _ in
             guard let deco = value as? Deco else { return }
             draw(deco, range: range, storage: storage, origin: origin, width: width)

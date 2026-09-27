@@ -134,6 +134,11 @@ extension AppModel {
         for rel in pending.keys where rel.hasPrefix(folder + "/") {
             if var p = pending.removeValue(forKey: rel) { p.rel = moved(rel); pending[p.rel] = p }
         }
+        for n in v.notes where n.rel.hasPrefix(new + "/") {
+            let old = folder + String(n.rel.dropFirst(new.count))
+            let before = old == folder + "/" + (new as NSString).lastPathComponent + ".md" ? folder + "/" + oldName + ".md" : old
+            carryNoteData(from: before, to: n.rel)
+        }
         openFolders = Set(openFolders.map { $0 == folder || $0.hasPrefix(folder + "/") ? new + String($0.dropFirst(folder.count)) : $0 })
         if let a = activeRel, a.hasPrefix(folder + "/") { activeRel = moved(a) }
         if let s = selection, s.hasPrefix(folder + "/") { selection = moved(s) }
@@ -169,6 +174,7 @@ extension AppModel {
             let new = try v.move(rel, to: folder)
             guard new != rel else { return }
             if var p = pending.removeValue(forKey: rel) { p.rel = new; pending[new] = p }
+            carryNoteData(from: rel, to: new)
             if activeRel == rel { activeRel = new }
             if selection == rel { selection = new }
             revealInSidebar(new)

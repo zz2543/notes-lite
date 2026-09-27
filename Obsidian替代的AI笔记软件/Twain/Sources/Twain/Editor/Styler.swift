@@ -47,6 +47,8 @@ struct EditorStyle: Equatable {
     var width: CGFloat
     /// Source code (an HTML note): monospaced, no Markdown rendering.
     var plain = false
+    /// Width kept free on the right for annotation cards.
+    var rail: CGFloat = 0
 }
 
 /// Styles the note line by line and, after an edit, restyles only the lines whose text or
