@@ -142,6 +142,16 @@ enum CommandRegistry {
             m.setApproved(a, true)
             return ["approved": .string(a.id)]
         },
+        AppCommand(spec: CommandSpec("debug.summarize", "（调试）为笔记生成 AI 摘要", effect: .write, params: [
+            ParamSpec("limit", .int, help: "最多几篇"),
+        ])) { m, call, reply in
+            m.summarizeNotes(limit: call.params["limit"]?.int)
+            func poll() {
+                if m.summarizing == nil { reply(.success(["toast": JSONValue(m.toast)])) }
+                else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll)
+        },
         AppCommand(spec: CommandSpec("debug.answer", "（调试）替用户回答最近的问题", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "回答"),
         ])) { m, call in
@@ -169,6 +179,8 @@ enum CommandRegistry {
         AppCommand(spec: TwainCommands.context) { m, call in try m.contextJSON(session: call.session) },
         query(TwainCommands.notes),
         query(TwainCommands.search),
+        query(TwainCommands.skim),
+        query(TwainCommands.read),
         query(TwainCommands.backlinks),
         query(TwainCommands.outline),
         query(TwainCommands.tasks),
@@ -276,6 +288,11 @@ enum CommandRegistry {
         ui("review.next", "打开下一处待审阅的改动", agents: true,
            PaletteInfo(label: { "审阅待定改动（\($0.pending.count)）" }, hint: "⇧⌘R", icon: "checklist",
                        visible: { !$0.pending.isEmpty })) { $0.reviewNext() },
+        ui("notes.summarize", "为还没有最新摘要的笔记生成 AI 摘要（小模型，分批，每天有上限）",
+           PaletteInfo(label: { m in m.summarizing.map { "正在生成摘要 \($0.done)/\($0.total)…" } ?? "为笔记生成 AI 摘要" },
+                       icon: "text.badge.star")) { $0.summarizeNotes() },
+        ui("note.info", "查看和编辑当前笔记的名片（摘要、标签）",
+           PaletteInfo(label: { _ in "笔记信息与摘要" }, hint: "⌘I", icon: "info.circle", visible: { $0.activeRel != nil })) { $0.noteInfoOpen = true },
         ui("settings.agent", "打开 Agent 与 CLI 设置",
            PaletteInfo(label: { _ in "Agent 与 CLI 设置" }, hint: "⌘,", icon: "gearshape")) { $0.openSettings(.agent) },
         ui("vault.choose", "选择另一个库", PaletteInfo(label: { _ in "打开其他库…" }, hint: "⌘O", icon: "folder")) { $0.chooseVault() },

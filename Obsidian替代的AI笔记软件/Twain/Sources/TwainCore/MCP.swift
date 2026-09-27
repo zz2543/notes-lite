@@ -21,6 +21,7 @@ public final class MCPServer {
     public static let instructions = """
     共笔是用户正在使用的 Markdown 笔记应用，当前目录就是笔记库。
     - 用户说“这段”“这里”“这一节”“我选中的”时，先调用 context 看用户选了什么、光标在哪。
+    - 在库里找资料：先 skim 看名片，再 read_note 按层级（名片 → 提纲 → 某一节）读，只读需要的部分。
     - 修改笔记优先用 propose_edit：改动进入用户的审阅，每处都写明理由；wait=true 可以拿到审阅结果和拒绝原因。
     - 拿不准用户想要什么时，用 ask_user 问，不要猜。
     """

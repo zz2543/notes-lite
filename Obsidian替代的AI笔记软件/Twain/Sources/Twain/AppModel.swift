@@ -93,6 +93,11 @@ final class AppModel {
     /// Master switch for `.twain/automations/`.
     var automationsOn = true { didSet { save("automationsOn", automationsOn) } }
     var automationDailyLimit = 20 { didSet { save("automationLimit", automationDailyLimit) } }
+    /// AI summaries a day at most (each is one note in a batched call to a small model).
+    var summaryDailyLimit = 100 { didSet { save("summaryLimit", summaryDailyLimit) } }
+    /// Progress of an AI summary run.
+    var summarizing: (done: Int, total: Int)?
+    var noteInfoOpen = false
     /// Model per agent; "" means whatever the CLI is configured to use.
     var agentModel: [AgentKind: String] = [:] {
         didSet { for k in AgentKind.allCases { save("model." + k.rawValue, agentModel[k] ?? "") } }
@@ -245,6 +250,7 @@ final class AppModel {
         mcpOn = b("mcpOn", true)
         automationsOn = b("automationsOn", true)
         automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
+        summaryDailyLimit = defaults.object(forKey: "pref.summaryLimit") as? Int ?? 100
         agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
             ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
         })
@@ -317,6 +323,8 @@ final class AppModel {
     ## 共笔命令
     在库目录里可以运行 `twain`（`twain help` 查看全部）：
     - `twain context`：用户当前打开的笔记、选中的文字、光标所在标题
+    - `twain skim [--folder 文件夹] [词]`：先看笔记“名片”（标题、标签、一句话摘要），不读正文
+    - `twain read <笔记> --level 1|2|3 [--section 标题]`：按层级读，名片 → 提纲 → 正文或某一节
     - `twain search <词>`、`twain backlinks <笔记>`、`twain tasks`：搜索、反链、全库待办
     - `twain open <笔记> --line N`：在共笔里打开给用户看
     - `twain propose <笔记> --content - --reason 理由`：提交修改，用户逐段审阅后才写入
@@ -797,10 +805,12 @@ final class AppModel {
         var parts = ["你在共笔笔记库中工作，当前目录就是库的根目录，库里的笔记都是 Markdown 文件。"]
         if !noteRel.isEmpty, !readOnly { parts.append("用户当前打开的笔记是 \(noteRel)，“这篇笔记”“当前笔记”指的就是它。") }
         if mcp {
-            parts.append("共笔提供了一组工具（twain 服务器）：context 查看用户选中的文字和光标所在标题；search、backlinks、outline、tasks 查询笔记库；"
-                + "propose_edit 提交修改，改动进入用户的逐段审阅，每处都要写明理由；ask_user 在拿不准时直接问用户；open 把笔记打开给用户看。")
+            parts.append("共笔提供了一组工具（twain 服务器）：context 查看用户选中的文字和光标所在标题；"
+                + "找资料时先用 skim 看笔记名片（标题、标签、一句话摘要），看准了再用 read_note 按层级读（1 名片、2 提纲、3 正文或某一节），不要一上来就通读全库；"
+                + "search、backlinks、tasks 查询笔记库；propose_edit 提交修改，改动进入用户的逐段审阅，每处都要写明理由；ask_user 在拿不准时直接问用户；open 把笔记打开给用户看。")
         } else if tool {
-            parts.append("可以运行 `twain` 命令：`twain context` 查看用户选中的文字和光标位置，`twain search`、`twain backlinks`、`twain tasks` 查询笔记库，"
+            parts.append("可以运行 `twain` 命令：`twain context` 查看用户选中的文字和光标位置，`twain skim` 先看笔记名片、`twain read <笔记> --level 2` 按层级读，"
+                + "`twain search`、`twain backlinks`、`twain tasks` 查询笔记库，"
                 + "`twain propose <笔记> --content - --reason 理由` 提交修改供用户审阅，`twain ask \"问题\"` 向用户提问；`twain help` 列出全部命令。")
         }
         if readOnly {

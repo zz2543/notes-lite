@@ -3,7 +3,7 @@ import Foundation
 /// The read commands that need only the files. The app and the CLI (when the app is closed)
 /// both answer them here, so the two give the same JSON.
 public enum VaultQueries {
-    public static let ids: Set<String> = ["notes", "search", "backlinks", "outline", "tasks", "reviews"]
+    public static let ids: Set<String> = ["notes", "search", "skim", "read", "backlinks", "outline", "tasks", "reviews"]
 
     /// `current` is the note open in the app; the CLI has none, so `note` is required there.
     public static func run(_ id: String, _ params: [String: JSONValue], index: VaultIndex, current: String?) throws -> JSONValue {
@@ -18,6 +18,27 @@ public enum VaultQueries {
             let q = params["query"]?.string ?? ""
             let hits = index.search(q, limit: params["limit"]?.int ?? 20)
             return .object(["query": .string(q), "results": .array(hits.map(json))])
+        case "skim":
+            let store = SummaryStore(vault: index.root)
+            let tag = params["tag"]?.string?.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased()
+            let q = params["query"]?.string?.lowercased() ?? ""
+            let limit = params["limit"]?.int ?? 60
+            var cards: [JSONValue] = []
+            var total = 0
+            for rel in index.list(folder: params["folder"]?.string) {
+                guard let n = index.notes[rel] else { continue }
+                let c = Skim.card(n, store: store)
+                if let tag, !tag.isEmpty, !c.tags.contains(where: { $0.lowercased() == tag }) { continue }
+                if !q.isEmpty, !(c.title.lowercased().contains(q) || c.summary.lowercased().contains(q)
+                                  || c.tags.contains { $0.lowercased().contains(q) } || c.headings.contains { $0.lowercased().contains(q) }) { continue }
+                total += 1
+                if cards.count < limit { cards.append(c.json) }
+            }
+            return .object(["cards": .array(cards), "total": JSONValue(total)])
+        case "read":
+            let rel = try note(params, index: index, current: current)
+            return try Skim.read(rel, level: params["level"]?.int ?? 2, section: params["section"]?.string, index: index,
+                                 store: SummaryStore(vault: index.root))
         case "backlinks":
             let rel = try note(params, index: index, current: current)
             return .object(["note": .string(rel), "backlinks": .array(index.backlinks(to: rel).map(json))])

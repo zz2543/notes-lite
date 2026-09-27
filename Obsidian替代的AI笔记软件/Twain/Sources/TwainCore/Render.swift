@@ -10,6 +10,8 @@ public enum Render {
         case "backlinks": return hits(r["backlinks"], empty: "没有笔记链接到 \(r["note"]?.string ?? "")")
         case "notes": return (r["notes"]?.array ?? []).compactMap { $0["path"]?.string }.joined(separator: "\n")
         case "outline": return outline(r)
+        case "skim": return skim(r)
+        case "read": return read(r)
         case "tasks": return tasks(r)
         case "commands": return commands(r)
         case "open":
@@ -25,6 +27,45 @@ public enum Render {
             if let o = r.object, o.keys.allSatisfy({ ["done", "shown"].contains($0) }) { return "" }
             return r.text(pretty: true)
         }
+    }
+
+    static func card(_ c: JSONValue) -> String {
+        var line = "\(c["path"]?.string ?? "") · \(c["summary"]?.string ?? "")"
+        let tags = (c["tags"]?.array ?? []).compactMap(\.string)
+        if !tags.isEmpty { line += "  " + tags.map { "#" + $0 }.joined(separator: " ") }
+        line += "（\(c["words"]?.int ?? 0) 字）"
+        let heads = (c["headings"]?.array ?? []).compactMap(\.string)
+        if !heads.isEmpty { line += "\n    标题：" + heads.joined(separator: " / ") }
+        return line
+    }
+
+    static func skim(_ r: JSONValue) -> String {
+        let cards = r["cards"]?.array ?? []
+        if cards.isEmpty { return "没有符合条件的笔记" }
+        let total = r["total"]?.int ?? cards.count
+        return cards.map(card).joined(separator: "\n") + (total > cards.count ? "\n（共 \(total) 篇，只列出前 \(cards.count) 篇；缩小 folder、tag 或 query 再看）" : "")
+    }
+
+    static func read(_ r: JSONValue) -> String {
+        let path = r["note"]?.string ?? ""
+        if let lines = r["lines"]?.array {
+            let from = r["from"]?.int ?? 1
+            let head = r["section"]?.string.map { "\(path) · \($0)" } ?? path
+            return head + "\n" + lines.enumerated().map { i, l in "\(from + i)| \(l.string ?? "")" }.joined(separator: "\n")
+        }
+        var out = r["card"].map(card) ?? path
+        if let o = r["outline"]?.array {
+            out += "\n提纲："
+            for h in o {
+                let pad = String(repeating: "  ", count: max(0, (h["level"]?.int ?? 1) - 1))
+                out += "\n  \(pad)\(h["line"]?.int ?? 0): \(h["text"]?.string ?? "")（\(h["lines"]?.int ?? 0) 行）"
+                if let op = h["opening"]?.string, !op.isEmpty { out += " — " + op }
+            }
+            if let t = r["tasks"]?.int, t > 0 { out += "\n未完成待办：\(t)" }
+            let links = (r["links"]?.array ?? []).compactMap(\.string)
+            if !links.isEmpty { out += "\n链接到：" + links.map { "[[\($0)]]" }.joined(separator: " ") }
+        }
+        return out
     }
 
     static func proposal(_ r: JSONValue) -> String {

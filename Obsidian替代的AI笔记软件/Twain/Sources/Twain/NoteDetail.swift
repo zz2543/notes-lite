@@ -196,6 +196,10 @@ extension NoteDetail {
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                Button("笔记信息", systemImage: "info.circle") { model.noteInfoOpen.toggle() }
+                    .help("笔记的名片：摘要、标签、反链")
+                    .disabled(model.activeRel == nil || model.activeNote?.isHTML == true)
+                    .popover(isPresented: $model.noteInfoOpen, arrowEdge: .bottom) { NoteInfoPopover(model: model) }
                 Button("专注模式", systemImage: "arrow.up.left.and.arrow.down.right", action: model.toggleZen)
                     .help("专注模式 ⌘.")
                 Button("命令面板", systemImage: "magnifyingglass", action: model.openPalette)

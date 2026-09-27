@@ -192,8 +192,21 @@ public enum TwainCommands {
         "backlinks", "哪些笔记用 [[双链]] 链接到了这篇笔记，附上所在行。", effect: .read, needsApp: false, mcp: "backlinks",
         params: [noteParam(false)])
     public static let outline = CommandSpec(
-        "outline", "一篇笔记的标题、待办和出链，带行号。", effect: .read, needsApp: false, mcp: "outline",
+        "outline", "一篇笔记的标题、待办和出链，带行号。", effect: .read, needsApp: false,
         params: [noteParam(false)])
+    public static let skim = CommandSpec(
+        "skim", "浏览笔记的“名片”：标题、标签、主要标题和一句话摘要，不读正文。在一个范围里找资料时先用它，"
+            + "看准了再用 read_note 按层级读。", effect: .read, needsApp: false, mcp: "skim",
+        params: [ParamSpec("folder", help: "只看这个文件夹（含子文件夹）"),
+                 ParamSpec("tag", help: "只看带这个标签的笔记"),
+                 ParamSpec("query", positional: true, help: "标题、标签或摘要里包含的词"),
+                 ParamSpec("limit", .int, help: "最多返回几张，默认 60")])
+    public static let read = CommandSpec(
+        "read", "分级读一篇笔记：level 1 是名片，2 是提纲（每节的行号、长度和开头一句），3 是全文（带行号）。"
+            + "给 section 时只读那一节。从低到高按需读，省上下文。", effect: .read, needsApp: false, mcp: "read_note",
+        params: [noteParam(true),
+                 ParamSpec("level", .int, help: "1 名片 · 2 提纲 · 3 全文，默认 2"),
+                 ParamSpec("section", help: "只读这个标题下的一节（level 3）")])
     public static let tasks = CommandSpec(
         "tasks", "全库的待办事项，默认只列未完成的。", effect: .read, needsApp: false, mcp: "tasks",
         params: [ParamSpec("folder", help: "只看这个文件夹"),
@@ -208,7 +221,7 @@ public enum TwainCommands {
         "reveal", "在侧栏中定位一篇笔记。", effect: .ui,
         params: [noteParam(true)])
     public static let notify = CommandSpec(
-        "notify", "在共笔里给用户显示一条消息；由共笔启动的 agent 调用时，也会记进会话。", effect: .ui, mcp: "notify",
+        "notify", "在共笔里给用户显示一条消息；由共笔启动的 agent 调用时，也会记进会话。", effect: .ui,
         params: [ParamSpec("message", required: true, positional: true, help: "消息内容")])
     public static let propose = CommandSpec(
         "propose", "提议修改（或新建）一篇笔记。改动不会直接写入：用户在共笔里逐段审阅，接受的部分才写进文件。"
@@ -250,7 +263,7 @@ public enum TwainCommands {
     public static let commands = CommandSpec(
         "commands", "列出所有可用命令，包括 app 里注册的。", effect: .read, needsApp: false)
 
-    public static let all: [CommandSpec] = [context, notes, search, backlinks, outline, tasks, open, reveal, notify,
+    public static let all: [CommandSpec] = [context, notes, search, skim, read, backlinks, outline, tasks, open, reveal, notify,
                                             propose, ask, reviews, run, watch, commands]
 
     public static func spec(_ id: String) -> CommandSpec? { all.first { $0.id == id } }
