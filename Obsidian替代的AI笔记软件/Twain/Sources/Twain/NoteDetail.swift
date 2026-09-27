@@ -19,6 +19,10 @@ struct NoteDetail: View {
                 page(pending: pend)
             }
         }
+        // The page takes whatever width the split view gives it. Letting its content report a
+        // minimum width feeds back into the column sizes, and a width-dependent layout (the
+        // dashboards) can then keep re-solving the window until AppKit aborts.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         // One continuous sheet of paper from the window's top edge down; the toolbar
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())

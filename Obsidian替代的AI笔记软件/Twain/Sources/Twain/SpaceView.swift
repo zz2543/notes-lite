@@ -7,7 +7,9 @@ struct SpaceView: View {
     @Bindable var model: AppModel
     let plugin: Plugin
     @State private var editing = false
-    @State private var width: CGFloat = 900
+    /// Two module columns or one. Switched with a gap between the two thresholds so a width
+    /// right at the edge cannot flip it back and forth.
+    @State private var twoColumns = true
 
     private struct WidthKey: PreferenceKey {
         static let defaultValue: CGFloat = 900
@@ -16,7 +18,7 @@ struct SpaceView: View {
 
     /// Module indexes grouped into rows.
     private func rows(_ modules: [JSONValue]) -> [[Int]] {
-        guard width >= 680 else { return modules.indices.map { [$0] } }
+        guard twoColumns else { return modules.indices.map { [$0] } }
         var out: [[Int]] = [], pending: Int?
         for (i, m) in modules.enumerated() {
             if m["span"]?.int == 2 {
@@ -41,7 +43,9 @@ struct SpaceView: View {
                     Color.clear.preference(key: WidthKey.self, value: geo.size.width)
                 }
                 .frame(height: 0)
-                .onPreferenceChange(WidthKey.self) { width = $0 }
+                .onPreferenceChange(WidthKey.self) { w in
+                    if twoColumns, w < 640 { twoColumns = false } else if !twoColumns, w > 720 { twoColumns = true }
+                }
                 // Two columns when there's room; a module with "span": 2 takes a whole row.
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(Array(rows(modules).enumerated()), id: \.offset) { _, row in
@@ -50,7 +54,7 @@ struct SpaceView: View {
                                 ModuleCard(model: model, plugin: plugin, module: modules[i], editing: editing,
                                            move: { d in move(i, by: d, in: modules) }, remove: { remove(i, in: modules) })
                             }
-                            if row.count == 1, width >= 680, modules[row[0]]["span"]?.int != 2 { Color.clear.frame(maxWidth: .infinity) }
+                            if row.count == 1, twoColumns, modules[row[0]]["span"]?.int != 2 { Color.clear.frame(maxWidth: .infinity) }
                         }
                     }
                 }
@@ -170,7 +174,8 @@ struct ModuleCard: View {
             content
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
+        .clipped()
         .background(Color(nsColor: .textBackgroundColor), in: .rect(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(editing ? 1 : 0.5),
                                                                                      style: StrokeStyle(lineWidth: editing ? 1 : 0.5, dash: editing ? [5, 4] : [])))
