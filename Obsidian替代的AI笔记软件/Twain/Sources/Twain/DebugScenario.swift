@@ -88,8 +88,42 @@ enum DebugScenario {
         if parts.first == "settings" { m.openSettings(SettingsTab(rawValue: parts.count > 1 ? parts[1] : "open") ?? .open); return }
         if m.vault?.note(rel) != nil { m.open(rel) }
         switch parts.first ?? "" {
+        case "toggles":
+            // Hides and shows the sidebar and the inspector at whatever width the window has.
+            let steps: [(AppModel) -> Void] = [
+                { $0.agentPanel.toggle() }, { $0.agentPanel.toggle() },
+                { $0.columnVisibility = .detailOnly }, { $0.columnVisibility = .all },
+                { $0.toggleZen() }, { $0.toggleZen() },
+            ]
+            for (i, s) in steps.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4 * Double(i + 1)) { s(m) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4 * Double(steps.count + 2)) {
+                FileHandle.standardError.write("toggles done\n".data(using: .utf8)!)
+            }
         case "perf":
             perf(m)
+        case "resize":
+            // Sweeps the window width a few points at a time, the way a user dragging its edge
+            // would, to catch layouts whose size depends on their own size.
+            if parts.contains("reply") { apply("reply", to: m) }
+            if parts.contains("noagent") { m.agentPanel = false }
+            if parts.contains("nosidebar") { m.columnVisibility = .detailOnly }
+            guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView?.frame.width ?? 0 > 600 }) else { return }
+            var width = w.frame.width
+            // Down to 900, then back and forth through 820–900 a point at a time.
+            var dir: CGFloat = -3, bounces = 0
+            func step() {
+                width += dir
+                if width <= 820 { dir = 1; bounces += 1 } else if width >= 900, bounces > 0 { dir = -1; bounces += 1 }
+                if width < 900, dir == -3 { dir = -1 }
+                guard bounces < 8 else { FileHandle.standardError.write("resize done\n".data(using: .utf8)!); return }
+                if parts.contains("tick") { m.tick += 1 }
+                var f = w.frame; f.size.width = width; w.setFrame(f, display: true)
+                FileHandle.standardError.write("width \(Int(width))\n".data(using: .utf8)!)
+                DispatchQueue.main.async { step() }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { step() }
         case "focus":
             m.requestFocus(caret: 40)
         case "caret":

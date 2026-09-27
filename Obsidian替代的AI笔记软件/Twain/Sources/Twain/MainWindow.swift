@@ -4,6 +4,7 @@ import SwiftUI
 /// The single document window: floating glass sidebar, the page, and the Agent inspector.
 struct MainWindow: View {
     @Bindable var model: AppModel
+    static let minWidth: CGFloat = 920
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {

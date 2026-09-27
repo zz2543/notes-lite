@@ -15,7 +15,9 @@ struct AgentMarkdownReply: NSViewRepresentable {
         tv.drawsBackground = false
         tv.textContainerInset = .zero
         tv.textContainer?.lineFragmentPadding = 0
-        tv.textContainer?.widthTracksTextView = false
+        // The frame SwiftUI gives the view decides the wrap width; sizing never touches this view.
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.size = NSSize(width: 320, height: CGFloat.greatestFiniteMagnitude)
         tv.isVerticallyResizable = false
         tv.isHorizontallyResizable = false
         tv.linkTextAttributes = [.foregroundColor: NSColor.controlAccentColor, .cursor: NSCursor.pointingHand]
@@ -26,16 +28,69 @@ struct AgentMarkdownReply: NSViewRepresentable {
     func updateNSView(_ tv: NSTextView, context: Context) {
         guard (tv as? ReplyTextView)?.source != source else { return }
         (tv as? ReplyTextView)?.source = source
-        tv.textStorage?.setAttributedString(ReplyRenderer.render(source))
+        let text = ReplyRenderer.render(source)
+        tv.textStorage?.setAttributedString(text)
+        context.coordinator.measure.setText(text)
     }
 
+    func makeCoordinator() -> Measure.Holder { Measure.Holder() }
+
+    /// Measured on a separate layout stack. Laying out the displayed view here would change its
+    /// size mid-measurement, SwiftUI would measure again at another width, and at some window
+    /// widths that never settles: AppKit aborts after too many constraint passes.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView tv: NSTextView, context: Context) -> CGSize? {
-        let width = max(40, proposal.width ?? 320)
-        guard let tc = tv.textContainer, let lm = tv.layoutManager else { return nil }
-        if tc.size.width != width { tc.size = NSSize(width: width, height: .greatestFiniteMagnitude) }
-        lm.ensureLayout(for: tc)
-        let h = ceil(lm.usedRect(for: tc).height)
-        return CGSize(width: width, height: h)
+        let m = context.coordinator.measure
+        if m.source != source { m.setText(ReplyRenderer.render(source)); m.source = source }
+        guard let w = proposal.width, w.isFinite else {
+            // Unbounded or unspecified: the text's natural width, capped like a reading column.
+            let natural = min(ceil(m.naturalWidth()), 520)
+            return CGSize(width: max(40, natural), height: m.height(for: max(40, natural)))
+        }
+        let width = max(40, w)
+        return CGSize(width: width, height: m.height(for: width))
+    }
+}
+
+/// A private text stack for measuring a reply at any width, with the answers cached.
+final class Measure {
+    final class Holder { let measure = Measure() }
+
+    var source: String?
+    private let storage = NSTextStorage()
+    private let layout = NSLayoutManager()
+    private let container = NSTextContainer(size: NSSize(width: 320, height: CGFloat.greatestFiniteMagnitude))
+    private var heights: [CGFloat: CGFloat] = [:]
+    private var natural: CGFloat?
+
+    init() {
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+    }
+
+    func setText(_ text: NSAttributedString) {
+        storage.setAttributedString(text)
+        heights = [:]
+        natural = nil
+    }
+
+    func height(for width: CGFloat) -> CGFloat {
+        let key = width.rounded()
+        if let h = heights[key] { return h }
+        container.size = NSSize(width: key, height: .greatestFiniteMagnitude)
+        layout.ensureLayout(for: container)
+        let h = ceil(layout.usedRect(for: container).height)
+        heights[key] = h
+        return h
+    }
+
+    func naturalWidth() -> CGFloat {
+        if let n = natural { return n }
+        container.size = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        layout.ensureLayout(for: container)
+        let n = layout.usedRect(for: container).width
+        natural = n
+        return n
     }
 }
 
@@ -43,6 +98,8 @@ private final class ReplyTextView: NSTextView {
     var source: String?
     // Scrolling belongs to the transcript, not to each reply.
     override func scrollWheel(with event: NSEvent) { nextResponder?.scrollWheel(with: event) }
+    // Its size comes from sizeThatFits alone; an intrinsic size would ask SwiftUI to lay out again.
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) }
 }
 
 /// Markdown → attributed text for replies: headings, lists, quotes, fenced code, rules,

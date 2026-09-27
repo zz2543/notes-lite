@@ -10,7 +10,10 @@ struct TwainApp: App {
     var body: some Scene {
         Window("共笔", id: "main") {
             MainWindow(model: model)
-                .frame(minWidth: 760, minHeight: 480)
+                // Wide enough for the sidebar, the page and the Agent inspector at their minimum
+                // widths. Narrower, the split view cannot fit its columns and re-solves them on
+                // every layout pass until AppKit aborts ("more Update Constraints passes than views").
+                .frame(minWidth: MainWindow.minWidth, minHeight: 480)
                 #if DEBUG
                 .background(SnapshotWindowHider())
                 #endif
@@ -80,6 +83,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         if snapshotMode { NSApp.setActivationPolicy(.accessory) }
         #if DEBUG
+        // Test runs that expect to crash: print why and exit quietly instead of raising the
+        // system's crash dialog on the user's screen.
+        if ProcessInfo.processInfo.environment["TWAIN_QUIET_CRASH"] != nil {
+            NSSetUncaughtExceptionHandler { e in
+                FileHandle.standardError.write("CRASH \(e.name.rawValue): \(e.reason ?? "")\n".data(using: .utf8)!)
+                _exit(70)
+            }
+            for sig in [SIGABRT, SIGTRAP, SIGSEGV, SIGBUS] {
+                signal(sig) { s in
+                    let msg = "CRASH signal \(s)\n"
+                    _ = msg.withCString { write(2, $0, strlen($0)) }
+                    _exit(71)
+                }
+            }
+        }
         switch ProcessInfo.processInfo.environment["TWAIN_APPEARANCE"] {
         case "light": NSApp.appearance = NSAppearance(named: .aqua)
         case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
