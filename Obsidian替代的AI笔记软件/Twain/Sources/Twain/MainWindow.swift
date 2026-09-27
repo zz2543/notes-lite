@@ -1,7 +1,8 @@
 import TwainCore
 import SwiftUI
 
-/// The single document window: floating glass sidebar, the page, and the Agent inspector.
+/// The single document window: floating glass sidebar, then one of three workspaces —
+/// the page with the agent beside it, the agent with the page beside it, or the desk.
 struct MainWindow: View {
     @Bindable var model: AppModel
     @Environment(\.openSettings) private var openSettings
@@ -11,11 +12,25 @@ struct MainWindow: View {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
         } detail: {
-            NoteDetail(model: model)
-                .inspector(isPresented: $model.agentPanel) {
-                    AgentInspector(model: model)
-                        .inspectorColumnWidth(min: 300, ideal: 360, max: 520)
-                }
+            switch model.workspace {
+            case .write:
+                NoteDetail(model: model)
+                    .inspector(isPresented: $model.agentPanel) {
+                        AgentInspector(model: model)
+                            .inspectorColumnWidth(min: 300, ideal: 360, max: 520)
+                    }
+            case .agent:
+                AgentStage(model: model)
+                    .inspector(isPresented: $model.notePanel) {
+                        NoteDetail(model: model, embedded: true)
+                            .inspectorColumnWidth(min: 360, ideal: 480, max: 760)
+                    }
+            case .desk:
+                Workbench(model: model)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .principal) { WorkspacePicker(model: model) }
         }
         .toolbar(model.zen ? .hidden : .automatic, for: .windowToolbar)
         .overlay {
@@ -32,6 +47,7 @@ struct MainWindow: View {
             }
         }
         .animation(.snappy(duration: 0.22), value: model.palette)
+        .animation(.snappy(duration: 0.25), value: model.workspace)
         .animation(.snappy(duration: 0.25), value: model.toast)
         .sheet(isPresented: Binding(get: { model.onboardingStep != nil }, set: { if !$0 { model.onboardingStep = nil } })) {
             OnboardingSheet(model: model)

@@ -17,6 +17,7 @@ enum DebugScenario {
         let parts = name.split(separator: ":").map(String.init)
         let rel = parts.count > 1 ? parts[1] : "项目/2.0 发布计划.md"
         if m.vault?.note(rel) != nil { m.open(rel) }
+        if let w = ProcessInfo.processInfo.environment["TWAIN_WORKSPACE"].flatMap(Workspace.init(rawValue:)) { m.workspace = w }
         switch parts.first ?? "" {
         case "focus":
             m.requestFocus(caret: 40)
@@ -118,6 +119,16 @@ enum DebugScenario {
         case "agent":
             m.agentPanel = true
             if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agentPick = k }
+        case "quote":
+            // Agent workspace: a selection shows up as a quote chip, a reply lands in the note.
+            m.pin("收件箱.md")
+            m.editorSelection = NSRange(location: (m.editorText as NSString).range(of: "同步冲突").location, length: 12)
+            let s = AgentSession(agent: .claude, source: .app, title: "解释风险")
+            s.apply([.user("解释一下这段风险"), .text("## 风险说明\n冲突来自两端同时改同一行。")])
+            m.sessions.append(s)
+            m.activeSessionID = s.id
+            FileHandle.standardError.write(Data("PROMPT<<\(m.composedPrompt("解释一下"))>>\n".utf8))
+            m.insertIntoNote("## 风险说明\n冲突来自两端同时改同一行。")
         case "palette": m.openPalette(); m.paletteQuery = parts.count > 2 ? parts[2] : ""
         case "settings": m.openSettings(parts.count > 2 ? SettingsTab(rawValue: parts[2]) ?? .agent : .agent)
         case "onboarding": m.onboardingStep = Int(parts.count > 2 ? parts[2] : "0") ?? 0

@@ -238,8 +238,7 @@ extension AppModel {
         questionReplies[q.id] = reply
         s.items.append(SessionItem(kind: .question(q.id)))
         activeSessionID = s.id
-        if zen { toggleZen() }
-        agentPanel = true
+        revealAgent()
         showToast("\(s.agent.displayName) 有一个问题等你回答")
         NSApp.requestUserAttention(.informationalRequest)
 

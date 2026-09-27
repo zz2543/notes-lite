@@ -1,16 +1,21 @@
 import TwainCore
 import SwiftUI
 
-/// The detail column: the page itself, or the review of an agent's changes to it.
+/// The page itself, or the review of an agent's changes to it. In the writing workspace it is
+/// the detail column; `embedded`, it is the page panel beside the agent's conversation.
 struct NoteDetail: View {
     @Bindable var model: AppModel
+    var embedded = false
 
     var body: some View {
         let pend = model.activePending
         let reviewing = model.showDiff && pend != nil
-        Group {
+        let content = Group {
             if reviewing, let pend {
                 ReviewView(model: model, review: pend)
+            } else if embedded, model.activeRel == nil {
+                ContentUnavailableView("没有打开的笔记", systemImage: "doc.text",
+                                       description: Text("从侧栏选一篇笔记，或者让 agent 写一篇。它写入的笔记会在这里打开。"))
             } else {
                 page(pending: pend)
             }
@@ -18,10 +23,15 @@ struct NoteDetail: View {
         // One continuous sheet of paper from the window's top edge down; the toolbar
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .navigationTitle(model.activeNote?.displayName ?? "共笔")
-        .navigationSubtitle(model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
         .toolbar { toolbar(reviewing: reviewing) }
+        if embedded {
+            content
+        } else {
+            content
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+                .navigationTitle(model.activeNote?.displayName ?? "共笔")
+                .navigationSubtitle(model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
+        }
     }
 
     private func page(pending: PendingReview?) -> some View {
@@ -37,6 +47,17 @@ struct NoteDetail: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 if !model.zen { StatusPill(model: model).padding(Metrics.floatInset) }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if embedded, let n = model.activeNote {
+                    Label(n.displayName, systemImage: "doc.text")
+                        .font(.caption).lineLimit(1).truncationMode(.middle)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .glassCapsule()
+                        .padding(Metrics.floatInset)
+                        .help(n.rel)
+                }
             }
             .overlay(alignment: .topTrailing) {
                 if model.zen {
@@ -153,6 +174,16 @@ extension NoteDetail {
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
             }
+        } else if embedded {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Toggle(isOn: $model.followAgent) {
+                    Label("跟随 Agent", systemImage: "scope")
+                }
+                .help(model.followAgent ? "Agent 开始写入哪篇笔记，这里就打开哪篇（点按关闭）" : "开启后，agent 写入的笔记会在这里自动打开")
+                Button("在写作模式中打开", systemImage: "arrow.up.left.and.arrow.down.right") { model.setWorkspace(.write) }
+                    .help("在写作模式中编辑这篇笔记 ⌘1")
+                    .disabled(model.activeRel == nil)
+            }
         } else {
             if !model.pending.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
@@ -172,10 +203,12 @@ extension NoteDetail {
                     .help("搜索笔记与命令 ⌘K")
             }
         }
-        ToolbarSpacer(.fixed, placement: .primaryAction)
-        ToolbarItem(placement: .primaryAction) {
-            Button("Agent", systemImage: "sidebar.trailing", action: model.toggleAgent)
-                .help("Agent 面板 ⌘J")
+        if !embedded {
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+            ToolbarItem(placement: .primaryAction) {
+                Button("Agent", systemImage: "sidebar.trailing", action: model.toggleSidePanel)
+                    .help("Agent 面板 ⌘J")
+            }
         }
     }
 }

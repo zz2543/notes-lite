@@ -26,7 +26,13 @@ struct TwainApp: App {
                 Button("打开库…") { model.chooseVault() }.keyboardShortcut("o")
             }
             CommandGroup(after: .sidebar) {
-                Button(model.agentPanel ? "隐藏 Agent 面板" : "显示 Agent 面板") { model.toggleAgent() }.keyboardShortcut("j")
+                ForEach(Workspace.allCases) { w in
+                    Toggle(w.title + "模式", isOn: Binding(get: { model.workspace == w }, set: { if $0 { model.setWorkspace(w) } }))
+                        .keyboardShortcut(w.key)
+                }
+                Divider()
+                Button(model.sidePanelLabel) { model.toggleSidePanel() }.keyboardShortcut("j")
+                    .disabled(model.workspace == .desk)
                 Button("命令面板") { model.palette ? (model.palette = false) : model.openPalette() }.keyboardShortcut("k")
                 Button(model.zen ? "退出专注模式" : "进入专注模式") { model.toggleZen() }.keyboardShortcut(".")
                 Divider()

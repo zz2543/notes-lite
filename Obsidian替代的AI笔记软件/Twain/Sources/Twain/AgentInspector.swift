@@ -1,15 +1,28 @@
 import TwainCore
 import SwiftUI
 
-/// The trailing inspector: one conversation with an agent, and the composer that starts the next turn.
+/// One conversation with an agent, and the composer that starts the next turn. In the writing
+/// workspace it is the trailing inspector; as the `stage` of the agent workspace it takes the
+/// middle of the window, in a readable column, with the notes the session touched above it.
 struct AgentInspector: View {
     @Bindable var model: AppModel
+    var stage = false
     @FocusState private var inputFocused: Bool
+
+    /// Readable width of the conversation when it has the whole middle of the window.
+    static let stageWidth: CGFloat = 720
 
     private static let suggestions: [(String, String)] = [
         ("text.append", "总结这篇笔记，在开头加一段摘要"),
         ("checklist", "整理这篇笔记的待办，合并重复项"),
         ("list.bullet.indent", "把这篇笔记改写成清晰的层级结构"),
+    ]
+
+    /// Tasks that span the vault, offered when the conversation has the stage.
+    private static let vaultSuggestions: [(String, String)] = [
+        ("tray.full", "汇总全库未完成的待办，按项目整理成一篇笔记"),
+        ("link", "为当前笔记找出相关的笔记，补上 [[双链]]"),
+        ("calendar", "根据这周改过的笔记，写一篇本周回顾"),
     ]
 
     var body: some View {
@@ -26,10 +39,14 @@ struct AgentInspector: View {
             VStack(spacing: 8) {
                 AgentBar(model: model)
                 if !model.sessions.isEmpty { sessionBar(sess) }
+                if stage, let sess { TouchedStrip(model: model, session: sess) }
             }
+            .frame(maxWidth: stage ? Self.stageWidth : .infinity)
             .padding(.horizontal, Metrics.floatInset).padding(.top, 8)
+            .frame(maxWidth: .infinity)
         }
         .safeAreaBar(edge: .bottom) { composer }
+        .onAppear { if stage { inputFocused = true } }
     }
 
     // MARK: session bar
@@ -104,8 +121,12 @@ struct AgentInspector: View {
     private func transcript(_ sess: AgentSession) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(sess.items) { ItemView(model: model, session: sess, item: $0).id($0.id) }
+                let finals = Self.turnFinalReplies(sess.items)
+                LazyVStack(alignment: .leading, spacing: stage ? 16 : 12) {
+                    ForEach(sess.items) { item in
+                        ItemView(model: model, session: sess, item: item, replyActions: finals.contains(item.id))
+                            .id(item.id)
+                    }
                     if sess.running && sess.source == .app {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -114,7 +135,9 @@ struct AgentInspector: View {
                         .id("running")
                     }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.horizontal, stage ? 24 : 16).padding(.vertical, 12)
+                .frame(maxWidth: stage ? Self.stageWidth + 48 : .infinity)
+                .frame(maxWidth: .infinity)
             }
             .scrollEdgeEffectStyle(.soft, for: .all)
             .onChange(of: sess.items.count) { _, _ in
@@ -126,17 +149,20 @@ struct AgentInspector: View {
     private var emptyState: some View {
         VStack(spacing: 18) {
             AgentLogo(agent: model.agentPick)
-                .frame(width: 84, height: 84)
+                .frame(width: stage ? 108 : 84, height: stage ? 108 : 84)
                 .id(model.agentPick)
                 .transition(.blurReplace)
             VStack(spacing: 6) {
-                Text("描述一个任务").font(.title3.weight(.semibold))
-                Text("Claude Code 或 Codex 会直接读写库里的 Markdown 文件。每次改动都进入审阅，可以逐段接受或还原。")
+                Text(stage ? "让 agent 在你的笔记库里工作" : "描述一个任务").font(stage ? .title2.weight(.semibold) : .title3.weight(.semibold))
+                Text(stage
+                     ? "它写入的笔记会在右侧打开，你看着它写。回复可以直接插入笔记或存成新笔记；在笔记里选中一段，会作为引用一起发送。"
+                     : "Claude Code 或 Codex 会直接读写库里的 Markdown 文件。每次改动都进入审阅，可以逐段接受或还原。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .frame(maxWidth: 460)
             }
-            if model.activeRel != nil {
+            if model.activeRel != nil || stage {
                 GlassEffectContainer(spacing: 8) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(suggestions, id: \.1) { icon, prompt, run in
@@ -152,6 +178,7 @@ struct AgentInspector: View {
                         }
                     }
                 }
+                .frame(maxWidth: stage ? 460 : .infinity)
                 .padding(.top, 4)
             }
         }
@@ -162,32 +189,47 @@ struct AgentInspector: View {
     /// The vault's note commands, or the built-in prompts when it has none.
     private var suggestions: [(String, String, () -> Void)] {
         let m = model
-        let own = m.userCommands.filter { $0.scope == .note }.prefix(3)
-        if !own.isEmpty {
-            return own.map { c in (c.icon, c.title, {
-                do { try m.runUserCommand(c, input: nil) } catch let e as RPCError { m.showToast(e.message) } catch {}
-            }) }
+        var out: [(String, String, () -> Void)] = []
+        if m.activeRel != nil {
+            let own = m.userCommands.filter { $0.scope == .note }.prefix(3)
+            if !own.isEmpty {
+                out = own.map { c in (c.icon, c.title, {
+                    do { try m.runUserCommand(c, input: nil) } catch let e as RPCError { m.showToast(e.message) } catch {}
+                }) }
+            } else {
+                out = Self.suggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: m.agentPick) }) }
+            }
         }
-        return Self.suggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: m.agentPick) }) }
+        if stage {
+            out = Array(out.prefix(2)) + Self.vaultSuggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: m.agentPick) }) }
+        }
+        return out
+    }
+
+    /// The last reply of each turn — the one worth keeping — gets the note actions.
+    static func turnFinalReplies(_ items: [SessionItem]) -> Set<UUID> {
+        var out = Set<UUID>()
+        var last: UUID?
+        for item in items {
+            switch item.kind {
+            case .agent: last = item.id
+            case .user: if let l = last { out.insert(l) }; last = nil
+            default: break
+            }
+        }
+        if let last { out.insert(last) }
+        return out
     }
 
     // MARK: composer
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                if let n = model.activeNote {
-                    Label((n.rel as NSString).lastPathComponent, systemImage: "doc.text")
-                        .lineLimit(1).truncationMode(.middle)
-                }
-                Label("AGENTS.md", systemImage: "doc.badge.gearshape").lineLimit(1)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .labelStyle(TagLabelStyle())
+            ContextShelf(model: model)
 
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("让 \(model.agentPick.displayName) 修改当前笔记…", text: $model.agentInput, axis: .vertical)
+                TextField(stage ? "让 \(model.agentPick.displayName) 在笔记库里做点什么…" : "让 \(model.agentPick.displayName) 修改当前笔记…",
+                          text: $model.agentInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
                     .lineLimit(2...8)
@@ -210,11 +252,14 @@ struct AgentInspector: View {
         .floatingGlass(radius: Metrics.cardRadius + 4)
         .contentShape(.rect)
         .onTapGesture { inputFocused = true }
+        .frame(maxWidth: stage ? Self.stageWidth : .infinity)
         .padding(Metrics.floatInset)
+        .frame(maxWidth: .infinity)
     }
 
     private func send() {
-        model.runAgent(prompt: model.agentInput, agent: model.agentPick)
+        guard !model.agentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        model.runAgent(prompt: model.composedPrompt(model.agentInput), agent: model.agentPick)
     }
 }
 
@@ -459,6 +504,7 @@ struct ItemView: View {
     @Bindable var model: AppModel
     let session: AgentSession
     let item: SessionItem
+    var replyActions = false
 
     var body: some View {
         switch item.kind {
@@ -485,8 +531,13 @@ struct ItemView: View {
             .font(.caption.monospaced())
             .foregroundStyle(.secondary)
         case let .agent(t):
-            AgentMarkdownReply(source: t)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                AgentMarkdownReply(source: t)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if replyActions && !(session.running && item.id == session.items.last?.id) {
+                    ReplyActions(model: model, session: session, text: t)
+                }
+            }
         case let .error(t):
             Label {
                 Text(t).textSelection(.enabled)
@@ -517,14 +568,14 @@ struct ItemView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if pendingNow {
-                    Button("审阅") {
-                        model.open(rel)
-                        model.showDiff = true
-                    }
-                    .buttonStyle(.glassProminent)
+                    Button("审阅") { model.review(rel) }
+                        .buttonStyle(.glassProminent)
                 } else if model.vault?.note(rel) != nil {
-                    Button("打开") { model.open(rel) }
-                        .buttonStyle(.glass)
+                    Button("打开") {
+                        model.open(rel)
+                        model.revealNote()
+                    }
+                    .buttonStyle(.glass)
                 }
             }
             .controlSize(.small)
@@ -545,7 +596,7 @@ struct ItemView: View {
 }
 
 /// An agent's `ask_user`: the question, its options, and room to answer in your own words.
-private struct QuestionCard: View {
+struct QuestionCard: View {
     @Bindable var model: AppModel
     let question: AgentQuestion
     @State private var text = ""

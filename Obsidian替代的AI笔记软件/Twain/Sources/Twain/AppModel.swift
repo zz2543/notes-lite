@@ -105,7 +105,20 @@ final class AppModel {
 
     // MARK: chrome
     var columnVisibility: NavigationSplitViewVisibility = .all
+    /// What holds the middle of the window: the page, the agent, or the desk.
+    var workspace: Workspace = .write { didSet { save("workspace", workspace.rawValue) } }
+    /// Writing: the agent inspector beside the page.
     var agentPanel = true
+    /// Agent: the page beside the conversation.
+    var notePanel = true
+    /// Agent: the page panel opens whatever file the agent starts writing.
+    var followAgent = true { didSet { save("followAgent", followAgent) } }
+    /// Notes the next prompt points the agent at, besides the open one.
+    var contextPins: [String] = []
+    /// Send the editor's selection along as a quote.
+    var quoteSelection = true
+    /// The selection as the composer shows it; mirrors `editorSelection`, which isn't observed.
+    var selectionPreview: SelectionQuote?
     var modelPickerOpen = false
     var zen = false
     var palette = false
@@ -117,10 +130,10 @@ final class AppModel {
     var renaming: String?
     /// Sidebar list selection; choosing a row opens the note.
     var selection: String? {
-        didSet { if let s = selection, s != activeRel { open(s) } }
+        didSet { if let s = selection, s != activeRel { open(s); revealNote() } }
     }
     @ObservationIgnored var openSettingsAction: (() -> Void)?
-    @ObservationIgnored private var beforeZen: (NavigationSplitViewVisibility, Bool)?
+    @ObservationIgnored private var beforeZen: (NavigationSplitViewVisibility, Bool, Workspace)?
     var onboardingStep: Int?
     var toast: String?
     var openFolders: Set<String> = []
@@ -176,7 +189,9 @@ final class AppModel {
     var effortFallback: [AgentKind: String] = [:]
     var modelsListedBy: [AgentKind: String] = [:]
     var pending: [String: PendingReview] = [:]
-    var writing: Set<String> = []
+    var writing: Set<String> = [] {
+        didSet { if let rel = writing.subtracting(oldValue).sorted().first { agentStartedWriting(rel) } }
+    }
 
     @ObservationIgnored private var saveWork: DispatchWorkItem?
     @ObservationIgnored private var toastWork: DispatchWorkItem?
@@ -236,6 +251,8 @@ final class AppModel {
         mcpOn = b("mcpOn", true)
         automationsOn = b("automationsOn", true)
         automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
+        workspace = Workspace(rawValue: defaults.string(forKey: "pref.workspace") ?? "") ?? .write
+        followAgent = b("followAgent", true)
         agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
             ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
         })
@@ -668,8 +685,7 @@ final class AppModel {
         let s = session!
         if s.title == "新会话" { s.title = String(prompt.prefix(10)) }
         activeSessionID = s.id
-        if zen { toggleZen() }
-        agentPanel = true
+        revealAgent()
         agentInput = ""
         launch(s, prompt: prompt, model: model, effort: effort)
     }
@@ -970,6 +986,7 @@ final class AppModel {
         let s = AgentSession(agent: agentPick, source: .app, title: "新会话")
         sessions.append(s)
         activeSessionID = s.id
+        contextPins = []
     }
 
     // MARK: stats
@@ -988,23 +1005,20 @@ final class AppModel {
 
     // MARK: chrome actions
 
+    /// Zen is a writing mode: entering it from elsewhere brings the page forward, leaving it goes back.
     func toggleZen() {
         palette = false
         if zen {
             zen = false
-            if let (cols, agent) = beforeZen { columnVisibility = cols; agentPanel = agent }
+            if let (cols, agent, ws) = beforeZen { columnVisibility = cols; agentPanel = agent; workspace = ws }
             beforeZen = nil
         } else {
-            beforeZen = (columnVisibility, agentPanel)
+            beforeZen = (columnVisibility, agentPanel, workspace)
             zen = true
+            workspace = .write
             columnVisibility = .detailOnly
             agentPanel = false
         }
-    }
-
-    func toggleAgent() {
-        if zen { toggleZen() }
-        agentPanel.toggle()
     }
     func openPalette() { palette = true; paletteQuery = ""; paletteSel = 0 }
     func openSettings(_ tab: SettingsTab) {
@@ -1014,9 +1028,7 @@ final class AppModel {
 
     func reviewNext() {
         guard let rel = activeRel.flatMap({ pending[$0] != nil ? $0 : nil }) ?? pending.keys.sorted().first else { return }
-        if zen { toggleZen() }
-        open(rel)
-        showDiff = true
+        review(rel)
     }
 
     func trash(_ rel: String) {

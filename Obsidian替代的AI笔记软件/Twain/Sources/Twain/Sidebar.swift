@@ -62,26 +62,6 @@ struct SidebarView: View {
             }
             .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
         }
-        .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
-        .safeAreaBar(edge: .bottom) {
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    Button(action: model.newNote) {
-                        Label("新建笔记", systemImage: "square.and.pencil")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .help("新建笔记 ⌘N")
-                    Button { model.openSettings(.agent) } label: {
-                        Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
-                    }
-                    .help("设置 ⌘,")
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-            }
-            .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
-        }
     }
 }
 
@@ -207,7 +187,7 @@ struct AgentStatusRow: View {
         }()
         Button {
             model.agentPick = kind
-            if !model.agentPanel { model.toggleAgent() }
+            model.revealAgent()
         } label: {
             LabeledContent {
                 HStack(spacing: 6) {

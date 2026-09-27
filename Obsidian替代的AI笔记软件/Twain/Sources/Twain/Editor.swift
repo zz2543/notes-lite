@@ -558,7 +558,9 @@ struct EditorView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
-        let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth)
+        // Beside the agent the page is mostly watched, not typed into: keep it top-aligned.
+        let style = EditorStyle(font: model.font, typewriter: model.typewriter && model.workspace != .agent, dim: model.dim,
+                                zen: model.zen, width: model.editorWidth)
         c.sync(version: model.editorVersion, text: model.editorText, style: style,
                ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest)
     }
