@@ -165,9 +165,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
+    /// twain://open?note=…&line=…, twain://new?title=…&folder=…&content=…, twain://ask?q=…,
+    /// twain://run?name=…&input=… — links other apps (and notes) can use.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for u in urls { model?.handleURL(u) }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model?.flushSave()
         model?.server?.stop()
+        model?.http.stop()
     }
 }
 

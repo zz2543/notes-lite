@@ -15,7 +15,8 @@ mkdir -p "$VAULT/.twain" "$VAULT/项目"
 printf '# 收件箱\n- [ ] 读 [[同步引擎]] 的方案\n- [x] 已完成\n' > "$VAULT/收件箱.md"
 printf '# 同步引擎\n## 冲突处理\n用 CRDT 处理冲突。 #工作\n- [ ] 压测\n' > "$VAULT/项目/同步引擎.md"
 
-TWAIN_SNAPSHOT_VAULT="$VAULT" TWAIN_BACKGROUND=1 TWAIN_SOCK="$SOCK" "$BIN/Twain" >/dev/null 2>&1 &
+PORT=$((27300 + $$ % 500))
+TWAIN_SNAPSHOT_VAULT="$VAULT" TWAIN_BACKGROUND=1 TWAIN_SOCK="$SOCK" TWAIN_HTTP_PORT=$PORT "$BIN/Twain" >/dev/null 2>&1 &
 APP=$!
 trap 'kill $APP 2>/dev/null; rm -f "$SOCK"; rm -rf "$(dirname "$VAULT")"' EXIT
 for _ in $(seq 50); do [ -S "$SOCK" ] && break; sleep 0.2; done
@@ -106,7 +107,21 @@ check "agents can reply"              '"replied"'                       "$CLI" a
 check "annotations follow a rename"   "因为离线优先"                      bash -c "'$CLI' debug.rename 项目/同步方案.md --title 同步设计 >/dev/null; '$CLI' annotations 同步设计 --json"
 check "summary store follows too"     ""                                ls "$VAULT/.twain"
 
+# Phase 6: data and the HTTP door.
+check "data add"                      "已向 sleep 添加 1 条记录"            "$CLI" data add sleep --record '{"hours": 7}'
+check "data lists collections"        "sleep  1 条"                     "$CLI" data
+TOKEN="$(cat "$HOME/Library/Application Support/Twain/http-token")"
+H="Authorization: Bearer $TOKEN"
+check "http ping"                     '"app" : "twain"'                 curl -s "http://127.0.0.1:$PORT/v1/ping"
+check "http needs a token"            "需要令牌"                          curl -s "http://127.0.0.1:$PORT/v1/data"
+check "http adds data"                '"added" : 2'                     curl -s -H "$H" -X POST "http://127.0.0.1:$PORT/v1/data/sleep" -d '[{"hours":6},{"hours":8}]'
+check "http imports a note"           '"created" : true'                curl -s -H "$H" -X POST "http://127.0.0.1:$PORT/v1/notes" -d '{"title":"外部","source":"测试","source_id":"1","content":"# 外部\n一"}'
+check "imported note is on disk"      "# 外部"                           cat "$VAULT/导入/测试/外部.md"
+check "an update becomes a proposal"  '"status" : "proposed"'           curl -s -H "$H" -X POST "http://127.0.0.1:$PORT/v1/notes" -d '{"title":"外部","source":"测试","source_id":"1","content":"# 外部\n二"}'
+check "http calls commands"           "导入/测试/外部.md"                  curl -s -H "$H" -X POST "http://127.0.0.1:$PORT/v1/call/search" -d '{"query":"外部"}'
+
 kill $APP 2>/dev/null; wait $APP 2>/dev/null
+check "data works offline"            "sleep  3 条"                     "$CLI" data
 check "read commands work offline"    "项目/同步设计.md:4"              "$CLI" tasks
 check "reviews work offline"          "原因：保留原话"                    "$CLI" reviews
 check "app-only commands say so"      "共笔没有运行"                  "$CLI" context

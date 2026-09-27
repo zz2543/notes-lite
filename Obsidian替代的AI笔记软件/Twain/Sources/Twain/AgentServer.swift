@@ -213,5 +213,18 @@ extension AppModel {
             self.handle(req, connection: conn, reply: reply)
         }
         if s.start() { server = s }
+        startHTTP()
+    }
+
+    /// The local HTTP API, when the user has it on (it is by default: bound to 127.0.0.1, token-gated).
+    func startHTTP() {
+        http.model = self
+        guard httpOn else { http.stop(); return }
+        var port = httpPort
+        #if DEBUG
+        if let p = ProcessInfo.processInfo.environment["TWAIN_HTTP_PORT"].flatMap(UInt16.init) { port = p }
+        #endif
+        _ = HTTPGateway.token()
+        http.start(port: port)
     }
 }

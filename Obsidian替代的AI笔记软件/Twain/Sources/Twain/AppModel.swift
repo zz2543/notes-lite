@@ -215,6 +215,10 @@ final class AppModel {
     /// The vault's pipelines (`.twain/pipelines/`) and the runs in progress (`Pipelines.swift`).
     var pipelines: [Pipeline] = []
     var pipelineRuns: [UUID: PipelineRun] = [:]
+    /// Local HTTP API for other apps (`HTTPGateway.swift`).
+    var httpOn = true { didSet { save("httpOn", httpOn); if oldValue != httpOn { startHTTP() } } }
+    var httpPort: UInt16 = HTTPGateway.defaultPort { didSet { save("httpPort", Int(httpPort)) } }
+    @ObservationIgnored let http = HTTPGateway()
     /// Bumped whenever a data collection changes, so spaces redraw their charts.
     var dataVersion = 0
     /// 问库 desks (`ResearchDesk.swift`) and the one shown in place of a note.
@@ -282,6 +286,8 @@ final class AppModel {
         automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
         summaryDailyLimit = defaults.object(forKey: "pref.summaryLimit") as? Int ?? 100
         companionOn = b("companion", false)
+        httpOn = b("httpOn", true)
+        httpPort = UInt16(defaults.object(forKey: "pref.httpPort") as? Int ?? Int(HTTPGateway.defaultPort))
         agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
             ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
         })
