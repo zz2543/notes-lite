@@ -102,12 +102,17 @@ public enum Skim {
 
     /// First real paragraph, trimmed to about `limit` characters: a free summary.
     public static func autoSummary(_ lines: [String], limit: Int = 90) -> String {
-        let types = Markdown.types(lines)
+        // Block types only run forward, so each line is typed as it is reached and the walk
+        // stops once the summary is long enough, instead of typing the whole note first.
+        var ctx = BlockContext.none
         var parts: [String] = []
+        var chars = 0
         for (i, line) in lines.enumerated() {
-            let t = types[i]
+            let (forced, next) = Markdown.role(of: line, index: i, context: ctx)
+            ctx = next
+            let t = forced ?? Markdown.blockType(line)
             if t.isLiteral || t.isHeading || t == .hr || t == .table {
-                if t.isHeading, parts.joined().count >= 30 { break }
+                if t.isHeading, chars >= 30 { break }
                 continue
             }
             let m = Markdown.parseLine(line, type: t)
@@ -117,9 +122,10 @@ public enum Skim {
                 if r.location >= 0, NSMaxRange(r) <= (text as NSString).length { text = (text as NSString).replacingCharacters(in: r, with: "") }
             }
             text = text.trimmingCharacters(in: .whitespaces)
-            if text.isEmpty { if parts.joined().count >= 30 { break }; continue }
+            if text.isEmpty { if chars >= 30 { break }; continue }
             parts.append(text)
-            if parts.joined().count >= limit { break }
+            chars += text.count
+            if chars >= limit { break }
         }
         let s = parts.joined(separator: " ")
         return s.count > limit ? String(s.prefix(limit)) + "…" : s

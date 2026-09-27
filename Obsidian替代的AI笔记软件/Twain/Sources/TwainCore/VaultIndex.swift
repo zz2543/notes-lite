@@ -100,6 +100,8 @@ public final class VaultIndex {
         public var lines: [String]
         public var outline: NoteOutline
         var stamp: Date?
+        /// Lowercased lines, kept so a search does not lowercase the vault on every query.
+        var lower: [String] = []
     }
 
     public struct Hit: Equatable, Sendable {
@@ -139,7 +141,10 @@ public final class VaultIndex {
                 seen.insert(rel)
                 let stamp = values?.contentModificationDate
                 if let old = notes[rel], old.stamp == stamp, stamp != nil { continue }
-                let text = (try? String(contentsOf: u, encoding: .utf8)) ?? ""
+                var text = (try? String(contentsOf: u, encoding: .utf8)) ?? ""
+                // A damaged file (e.g. an iCloud placeholder filled with NULs) is not a note:
+                // index it empty so search, skim and summaries do not chew on megabytes of zeros.
+                if text.utf8.prefix(8192).contains(0) { text = "" }
                 store(rel, text, stamp: stamp)
             }
         }
@@ -155,7 +160,8 @@ public final class VaultIndex {
 
     private func store(_ rel: String, _ text: String, stamp: Date?) {
         let lines = Markdown.lines(text)
-        notes[rel] = Note(rel: rel, lines: lines, outline: NoteOutline.parse(lines: lines), stamp: stamp)
+        notes[rel] = Note(rel: rel, lines: lines, outline: NoteOutline.parse(lines: lines), stamp: stamp,
+                          lower: lines.map { $0.lowercased() })
     }
 
     private func rebuildTitles() {
@@ -214,11 +220,11 @@ public final class VaultIndex {
         for p in paths {
             guard let n = notes[p] else { continue }
             let title = n.title.lowercased()
-            if terms.allSatisfy(title.contains) { scored.append((3, Hit(rel: p, line: nil, text: n.title))) }
+            if terms.allSatisfy({ Self.has(title, $0) }) { scored.append((3, Hit(rel: p, line: nil, text: n.title))) }
             let headingLines = Set(n.outline.headings.map(\.line))
-            for (i, line) in n.lines.enumerated() {
-                let low = line.lowercased()
-                guard terms.allSatisfy(low.contains) else { continue }
+            for (i, low) in n.lower.enumerated() {
+                guard terms.allSatisfy({ Self.has(low, $0) }) else { continue }
+                let line = n.lines[i]
                 scored.append((headingLines.contains(i + 1) ? 2 : 1,
                                Hit(rel: p, line: i + 1, text: Self.snippet(line, around: terms[0]))))
             }
@@ -228,6 +234,19 @@ public final class VaultIndex {
             a.element.0 != b.element.0 ? a.element.0 > b.element.0 : a.offset < b.offset
         }
         return sorted.prefix(max(0, limit)).map(\.element.1)
+    }
+
+    /// Byte search over UTF-8: exact for already-lowercased text, and far cheaper than
+    /// Foundation's `contains`, which is what a vault-wide search spends its time in.
+    static func has(_ hay: String, _ needle: String) -> Bool {
+        var hay = hay, needle = needle
+        return hay.withUTF8 { h in
+            needle.withUTF8 { n in
+                guard n.count <= h.count else { return false }
+                guard n.count > 0 else { return true }
+                return memmem(h.baseAddress!, h.count, n.baseAddress!, n.count) != nil
+            }
+        }
     }
 
     public struct TaskHit: Equatable, Sendable {

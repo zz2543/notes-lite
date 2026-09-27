@@ -64,9 +64,9 @@ struct EditorView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
         let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth,
-                                plain: model.activeNote?.isHTML == true,
+                                plain: model.activeNote?.isHTML == true || model.oversized,
                                 rail: model.visibleAnnotations.isEmpty || model.zen ? 0 : AnnotationRail.width)
-        c.sync(version: model.editorVersion, text: model.editorText, style: style,
+        c.sync(version: model.editorVersion, text: model.editorDisplayText, style: style,
                ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest)
         // Annotations and the selected one change what the rail and highlights show.
         _ = (model.annotations, model.selectedAnnotation)
@@ -83,6 +83,9 @@ struct EditorView: NSViewRepresentable {
         private var style: EditorStyle?
         private var focusToken = -1
         private var restyling = false
+        /// Set while the whole text is being replaced: the selection passes through the end of the
+        /// new text on the way, and centering on it would lay out the entire note.
+        private var swapping = false
         private var styler = MarkdownStyler(style: EditorStyle(font: .serif, typewriter: true, dim: true, zen: false, width: 680))
 
         init(model: AppModel) {
@@ -115,6 +118,7 @@ struct EditorView: NSViewRepresentable {
                 if tv.string != text {
                     let sel = tv.selectedRange()
                     styler.reset()
+                    swapping = true
                     storage.beginEditing()
                     storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
                     storage.endEditing()
@@ -123,6 +127,7 @@ struct EditorView: NSViewRepresentable {
                     // A pending focus request already says where the caret goes.
                     let pendingCaret = focus.flatMap { $0.token != focusToken ? $0.caret : nil }
                     tv.setSelectedRange(NSRange(location: min(pendingCaret ?? sel.location, len), length: 0))
+                    swapping = false
                     tv.resetCaretTrailTracking()
                     if focus == nil || focus!.token == focusToken { tv.scroll(.zero) }
                 }
@@ -279,7 +284,7 @@ struct EditorView: NSViewRepresentable {
             model.editorSelection = tv.selectedRange()
             restyle()
             updateSlash()
-            if tv.selectedRange().length == 0 { center(smooth: true) }
+            if tv.selectedRange().length == 0, !swapping { center(smooth: true) }
         }
 
         /// The caret's line: its text, range (without the newline) and index.

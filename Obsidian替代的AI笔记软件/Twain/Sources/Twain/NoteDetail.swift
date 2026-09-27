@@ -101,6 +101,18 @@ struct NoteDetail: View {
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+                if model.oversized {
+                    Banner(tint: .secondary) {
+                        Image(systemName: "text.alignleft")
+                    } text: {
+                        Text("这篇笔记含有极长的行（例如内嵌的 base64 图片），以纯文本只读打开以保持流畅 \(Text("· 可以在其他编辑器中修改").foregroundStyle(.secondary))")
+                    } action: {
+                        Button("在 Finder 中显示") {
+                            if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+                        }
+                        .buttonStyle(.glass)
+                    }
+                }
                 if let rel = model.activeRel, model.writing.contains(rel) {
                     let agent = model.sessions.first { $0.running && $0.source == .app }?.agent
                     Banner(tint: agent.map(Theme.agentColor) ?? Theme.claude) {

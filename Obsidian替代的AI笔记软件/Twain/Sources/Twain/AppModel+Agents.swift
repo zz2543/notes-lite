@@ -303,6 +303,8 @@ extension AppModel {
         let disk = v.read(rel)
         if disk != editorText {
             editorText = disk
+            oversizedDisplay = nil
+            oversized = Self.hasOversizedLine(disk)
             editorVersion += 1
         }
         dirty = false

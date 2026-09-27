@@ -13,6 +13,70 @@ enum DebugScenario {
         return NSApp.windows.compactMap { $0.contentView.flatMap(find) }.first
     }
 
+    /// Seconds since this process started, from the kernel's record of it.
+    static func uptime() -> Double {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return 0 }
+        let t = info.kp_proc.p_un.__p_starttime
+        return Date().timeIntervalSince1970 - (Double(t.tv_sec) + Double(t.tv_usec) / 1e6)
+    }
+
+    /// Times the operations that grow with the vault, on whatever vault is open.
+    static func perf(_ m: AppModel) {
+        func ms(_ body: () -> Void) -> Double {
+            let t = CACurrentMediaTime(); body(); return (CACurrentMediaTime() - t) * 1000
+        }
+        func log(_ s: String) { FileHandle.standardError.write((s + "\n").data(using: .utf8)!) }
+        guard let v = m.vault else { return }
+        log(String(format: "perf launch→ready %.0fms (includes the 1.5s scenario delay)", uptime() * 1000))
+        log(String(format: "perf notes=%d folders=%d", v.notes.count, v.folders.count))
+        log(String(format: "perf vault.scan %.1fms", ms { v.scan() }))
+        let cold = VaultIndex(root: v.root)
+        log(String(format: "perf index cold %.1fms", ms { cold.refresh() }))
+        log(String(format: "perf index warm %.1fms", ms { cold.refresh() }))
+        let store = SummaryStore(vault: v.root)
+        var cards = 0
+        log(String(format: "perf skim all cards %.1fms", ms { cards = cold.paths.compactMap { cold.notes[$0] }.map { Skim.card($0, store: store) }.count }) + " (\(cards))")
+        for q in ["AI", "笔记", "markdown 插件", "不存在的词组xyz"] {
+            var n = 0
+            log(String(format: "perf search %@ %.1fms", q, ms { n = cold.search(q, limit: 20).count }) + " hits=\(n)")
+        }
+        log(String(format: "perf tasks %.1fms", ms { _ = cold.tasks() }))
+        var parts = (hash: 0.0, words: 0.0, summary: 0.0)
+        var slow: [(Double, String)] = []
+        for n in cold.notes.values {
+            parts.hash += ms { _ = Skim.hash(n.lines) }
+            parts.words += ms { _ = Markdown.countWords(n.lines) }
+            let t = ms { _ = Skim.autoSummary(n.lines) }
+            parts.summary += t
+            slow.append((t, n.rel))
+        }
+        for (t, rel) in slow.sorted(by: { $0.0 > $1.0 }).prefix(3) { log(String(format: "perf slow summary %.1fms %@", t, rel)) }
+        log(String(format: "perf skim parts hash %.1fms words %.1fms summary %.1fms", parts.hash, parts.words, parts.summary))
+        // Open notes of a few sizes and wait for each one's first screen to lay out.
+        let size = { (n: VaultIndex.Note) in n.lines.reduce(0) { $0 + $1.count } }
+        let readable = cold.notes.values.filter { AppModel.unreadableReason(v.url($0.rel)) == nil }.sorted { size($0) < size($1) }
+        guard !readable.isEmpty else { return }
+        let picks = [readable[readable.count / 2], readable.last { size($0) < 200_000 }, readable.last].compactMap { $0 }
+        func openNext(_ i: Int) {
+            guard i < picks.count else { return }
+            let t = CACurrentMediaTime()
+            m.open(picks[i].rel)
+            DispatchQueue.main.async {
+                DispatchQueue.main.async {
+                    if let tv = textView(), let lm = tv.layoutManager, let tc = tv.textContainer {
+                        lm.ensureLayout(forBoundingRect: tv.visibleRect, in: tc)
+                    }
+                    log(String(format: "perf open %d chars %.1fms", (m.editorText as NSString).length, (CACurrentMediaTime() - t) * 1000))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { openNext(i + 1) }
+                }
+            }
+        }
+        openNext(0)
+    }
+
     static func apply2(_ parts: [String], _ m: AppModel) {
         if parts.count > 1 { m.openSpace(parts[1]) }
     }
@@ -24,6 +88,8 @@ enum DebugScenario {
         if parts.first == "settings" { m.openSettings(SettingsTab(rawValue: parts.count > 1 ? parts[1] : "open") ?? .open); return }
         if m.vault?.note(rel) != nil { m.open(rel) }
         switch parts.first ?? "" {
+        case "perf":
+            perf(m)
         case "focus":
             m.requestFocus(caret: 40)
         case "caret":

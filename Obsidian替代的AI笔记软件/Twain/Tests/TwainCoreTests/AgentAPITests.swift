@@ -164,6 +164,21 @@ final class VaultIndexTests: XCTestCase {
         XCTAssertEqual(i.search("同步", limit: 2).count, 2)
     }
 
+    func testSearchMatchesEditedTextAndSkipsDamagedFiles() throws {
+        let i = VaultIndex(root: root)
+        // A file of NULs (a broken iCloud download) is indexed empty rather than searched.
+        try Data(repeating: 0, count: 4096).write(to: root.appendingPathComponent("坏文件.md"))
+        i.refresh()
+        XCTAssertEqual(i.notes["坏文件.md"]?.lines, [""])
+        XCTAssertTrue(i.search("\u{0}").isEmpty)
+        // Unsaved editor text is what search sees, case-insensitively.
+        i.update("收件箱.md", text: "# 收件箱\nMixed Case 行\n")
+        XCTAssertEqual(i.search("mixed case").map(\.line), [2])
+        XCTAssertTrue(VaultIndex.has("abc", ""))
+        XCTAssertFalse(VaultIndex.has("ab", "abc"))
+        XCTAssertTrue(VaultIndex.has("中文检索", "检索"))
+    }
+
     func testTasksAndRefresh() throws {
         let i = VaultIndex(root: root)
         i.refresh()

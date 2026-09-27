@@ -320,6 +320,7 @@ final class AppModel {
         v.onFilesChanged = { [weak self] rels in self?.filesChanged(rels) }
         vault = v
         index = VaultIndex(root: v.root)
+        warmIndex(for: v)
         ensureTwainFolder()
         loadPlugins()
         v.onTwainFilesChanged = { [weak self] paths in
@@ -353,6 +354,21 @@ final class AppModel {
         openDesk = nil
         loadDesks()
         importInbox()
+    }
+
+    /// Reads the whole vault into a fresh index off the main thread, so the first search, space
+    /// or agent call only has to check modification dates rather than read every note.
+    private func warmIndex(for v: Vault) {
+        let root = v.root
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let fresh = VaultIndex(root: root)
+            fresh.refresh()
+            DispatchQueue.main.async {
+                guard let self, self.vault === v else { return }
+                self.index = fresh
+                self.tick += 1
+            }
+        }
     }
 
     static let welcomeNote = """
@@ -434,6 +450,8 @@ final class AppModel {
         activeSpace = nil
         unreadable = Self.unreadableReason(v.url(rel))
         editorText = unreadable == nil ? v.read(rel) : ""
+        oversizedDisplay = nil
+        oversized = Self.hasOversizedLine(editorText)
         if unreadable != nil { v.acknowledge(rel, content: nil) }
         editorSelection = NSRange(location: 0, length: 0)
         if pending[rel] == nil { showDiff = false }
@@ -481,8 +499,38 @@ final class AppModel {
         return nil
     }
 
+    /// The open note has a line too long to typeset and edit smoothly: it is shown as plain,
+    /// read-only text instead of risking a hang in the text system.
+    var oversized = false { didSet { if !oversized { oversizedDisplay = nil } } }
+    /// What the editor shows for an oversized note: the text with its huge lines clipped, since
+    /// TextKit cannot typeset a paragraph of millions of characters. The file is never written from it.
+    @ObservationIgnored var oversizedDisplay: String?
+    static let oversizedLine = 100_000
+
+    static func hasOversizedLine(_ text: String) -> Bool {
+        guard text.utf8.count > oversizedLine else { return false }
+        var run = 0
+        for b in text.utf8 {
+            if b == 0x0A { run = 0 } else { run += 1; if run > oversizedLine { return true } }
+        }
+        return false
+    }
+
+    /// The text the editor shows: the note, or its clipped display copy when it is oversized.
+    var editorDisplayText: String {
+        guard oversized else { return editorText }
+        if let d = oversizedDisplay { return d }
+        let d = Markdown.lines(editorText).map { line -> String in
+            let n = (line as NSString).length
+            guard n > 2000 else { return line }
+            return (line as NSString).substring(to: 2000) + " …（此行还有 \(n - 2000) 个字符未显示）"
+        }.joined(separator: "\n")
+        oversizedDisplay = d
+        return d
+    }
+
     var editorReadOnly: Bool {
-        guard let rel = activeRel, unreadable == nil else { return true }
+        guard let rel = activeRel, unreadable == nil, !oversized else { return true }
         return writing.contains(rel)
     }
 
@@ -529,6 +577,8 @@ final class AppModel {
                                          baseline: Markdown.lines(mine), proposed: Markdown.lines(disk),
                                          hunks: LineDiff.hunks(from: Markdown.lines(mine), to: Markdown.lines(disk)), snapshot: nil)
             editorText = disk
+            oversizedDisplay = nil
+            oversized = Self.hasOversizedLine(disk)
             dirty = false
             editorVersion += 1
             showToast("文件在外部被修改，已载入磁盘上的版本")
