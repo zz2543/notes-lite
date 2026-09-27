@@ -140,32 +140,61 @@ struct NoteRow: View {
 }
 
 /// The note's name, editable in its row. Return or clicking away renames; Escape cancels.
-struct RenameField: View {
+/// An AppKit field: SwiftUI's never sees Escape, and can't take focus as its row appears.
+struct RenameField: NSViewRepresentable {
     @Bindable var model: AppModel
     let note: NoteRef
-    @State private var text = ""
-    @FocusState private var focused: Bool
 
-    var body: some View {
-        TextField("笔记名", text: $text)
-            .textFieldStyle(.roundedBorder)
-            .focused($focused)
-            .onAppear {
-                text = note.title
-                // A List row can't take focus in the same pass that inserts it.
-                DispatchQueue.main.async { focused = true }
-            }
-            .onSubmit { commit(keepOpen: true) }
-            // The field editor takes Escape before onKeyPress would see it.
-            .onExitCommand { model.renaming = nil }
-            .onChange(of: focused) { _, now in if !now { commit(keepOpen: false) } }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let f = NSTextField(string: note.title)
+        f.delegate = context.coordinator
+        f.bezelStyle = .roundedBezel
+        f.lineBreakMode = .byTruncatingTail
+        f.cell?.isScrollable = true
+        // Becoming first responder selects the whole name, as Finder does.
+        DispatchQueue.main.async { f.window?.makeFirstResponder(f) }
+        return f
     }
 
-    /// A rejected name keeps the field open after Return; clicking away just drops it.
-    private func commit(keepOpen: Bool) {
-        guard model.renaming == note.rel else { return }
-        if text == note.title || model.renameNote(note.rel, to: text) || !keepOpen {
-            model.renaming = nil
+    func updateNSView(_ f: NSTextField, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: RenameField
+        private var done = false
+
+        init(_ parent: RenameField) { self.parent = parent }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
+            switch sel {
+            case #selector(NSResponder.insertNewline(_:)):
+                finish(control.stringValue, keepOpen: true)
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                done = true
+                parent.model.renaming = nil
+                return true
+            default:
+                return false
+            }
+        }
+
+        func controlTextDidEndEditing(_ n: Notification) {
+            guard let f = n.object as? NSTextField else { return }
+            finish(f.stringValue, keepOpen: false)
+        }
+
+        /// A rejected name keeps the field open after Return; clicking away just drops it.
+        private func finish(_ text: String, keepOpen: Bool) {
+            let m = parent.model, note = parent.note
+            guard !done, m.renaming == note.rel else { return }
+            if text == note.title || m.renameNote(note.rel, to: text) || !keepOpen {
+                done = true
+                m.renaming = nil
+            }
         }
     }
 }
