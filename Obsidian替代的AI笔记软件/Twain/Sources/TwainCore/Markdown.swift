@@ -1,18 +1,43 @@
 import Foundation
 
-/// One line of a note is one block, exactly like the prototype.
+/// What a line is. Most lines are one block on their own; fenced code and front matter span
+/// several and need the line's `BlockContext` (see `Markdown.roles`).
 public enum BlockType: String, Sendable {
-    case h1, h2, h3, task, li, ol, quote, hr, empty, p
+    case h1, h2, h3, h4, h5, h6, task, li, ol, quote, hr, empty, p, table
+    /// A ``` or ~~~ line that opens or closes a code block.
+    case fence
+    /// A line inside a fenced code block or a `$$` math block.
+    case code
+    /// A line of YAML front matter, delimiters included.
+    case frontmatter
 
-    public var isHeading: Bool { self == .h1 || self == .h2 || self == .h3 }
+    public var isHeading: Bool { headingLevel != nil }
     public var isList: Bool { self == .li || self == .task || self == .ol }
+    public var headingLevel: Int? {
+        switch self {
+        case .h1: 1
+        case .h2: 2
+        case .h3: 3
+        case .h4: 4
+        case .h5: 5
+        case .h6: 6
+        default: nil
+        }
+    }
+    /// Lines whose content is literal: no inline markup applies.
+    public var isLiteral: Bool { self == .fence || self == .code || self == .frontmatter }
 }
 
 public struct InlineSpan: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
-        case bold, italic, code
+        case bold, italic, code, strike, highlight
         case wikilink(String)
         case link(String)
+        /// `![[target]]`: an attachment or another note shown in place.
+        case embed(String)
+        /// `![alt](url)`.
+        case image(String)
+        case tag(String)
     }
     public var kind: Kind
     /// Visible content, UTF-16 range within the line.
@@ -23,141 +48,305 @@ public struct InlineSpan: Equatable, Sendable {
 
 public struct LineMarkup: Equatable, Sendable {
     public var type: BlockType
-    /// Block prefix such as `# `, `- [ ] `, `1. `, `> ` (length 0 when absent).
+    /// Block prefix such as `# `, `\t- [ ] `, `1. `, `> ` (length 0 when absent), indentation included.
     public var prefix: NSRange
     public var spans: [InlineSpan]
+    /// Nesting of a list item (0 for top level) or of a quote (`> > ` is 1).
+    public var depth: Int = 0
+    /// `> [!note] Title`: the callout kind, lowercased.
+    public var callout: String?
 
     public var allMarks: [NSRange] {
         var r = prefix.length > 0 ? [prefix] : []
         for s in spans { r.append(contentsOf: s.marks) }
         return r
     }
+
+    /// The line is nothing but one embed (`![[a.png]]` or `![](a.png)`), so it can be shown as a block.
+    public var blockEmbed: String? {
+        guard spans.count == 1, prefix.length == 0 else { return nil }
+        switch spans[0].kind {
+        case let .embed(t), let .image(t): return t
+        default: return nil
+        }
+    }
+}
+
+/// Multi-line state carried from one line to the next.
+public enum BlockContext: Equatable, Sendable {
+    case none
+    /// Inside a fenced block opened by `fence` (e.g. "```" or "~~~~").
+    case code(fence: String)
+    case math
+    case frontmatter
 }
 
 public enum Markdown {
-    static let prefixPattern = try! NSRegularExpression(pattern: #"^(#{1,3} |- \[[ xX]\] |[-*] |\d+\. |> )"#)
+    static let listRe = try! NSRegularExpression(pattern: #"^([ \t]*)([-*+] \[[ xX]\] |[-*+] |\d{1,9}[.)] )"#)
+    static let headingRe = try! NSRegularExpression(pattern: #"^(#{1,6}) "#)
+    static let quoteRe = try! NSRegularExpression(pattern: #"^((?:> ?)+)"#)
+    static let calloutRe = try! NSRegularExpression(pattern: #"^\[!([A-Za-z-]+)\][+-]?"#)
     static let codeRe = try! NSRegularExpression(pattern: #"`([^`]+)`"#)
-    static let boldRe = try! NSRegularExpression(pattern: #"\*\*(.+?)\*\*"#)
-    static let italicRe = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*]+)\*(?!\*)"#)
+    static let boldRe = try! NSRegularExpression(pattern: #"\*\*(.+?)\*\*|__(.+?)__"#)
+    static let italicRe = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*\s](?:[^*]*[^*\s])?)\*(?!\*)|(?<![_\p{L}\p{N}])_([^_\s](?:[^_]*[^_\s])?)_(?![_\p{L}\p{N}])"#)
+    static let strikeRe = try! NSRegularExpression(pattern: #"~~(.+?)~~"#)
+    static let highlightRe = try! NSRegularExpression(pattern: #"==(.+?)=="#)
     static let wikiRe = try! NSRegularExpression(pattern: #"\[\[(.+?)\]\]"#)
+    static let embedRe = try! NSRegularExpression(pattern: #"!\[\[(.+?)\]\]"#)
+    static let imageRe = try! NSRegularExpression(pattern: #"!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)"#)
     static let linkRe = try! NSRegularExpression(pattern: #"\[([^\]\[]+)\]\(([^)]+)\)"#)
+    static let urlRe = try! NSRegularExpression(pattern: #"https?://[^\s<>()（）\[\]，。、；：“”]+"#)
+    static let tagRe = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}_&#/\-])#([\p{L}\p{N}_/\-]*[\p{L}_][\p{L}\p{N}_/\-]*)"#)
 
+    // MARK: blocks
+
+    /// Length of the block prefix (indentation, list marker, heading hashes, quote marks).
     public static func prefixLength(_ t: String) -> Int {
-        let ns = t as NSString
-        return prefixPattern.firstMatch(in: t, range: NSRange(location: 0, length: ns.length))?.range.length ?? 0
+        parsePrefix(t).length
     }
 
+    private static func parsePrefix(_ t: String) -> (type: BlockType, length: Int, depth: Int) {
+        let ns = t as NSString
+        let all = NSRange(location: 0, length: ns.length)
+        guard ns.length > 0 else { return (.empty, 0, 0) }
+        let first = ns.character(at: 0)
+        if first == 0x23, let m = headingRe.firstMatch(in: t, range: all) { // #
+            let level = m.range(at: 1).length
+            return ([.h1, .h2, .h3, .h4, .h5, .h6][level - 1], m.range.length, 0)
+        }
+        if first == 0x3E, let m = quoteRe.firstMatch(in: t, range: all) { // >
+            let depth = ns.substring(with: m.range).filter { $0 == ">" }.count - 1
+            return (.quote, m.range.length, depth)
+        }
+        if let m = listRe.firstMatch(in: t, range: all) {
+            let marker = ns.substring(with: m.range(at: 2))
+            let type: BlockType = marker.contains("[") ? .task : marker.first!.isNumber ? .ol : .li
+            return (type, m.range.length, indentLevel(ns.substring(with: m.range(at: 1))))
+        }
+        return (.p, 0, 0)
+    }
+
+    /// Tabs count one level each; spaces count one level per two (four-space indents read as two).
+    public static func indentLevel(_ ws: String) -> Int {
+        var tabs = 0, spaces = 0
+        for c in ws { if c == "\t" { tabs += 1 } else { spaces += 1 } }
+        return tabs + spaces / 2
+    }
+
+    /// The type of a line on its own, as if it were outside any code block.
     public static func blockType(_ t: String) -> BlockType {
-        if t.hasPrefix("### ") { return .h3 }
-        if t.hasPrefix("## ") { return .h2 }
-        if t.hasPrefix("# ") { return .h1 }
-        if t.range(of: #"^- \[[ xX]\] "#, options: .regularExpression) != nil { return .task }
-        if t.hasPrefix("- ") || t.hasPrefix("* ") { return .li }
-        if t.range(of: #"^\d+\. "#, options: .regularExpression) != nil { return .ol }
-        if t.hasPrefix("> ") { return .quote }
-        if t.range(of: #"^-{3,}$"#, options: .regularExpression) != nil { return .hr }
         if t.isEmpty { return .empty }
-        return .p
+        if isFence(t) != nil { return .fence }
+        if isRule(t) { return .hr }
+        let p = parsePrefix(t)
+        if p.type != .p { return p.type }
+        if t.hasPrefix("|") { return .table }
+        return t.allSatisfy(\.isWhitespace) ? .empty : .p
+    }
+
+    static func isRule(_ t: String) -> Bool {
+        let s = t.trimmingCharacters(in: .whitespaces)
+        guard s.count >= 3, let c = s.first, c == "-" || c == "*" || c == "_" else { return false }
+        return s.allSatisfy { $0 == c || $0 == " " } && s.filter { $0 == c }.count >= 3
+    }
+
+    /// The fence a line opens or closes with (```` ``` ````, `~~~~`…), nil if it is not a fence.
+    public static func isFence(_ t: String) -> String? {
+        let s = t.drop { $0 == " " }
+        guard t.count - s.count <= 3, let c = s.first, c == "`" || c == "~" else { return nil }
+        let run = s.prefix { $0 == c }
+        guard run.count >= 3 else { return nil }
+        // A backtick fence's info string may not contain backticks.
+        if c == "`", s.dropFirst(run.count).contains("`") { return nil }
+        return String(run)
+    }
+
+    /// Role of each line given the lines before it: fences, code, front matter, math.
+    /// `context` is the state before the line; the returned one is the state after it.
+    public static func role(of line: String, index: Int, context: BlockContext) -> (type: BlockType?, next: BlockContext) {
+        switch context {
+        case .none:
+            if index == 0, line == "---" { return (.frontmatter, .frontmatter) }
+            if let f = isFence(line) { return (.fence, .code(fence: f)) }
+            if line.trimmingCharacters(in: .whitespaces) == "$$" { return (.fence, .math) }
+            return (nil, .none)
+        case let .code(fence):
+            if let f = isFence(line), f.first == fence.first, f.count >= fence.count,
+               line.trimmingCharacters(in: .whitespaces).count == f.count {
+                return (.fence, .none)
+            }
+            return (.code, context)
+        case .math:
+            if line.trimmingCharacters(in: .whitespaces) == "$$" { return (.fence, .none) }
+            return (.code, context)
+        case .frontmatter:
+            if line == "---" || line == "..." { return (.frontmatter, .none) }
+            return (.frontmatter, context)
+        }
+    }
+
+    /// Block type of every line, with code blocks and front matter taken into account.
+    public static func types(_ lines: [String]) -> [BlockType] {
+        var ctx = BlockContext.none
+        return lines.enumerated().map { i, l in
+            let (forced, next) = role(of: l, index: i, context: ctx)
+            ctx = next
+            return forced ?? blockType(l)
+        }
     }
 
     public static func isTaskDone(_ t: String) -> Bool {
-        t.range(of: #"^- \[[xX]\] "#, options: .regularExpression) != nil
+        t.range(of: #"^[ \t]*[-*+] \[[xX]\] "#, options: .regularExpression) != nil
     }
 
     public static func orderedNumber(_ t: String) -> Int? {
-        guard let r = t.range(of: #"^\d+"#, options: .regularExpression) else { return nil }
-        return Int(t[r])
+        guard let r = t.range(of: #"^[ \t]*\d+"#, options: .regularExpression) else { return nil }
+        return Int(t[r].trimmingCharacters(in: .whitespaces))
     }
 
     public static func toggleTask(_ t: String) -> String {
-        if isTaskDone(t) { return "- [ ] " + t.dropFirst(6) }
-        if t.hasPrefix("- [ ] ") { return "- [x] " + t.dropFirst(6) }
-        return t
+        guard let r = t.range(of: #"^[ \t]*[-*+] \[[ xX]\] "#, options: .regularExpression) else { return t }
+        let marker = t[r]
+        let box = marker.firstIndex(of: "[")!
+        let state = marker[marker.index(after: box)]
+        var out = t
+        let at = t.index(after: box)
+        out.replaceSubrange(at...at, with: state == " " ? "x" : " ")
+        return out
     }
 
     /// What pressing Enter at the end of `line` should put on the next line.
-    /// Returns nil when the line is not a list item. `exit` is true for an empty item,
-    /// which the prototype turns into a plain empty line instead.
+    /// Returns nil when the line is not a list item. `exit` is true for an empty item: the
+    /// item is removed (or outdented one level when nested) instead of continuing the list.
     public static func continuation(for line: String) -> (prefix: String, exit: Bool)? {
-        let type = blockType(line)
-        guard type.isList else { return nil }
-        let pl = prefixLength(line)
-        let pre = (line as NSString).substring(to: pl)
-        if line == pre { return ("", true) }
-        switch type {
-        case .task: return ("- [ ] ", false)
-        case .ol: return ("\((orderedNumber(line) ?? 0) + 1). ", false)
+        let p = parsePrefix(line)
+        guard p.type.isList else { return nil }
+        let ns = line as NSString
+        let pre = ns.substring(to: p.length)
+        if ns.substring(from: p.length).allSatisfy(\.isWhitespace) { return ("", true) }
+        let indent = String(pre.prefix { $0 == " " || $0 == "\t" })
+        switch p.type {
+        case .task:
+            let bullet = pre.dropFirst(indent.count).first.map(String.init) ?? "-"
+            return (indent + bullet + " [ ] ", false)
+        case .ol:
+            let delim = pre.contains(")") ? ")" : "."
+            return (indent + "\((orderedNumber(line) ?? 0) + 1)" + delim + " ", false)
         default: return (pre, false)
         }
     }
 
-    public static func parseLine(_ t: String) -> LineMarkup {
-        let type = blockType(t)
-        let ns = t as NSString
-        let pl = type == .hr ? 0 : prefixLength(t)
-        var markup = LineMarkup(type: type, prefix: NSRange(location: 0, length: pl), spans: [])
-        if type == .hr || type == .empty { return markup }
+    // MARK: inline
 
-        let body = NSRange(location: pl, length: ns.length - pl)
+    /// Parses one line outside any multi-line block.
+    public static func parseLine(_ t: String) -> LineMarkup {
+        parseLine(t, type: blockType(t))
+    }
+
+    /// Parses one line whose block type is already known (from `types`/`role`).
+    public static func parseLine(_ t: String, type: BlockType) -> LineMarkup {
+        let ns = t as NSString
+        if type.isLiteral || type == .hr || type == .empty || type == .table {
+            return LineMarkup(type: type, prefix: NSRange(location: 0, length: 0), spans: [])
+        }
+        let pre = parsePrefix(t)
+        let pl = pre.type == type ? pre.length : 0
+        var markup = LineMarkup(type: type, prefix: NSRange(location: 0, length: pl), spans: [], depth: pre.depth)
+        var bodyStart = pl
+        if type == .quote, let m = calloutRe.firstMatch(in: t, range: NSRange(location: pl, length: ns.length - pl)) {
+            markup.callout = ns.substring(with: m.range(at: 1)).lowercased()
+            markup.prefix.length = NSMaxRange(m.range)
+            // Keep one space after the marker hidden with it.
+            if markup.prefix.length < ns.length, ns.character(at: markup.prefix.length) == 0x20 { markup.prefix.length += 1 }
+            bodyStart = markup.prefix.length
+        }
+        let body = NSRange(location: bodyStart, length: ns.length - bodyStart)
+        guard body.length > 0 else { return markup }
         var taken: [NSRange] = []
         func free(_ r: NSRange) -> Bool { !taken.contains { NSIntersectionRange($0, r).length > 0 } }
+        func add(_ kind: InlineSpan.Kind, _ content: NSRange, _ marks: [NSRange], take: NSRange) {
+            taken.append(take)
+            markup.spans.append(InlineSpan(kind: kind, content: content, marks: marks))
+        }
+        func edges(_ m: NSTextCheckingResult, _ open: Int, _ close: Int) -> [NSRange] {
+            [NSRange(location: m.range.location, length: open), NSRange(location: NSMaxRange(m.range) - close, length: close)]
+        }
+        func group(_ m: NSTextCheckingResult) -> NSRange {
+            (1..<m.numberOfRanges).map { m.range(at: $0) }.first { $0.location != NSNotFound } ?? m.range
+        }
 
         for m in codeRe.matches(in: t, range: body) {
-            taken.append(m.range)
-            markup.spans.append(InlineSpan(kind: .code, content: m.range(at: 1),
-                                           marks: [NSRange(location: m.range.location, length: 1),
-                                                   NSRange(location: NSMaxRange(m.range) - 1, length: 1)]))
+            add(.code, m.range(at: 1), edges(m, 1, 1), take: m.range)
+        }
+        for m in embedRe.matches(in: t, range: body) where free(m.range) {
+            add(.embed(ns.substring(with: m.range(at: 1))), m.range(at: 1), edges(m, 3, 2), take: m.range)
+        }
+        for m in imageRe.matches(in: t, range: body) where free(m.range) {
+            let alt = m.range(at: 1)
+            let url = ns.substring(with: m.range(at: 2))
+            // The alt text stays visible; everything else is syntax.
+            add(.image(url), alt, [NSRange(location: m.range.location, length: 2),
+                                   NSRange(location: NSMaxRange(alt), length: NSMaxRange(m.range) - NSMaxRange(alt))], take: m.range)
         }
         for m in wikiRe.matches(in: t, range: body) where free(m.range) {
-            taken.append(m.range)
-            let title = ns.substring(with: m.range(at: 1))
-            markup.spans.append(InlineSpan(kind: .wikilink(title), content: m.range(at: 1),
-                                           marks: [NSRange(location: m.range.location, length: 2),
-                                                   NSRange(location: NSMaxRange(m.range) - 2, length: 2)]))
+            add(.wikilink(ns.substring(with: m.range(at: 1))), m.range(at: 1), edges(m, 2, 2), take: m.range)
         }
         for m in linkRe.matches(in: t, range: body) where free(m.range) {
-            taken.append(m.range)
             let text = m.range(at: 1)
-            markup.spans.append(InlineSpan(kind: .link(ns.substring(with: m.range(at: 2))), content: text,
-                                           marks: [NSRange(location: m.range.location, length: 1),
-                                                   NSRange(location: NSMaxRange(text), length: NSMaxRange(m.range) - NSMaxRange(text))]))
+            add(.link(ns.substring(with: m.range(at: 2))), text,
+                [NSRange(location: m.range.location, length: 1),
+                 NSRange(location: NSMaxRange(text), length: NSMaxRange(m.range) - NSMaxRange(text))], take: m.range)
         }
-        var boldRanges: [NSRange] = []
-        for m in boldRe.matches(in: t, range: body) where free(m.range) {
-            boldRanges.append(m.range)
-            markup.spans.append(InlineSpan(kind: .bold, content: m.range(at: 1),
-                                           marks: [NSRange(location: m.range.location, length: 2),
-                                                   NSRange(location: NSMaxRange(m.range) - 2, length: 2)]))
+        for m in urlRe.matches(in: t, range: body) where free(m.range) {
+            add(.link(ns.substring(with: m.range)), m.range, [], take: m.range)
         }
-        taken.append(contentsOf: boldRanges.flatMap { [NSRange(location: $0.location, length: 2), NSRange(location: NSMaxRange($0) - 2, length: 2)] })
-        for m in italicRe.matches(in: t, range: body) where free(m.range) {
-            markup.spans.append(InlineSpan(kind: .italic, content: m.range(at: 1),
-                                           marks: [NSRange(location: m.range.location, length: 1),
-                                                   NSRange(location: NSMaxRange(m.range) - 1, length: 1)]))
+        // Emphasis may nest inside each other but not inside the spans above.
+        let locked = taken
+        func open(_ r: NSRange) -> Bool { !locked.contains { NSIntersectionRange($0, r).length > 0 } }
+        var markerRanges: [NSRange] = []
+        func emphasis(_ re: NSRegularExpression, _ kind: InlineSpan.Kind, _ width: Int) {
+            for m in re.matches(in: t, range: body) where open(m.range) {
+                let marks = edges(m, width, width)
+                if marks.contains(where: { mk in markerRanges.contains { NSIntersectionRange($0, mk).length > 0 } }) { continue }
+                markerRanges += marks
+                markup.spans.append(InlineSpan(kind: kind, content: group(m), marks: marks))
+            }
+        }
+        emphasis(boldRe, .bold, 2)
+        emphasis(strikeRe, .strike, 2)
+        emphasis(highlightRe, .highlight, 2)
+        emphasis(italicRe, .italic, 1)
+        taken += markerRanges
+        for m in tagRe.matches(in: t, range: body) where free(m.range) {
+            markup.spans.append(InlineSpan(kind: .tag(ns.substring(with: m.range(at: 1))), content: m.range, marks: []))
         }
         return markup
     }
 
+    // MARK: text utilities
+
     /// CJK characters count one each, Latin words count one each (prototype's rule).
     public static func countWords(_ lines: [String]) -> Int {
-        let text = lines.map { line -> String in
+        var cjk = 0, latin = 0
+        var inWord = false
+        for line in lines {
             let pl = prefixLength(line)
-            let rest = (line as NSString).substring(from: pl)
-            return rest.replacingOccurrences(of: #"[*`\[\]#>]"#, with: "", options: .regularExpression)
-        }.joined(separator: " ")
-        var cjk = 0
-        var latinSource = ""
-        latinSource.reserveCapacity(text.utf8.count)
-        for scalar in text.unicodeScalars {
-            if (0x4E00...0x9FFF).contains(scalar.value) {
-                cjk += 1
-                latinSource.append(" ")
-            } else {
-                latinSource.unicodeScalars.append(scalar)
+            for (i, scalar) in line.unicodeScalars.enumerated() {
+                if i < pl { continue }
+                let v = scalar.value
+                if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) {
+                    cjk += 1
+                    inWord = false
+                } else if (0x30...0x39).contains(v) || (0x41...0x5A).contains(v) || (0x61...0x7A).contains(v) {
+                    if !inWord { latin += 1; inWord = true }
+                } else if inWord, v == 0x2E || v == 0x2C || v == 0x25 {
+                    continue   // 2.0, 3,200, 50%
+                } else {
+                    inWord = false
+                }
             }
+            inWord = false
         }
-        let latinRe = try! NSRegularExpression(pattern: #"[A-Za-z0-9][A-Za-z0-9.,%]*"#)
-        let latin = latinRe.numberOfMatches(in: latinSource, range: NSRange(location: 0, length: (latinSource as NSString).length))
         return cjk + latin
     }
 

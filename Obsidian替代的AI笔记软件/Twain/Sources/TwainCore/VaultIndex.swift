@@ -27,7 +27,6 @@ public struct NoteOutline: Equatable, Sendable {
     public var links: [Link] = []
     public var tags: [String] = []
 
-    static let fence = try! NSRegularExpression(pattern: #"^\s*(```|~~~)"#)
     static let inlineCode = try! NSRegularExpression(pattern: #"`[^`]*`"#)
     static let tag = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}_&#/\-])#([\p{L}\p{N}_/\-]+)"#)
 
@@ -37,21 +36,17 @@ public struct NoteOutline: Equatable, Sendable {
 
     public static func parse(lines: [String]) -> NoteOutline {
         var o = NoteOutline()
-        var inFence = false
         var current: String?
         var tagSet = Set<String>()
+        let types = Markdown.types(lines)
         for (i, line) in lines.enumerated() {
+            let type = types[i]
+            if type.isLiteral { continue }
             let ns = line as NSString
-            if fence.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) != nil {
-                inFence.toggle()
-                continue
-            }
-            if inFence { continue }
-            let type = Markdown.blockType(line)
             let body = ns.substring(from: Markdown.prefixLength(line))
             switch type {
-            case .h1, .h2, .h3:
-                let level = type == .h1 ? 1 : type == .h2 ? 2 : 3
+            case _ where type.isHeading:
+                let level = type.headingLevel!
                 let text = body.trimmingCharacters(in: .whitespaces)
                 o.headings.append(Heading(level: level, text: text, line: i + 1))
                 current = text
@@ -60,7 +55,7 @@ public struct NoteOutline: Equatable, Sendable {
                                     line: i + 1, heading: current))
             default: break
             }
-            for span in Markdown.parseLine(line).spans {
+            for span in Markdown.parseLine(line, type: type).spans {
                 if case let .wikilink(raw) = span.kind {
                     let target = linkTarget(raw)
                     if !target.isEmpty { o.links.append(Link(target: target, line: i + 1)) }

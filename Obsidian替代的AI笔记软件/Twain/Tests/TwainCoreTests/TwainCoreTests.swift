@@ -6,7 +6,15 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(Markdown.blockType("# 2.0 发布计划"), .h1)
         XCTAssertEqual(Markdown.blockType("## 里程碑"), .h2)
         XCTAssertEqual(Markdown.blockType("### x"), .h3)
-        XCTAssertEqual(Markdown.blockType("#### x"), .p)
+        XCTAssertEqual(Markdown.blockType("#### x"), .h4)
+        XCTAssertEqual(Markdown.blockType("####### x"), .p)
+        XCTAssertEqual(Markdown.blockType("\t- 嵌套"), .li)
+        XCTAssertEqual(Markdown.blockType("* 星号"), .li)
+        XCTAssertEqual(Markdown.blockType("2) 括号"), .ol)
+        XCTAssertEqual(Markdown.blockType("```swift"), .fence)
+        XCTAssertEqual(Markdown.blockType("| a | b |"), .table)
+        XCTAssertEqual(Markdown.blockType("***"), .hr)
+        XCTAssertEqual(Markdown.blockType("-"), .p)
         XCTAssertEqual(Markdown.blockType("- [x] 冻结功能范围"), .task)
         XCTAssertEqual(Markdown.blockType("- [ ] 完成"), .task)
         XCTAssertEqual(Markdown.blockType("- 列表"), .li)
@@ -23,6 +31,54 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(Markdown.continuation(for: "3. c")?.prefix, "4. ")
         XCTAssertEqual(Markdown.continuation(for: "- ")?.exit, true)
         XCTAssertNil(Markdown.continuation(for: "plain"))
+        XCTAssertEqual(Markdown.continuation(for: "\t- 嵌套")?.prefix, "\t- ")
+        XCTAssertEqual(Markdown.continuation(for: "\t- [x] 做完")?.prefix, "\t- [ ] ")
+        XCTAssertEqual(Markdown.continuation(for: "\t- ")?.exit, true)
+        XCTAssertEqual(Markdown.continuation(for: "9) 九")?.prefix, "10) ")
+    }
+
+    func testContextTypes() {
+        let lines = ["---", "title: x", "---", "# 标题", "```swift", "# 不是标题", "- 不是列表", "```", "- 列表", "$$", "a^2", "$$", "正文"]
+        XCTAssertEqual(Markdown.types(lines), [.frontmatter, .frontmatter, .frontmatter, .h1, .fence, .code, .code, .fence, .li,
+                                                .fence, .code, .fence, .p])
+        // A later --- is a rule, not front matter.
+        XCTAssertEqual(Markdown.types(["正文", "---"]), [.p, .hr])
+        // A shorter or different fence does not close the block.
+        XCTAssertEqual(Markdown.types(["````", "```", "~~~", "````"]), [.fence, .code, .code, .fence])
+    }
+
+    func testNestedListPrefix() {
+        let m = Markdown.parseLine("\t\t- [ ] 深一层")
+        XCTAssertEqual(m.type, .task)
+        XCTAssertEqual(m.depth, 2)
+        XCTAssertEqual(m.prefix, NSRange(location: 0, length: 8))
+        XCTAssertEqual(Markdown.toggleTask("\t- [ ] a"), "\t- [x] a")
+    }
+
+    func testNewInlineSpans() {
+        let line = "~~删掉~~ 和 ==重点== 还有 #标签/子 与 ![[图.png]] 见 https://example.com/a 结束"
+        let m = Markdown.parseLine(line)
+        let ns = line as NSString
+        func text(_ k: InlineSpan.Kind) -> String? { m.spans.first { $0.kind == k }.map { ns.substring(with: $0.content) } }
+        XCTAssertEqual(text(.strike), "删掉")
+        XCTAssertEqual(text(.highlight), "重点")
+        XCTAssertEqual(text(.tag("标签/子")), "#标签/子")
+        XCTAssertEqual(text(.embed("图.png")), "图.png")
+        XCTAssertEqual(text(.link("https://example.com/a")), "https://example.com/a")
+        XCTAssertNil(m.blockEmbed)
+        XCTAssertEqual(Markdown.parseLine("![[图.png|300]]").blockEmbed, "图.png|300")
+        XCTAssertEqual(Markdown.parseLine("![说明](附件/a.jpg)").blockEmbed, "附件/a.jpg")
+        // Headings aren't tags; neither are numbers or anchors in URLs.
+        XCTAssertFalse(Markdown.parseLine("# 标题").spans.contains { if case .tag = $0.kind { return true }; return false })
+        XCTAssertFalse(Markdown.parseLine("第 #1 名").spans.contains { if case .tag = $0.kind { return true }; return false })
+        XCTAssertFalse(Markdown.parseLine("snake_case_name").spans.contains { $0.kind == .italic })
+        XCTAssertTrue(Markdown.parseLine("一个 _斜体_ 词").spans.contains { $0.kind == .italic })
+    }
+
+    func testCallout() {
+        let m = Markdown.parseLine("> [!Warning] 小心")
+        XCTAssertEqual(m.callout, "warning")
+        XCTAssertEqual(("> [!Warning] 小心" as NSString).substring(with: m.prefix), "> [!Warning] ")
     }
 
     func testRenamingWikiLinks() {

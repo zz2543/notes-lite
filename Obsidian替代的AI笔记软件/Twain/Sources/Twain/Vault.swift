@@ -19,6 +19,8 @@ final class Vault {
     let root: URL
     private(set) var notes: [NoteRef] = []
     private(set) var folders: [String] = []
+    /// Non-note files by lowercased file name, for resolving `![[name.png]]` like Obsidian does.
+    @ObservationIgnored private(set) var attachments: [String: [String]] = [:]
     private(set) var isGitRepo = false
 
     @ObservationIgnored private(set) var known: [String: String] = [:]
@@ -46,6 +48,7 @@ final class Vault {
         isGitRepo = fm.fileExists(atPath: root.appendingPathComponent(".git").path)
         var found: [NoteRef] = []
         var dirs: [String] = []
+        var files: [String: [String]] = [:]
         let keys: [URLResourceKey] = [.isDirectoryKey]
         if let e = fm.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
             for case let u as URL in e {
@@ -55,9 +58,12 @@ final class Vault {
                     dirs.append(rel)
                 } else if u.pathExtension.lowercased() == "md" {
                     found.append(NoteRef(rel: rel))
+                } else {
+                    files[u.lastPathComponent.lowercased(), default: []].append(rel)
                 }
             }
         }
+        attachments = files
         let cmp: (String, String) -> Bool = { $0.localizedStandardCompare($1) == .orderedAscending }
         notes = found.sorted { cmp($0.rel, $1.rel) }
         folders = dirs.sorted(by: cmp)
@@ -70,6 +76,24 @@ final class Vault {
     }
 
     func note(_ rel: String) -> NoteRef? { notes.first { $0.rel == rel } }
+
+    /// `name.png`, `folder/name.png` or `name.png|300` → the file's path in the vault.
+    func attachment(_ target: String, from noteRel: String?) -> String? {
+        var t = target.split(separator: "|", maxSplits: 1).first.map(String.init) ?? target
+        t = t.trimmingCharacters(in: .whitespaces)
+        t = t.removingPercentEncoding ?? t
+        if t.hasPrefix("/") { t.removeFirst() }
+        if let noteRel {
+            let here = ((noteRel as NSString).deletingLastPathComponent as NSString).appendingPathComponent(t)
+            let clean = (here as NSString).standardizingPath
+            if FileManager.default.fileExists(atPath: url(clean).path) { return clean }
+        }
+        if FileManager.default.fileExists(atPath: url(t).path) { return t }
+        let name = (t as NSString).lastPathComponent.lowercased()
+        let hits = attachments[name] ?? []
+        // Obsidian's rule: a partial path narrows the match, the shortest path wins ties.
+        return hits.filter { $0.lowercased().hasSuffix(t.lowercased()) }.min { $0.count < $1.count } ?? hits.min { $0.count < $1.count }
+    }
 
     func note(titled title: String) -> NoteRef? {
         notes.first { $0.title == title } ?? notes.first { $0.title.localizedCaseInsensitiveCompare(title) == .orderedSame }

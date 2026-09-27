@@ -64,6 +64,9 @@ enum Theme {
         static var ghostPillText: NSColor { .tertiaryLabelColor }
         static var accent: NSColor { .controlAccentColor }
         static var paper: NSColor { .textBackgroundColor }
+        static let codeBlock = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.04) }
+        static var highlight: NSColor { .systemYellow }
+        static var tag: NSColor { .systemPurple }
     }
 }
 
