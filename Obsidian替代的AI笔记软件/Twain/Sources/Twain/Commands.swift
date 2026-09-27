@@ -169,6 +169,25 @@ enum CommandRegistry {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: poll)
         },
+        AppCommand(spec: CommandSpec("debug.companion", "（调试）在当前笔记末尾写一段，等伴写给出一句话", effect: .write, params: [
+            ParamSpec("text", required: true, positional: true, help: "追加的文字"),
+        ])) { m, call, reply in
+            if !m.companionOn { m.toggleCompanion() }
+            m.companionLast = .distantPast
+            m.companionTip = nil
+            let t = m.editorText + (call.params["text"]?.string ?? "")
+            m.editorDidChange(t)
+            m.editorSelection = NSRange(location: (t as NSString).length, length: 0)
+            let start = Date()
+            func poll() {
+                if let tip = m.companionTip {
+                    reply(.success(["kind": .string(tip.kind.rawValue), "text": .string(tip.text), "quote": JSONValue(tip.quote),
+                                    "seconds": JSONValue(Int(Date().timeIntervalSince(start)))]))
+                } else if Date().timeIntervalSince(start) > 60 { reply(.success(["tip": .null])) }
+                else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll) }
+            }
+            poll()
+        },
         AppCommand(spec: CommandSpec("debug.answer", "（调试）替用户回答最近的问题", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "回答"),
         ])) { m, call in
@@ -307,6 +326,8 @@ enum CommandRegistry {
         ui("review.next", "打开下一处待审阅的改动", agents: true,
            PaletteInfo(label: { "审阅待定改动（\($0.pending.count)）" }, hint: "⇧⌘R", icon: "checklist",
                        visible: { !$0.pending.isEmpty })) { $0.reviewNext() },
+        ui("companion", "开关伴写：停笔时页边偶尔出现一句提问或思路（小模型）",
+           PaletteInfo(label: { "伴写：" + ($0.companionOn ? "关闭" : "开启") }, icon: "sparkle.text.clipboard")) { $0.toggleCompanion() },
         ui("note.review", "让 agent 审阅当前笔记，在正文旁留下批注（不改动笔记）",
            PaletteInfo(label: { m in "AI 审阅：让 \(m.agentPick.displayName) 批注这篇笔记" }, icon: "text.bubble",
                        visible: { $0.activeRel != nil && $0.activeNote?.isHTML != true })) { $0.startAIReview() },

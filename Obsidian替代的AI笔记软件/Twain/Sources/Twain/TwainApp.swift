@@ -33,6 +33,7 @@ struct TwainApp: App {
                 Toggle("打字机滚动", isOn: $model.typewriter)
                 Toggle("段落聚焦", isOn: $model.dim)
                 Toggle("Tab 行内续写", isOn: $model.ghostOn)
+                Toggle("伴写（页边提问与思路）", isOn: Binding(get: { model.companionOn }, set: { if $0 != model.companionOn { model.toggleCompanion() } }))
                 Picker("正文字体", selection: $model.font) {
                     ForEach(EditorFont.allCases) { Text($0.cardLabel).tag($0) }
                 }

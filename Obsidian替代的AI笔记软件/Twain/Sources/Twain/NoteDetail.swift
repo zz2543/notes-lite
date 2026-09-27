@@ -59,6 +59,14 @@ struct NoteDetail: View {
                 if !model.zen { StatusPill(model: model).padding(Metrics.floatInset) }
             }
             .overlay(alignment: .topTrailing) {
+                if let tip = model.companionTip, tip.rel == model.activeRel {
+                    CompanionBubble(model: model, tip: tip)
+                        .padding(.top, 64).padding(.trailing, Metrics.floatInset)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy(duration: 0.3), value: model.companionTip)
+            .overlay(alignment: .topTrailing) {
                 if model.zen {
                     Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
                         .buttonStyle(.glass)
@@ -139,6 +147,9 @@ struct StatusPill: View {
                     .fill(model.dirty ? AnyShapeStyle(.orange) : AnyShapeStyle(.green.opacity(0.8)))
                     .frame(width: 6, height: 6)
                 Text(model.dirty ? "编辑中" : "已保存")
+                if model.companionOn {
+                    if model.companionThinking { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkle").foregroundStyle(.tint) }
+                }
                 Text(model.stats).monospacedDigit().foregroundStyle(.secondary)
             }
             .font(.caption)

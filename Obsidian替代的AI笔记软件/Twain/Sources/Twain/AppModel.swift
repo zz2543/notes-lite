@@ -98,6 +98,15 @@ final class AppModel {
     /// Progress of an AI summary run.
     var summarizing: (done: Int, total: Int)?
     var noteInfoOpen = false
+    /// The writing companion (`Companion.swift`): off unless the user turns it on.
+    var companionOn = false { didSet { save("companion", companionOn) } }
+    var companionTip: CompanionTip?
+    var companionThinking = false
+    @ObservationIgnored var companionWork: DispatchWorkItem?
+    @ObservationIgnored var companionLast = Date.distantPast
+    @ObservationIgnored var companionLength = 0
+    @ObservationIgnored var companionCalls: [Date] = []
+    @ObservationIgnored var companionModel: LiveModel?
     /// Model per agent; "" means whatever the CLI is configured to use.
     var agentModel: [AgentKind: String] = [:] {
         didSet { for k in AgentKind.allCases { save("model." + k.rawValue, agentModel[k] ?? "") } }
@@ -257,6 +266,7 @@ final class AppModel {
         automationsOn = b("automationsOn", true)
         automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
         summaryDailyLimit = defaults.object(forKey: "pref.summaryLimit") as? Int ?? 100
+        companionOn = b("companion", false)
         agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
             ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
         })
@@ -305,6 +315,9 @@ final class AppModel {
         activeRel = nil
         if let first { open(first.rel) }
         pollTerminal()
+        companionModel?.stop()
+        companionModel = nil
+        warmCompanion()
     }
 
     static let welcomeNote = """
@@ -446,6 +459,7 @@ final class AppModel {
         editorText = text
         dirty = true
         recountWords()
+        companionTextChanged()
         if let rel = activeRel, pending[rel] != nil {
             // Editing a file under review keeps the agent's version as the new base.
             pending[rel] = nil
