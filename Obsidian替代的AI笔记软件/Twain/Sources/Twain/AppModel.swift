@@ -399,6 +399,9 @@ final class AppModel {
         focusRequest = (caret, focusToken)
     }
 
+    /// HTML notes show their source in the editor instead of the rendered page.
+    var htmlSource = false
+
     /// Why the open file can't be shown as text (binary, far too large); nil when it can.
     var unreadable: String?
 

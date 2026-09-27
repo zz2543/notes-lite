@@ -62,7 +62,8 @@ struct EditorView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
-        let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth)
+        let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth,
+                                plain: model.activeNote?.isHTML == true)
         c.sync(version: model.editorVersion, text: model.editorText, style: style,
                ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest)
     }

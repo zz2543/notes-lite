@@ -10,6 +10,9 @@ struct NoteRef: Hashable, Identifiable {
     /// Root-level agent files are listed with their extension, like the prototype does.
     var isAgentFile: Bool { folder.isEmpty && (title == "AGENTS" || title == "CLAUDE") }
     var displayName: String { isAgentFile ? title + ".md" : title }
+    /// An HTML note: rendered as a page, edited as source.
+    var isHTML: Bool { Vault.htmlExtensions.contains((rel as NSString).pathExtension.lowercased()) }
+    var ext: String { (rel as NSString).pathExtension }
 }
 
 /// A folder on disk full of Markdown files. Twain keeps no database: `known` is only
@@ -48,6 +51,9 @@ final class Vault {
 
     func url(_ rel: String) -> URL { root.appendingPathComponent(rel) }
 
+    static let htmlExtensions: Set<String> = ["html", "htm"]
+    static let noteExtensions: Set<String> = ["md", "html", "htm"]
+
     struct Listing {
         var notes: [NoteRef] = []
         var folders: [String] = []
@@ -70,7 +76,7 @@ final class Vault {
                 if (try? u.resourceValues(forKeys: Set(keys)).isDirectory) == true {
                     if u.lastPathComponent == "node_modules" { e.skipDescendants(); continue }
                     out.folders.append(rel)
-                } else if u.pathExtension.lowercased() == "md" {
+                } else if Self.noteExtensions.contains(u.pathExtension.lowercased()) {
                     out.notes.append(NoteRef(rel: rel))
                 } else {
                     out.attachments[u.lastPathComponent.lowercased(), default: []].append(rel)
@@ -190,11 +196,11 @@ final class Vault {
         try? text.write(to: u, atomically: true, encoding: .utf8)
     }
 
-    func uniqueRel(title: String, folder: String) -> String {
+    func uniqueRel(title: String, folder: String, ext: String = "md") -> String {
         var n = 1
         while true {
             let name = n == 1 ? title : "\(title) \(n)"
-            let rel = folder.isEmpty ? name + ".md" : folder + "/" + name + ".md"
+            let rel = folder.isEmpty ? name + "." + ext : folder + "/" + name + "." + ext
             if !FileManager.default.fileExists(atPath: url(rel).path) { return rel }
             n += 1
         }
@@ -225,7 +231,8 @@ final class Vault {
         guard !t.isEmpty else { throw RenameError.empty }
         guard !t.contains("/"), !t.contains(":"), !t.hasPrefix(".") else { throw RenameError.invalid }
         let folder = (rel as NSString).deletingLastPathComponent
-        let new = folder.isEmpty ? t + ".md" : folder + "/" + t + ".md"
+        let ext = (rel as NSString).pathExtension.isEmpty ? "md" : (rel as NSString).pathExtension
+        let new = folder.isEmpty ? t + "." + ext : folder + "/" + t + "." + ext
         if new == rel { return rel }
         // A case-only change is the same file on a case-insensitive disk.
         if new.lowercased() != rel.lowercased(), FileManager.default.fileExists(atPath: url(new).path) {
@@ -245,7 +252,7 @@ final class Vault {
         let all = Set(paths.map(relative))
         // Hidden folders are not notes; Twain's own config lives in one of them.
         let visible = all.filter { !$0.split(separator: "/").contains { $0.hasPrefix(".") } }
-        let rels = visible.filter { $0.lowercased().hasSuffix(".md") }
+        let rels = visible.filter { Self.noteExtensions.contains(($0 as NSString).pathExtension.lowercased()) }
         if !visible.isEmpty {
             scanSoon { [weak self] in if !rels.isEmpty { self?.onFilesChanged?(Array(rels)) } }
         }
@@ -278,7 +285,7 @@ struct VaultSnapshot: Sendable {
         let fm = FileManager.default
         if let e = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
             let base = root.path.hasSuffix("/") ? root.path : root.path + "/"
-            for case let u as URL in e where u.pathExtension.lowercased() == "md" {
+            for case let u as URL in e where Vault.noteExtensions.contains(u.pathExtension.lowercased()) {
                 let p = u.standardizedFileURL.resolvingSymlinksInPath().path
                 if p.hasPrefix(base) { rels.insert(String(p.dropFirst(base.count))) }
             }

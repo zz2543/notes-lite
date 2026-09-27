@@ -45,6 +45,8 @@ struct EditorStyle: Equatable {
     var dim: Bool
     var zen: Bool
     var width: CGFloat
+    /// Source code (an HTML note): monospaced, no Markdown rendering.
+    var plain = false
 }
 
 /// Styles the note line by line and, after an edit, restyles only the lines whose text or
@@ -301,6 +303,13 @@ final class MarkdownStyler {
         func dimmed(_ c: NSColor) -> NSColor { alpha < 1 ? c.withAlphaComponent(c.alphaComponent * alpha) : c }
 
         guard full.length > 0 else { return }
+        if style.plain {
+            let font = typo.mono(size: 14)
+            let p = paragraph(.code, font: font, first: false)
+            storage.setAttributes([.font: font, .foregroundColor: ink, .paragraphStyle: p], range: full)
+            typo.applyCJK(storage, in: r)
+            return
+        }
         // Literal blocks: code, fences, front matter.
         if type.isLiteral {
             let size: CGFloat = type == .code ? (bodySize * 0.84).rounded() : 13

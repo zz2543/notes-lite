@@ -36,6 +36,9 @@ struct NoteDetail: View {
                     if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
                 }
             }
+        } else if let n = model.activeNote, n.isHTML, !model.htmlSource, let v = model.vault {
+            HTMLNoteView(url: v.url(n.rel), root: v.root, version: model.editorVersion)
+                .overlay(alignment: .top) { if !model.zen { banners(pending: pending) } }
         } else {
             editorPage(pending: pending)
         }
@@ -179,6 +182,16 @@ extension NoteDetail {
                     }
                     .buttonStyle(.glassProminent)
                     .help("审阅 agent 的改动 ⇧⌘R")
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            }
+            if model.activeNote?.isHTML == true {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(model.htmlSource ? "预览" : "源码", systemImage: model.htmlSource ? "eye" : "chevron.left.forwardslash.chevron.right") {
+                        model.flushSave()
+                        model.htmlSource.toggle()
+                    }
+                    .help(model.htmlSource ? "显示渲染后的页面" : "编辑 HTML 源码")
                 }
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }

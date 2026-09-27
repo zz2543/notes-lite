@@ -63,8 +63,8 @@ extension Vault {
     /// Moves a note into `folder`, keeping its name (numbered when taken). Returns the new path.
     func move(_ rel: String, to folder: String) throws -> String {
         guard (rel as NSString).deletingLastPathComponent != folder else { return rel }
-        let title = NoteRef(rel: rel).title
-        let new = uniqueRel(title: title, folder: folder)
+        let ref = NoteRef(rel: rel)
+        let new = uniqueRel(title: ref.title, folder: folder, ext: ref.ext.isEmpty ? "md" : ref.ext)
         try FileManager.default.createDirectory(at: url(folder), withIntermediateDirectories: true)
         try FileManager.default.moveItem(at: url(rel), to: url(new))
         let k = known[rel]

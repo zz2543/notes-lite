@@ -181,7 +181,7 @@ struct NoteRow: View {
                 }
             }
         } icon: {
-            Image(systemName: note.isAgentFile ? "doc.badge.gearshape" : "doc.text")
+            Image(systemName: note.isAgentFile ? "doc.badge.gearshape" : note.isHTML ? "globe" : "doc.text")
         }
         .tag(note.rel)
         .draggable(note.rel)
