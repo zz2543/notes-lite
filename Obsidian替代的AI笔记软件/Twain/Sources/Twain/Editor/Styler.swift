@@ -124,6 +124,9 @@ final class MarkdownStyler {
         return lo
     }
 
+    /// Whether line `i` sits inside a fenced code or math block, as of the last restyle.
+    func isCode(line i: Int) -> Bool { i < sigs.count && sigs[i].forced == .code }
+
     /// Range of line `i` without its newline.
     func lineRange(_ i: Int, length: Int) -> NSRange {
         let start = lineStarts[i]
@@ -135,13 +138,20 @@ final class MarkdownStyler {
         var starts = [0]
         starts.reserveCapacity(lineStarts.count + 8)
         let len = ns.length
-        var buf = [unichar](repeating: 0, count: 4096)
+        var buf = [unichar](repeating: 0, count: 8192)
         var pos = 0
-        while pos < len {
-            let n = min(4096, len - pos)
-            ns.getCharacters(&buf, range: NSRange(location: pos, length: n))
-            for k in 0..<n where buf[k] == 0x0A { starts.append(pos + k + 1) }
-            pos += n
+        buf.withUnsafeMutableBufferPointer { b in
+            let p = b.baseAddress!
+            while pos < len {
+                let n = min(8192, len - pos)
+                ns.getCharacters(p, range: NSRange(location: pos, length: n))
+                var k = 0
+                while k < n {
+                    if p[k] == 0x0A { starts.append(pos + k + 1) }
+                    k += 1
+                }
+                pos += n
+            }
         }
         lineStarts = starts
     }

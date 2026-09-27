@@ -132,7 +132,7 @@ final class AppModel {
     var activeRel: String?
     var editorText = ""
     /// Bumped whenever the model replaces the editor's text (note switch, disk reload).
-    var editorVersion = 0
+    var editorVersion = 0 { didSet { recountWords(now: true) } }
     var dirty = false
     var focusRequest: (caret: Int, token: Int)?
     /// The editor's selection (UTF-16), read by agents through `twain context`. Not observed:
@@ -397,6 +397,7 @@ final class AppModel {
         netTyped += delta
         editorText = text
         dirty = true
+        recountWords()
         if let rel = activeRel, pending[rel] != nil {
             // Editing a file under review keeps the agent's version as the new base.
             pending[rel] = nil
@@ -974,10 +975,24 @@ final class AppModel {
 
     // MARK: stats
 
+    /// Words in the open note, recounted a moment after typing stops rather than on every key.
+    var wordCount = 0
+    @ObservationIgnored private var countWork: DispatchWorkItem?
+
+    func recountWords(now: Bool = false) {
+        countWork?.cancel()
+        let text = editorText
+        let w = DispatchWorkItem { [weak self] in
+            let n = Markdown.countWords(Markdown.lines(text))
+            DispatchQueue.main.async { if self?.wordCount != n { self?.wordCount = n } }
+        }
+        countWork = w
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + (now ? 0 : 0.4), execute: w)
+    }
+
     var stats: String {
         _ = tick
-        let lines = Markdown.lines(editorText)
-        let words = Markdown.countWords(lines)
+        let words = wordCount
         let now = Date()
         let pace = typed.filter { now.timeIntervalSince($0.0) < 60 }.reduce(0) { $0 + $1.1 }
         var s = "\(words.formatted()) 字 · 约 \(max(1, Int(ceil(Double(words) / 400)))) 分钟"

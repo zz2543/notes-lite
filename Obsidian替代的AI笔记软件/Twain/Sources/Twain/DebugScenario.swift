@@ -36,6 +36,32 @@ enum DebugScenario {
                     else { tv.insertText(s, replacementRange: tv.selectedRange()) }
                 }
             }
+        case "bench":
+            // Types into the middle of the note, one key per run-loop turn so the async work
+            // (SwiftUI updates, height fitting, drawing) counts too, and reports per-key costs.
+            let mid = (m.editorText as NSString).length / 2
+            m.requestFocus(caret: mid)
+            let keys = ProcessInfo.processInfo.environment["BENCH_KEYS"].flatMap(Int.init) ?? 60
+            var times: [Double] = []
+            var last = CACurrentMediaTime()
+            func step(_ i: Int) {
+                let tv = textView()!
+                if i > 0 { times.append((CACurrentMediaTime() - last) * 1000) }
+                guard i < keys else {
+                    let sorted = times.sorted()
+                    let line = String(format: "bench keys=%d median=%.2fms p95=%.2fms max=%.2fms length=%d\n",
+                                      times.count, sorted[sorted.count / 2], sorted[Int(Double(sorted.count) * 0.95)], sorted.last!,
+                                      (m.editorText as NSString).length)
+                    FileHandle.standardError.write(line.data(using: .utf8)!)
+                    return
+                }
+                last = CACurrentMediaTime()
+                if i % 15 == 14 { tv.doCommand(by: #selector(NSResponder.insertNewline(_:))) }
+                else { tv.insertText(i % 2 == 0 ? "字" : "a", replacementRange: tv.selectedRange()) }
+                // Let the run loop do everything a real key would trigger, then type the next.
+                DispatchQueue.main.async { DispatchQueue.main.async { step(i + 1) } }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { step(0) }
         case "diff", "banner":
             let before = Markdown.lines(m.editorText)
             var after = before

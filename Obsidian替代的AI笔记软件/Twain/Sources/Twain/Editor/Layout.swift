@@ -63,7 +63,7 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
 
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
-        guard let storage = textStorage, let container = textContainers.first, numberOfGlyphs > 0 else { return }
+        guard let storage = textStorage, let container = textContainers.first, glyphsToShow.length > 0 else { return }
         let chars = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         // Whole paragraphs, so a block that starts above the dirty rect still draws its part.
         let paras = (storage.string as NSString).paragraphRange(for: chars)

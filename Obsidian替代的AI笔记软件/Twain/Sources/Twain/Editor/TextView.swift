@@ -67,7 +67,9 @@ final class TwainTextView: NSTextView {
 
     private func fitHeightToLayout() {
         guard let lm = layoutManager, let tc = textContainer else { return }
-        lm.ensureLayout(for: tc)
+        // Non-contiguous layout: lay out what is on screen; the rest of the height is the
+        // layout manager's estimate, refined as the reader scrolls.
+        lm.ensureLayout(forBoundingRect: visibleRect.offsetBy(dx: 0, dy: -textContainerOrigin.y), in: tc)
         let h = max(minSize.height, lm.usedRect(for: tc).height + topInset + bottomInset)
         if abs(h - frame.height) > 0.5 { setFrameSize(NSSize(width: frame.width, height: h)) }
     }

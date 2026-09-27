@@ -13,6 +13,8 @@ struct EditorView: NSViewRepresentable {
         let storage = NSTextStorage()
         storage.delegate = context.coordinator
         let lm = TwainLayoutManager()
+        // Only what is visible gets laid out: an edit no longer re-typesets the rest of the note.
+        lm.allowsNonContiguousLayout = true
         storage.addLayoutManager(lm)
         let container = NSTextContainer(size: NSSize(width: 600, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
@@ -205,7 +207,6 @@ struct EditorView: NSViewRepresentable {
             p.headIndent = MarkdownStyler.gutter
             p.tailIndent = -MarkdownStyler.gutter
             tv.typingAttributes = [.font: body, .foregroundColor: Theme.NS.ink, .paragraphStyle: p]
-            if !ranges.isEmpty { tv.needsDisplay = true }
             tv.updateCaret(animated: true)
         }
 
@@ -214,7 +215,8 @@ struct EditorView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText() else { return }
-            model.editorDidChange(tv.string)
+            // A native copy: comparing and slicing a bridged NSString is many times slower.
+            model.editorDidChange(String(decoding: Array(tv.string.utf8), as: UTF8.self))
             restyle()
             updateSlash()
             center(smooth: true)
@@ -331,13 +333,7 @@ struct EditorView: NSViewRepresentable {
             }
         }
 
-        private func isCode(line: Int) -> Bool {
-            guard let tv = textView else { return false }
-            let lines = Markdown.lines(tv.string)
-            guard line < lines.count else { return false }
-            let t = Markdown.types(Array(lines.prefix(line + 1)))
-            return t[line] == .code
-        }
+        private func isCode(line: Int) -> Bool { styler.isCode(line: line) }
 
         /// Return: continue lists and quotes, leave an empty item, keep code indentation.
         private func newline() -> Bool {
@@ -533,10 +529,10 @@ struct EditorView: NSViewRepresentable {
             let loc = min(tv.selectedRange().location, len)
             lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(len, loc + 1)))
             let caretRect: CGRect
-            if lm.numberOfGlyphs == 0 {
+            if len == 0 {
                 caretRect = CGRect(x: 0, y: tv.textContainerOrigin.y, width: 1, height: 20)
             } else {
-                let gi = loc >= len ? max(0, lm.numberOfGlyphs - 1) : lm.glyphIndexForCharacter(at: loc)
+                let gi = lm.glyphIndexForCharacter(at: min(loc, len - 1))
                 var r = NSRange()
                 var frag = lm.lineFragmentRect(forGlyphAt: gi, effectiveRange: &r)
                 if loc >= len, lm.extraLineFragmentTextContainer != nil { frag = lm.extraLineFragmentRect }
