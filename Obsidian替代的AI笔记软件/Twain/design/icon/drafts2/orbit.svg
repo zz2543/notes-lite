@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2B2622"/><stop offset="1" stop-color="#0E0D0C"/></linearGradient>
+<radialGradient id="core" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFE3CF" stop-opacity="0.55"/><stop offset="1" stop-color="#FFE3CF" stop-opacity="0"/></radialGradient>
+<radialGradient id="clay" cx="0.35" cy="0.3" r="0.75"><stop offset="0" stop-color="#FFC4A3"/><stop offset="0.55" stop-color="#DD7746"/><stop offset="1" stop-color="#9A3F18"/></radialGradient>
+<radialGradient id="pearl" cx="0.35" cy="0.3" r="0.75"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.6" stop-color="#E7E0D7"/><stop offset="1" stop-color="#9C958C"/></radialGradient>
+<radialGradient id="haloC" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#E07A4A" stop-opacity="0.55"/><stop offset="1" stop-color="#E07A4A" stop-opacity="0"/></radialGradient>
+<radialGradient id="haloP" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.35"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="3"/>
+<g clip-path="url(#tile)"><circle cx="512" cy="512" r="300" fill="url(#core)" opacity="0.5"/></g>
+<g fill="none" stroke-width="7" stroke-linecap="round">
+  <ellipse cx="512" cy="512" rx="300" ry="130" transform="rotate(-32 512 512)" stroke="#E07A4A" stroke-opacity="0.75"/>
+  <ellipse cx="512" cy="512" rx="300" ry="130" transform="rotate(32 512 512)" stroke="#F3EEE8" stroke-opacity="0.6"/>
+</g>
+<circle cx="512" cy="512" r="14" fill="#FFF3E8"/>
+<circle cx="512" cy="512" r="48" fill="url(#haloP)"/>
+<circle cx="266" cy="358" r="170" fill="url(#haloC)"/>
+<circle cx="266" cy="358" r="74" fill="url(#clay)"/>
+<circle cx="760" cy="358" r="150" fill="url(#haloP)"/>
+<circle cx="760" cy="358" r="66" fill="url(#pearl)"/>
+</svg>

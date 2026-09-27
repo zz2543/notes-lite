@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0A075"/><stop offset="1" stop-color="#B84F22"/></linearGradient>
+<filter id="sh" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#5A200A" flood-opacity="0.35"/></filter>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="#fff" stroke-opacity="0.4" stroke-width="3"/>
+<g clip-path="url(#tile)" fill="none" stroke-linecap="round" stroke-width="12">
+  <path d="M60 820 C260 800 330 640 470 600 S640 560 690 470" stroke="#FFFFFF" stroke-opacity="0.55" stroke-dasharray="2 34"/>
+  <path d="M60 700 C220 720 300 800 420 740" stroke="#1D1A17" stroke-opacity="0.4" stroke-dasharray="2 30"/>
+</g>
+<g filter="url(#sh)">
+  <g transform="translate(790 330) rotate(-28)"><path d="M0 0 L-330 -120 L-210 10 Z" fill="#FFFFFF"/><path d="M0 0 L-210 10 L-270 130 Z" fill="#E6DED4"/><path d="M0 0 L-210 10 L-175 78 Z" fill="#C9BFB2"/></g>
+  <g transform="translate(520 690) rotate(-22) scale(0.52)"><path d="M0 0 L-330 -120 L-210 10 Z" fill="#3C3631"/><path d="M0 0 L-210 10 L-270 130 Z" fill="#221F1C"/><path d="M0 0 L-210 10 L-175 78 Z" fill="#0F0E0D"/></g>
+</g>
+</svg>

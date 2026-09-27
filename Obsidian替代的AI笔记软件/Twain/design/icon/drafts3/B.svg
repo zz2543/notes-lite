@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<radialGradient id="dark" cx="0.5" cy="0.35" r="0.8"><stop offset="0" stop-color="#2F2925"/><stop offset="1" stop-color="#0D0C0B"/></radialGradient>
+<linearGradient id="pearl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D9D1C7"/></linearGradient>
+<linearGradient id="clay" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F7A77E"/><stop offset="1" stop-color="#C2582A"/></linearGradient><linearGradient id="wave" gradientUnits="userSpaceOnUse" x1="272" y1="0" x2="752" y2="0"><stop offset="0.3" stop-color="#FBF7F2"/><stop offset="0.7" stop-color="#E07B48"/></linearGradient></defs><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#dark)"/>
+<path d="M272 512 A120 120 0 0 1 512 512 A120 120 0 0 0 752 512" fill="none" stroke="url(#wave)" stroke-width="150" stroke-linecap="round"/><rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="#fff" stroke-opacity="0.14" stroke-width="3"/></svg>

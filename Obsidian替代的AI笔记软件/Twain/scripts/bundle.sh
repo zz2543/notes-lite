@@ -12,6 +12,8 @@ cp "$BIN" "$APP/Contents/MacOS/Twain"
 # The agent-facing command. Built as twain-cli so it can't clash with Twain on a case-insensitive disk.
 cp "$(dirname "$BIN")/twain-cli" "$APP/Contents/Helpers/twain"
 cp -R "$(dirname "$BIN")/Twain_Twain.bundle" "$APP/Contents/Resources/"
+# Source art lives in design/icon (twain-icon.svg → render.sh → Twain.icns).
+cp design/icon/Twain.icns "$APP/Contents/Resources/Twain.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -21,6 +23,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Twain</string>
   <key>CFBundleIdentifier</key><string>app.twain.notes</string>
   <key>CFBundleExecutable</key><string>Twain</string>
+  <key>CFBundleIconFile</key><string>Twain</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>

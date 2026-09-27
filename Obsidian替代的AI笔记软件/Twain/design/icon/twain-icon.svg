@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- paper -->
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDFAF4"/>
+      <stop offset="1" stop-color="#EDE3D3"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.12" r="0.8">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- the two authors -->
+    <linearGradient id="ink" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#15130F"/>
+      <stop offset="1" stop-color="#3D3833"/>
+    </linearGradient>
+    <linearGradient id="clay" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#B35A30"/>
+      <stop offset="1" stop-color="#E4926A"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2A2622" stop-opacity="0"/>
+      <stop offset="0.35" stop-color="#2A2622"/>
+      <stop offset="1" stop-color="#2A2622"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#5A3A20" flood-opacity="0.28"/>
+    </filter>
+    <filter id="tile" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.22"/>
+    </filter>
+    <clipPath id="squircle"><rect x="100" y="100" width="824" height="824" rx="185" ry="185"/></clipPath>
+    <!-- one half of the nib: tip at origin, body upward -->
+    <path id="half" d="M0 6 L-4 -150 A22 22 0 0 1 -4 -194 L-4 -440 L-126 -440 Q-146 -440 -146 -420 L-146 -300 C-146 -200 -46 -90 0 6 Z"/>
+  </defs>
+
+  <!-- tile -->
+  <g filter="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#paper)"/>
+  </g>
+  <g clip-path="url(#squircle)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#sheen)" opacity="0.7"/>
+    <!-- faint ruled lines: a page -->
+    <g stroke="#C9B89E" stroke-opacity="0.35" stroke-width="4">
+      <line x1="100" y1="752" x2="924" y2="752"/>
+    </g>
+  </g>
+  <!-- glass rim -->
+  <rect x="101.5" y="101.5" width="821" height="821" rx="184" ry="184" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="3"/>
+
+  <!-- the written line, left behind by the shared tip -->
+  <path d="M196 724 C256 664 292 758 346 722 C384 696 414 692 440 702" fill="none" stroke="url(#trail)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the nib: two tines, one point -->
+  <g transform="translate(440 702) rotate(38) scale(1.05)" filter="url(#shadow)">
+    <use href="#half" fill="url(#ink)"/>
+    <use href="#half" fill="url(#clay)" transform="scale(-1 1)"/>
+    <!-- subtle facet highlights -->
+    <path d="M-20 -230 L-20 -420 L-110 -420 L-110 -300 C-110 -270 -70 -240 -20 -230Z" fill="#FFFFFF" opacity="0.05"/>
+    <path d="M20 -230 L20 -420 L110 -420 L110 -300 C110 -270 70 -240 20 -230Z" fill="#FFFFFF" opacity="0.12"/>
+  </g>
+</svg>

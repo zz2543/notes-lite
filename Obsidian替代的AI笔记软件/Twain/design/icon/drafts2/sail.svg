@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDF0E4"/><stop offset="1" stop-color="#F4B48F"/></linearGradient>
+<linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D06A38"/><stop offset="1" stop-color="#9A401D"/></linearGradient>
+<radialGradient id="sunglow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFF7EE" stop-opacity="0.95"/><stop offset="1" stop-color="#FFF7EE" stop-opacity="0"/></radialGradient>
+<linearGradient id="main" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEE6DC"/></linearGradient>
+<linearGradient id="jib" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A433D"/><stop offset="1" stop-color="#181614"/></linearGradient>
+<linearGradient id="refl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE6D4" stop-opacity="0.55"/><stop offset="1" stop-color="#FFE6D4" stop-opacity="0"/></linearGradient>
+<filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#7A300E" flood-opacity="0.3"/></filter>
+</defs>
+<g clip-path="url(#tile)">
+  <rect x="100" y="100" width="824" height="824" fill="url(#sky)"/>
+  <circle cx="330" cy="736" r="260" fill="url(#sunglow)"/>
+  <rect x="100" y="736" width="824" height="200" fill="url(#sea)"/>
+  <path d="M380 780 L690 780" stroke="url(#refl)" stroke-width="10" stroke-linecap="round" stroke="#FFE6D4" stroke-opacity="0.45"/>
+  <path d="M430 820 L640 820" stroke="#FFE6D4" stroke-opacity="0.3" stroke-width="10" stroke-linecap="round"/>
+  <path d="M480 860 L590 860" stroke="#FFE6D4" stroke-opacity="0.18" stroke-width="10" stroke-linecap="round"/>
+</g>
+<rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
+<g filter="url(#sh)">
+  <path d="M556 200 C668 344 742 520 752 682 L556 682 Z" fill="url(#main)"/>
+  <path d="M526 256 L526 682 L300 682 C362 536 444 382 526 256 Z" fill="url(#jib)"/>
+  <path d="M282 704 L776 704 C758 752 708 776 648 776 L412 776 C352 776 300 752 282 704 Z" fill="#1A1715"/>
+</g>
+<g stroke="#D8CCBF" stroke-width="15" stroke-linecap="round">
+  <line x1="592" y1="430" x2="648" y2="430"/><line x1="592" y1="488" x2="680" y2="488"/><line x1="592" y1="546" x2="700" y2="546"/><line x1="592" y1="604" x2="664" y2="604"/>
+</g>
+<rect x="672" y="582" width="10" height="44" rx="5" fill="#C9602F"/>
+</svg>
