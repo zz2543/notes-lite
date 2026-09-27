@@ -1,21 +1,16 @@
 import TwainCore
 import SwiftUI
 
-/// The page itself, or the review of an agent's changes to it. Usually the middle of the window;
-/// `embedded`, it is the draft beside a conversation, which leaves reviews to the middle.
+/// The detail column: the page itself, or the review of an agent's changes to it.
 struct NoteDetail: View {
     @Bindable var model: AppModel
-    var embedded = false
 
     var body: some View {
         let pend = model.activePending
-        let reviewing = model.showDiff && pend != nil && !embedded
-        let content = Group {
+        let reviewing = model.showDiff && pend != nil
+        Group {
             if reviewing, let pend {
                 ReviewView(model: model, review: pend)
-            } else if embedded, model.activeRel == nil {
-                ContentUnavailableView("没有打开的笔记", systemImage: "doc.text",
-                                       description: Text("从侧栏选一篇笔记，或者让 agent 写一篇。它写入的笔记会在这里打开。"))
             } else {
                 page(pending: pend)
             }
@@ -23,15 +18,10 @@ struct NoteDetail: View {
         // One continuous sheet of paper from the window's top edge down; the toolbar
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())
-        if embedded {
-            content
-        } else {
-            content
-                .toolbar { toolbar(reviewing: reviewing) }
-                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-                .navigationTitle(model.activeNote?.displayName ?? "共笔")
-                .navigationSubtitle(model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
-        }
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .navigationTitle(model.activeNote?.displayName ?? "共笔")
+        .navigationSubtitle(model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
+        .toolbar { toolbar(reviewing: reviewing) }
     }
 
     private func page(pending: PendingReview?) -> some View {
@@ -47,17 +37,6 @@ struct NoteDetail: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 if !model.zen { StatusPill(model: model).padding(Metrics.floatInset) }
-            }
-            .overlay(alignment: .bottomLeading) {
-                if embedded, let n = model.activeNote {
-                    Label(n.displayName, systemImage: "doc.text")
-                        .font(.caption).lineLimit(1).truncationMode(.middle)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .glassCapsule()
-                        .padding(Metrics.floatInset)
-                        .help(n.rel)
-                }
             }
             .overlay(alignment: .topTrailing) {
                 if model.zen {
@@ -84,7 +63,7 @@ struct NoteDetail: View {
                         let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
                         Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
                     } action: {
-                        Button("审阅") { model.review(pending.rel) }
+                        Button("审阅") { model.showDiff = true }
                             .buttonStyle(.glassProminent)
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -159,19 +138,9 @@ extension NoteDetail {
     @ToolbarContentBuilder
     fileprivate func toolbar(reviewing: Bool) -> some ToolbarContent {
         if reviewing {
-            if let p = model.reviewProgress {
-                ToolbarItem(placement: .primaryAction) {
-                    Text("第 \(p.index) / \(p.total) 篇").font(.callout).monospacedDigit().foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .help("处理完这篇会自动打开下一篇；全部处理完回到刚才的位置")
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("稍后", systemImage: "clock") {
-                    if model.reviewReturn != nil { model.endReviewFlow(done: false) } else { model.showDiff = false }
-                }
-                .help(model.reviewReturn != nil ? "稍后再审阅，回到刚才的位置" : "稍后审阅")
+                Button("稍后", systemImage: "clock") { model.showDiff = false }
+                    .help("稍后审阅 ⎋")
                 let proposal = model.activePending?.isProposal == true
                 Button(proposal ? "全部拒绝" : "全部还原", systemImage: "arrow.uturn.backward") { model.finishReview(all: .rejected) }
                     .labelStyle(.titleAndIcon)
@@ -185,16 +154,28 @@ extension NoteDetail {
                     .keyboardShortcut(.defaultAction)
             }
         } else {
-            CommonTools(model: model)
+            if !model.pending.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: model.reviewNext) {
+                        Label("审阅 \(model.pending.values.reduce(0) { $0 + $1.hunks.count }) 处改动", systemImage: "checklist")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .help("审阅 agent 的改动 ⇧⌘R")
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("专注模式", systemImage: "arrow.up.left.and.arrow.down.right", action: model.toggleZen)
                     .help("专注模式 ⌘.")
+                Button("命令面板", systemImage: "magnifyingglass", action: model.openPalette)
+                    .help("搜索笔记与命令 ⌘K")
             }
-            ToolbarSpacer(.fixed, placement: .primaryAction)
         }
+        ToolbarSpacer(.fixed, placement: .primaryAction)
         ToolbarItem(placement: .primaryAction) {
-            Button("旁注", systemImage: "sidebar.trailing", action: model.toggleSidePanel)
-                .help("Agent 旁注 ⌘J")
+            Button("Agent", systemImage: "sidebar.trailing", action: model.toggleAgent)
+                .help("Agent 面板 ⌘J")
         }
     }
 }

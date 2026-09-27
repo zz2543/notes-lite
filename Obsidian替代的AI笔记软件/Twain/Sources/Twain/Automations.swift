@@ -46,7 +46,6 @@ extension AppModel {
 
     /// Reports the selection to those who asked for it, once it has held still for half a second.
     func selectionChanged() {
-        updateSelectionPreview()
         guard subscribers.values.contains(where: { $0.events?.contains("selection.changed") == true }) else { return }
         selectionEventWork?.cancel()
         let work = DispatchWorkItem { [weak self] in

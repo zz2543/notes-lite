@@ -6,7 +6,6 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $model.selection) {
-            TaskSection(model: model)
             if let v = model.vault {
                 Section {
                     let q = model.sidebarFilter.trimmingCharacters(in: .whitespaces)
@@ -42,6 +41,26 @@ struct SidebarView: View {
             guard model.renaming == nil, let rel = model.selection, model.vault?.note(rel) != nil else { return .ignored }
             model.renaming = rel
             return .handled
+        }
+        .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
+        .safeAreaBar(edge: .bottom) {
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button(action: model.newNote) {
+                        Label("新建笔记", systemImage: "square.and.pencil")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .help("新建笔记 ⌘N")
+                    Button { model.openSettings(.agent) } label: {
+                        Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
+                    }
+                    .help("设置 ⌘,")
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+            }
+            .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
         }
         .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
         .safeAreaBar(edge: .bottom) {
@@ -217,7 +236,7 @@ struct AgentStatusRow: View {
         }()
         Button {
             model.agentPick = kind
-            model.revealAgent()
+            if !model.agentPanel { model.toggleAgent() }
         } label: {
             LabeledContent {
                 HStack(spacing: 6) {
@@ -234,79 +253,5 @@ struct AgentStatusRow: View {
             }
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// What agents are doing and have done, newest and most urgent first. A task opens as its
-/// conversation; the full list is one row away.
-struct TaskSection: View {
-    @Bindable var model: AppModel
-    private static let shown = 5
-
-    var body: some View {
-        let all = model.listedSessions
-        Section {
-            if all.isEmpty {
-                Button(action: model.openTaskBar) {
-                    Label("交给 agent 一件事", systemImage: "sparkles")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("⌘L；在笔记里选中一段，也可以直接让它改写")
-            }
-            ForEach(all.prefix(Self.shown)) { s in TaskSidebarRow(model: model, session: s) }
-            if all.count > Self.shown || (!all.isEmpty && model.center != .tasks) {
-                Button(action: model.showTasks) {
-                    LabeledContent {
-                        Text("\(all.count)").monospacedDigit()
-                    } label: {
-                        Label("全部任务", systemImage: "list.bullet.rectangle")
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("全部任务 ⇧⌘T")
-            }
-        } header: {
-            HStack {
-                Text("任务")
-                Spacer()
-                Button("新对话", systemImage: "plus", action: model.newThread)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .help("新对话 ⇧⌘L")
-            }
-        }
-    }
-}
-
-struct TaskSidebarRow: View {
-    @Bindable var model: AppModel
-    let session: AgentSession
-
-    var body: some View {
-        let state = model.state(of: session)
-        let current = model.centerSession === session
-        Button { model.showThread(session) } label: {
-            LabeledContent {
-                if state != .done { Text(state.label).font(.caption).foregroundStyle(state.color) }
-            } label: {
-                Label {
-                    Text(session.title).lineLimit(1)
-                } icon: {
-                    if state == .running {
-                        ProgressView().controlSize(.mini)
-                    } else {
-                        Image(systemName: state == .done ? Theme.agentSymbol(session.agent) : state.icon)
-                            .foregroundStyle(state == .done ? Theme.agentColor(session.agent) : state.color)
-                    }
-                }
-            }
-            .padding(.vertical, 1)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .fontWeight(current ? .semibold : .regular)
-        .help(model.lastLine(session) ?? session.title)
     }
 }

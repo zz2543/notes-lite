@@ -105,38 +105,7 @@ final class AppModel {
 
     // MARK: chrome
     var columnVisibility: NavigationSplitViewVisibility = .all
-    /// What the middle of the window shows: the page, a conversation, or every task.
-    var center: CenterDoc = .note
-    /// Places left by navigating, for ⌘[ and ⌘].
-    var backStack: [Place] = []
-    var forwardStack: [Place] = []
-    /// The side notes (⌘J): the agent beside a page, the draft beside a conversation.
     var agentPanel = true
-    var draftPanel = true
-    /// Beside a conversation, the panel opens whatever file the agent starts writing.
-    var followAgent = true { didSet { save("followAgent", followAgent) } }
-    /// ⌘L: the bar that starts a task.
-    var taskBar = false
-    var taskText = ""
-    var taskScope: TaskScope = .note
-    /// Return opens a conversation rather than a background task (after "讨论" on a selection).
-    var taskThreadFirst = false
-    /// The toolbar's list of what waits on the user.
-    var inboxOpen = false
-    /// Where the review flow (⇧⌘R) goes back to once the queue is empty; nil outside the flow.
-    var reviewReturn: Place?
-    /// A rewrite of part of the page, shown in place until accepted or rejected.
-    var inline: InlineEdit?
-    /// The quick-action bar over a selection in the page.
-    var selectionBar: SelectionBar?
-    /// Open tasks handed to an agent from the page, by "rel:line".
-    var delegatedTasks: [String: UUID] = [:]
-    /// Notes the next prompt points the agent at, besides the open one.
-    var contextPins: [String] = []
-    /// Send the editor's selection along as a quote.
-    var quoteSelection = true
-    /// The selection as the composer shows it; mirrors `editorSelection`, which isn't observed.
-    var selectionPreview: SelectionQuote?
     var modelPickerOpen = false
     var zen = false
     var palette = false
@@ -146,10 +115,9 @@ final class AppModel {
     var sidebarFilter = ""
     /// The sidebar row whose name is being edited in place.
     var renaming: String?
-    /// Sidebar list selection; choosing a row opens the note as the page. `open` keeps it in
-    /// step with `activeRel`, which is what tells a click from that.
+    /// Sidebar list selection; choosing a row opens the note.
     var selection: String? {
-        didSet { if let s = selection, s != activeRel { showNote(s) } }
+        didSet { if let s = selection, s != activeRel { open(s) } }
     }
     @ObservationIgnored var openSettingsAction: (() -> Void)?
     @ObservationIgnored private var beforeZen: (NavigationSplitViewVisibility, Bool)?
@@ -208,9 +176,7 @@ final class AppModel {
     var effortFallback: [AgentKind: String] = [:]
     var modelsListedBy: [AgentKind: String] = [:]
     var pending: [String: PendingReview] = [:]
-    var writing: Set<String> = [] {
-        didSet { if let rel = writing.subtracting(oldValue).sorted().first { agentStartedWriting(rel) } }
-    }
+    var writing: Set<String> = []
 
     @ObservationIgnored private var saveWork: DispatchWorkItem?
     @ObservationIgnored private var toastWork: DispatchWorkItem?
@@ -270,7 +236,6 @@ final class AppModel {
         mcpOn = b("mcpOn", true)
         automationsOn = b("automationsOn", true)
         automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
-        followAgent = b("followAgent", true)
         agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
             ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
         })
@@ -616,7 +581,7 @@ final class AppModel {
     // MARK: agents
 
     var activeSession: AgentSession? {
-        sessions.first { $0.id == activeSessionID } ?? sessions.first { !$0.inline }
+        sessions.first { $0.id == activeSessionID } ?? sessions.first
     }
 
     func agentEnabled(_ k: AgentKind) -> Bool { k == .claude ? claudeOn : codexOn }
@@ -687,9 +652,7 @@ final class AppModel {
 
     /// Starts a run the user asked for. `target` continues that session (sending review feedback
     /// back, say); otherwise the active session is reused when it fits, or a new one begins.
-    /// A `background` run leaves the screen as it is: the task shows up in the sidebar instead.
-    func runAgent(prompt: String, agent: AgentKind, model: String? = nil, effort: String? = nil, in target: AgentSession? = nil,
-                  background: Bool = false) {
+    func runAgent(prompt: String, agent: AgentKind, model: String? = nil, effort: String? = nil, in target: AgentSession? = nil) {
         let prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, vault != nil else { return }
         var session = target ?? activeSession
@@ -703,12 +666,11 @@ final class AppModel {
             session = s
         }
         let s = session!
-        if s.title == "新会话" || s.title == "新对话" { s.title = Self.title(for: prompt) }
-        if !background {
-            activeSessionID = s.id
-            revealAgent()
-            agentInput = ""
-        }
+        if s.title == "新会话" { s.title = String(prompt.prefix(10)) }
+        activeSessionID = s.id
+        if zen { toggleZen() }
+        agentPanel = true
+        agentInput = ""
         launch(s, prompt: prompt, model: model, effort: effort)
     }
 
@@ -731,7 +693,7 @@ final class AppModel {
         let effort = effort ?? effortArgument(agent)
         s.model = model.isEmpty ? modelFallback[agent] : model
         s.effort = effort.isEmpty ? effectiveEffort(agent) : effort
-        let readOnly = s.source == .automation || s.inline
+        let readOnly = s.source == .automation
 
         let git = gitSnapshot && !readOnly ? Git.snapshot(v.root, message: "Twain: snapshot before \(agent.displayName)") : nil
         runSnapshots[s.id] = (v.snapshotAll(), git)
@@ -744,8 +706,7 @@ final class AppModel {
             ? AgentArguments.MCP(command: TwainTool.managedLink.path, env: env.filter { $0.key != "PATH" }) : nil
         // Claude Code gives up on a tool call after its own default; questions may wait longer.
         if mcp != nil { env["MCP_TOOL_TIMEOUT"] = "900000" }
-        let context = s.inline ? Self.inlineContext : agentContext(tool: tool != nil, mcp: mcp != nil, readOnly: readOnly)
-            + draftContext(s)
+        let context = agentContext(tool: tool != nil, mcp: mcp != nil, readOnly: readOnly)
         let args = AgentArguments.build(kind: agent, prompt: prompt, context: context, root: v.rootPath,
                                         resume: s.cliSessionID, model: model, effort: effort, socket: server?.path,
                                         version: cli[agent]?.version, mcp: mcp, readOnly: readOnly)
@@ -769,7 +730,6 @@ final class AppModel {
                 s.running = false
                 s.process = nil
                 self.finishRun(s)
-                self.runFinished(s)
                 self.emit("session.finished", source: self.eventSource(for: s),
                           ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue), "status": JSONValue(Int(status))])
             })
@@ -871,9 +831,7 @@ final class AppModel {
         }
         // A proposal for this note no longer matches the file the agent just wrote.
         if let old = pending[rel], old.isProposal { markStale(old) }
-        // A conversation's draft is the agent's to write: the user edits it directly, not by review.
-        let draft = session.map { $0.draftRel == rel && !$0.draftDone } ?? false
-        if hunks.isEmpty || draft || (reviewMode == .auto && session?.source != .automation) {
+        if hunks.isEmpty || (reviewMode == .auto && session?.source != .automation) {
             pending[rel] = nil
             return
         }
@@ -1012,7 +970,6 @@ final class AppModel {
         let s = AgentSession(agent: agentPick, source: .app, title: "新会话")
         sessions.append(s)
         activeSessionID = s.id
-        contextPins = []
     }
 
     // MARK: stats
@@ -1031,7 +988,6 @@ final class AppModel {
 
     // MARK: chrome actions
 
-    /// Zen is a writing mode: entering it from elsewhere brings the page forward, leaving it goes back.
     func toggleZen() {
         palette = false
         if zen {
@@ -1039,12 +995,16 @@ final class AppModel {
             if let (cols, agent) = beforeZen { columnVisibility = cols; agentPanel = agent }
             beforeZen = nil
         } else {
-            if center != .note { showNote(activeRel) }
             beforeZen = (columnVisibility, agentPanel)
             zen = true
             columnVisibility = .detailOnly
             agentPanel = false
         }
+    }
+
+    func toggleAgent() {
+        if zen { toggleZen() }
+        agentPanel.toggle()
     }
     func openPalette() { palette = true; paletteQuery = ""; paletteSel = 0 }
     func openSettings(_ tab: SettingsTab) {
@@ -1053,7 +1013,10 @@ final class AppModel {
     }
 
     func reviewNext() {
-        startReviewFlow(at: activeRel.flatMap { pending[$0] != nil ? $0 : nil })
+        guard let rel = activeRel.flatMap({ pending[$0] != nil ? $0 : nil }) ?? pending.keys.sorted().first else { return }
+        if zen { toggleZen() }
+        open(rel)
+        showDiff = true
     }
 
     func trash(_ rel: String) {

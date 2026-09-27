@@ -1,19 +1,10 @@
 import TwainCore
 import SwiftUI
 
-/// One conversation with an agent, and the composer that starts the next turn. Beside a page it
-/// is the side notes, following whichever session is active. Given a `session`, it is that
-/// conversation in the middle of the window, in a readable column, its draft beside it.
+/// The trailing inspector: one conversation with an agent, and the composer that starts the next turn.
 struct AgentInspector: View {
     @Bindable var model: AppModel
-    /// The conversation shown in the middle; nil for the side notes.
-    var session: AgentSession? = nil
     @FocusState private var inputFocused: Bool
-
-    private var stage: Bool { session != nil }
-
-    /// Readable width of the conversation when it has the whole middle of the window.
-    static let stageWidth: CGFloat = 720
 
     private static let suggestions: [(String, String)] = [
         ("text.append", "总结这篇笔记，在开头加一段摘要"),
@@ -21,15 +12,8 @@ struct AgentInspector: View {
         ("list.bullet.indent", "把这篇笔记改写成清晰的层级结构"),
     ]
 
-    /// Things worth talking through, offered in an empty conversation.
-    private static let threadSuggestions: [(String, String)] = [
-        ("lightbulb", "帮我想清楚一个问题：先问我背景，再一起整理成文"),
-        ("books.vertical", "回顾库里和当前笔记相关的内容，说说还缺什么"),
-        ("calendar", "根据这周改过的笔记，和我一起写本周回顾"),
-    ]
-
     var body: some View {
-        let sess = session ?? model.activeSession
+        let sess = model.activeSession
         VStack(spacing: 0) {
             if let sess, !sess.items.isEmpty {
                 transcript(sess)
@@ -40,52 +24,21 @@ struct AgentInspector: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaBar(edge: .top) {
             VStack(spacing: 8) {
-                if stage, let sess {
-                    threadHeader(sess)
-                    TouchedStrip(model: model, session: sess)
-                } else {
-                    AgentBar(model: model)
-                    if sess != nil { sessionBar(sess) }
-                }
+                AgentBar(model: model)
+                if !model.sessions.isEmpty { sessionBar(sess) }
             }
-            .frame(maxWidth: stage ? Self.stageWidth : .infinity)
             .padding(.horizontal, Metrics.floatInset).padding(.top, 8)
-            .frame(maxWidth: .infinity)
         }
         .safeAreaBar(edge: .bottom) { composer }
-        .onAppear { if stage { inputFocused = true } }
     }
 
-    // MARK: headers
-
-    /// A conversation's own header: who's talking, on what, and whether it's still working.
-    private func threadHeader(_ s: AgentSession) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: Theme.agentSymbol(s.agent)).foregroundStyle(Theme.agentColor(s.agent))
-            VStack(alignment: .leading, spacing: 0) {
-                Text(s.agent.displayName).font(.callout.weight(.medium))
-                Text(meta(s)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            if s.source == .app, s.running {
-                Button("停止", systemImage: "stop.fill") { model.stopAgent(s) }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .help("停止")
-            }
-        }
-        .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 6)
-        .frame(minHeight: 44)
-        .glassCapsule()
-        .help("工作目录：" + (model.vault?.rootPath ?? ""))
-    }
+    // MARK: session bar
 
     private func sessionBar(_ sess: AgentSession?) -> some View {
         HStack(spacing: 8) {
             Menu {
                 Picker("会话", selection: Binding(get: { sess?.id }, set: { model.activeSessionID = $0 })) {
-                    ForEach(model.sessions.filter { !$0.inline || $0.id == sess?.id }) { s in
+                    ForEach(model.sessions) { s in
                         Label(sessionTitle(s), systemImage: s.source == .terminal ? "apple.terminal" : Theme.agentSymbol(s.agent))
                             .tag(Optional(s.id))
                     }
@@ -117,13 +70,6 @@ struct AgentInspector: View {
                         Button("停止", systemImage: "stop.fill") { model.stopAgent(sess) }
                             .help("停止")
                     }
-                    if let sess, !sess.items.isEmpty {
-                        Button("在中间展开", systemImage: "arrow.up.left.and.arrow.down.right") {
-                            sess.isThread = true
-                            model.showThread(sess)
-                        }
-                        .help("把这段对话放到中间，右侧给它一篇草稿")
-                    }
                     Button("新会话", systemImage: "square.and.pencil", action: model.newSession)
                         .help("新会话")
                 }
@@ -145,7 +91,7 @@ struct AgentInspector: View {
             parts.append("终端 pid \(s.pid.map(String.init) ?? "?")")
             parts.append(!s.alive ? "已结束" : model.watchTerminal ? "监听中" : "未监听")
         } else {
-            parts.append(s.model.map { model.modelName($0, for: s.agent) } ?? model.modelLabel(s.agent))
+            parts.append(s.model.map { model.modelName($0, for: s.agent) } ?? s.agent.displayName)
             if let e = s.effort { parts.append(Effort.name(e)) }
             if let id = s.cliSessionID { parts.append("会话 " + String(id.prefix(8))) }
         }
@@ -158,12 +104,8 @@ struct AgentInspector: View {
     private func transcript(_ sess: AgentSession) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                let finals = Self.turnFinalReplies(sess.items)
-                LazyVStack(alignment: .leading, spacing: stage ? 16 : 12) {
-                    ForEach(sess.items) { item in
-                        ItemView(model: model, session: sess, item: item, replyActions: finals.contains(item.id), inThread: stage)
-                            .id(item.id)
-                    }
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(sess.items) { ItemView(model: model, session: sess, item: $0).id($0.id) }
                     if sess.running && sess.source == .app {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -172,9 +114,7 @@ struct AgentInspector: View {
                         .id("running")
                     }
                 }
-                .padding(.horizontal, stage ? 24 : 16).padding(.vertical, 12)
-                .frame(maxWidth: stage ? Self.stageWidth + 48 : .infinity)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16).padding(.vertical, 12)
             }
             .scrollEdgeEffectStyle(.soft, for: .all)
             .onChange(of: sess.items.count) { _, _ in
@@ -184,23 +124,19 @@ struct AgentInspector: View {
     }
 
     private var emptyState: some View {
-        let agent = session?.agent ?? model.agentPick
-        return VStack(spacing: 18) {
-            AgentLogo(agent: agent)
-                .frame(width: stage ? 100 : 84, height: stage ? 100 : 84)
-                .id(agent)
+        VStack(spacing: 18) {
+            AgentLogo(agent: model.agentPick)
+                .frame(width: 84, height: 84)
+                .id(model.agentPick)
                 .transition(.blurReplace)
             VStack(spacing: 6) {
-                Text(stage ? "和 \(agent.displayName) 讨论" : "描述一个任务").font(stage ? .title2.weight(.semibold) : .title3.weight(.semibold))
-                Text(stage
-                     ? "有用的回复点「收进草稿」，或者直接说「写进草稿」。草稿在右边，写完点「完成草稿」，它就成为一篇笔记。"
-                     : "Claude Code 或 Codex 会直接读写库里的 Markdown 文件。每次改动都进入审阅，可以逐段接受或还原。")
+                Text("描述一个任务").font(.title3.weight(.semibold))
+                Text("Claude Code 或 Codex 会直接读写库里的 Markdown 文件。每次改动都进入审阅，可以逐段接受或还原。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 460)
             }
-            if model.activeRel != nil || stage {
+            if model.activeRel != nil {
                 GlassEffectContainer(spacing: 8) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(suggestions, id: \.1) { icon, prompt, run in
@@ -216,7 +152,6 @@ struct AgentInspector: View {
                         }
                     }
                 }
-                .frame(maxWidth: stage ? 460 : .infinity)
                 .padding(.top, 4)
             }
         }
@@ -227,9 +162,6 @@ struct AgentInspector: View {
     /// The vault's note commands, or the built-in prompts when it has none.
     private var suggestions: [(String, String, () -> Void)] {
         let m = model
-        if let s = session {
-            return Self.threadSuggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: s.agent, in: s) }) }
-        }
         let own = m.userCommands.filter { $0.scope == .note }.prefix(3)
         if !own.isEmpty {
             return own.map { c in (c.icon, c.title, {
@@ -239,31 +171,23 @@ struct AgentInspector: View {
         return Self.suggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: m.agentPick) }) }
     }
 
-    /// The last reply of each turn — the one worth keeping — gets the note actions.
-    static func turnFinalReplies(_ items: [SessionItem]) -> Set<UUID> {
-        var out = Set<UUID>()
-        var last: UUID?
-        for item in items {
-            switch item.kind {
-            case .agent: last = item.id
-            case .user: if let l = last { out.insert(l) }; last = nil
-            default: break
-            }
-        }
-        if let last { out.insert(last) }
-        return out
-    }
-
     // MARK: composer
 
     private var composer: some View {
-        let agent = session?.agent ?? model.agentPick
-        return VStack(alignment: .leading, spacing: 10) {
-            ContextShelf(model: model, inThread: stage)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if let n = model.activeNote {
+                    Label((n.rel as NSString).lastPathComponent, systemImage: "doc.text")
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                Label("AGENTS.md", systemImage: "doc.badge.gearshape").lineLimit(1)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .labelStyle(TagLabelStyle())
 
             HStack(alignment: .bottom, spacing: 8) {
-                TextField(stage ? "接着说，或者让它「写进草稿」…" : "让 \(agent.displayName) 修改当前笔记…",
-                          text: $model.agentInput, axis: .vertical)
+                TextField("让 \(model.agentPick.displayName) 修改当前笔记…", text: $model.agentInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
                     .lineLimit(2...8)
@@ -286,20 +210,11 @@ struct AgentInspector: View {
         .floatingGlass(radius: Metrics.cardRadius + 4)
         .contentShape(.rect)
         .onTapGesture { inputFocused = true }
-        .frame(maxWidth: stage ? Self.stageWidth : .infinity)
         .padding(Metrics.floatInset)
-        .frame(maxWidth: .infinity)
     }
 
     private func send() {
-        guard !model.agentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if let s = session {
-            // A conversation's draft is already its context; don't quote the draft back at it.
-            model.runAgent(prompt: model.composedPrompt(model.agentInput, quote: false), agent: s.agent, in: s)
-            model.agentInput = ""
-        } else {
-            model.runAgent(prompt: model.composedPrompt(model.agentInput), agent: model.agentPick)
-        }
+        model.runAgent(prompt: model.agentInput, agent: model.agentPick)
     }
 }
 
@@ -544,8 +459,6 @@ struct ItemView: View {
     @Bindable var model: AppModel
     let session: AgentSession
     let item: SessionItem
-    var replyActions = false
-    var inThread = false
 
     var body: some View {
         switch item.kind {
@@ -572,13 +485,8 @@ struct ItemView: View {
             .font(.caption.monospaced())
             .foregroundStyle(.secondary)
         case let .agent(t):
-            VStack(alignment: .leading, spacing: 6) {
-                AgentMarkdownReply(source: t)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if replyActions && !(session.running && item.id == session.items.last?.id) {
-                    ReplyActions(model: model, session: session, text: t, inThread: inThread)
-                }
-            }
+            AgentMarkdownReply(source: t)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case let .error(t):
             Label {
                 Text(t).textSelection(.enabled)
@@ -609,10 +517,13 @@ struct ItemView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if pendingNow {
-                    Button("审阅") { model.review(rel) }
-                        .buttonStyle(.glassProminent)
+                    Button("审阅") {
+                        model.open(rel)
+                        model.showDiff = true
+                    }
+                    .buttonStyle(.glassProminent)
                 } else if model.vault?.note(rel) != nil {
-                    Button("打开") { model.peek(rel) }
+                    Button("打开") { model.open(rel) }
                         .buttonStyle(.glass)
                 }
             }
@@ -634,7 +545,7 @@ struct ItemView: View {
 }
 
 /// An agent's `ask_user`: the question, its options, and room to answer in your own words.
-struct QuestionCard: View {
+private struct QuestionCard: View {
     @Bindable var model: AppModel
     let question: AgentQuestion
     @State private var text = ""

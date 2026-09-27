@@ -148,9 +148,8 @@ extension AppModel {
     }
 
     /// `all`: accept or reject everything; nil accepts whatever is still undecided.
-    /// `rel` defaults to the open note; the inbox resolves others without opening them.
-    func finishReview(all: HunkState?, rel target: String? = nil) {
-        guard let v = vault, let rel = target ?? activeRel, let r = pending[rel] else { return }
+    func finishReview(all: HunkState?) {
+        guard let v = vault, let rel = activeRel, let r = pending[rel] else { return }
         let hunks = r.hunks.map { h -> Hunk in
             var h = h
             if let all { h.state = all } else if h.state == .pending { h.state = .accepted }
@@ -164,7 +163,7 @@ extension AppModel {
             let disk = v.diskContent(rel)
             guard r.isNew ? disk == nil : disk.map(Markdown.lines) == r.baseline else {
                 markStale(r)
-                if rel == activeRel { showDiff = false }
+                showDiff = false
                 showToast("\(name) 在提案之后被改过，这份提案已作废")
                 return
             }
@@ -172,7 +171,7 @@ extension AppModel {
         let result = LineDiff.apply(hunks, to: r.baseline).joined(separator: "\n")
         if !(r.isNew && accepted == 0) { v.forceWrite(rel, result) }
         pending[rel] = nil
-        if rel == activeRel { showDiff = false }
+        showDiff = false
         if r.isNew, accepted > 0 { v.scan(); emit("note.created", source: "user", ["path": .string(rel)]) }
         if activeRel == rel { reloadEditor() }
 
@@ -199,7 +198,6 @@ extension AppModel {
         } else {
             showToast(r.isProposal ? "已拒绝全部提议，\(name) 没有改动" : "已还原到 agent 写入前的版本")
         }
-        if reviewReturn != nil, rel == activeRel { advanceReview() }
     }
 
     /// Shows the file as it is on disk now, e.g. after a review wrote it.
@@ -240,7 +238,8 @@ extension AppModel {
         questionReplies[q.id] = reply
         s.items.append(SessionItem(kind: .question(q.id)))
         activeSessionID = s.id
-        revealAgent()
+        if zen { toggleZen() }
+        agentPanel = true
         showToast("\(s.agent.displayName) 有一个问题等你回答")
         NSApp.requestUserAttention(.informationalRequest)
 
