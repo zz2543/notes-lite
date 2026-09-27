@@ -373,6 +373,24 @@ public enum Markdown {
         return (out + ns.substring(from: last), count)
     }
 
+    /// `[[旧/笔记]]` → `[[新/笔记]]` after the folder `old` became `new`.
+    public static func movingWikiLinks(in text: String, from old: String, to new: String) -> (text: String, count: Int) {
+        let ns = text as NSString
+        var out = "", last = 0, count = 0
+        let prefix = old.lowercased() + "/"
+        for m in wikiRe.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let inner = m.range(at: 1)
+            let target = ns.substring(with: inner)
+            guard target.lowercased().hasPrefix(prefix) else { continue }
+            out += ns.substring(with: NSRange(location: last, length: inner.location - last))
+            out += new + "/" + target.dropFirst(prefix.count)
+            last = NSMaxRange(inner)
+            count += 1
+        }
+        guard count > 0 else { return (text, 0) }
+        return (out + ns.substring(from: last), count)
+    }
+
     /// The text of the first line when it is a `# ` heading.
     public static func titleHeading(_ text: String) -> String? {
         let first = text.prefix { $0 != "\n" }

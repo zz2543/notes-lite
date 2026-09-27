@@ -24,7 +24,24 @@ struct NoteDetail: View {
         .toolbar { toolbar(reviewing: reviewing) }
     }
 
+    @ViewBuilder
     private func page(pending: PendingReview?) -> some View {
+        if let why = model.unreadable {
+            ContentUnavailableView {
+                Label("无法作为笔记打开", systemImage: "doc.questionmark")
+            } description: {
+                Text(why)
+            } actions: {
+                Button("在 Finder 中显示") {
+                    if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+                }
+            }
+        } else {
+            editorPage(pending: pending)
+        }
+    }
+
+    private func editorPage(pending: PendingReview?) -> some View {
         EditorView(model: model)
             // The page runs under the toolbar; the text view keeps its own top margin.
             .overlay(alignment: .topLeading) {

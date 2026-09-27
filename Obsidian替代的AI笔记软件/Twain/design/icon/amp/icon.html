@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:SFR;src:url('file:///System/Library/Fonts/SFNSRounded.ttf')}
+html,body{margin:0;width:1024px;height:1024px;background:transparent;font-synthesis:none}
+.tile{position:absolute;left:100px;top:100px;width:824px;height:824px;border-radius:185px;overflow:hidden;
+  background:var(--bg);box-shadow:0 18px 40px rgba(10,10,40,.28)}
+.tile::before{content:"";position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(90% 70% at 22% 8%,rgba(255,255,255,.34),rgba(255,255,255,0) 60%),
+             radial-gradient(80% 60% at 90% 110%,rgba(0,0,0,.22),rgba(0,0,0,0) 60%)}
+.tile::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  box-shadow:inset 0 3px 0 rgba(255,255,255,.38), inset 0 0 0 2px rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.10)}
+.amp{position:absolute;left:0;right:0;top:0;bottom:0;display:grid;place-items:center}
+.amp span{font:var(--w) var(--size) SFR;line-height:1;transform:translate(var(--dx),var(--dy));
+  background:linear-gradient(180deg,#FFFFFF 30%,var(--ink2) 100%);-webkit-background-clip:text;color:transparent;
+  filter:drop-shadow(0 14px 22px var(--shadow)) drop-shadow(0 2px 3px var(--shadow))}
+</style></head><body>
+<div class="tile"><div class="amp"><span>&amp;</span></div></div>
+<script>
+const P = Object.assign({bg:'linear-gradient(160deg,#6D7CFF 0%,#3B36E6 55%,#2B1DB5 100%)', w:'800', size:'650px', dx:'10px', dy:'-23px',
+  ink2:'#E9ECFF', shadow:'rgba(20,10,120,.35)'}, JSON.parse(decodeURIComponent(location.hash.slice(1)||'{}')));
+const s = document.documentElement.style;
+s.setProperty('--bg', P.bg); s.setProperty('--w', P.w); s.setProperty('--size', P.size); s.setProperty('--dx', P.dx); s.setProperty('--dy', P.dy);
+s.setProperty('--ink2', P.ink2); s.setProperty('--shadow', P.shadow);
+</script></body></html>

@@ -356,3 +356,11 @@ final class AgentModelTests: XCTestCase {
         XCTAssertEqual(Effort.name("xhigh"), "超高")
     }
 }
+
+final class FolderLinkTests: XCTestCase {
+    func testMovingWikiLinks() {
+        let (out, n) = Markdown.movingWikiLinks(in: "见 [[项目/同步]] 和 [[项目/子/a|别名]]，[[项目甲/x]] 不变", from: "项目", to: "工作")
+        XCTAssertEqual(out, "见 [[工作/同步]] 和 [[工作/子/a|别名]]，[[项目甲/x]] 不变")
+        XCTAssertEqual(n, 2)
+    }
+}

@@ -206,12 +206,28 @@ final class TerminalWatcher {
         try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
+    /// What a terminal agent wrote lately: paths its edit tools touched and the text of its
+    /// recent steps (shell commands, patches). Empty when the transcript has been quiet for
+    /// `within` seconds, so an edit made in another editor is never pinned on an idle agent.
+    static func recentWrites(transcript u: URL, agent: AgentKind, root: String, within: TimeInterval = 30) -> (paths: Set<String>, steps: [String]) {
+        guard let m = modified(u), Date().timeIntervalSince(m) < within else { return ([], []) }
+        let events = events(transcript: u, agent: agent, root: root, cap: 256 * 1024)
+        var paths = Set<String>()
+        var steps: [String] = []
+        for e in events.suffix(40) {
+            if case let .step(_, text, write) = e {
+                if let write { paths.insert(write) }
+                steps.append(text)
+            }
+        }
+        return (paths, steps)
+    }
+
     /// Parses (the tail of) a transcript into events.
-    static func events(transcript u: URL, agent: AgentKind, root: String) -> [AgentEvent] {
+    static func events(transcript u: URL, agent: AgentKind, root: String, cap: UInt64 = 3 * 1024 * 1024) -> [AgentEvent] {
         guard let h = try? FileHandle(forReadingFrom: u) else { return [] }
         defer { try? h.close() }
         let size = (try? h.seekToEnd()) ?? 0
-        let cap: UInt64 = 3 * 1024 * 1024
         try? h.seek(toOffset: size > cap ? size - cap : 0)
         var data = h.readDataToEndOfFile()
         if size > cap, let nl = data.firstIndex(of: 0x0A) { data.removeSubrange(data.startIndex...nl) }

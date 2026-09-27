@@ -1,0 +1,228 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head>
+<body><canvas id="c" width="1024" height="1024"></canvas>
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 outColor;
+uniform vec2 res;
+uniform int shape;
+uniform vec3 bgTop, bgBot, colA, colB;
+uniform float lightBg;
+uniform sampler2D glyph;
+uniform float span, R, zScale, tilt, gradAng;
+
+// ---------- shapes ----------
+vec2 smin(float a, float b, float k){ float h = clamp(0.5 + 0.5*(b - a)/k, 0.0, 1.0); return vec2(mix(b, a, h) - k*h*(1.0 - h), h); }
+float sdTorus(vec3 p, float R, float r){ vec2 q = vec2(length(p.xy) - R, p.z); return length(q) - r; }
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){ vec3 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0); return length(pa - ba*h) - r; }
+float sdEll(vec3 p, vec3 r){ float k0 = length(p/r); float k1 = length(p/(r*r)); return k0*(k0 - 1.0)/k1; }
+mat3 rotX(float a){ float c = cos(a), s = sin(a); return mat3(1,0,0, 0,c,s, 0,-s,c); }
+mat3 rotY(float a){ float c = cos(a), s = sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
+mat3 rotZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0, -s,c,0, 0,0,1); }
+
+// x: distance, y: 1 = belongs to A, 0 = belongs to B
+vec2 map(vec3 p){
+  if (shape == 5) {            // an inflated glyph (the ampersand)
+    vec3 q = rotX(tilt)*p;
+    vec2 t = q.xy/span + 0.5;
+    vec2 tc = clamp(t, 0.002, 0.998);
+    float d2 = texture(glyph, vec2(tc.x, 1.0 - tc.y)).r + length((t - tc)*span);
+    float e = d2 + R;
+    float z = q.z*zScale;
+    float dist = (e < 0.0 ? abs(z) - R : length(vec2(e, z)) - R)/zScale;
+    vec2 g = vec2(cos(gradAng), sin(gradAng));
+    return vec2(dist*0.9, clamp(0.5 + dot(q.xy, g)*0.95, 0.0, 1.0));
+  }
+  if (shape == 0) {            // two drops merging
+    float a = length(p - vec3(-0.22, 0.20, 0.0)) - 0.38;
+    float b = length(p - vec3( 0.26,-0.22, 0.0)) - 0.31;
+    return smin(a, b, 0.30);
+  } else if (shape == 1) {     // two rings, interlocked
+    vec3 q = rotY(0.35)*rotX(0.25)*p;
+    float a = sdTorus(q - vec3(-0.29, 0.0, 0.0), 0.42, 0.125);
+    float b = sdTorus(rotX(1.5708)*(q - vec3(0.29, 0.0, 0.0)), 0.42, 0.125);
+    return a < b ? vec2(a, 1.0) : vec2(b, 0.0);
+  } else if (shape == 2) {     // two strokes flowing into one
+    float a = sdCapsule(p, vec3(-0.42, 0.52, 0.0), vec3(0.0, -0.05, 0.05), 0.15);
+    float b = sdCapsule(p, vec3( 0.42, 0.52, 0.0), vec3(0.0, -0.05, 0.05), 0.15);
+    vec2 m = smin(a, b, 0.12);
+    float c = sdCapsule(p, vec3(0.0, -0.05, 0.05), vec3(0.0, -0.58, 0.05), 0.17);
+    vec2 r = smin(m.x, c, 0.18);
+    return vec2(r.x, mix(0.5, m.y, r.y));
+  } else {                     // Möbius band: one surface that looks like two
+    vec3 q = rotX(0.62)*rotZ(-0.35)*p;
+    float ang = atan(q.y, q.x);
+    vec2 w = vec2(length(q.xy) - 0.46, q.z);
+    float c = cos(ang*0.5), s = sin(ang*0.5);
+    w = mat2(c, -s, s, c)*w;
+    vec2 d = abs(w) - vec2(0.17, 0.035);
+    float dist = (length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.035)*0.6;
+    return vec2(dist, 0.5 + 0.5*cos(ang - 0.6));
+  }
+}
+vec3 normal(vec3 p){ vec2 e = vec2(shape == 5 ? 0.0035 : 0.0008, 0.0); return normalize(vec3(map(p+e.xyy).x - map(p-e.xyy).x, map(p+e.yxy).x - map(p-e.yxy).x, map(p+e.yyx).x - map(p-e.yyx).x)); }
+
+const float PLANE = -0.40;
+const vec3 L = normalize(vec3(-0.30, 0.45, 0.85));
+
+// ---------- lighting ----------
+vec3 env(vec3 d){
+  float t = d.y*0.5 + 0.5;
+  vec3 c = mix(vec3(0.02), vec3(0.20), t);
+  // big soft box, top-left
+  vec3 k = normalize(vec3(-0.55, 0.62, 0.56));
+  c += vec3(2.4) * smoothstep(0.90, 0.975, dot(d, k));
+  // thin strip light on the right
+  vec3 r = normalize(vec3(0.85, 0.15, 0.35));
+  c += vec3(1.2) * smoothstep(0.965, 0.99, dot(d, r));
+  // warm bounce from below
+  c += vec3(0.25) * smoothstep(0.2, 1.0, -d.y);
+  return c;
+}
+float softShadow(vec3 ro, vec3 rd){
+  float res = 1.0, t = 0.02;
+  for (int i = 0; i < 64; i++){ float h = map(ro + rd*t).x; res = min(res, 5.0*h/t); t += clamp(h, 0.01, 0.2); if (res < 0.001 || t > 3.0) break; }
+  return clamp(res, 0.0, 1.0);
+}
+vec3 background(vec3 p){
+  vec2 q = p.xy / 1.25;
+  vec3 c = mix(bgBot, bgTop, smoothstep(-0.9, 0.9, q.y));
+  c += (lightBg > 0.5 ? 0.06 : 0.10) * exp(-3.0*dot(q - vec2(-0.2, 0.35), q - vec2(-0.2, 0.35)));
+  float s = softShadow(p, L);
+  // coloured, soft shadow; glass lets some tinted light through
+  float d = map(p).x; float hA = map(p).y;
+  vec3 tint = mix(colB, colA, hA);
+  c *= mix(mix(vec3(lightBg > 0.5 ? 0.86 : 0.55), tint*0.95, 0.4), vec3(1.0), s);
+  // caustic: light focused below the glass
+  vec2 off = p.xy + L.xy*0.35*(0.0 - PLANE);
+  float cd = map(vec3(off, 0.0)).x;
+  c += tint * 0.35 * smoothstep(0.10, -0.25, cd) * (1.0 - s*0.5);
+  return c;
+}
+float hitPlane(vec3 ro, vec3 rd){ return (PLANE - ro.z)/rd.z; }
+
+vec3 trace(vec3 ro, vec3 rd){
+  float t = 0.0; bool hit = false;
+  for (int i = 0; i < 160; i++){ float h = map(ro + rd*t).x; if (h < 0.0004){ hit = true; break; } t += h; if (t > 8.0) break; }
+  if (!hit){ float tp = hitPlane(ro, rd); return background(ro + rd*tp); }
+  vec3 p = ro + rd*t, n = normal(p);
+  float hA = map(p).y;
+  vec3 tint = mix(colB, colA, hA);
+  float cosi = clamp(dot(-rd, n), 0.0, 1.0);
+  float F = 0.04 + 0.96*pow(1.0 - cosi, 5.0);
+  vec3 col = vec3(0.0);
+  // refraction with dispersion, per channel
+  for (int ch = 0; ch < 3; ch++){
+    float ior = 1.47 + 0.035*float(ch - 1);
+    vec3 r1 = refract(rd, n, 1.0/ior);
+    vec3 q = p - n*0.003; float th = 0.0;
+    for (int j = 0; j < 90; j++){ float h = -map(q).x; if (h < 0.0004) break; q += r1*max(h, 0.002); th += max(h, 0.002); }
+    vec3 n2 = -normal(q);
+    vec3 r2 = refract(r1, n2, ior);
+    if (dot(r2, r2) < 0.01) { r2 = reflect(r1, n2); r2.z = -abs(r2.z) - 0.2; r2 = normalize(r2); }
+    vec3 bgc = (r2.z < -0.05) ? background(q + r2*hitPlane(q, r2)) : mix(background(vec3(q.xy, PLANE)), env(r2), 0.35);
+    vec3 absorb = exp(-(vec3(1.0) - tint) * th * 3.4);
+    vec3 v = bgc * absorb * 1.1 + tint * (1.0 - exp(-th*3.0)) * (lightBg > 0.5 ? 0.42 : 1.0);
+    col[ch] = v[ch];
+  }
+  vec3 refl = env(reflect(rd, n));
+  col = mix(col, refl, F) + refl*0.06;
+  // fine rim light along silhouettes
+  col += vec3(0.9) * pow(1.0 - cosi, 3.0) * 0.35;
+  return col;
+}
+
+// macOS-style continuous-corner tile
+float tileSDF(vec2 u){ float r = 0.36; vec2 q = abs(u) - vec2(0.805 - r); return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+
+void main(){
+  vec3 acc = vec3(0.0); float alpha = 0.0;
+  for (int sy = 0; sy < 2; sy++) for (int sx = 0; sx < 2; sx++){
+    vec2 fc = gl_FragCoord.xy + (vec2(sx, sy) + 0.5)/2.0;
+    vec2 uv = (fc*2.0 - res)/res.y;
+    float d = tileSDF(uv);
+    float a = clamp(0.5 - d*res.y*0.5, 0.0, 1.0);
+    if (a <= 0.0) continue;
+    vec3 ro = vec3(0.03, -0.03, 3.2);
+    vec3 rd = normalize(vec3(uv*0.365 + vec2(-0.01, 0.01), -1.0));
+    vec3 c = trace(ro, rd);
+    // subtle inner rim of the tile
+    c += vec3(lightBg > 0.5 ? 0.25 : 0.12) * smoothstep(-0.018, 0.0, d) * smoothstep(0.2, 1.0, uv.y*0.5 + 0.6);
+    c = c / (1.0 + c*0.18);                // soft shoulder
+    acc += pow(clamp(c, 0.0, 1.0), vec3(1.0/2.2)) * a; alpha += a;
+  }
+  outColor = alpha > 0.0 ? vec4(acc/alpha, alpha/4.0) : vec4(0.0);
+}
+</script>
+<style>
+@font-face{font-family:'NY';src:url('file:///System/Library/Fonts/NewYork.ttf')}
+@font-face{font-family:'NYI';src:url('file:///System/Library/Fonts/NewYorkItalic.ttf')}
+@font-face{font-family:'SFR';src:url('file:///System/Library/Fonts/SFNSRounded.ttf')}
+</style>
+<script>
+// Felzenszwalb squared-distance transform
+function edt1(f, n){ const d=new Float32Array(n), v=new Int32Array(n), z=new Float32Array(n+1); let k=0; v[0]=0; z[0]=-1e20; z[1]=1e20;
+  for(let q=1;q<n;q++){ let s; do{ const r=v[k]; s=((f[q]+q*q)-(f[r]+r*r))/(2*q-2*r); if(s<=z[k]) k--; else break; }while(k>=0); k++; v[k]=q; z[k]=s; z[k+1]=1e20; }
+  k=0; for(let q=0;q<n;q++){ while(z[k+1]<q) k++; const r=v[k]; d[q]=(q-r)*(q-r)+f[r]; } return d; }
+function edt(grid, N){ const out=new Float32Array(N*N), col=new Float32Array(N);
+  for(let x=0;x<N;x++){ for(let y=0;y<N;y++) col[y]=grid[y*N+x]; const d=edt1(col,N); for(let y=0;y<N;y++) out[y*N+x]=d[y]; }
+  for(let y=0;y<N;y++){ const d=edt1(out.subarray(y*N,y*N+N),N); out.set(d,y*N); } return out; }
+function glyphField(ch, font, N, fill){
+  const cv=document.createElement('canvas'); cv.width=cv.height=N; const g=cv.getContext('2d');
+  g.font=`${font.replace('SIZE', 100)}`; const m=g.measureText(ch);
+  const w=m.actualBoundingBoxLeft+m.actualBoundingBoxRight, h=m.actualBoundingBoxAscent+m.actualBoundingBoxDescent;
+  const sc=fill*N/Math.max(w,h); g.font=font.replace('SIZE', 100*sc); const m2=g.measureText(ch);
+  const W=m2.actualBoundingBoxLeft+m2.actualBoundingBoxRight, H=m2.actualBoundingBoxAscent+m2.actualBoundingBoxDescent;
+  g.fillStyle='#000'; g.fillText(ch, (N-W)/2+m2.actualBoundingBoxLeft, (N-H)/2+m2.actualBoundingBoxAscent);
+  const a=g.getImageData(0,0,N,N).data, INF=1e20, fin=new Float32Array(N*N), fout=new Float32Array(N*N);
+  for(let i=0;i<N*N;i++){ const inside=a[i*4+3]>127; fin[i]=inside?INF:0; fout[i]=inside?0:INF; }
+  // edt(fin): for inside pixels, distance to the nearest outside pixel; edt(fout): the reverse
+  const toOut=edt(fin,N), toIn=edt(fout,N), sdf=new Float32Array(N*N);
+  for(let i=0;i<N*N;i++) sdf[i] = toIn[i] > 0 ? Math.sqrt(toIn[i]) - 0.5 : -Math.sqrt(toOut[i]) + 0.5;
+  return sdf;
+}
+</script>
+<script>
+async function main(){
+const P = Object.assign({shape:0, bgTop:[.12,.14,.40], bgBot:[.02,.03,.12], colA:[.35,.85,1.0], colB:[.70,.50,1.0], lightBg:0},
+  JSON.parse(decodeURIComponent(location.hash.slice(1) || '{}')));
+const G = Object.assign({ch:'&', font:"700 SIZEpx SFR", N:1024, fill:0.78, span:1.55, R:0.075, zScale:1.0, tilt:0.0, gradAng:-0.8}, P);
+await document.fonts.load(G.font.replace('SIZE', 40), G.ch);
+const c = document.getElementById('c'), gl = c.getContext('webgl2', {preserveDrawingBuffer:true, premultipliedAlpha:false});
+const lin = v => v.map(x => Math.pow(x, 2.2));
+function sh(t, s){ const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if(!gl.getShaderParameter(o, gl.COMPILE_STATUS)) document.title = 'ERR '+gl.getShaderInfoLog(o); return o; }
+const pr = gl.createProgram();
+gl.attachShader(pr, sh(gl.VERTEX_SHADER, `#version 300 es
+in vec2 p; void main(){ gl_Position = vec4(p, 0, 1); }`));
+gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent.trim()));
+gl.linkProgram(pr); gl.useProgram(pr);
+const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const u = n => gl.getUniformLocation(pr, n);
+gl.uniform2f(u('res'), c.width, c.height); gl.uniform1i(u('shape'), P.shape); gl.uniform1f(u('lightBg'), P.lightBg);
+for (const k of ['bgTop','bgBot','colA','colB']) gl.uniform3fv(u(k), lin(P[k]));
+if (P.shape == 5) {
+  const f = glyphField(G.ch, G.font, G.N, G.fill), px = G.span/G.N;
+  for (let i=0;i<f.length;i++) f[i]*=px;
+  const tx = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tx);
+  // soften the pixel staircase of the rasterised glyph
+  for (let pass = 0; pass < 3; pass++) {
+    const t = new Float32Array(f.length), N = G.N;
+    for (let y=0;y<N;y++) for (let x=0;x<N;x++){ let a=0,c=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=N||Y>=N) continue; a+=f[Y*N+X]; c++; } t[y*N+x]=a/c; }
+    f.set(t);
+  }
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, G.N, G.N, 0, gl.RED, gl.FLOAT, f);
+  const lin = true;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, lin ? gl.LINEAR : gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, lin ? gl.LINEAR : gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(u('glyph'), 0);
+  for (const k of ['span','R','zScale','tilt','gradAng']) gl.uniform1f(u(k), G[k]);
+  if (!lin) document.title = 'nolinear';
+}
+gl.drawArrays(gl.TRIANGLES, 0, 3); gl.finish();
+if (!document.title) document.title = 'done';
+}
+main();
+</script></body></html>

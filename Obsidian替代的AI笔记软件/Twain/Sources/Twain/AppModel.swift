@@ -117,7 +117,16 @@ final class AppModel {
     var renaming: String?
     /// Sidebar list selection; choosing a row opens the note.
     var selection: String? {
-        didSet { if let s = selection, s != activeRel { open(s) } }
+        didSet {
+            guard let s = selection, s != activeRel else { return }
+            if s.hasPrefix("dir:") {
+                // A folder without a folder note: selecting it just opens or closes it.
+                let f = String(s.dropFirst(4))
+                if openFolders.contains(f) { openFolders.remove(f) } else { openFolders.insert(f) }
+                return
+            }
+            open(s)
+        }
     }
     @ObservationIgnored var openSettingsAction: (() -> Void)?
     @ObservationIgnored private var beforeZen: (NavigationSplitViewVisibility, Bool)?
@@ -183,7 +192,7 @@ final class AppModel {
     @ObservationIgnored private var ghostWork: DispatchWorkItem?
     @ObservationIgnored private let ghostCompleter = GhostCompleter()
     @ObservationIgnored private var timers: [Timer] = []
-    @ObservationIgnored private var runSnapshots: [UUID: (files: [String: String], git: String?)] = [:]
+    @ObservationIgnored private var runSnapshots: [UUID: (snap: VaultSnapshot, git: String?)] = [:]
     @ObservationIgnored var typed: [(Date, Int)] = []
     @ObservationIgnored var netTyped = 0
     @ObservationIgnored private var focusToken = 0
@@ -259,7 +268,10 @@ final class AppModel {
         vault = v
         index = VaultIndex(root: v.root)
         ensureTwainFolder()
-        v.onTwainFilesChanged = { [weak self] in self?.loadVaultConfig() }
+        v.onTwainFilesChanged = { [weak self] paths in
+            if paths.contains(where: { $0.hasPrefix(".twain/commands") || $0.hasPrefix(".twain/automations") }) { self?.loadVaultConfig() }
+            self?.twainFilesChanged(paths)
+        }
         loadVaultConfig()
         #if DEBUG
         if ProcessInfo.processInfo.environment["TWAIN_SNAPSHOT_VAULT"] == nil {
@@ -356,7 +368,9 @@ final class AppModel {
             adoptHeadingTitle(leaving: true)
         }
         activeRel = rel
-        editorText = v.read(rel)
+        unreadable = Self.unreadableReason(v.url(rel))
+        editorText = unreadable == nil ? v.read(rel) : ""
+        if unreadable != nil { v.acknowledge(rel, content: nil) }
         editorSelection = NSRange(location: 0, length: 0)
         if pending[rel] == nil { showDiff = false }
         dirty = false
@@ -383,8 +397,21 @@ final class AppModel {
         focusRequest = (caret, focusToken)
     }
 
+    /// Why the open file can't be shown as text (binary, far too large); nil when it can.
+    var unreadable: String?
+
+    static func unreadableReason(_ u: URL) -> String? {
+        let size = (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        if size > 8 * 1024 * 1024 { return "这个文件有 \(size / 1024 / 1024) MB，超出了编辑器能流畅打开的大小。" }
+        guard let h = try? FileHandle(forReadingFrom: u) else { return nil }
+        defer { try? h.close() }
+        let head = h.readData(ofLength: 8192)
+        if head.contains(0) { return "这个文件含有二进制内容（例如全是空字节），不是文本笔记，可能已经损坏。" }
+        return nil
+    }
+
     var editorReadOnly: Bool {
-        guard let rel = activeRel else { return true }
+        guard let rel = activeRel, unreadable == nil else { return true }
         return writing.contains(rel)
     }
 
@@ -426,7 +453,7 @@ final class AppModel {
             // Someone else wrote the file after we last read it: theirs wins, ours goes to review.
             let mine = editorText
             v.acknowledge(rel, content: disk)
-            pending[rel] = PendingReview(rel: rel, by: mostRecentTerminalSession()?.agent, source: .terminal,
+            pending[rel] = PendingReview(rel: rel, by: nil, source: .terminal,
                                          baseline: Markdown.lines(mine), proposed: Markdown.lines(disk),
                                          hunks: LineDiff.hunks(from: Markdown.lines(mine), to: Markdown.lines(disk)), snapshot: nil)
             editorText = disk
@@ -498,14 +525,14 @@ final class AppModel {
         if activeRel == rel { activeRel = new }
         if selection == rel { selection = new }
         let name = NoteRef(rel: new).title
-        let links = relink(from: old, to: name)
+        let links = relinkNotes(from: old, to: name)
         emit("note.renamed", source: "user", ["path": .string(new), "from": .string(rel)])
         showToast(links > 0 ? "已重命名为「\(name)」，并更新了 \(links) 处链接" : "已重命名为「\(name)」")
         return true
     }
 
     /// Points `[[old]]` links at `new`, unless another note still answers to `old`.
-    private func relink(from old: String, to new: String) -> Int {
+    func relinkNotes(from old: String, to new: String) -> Int {
         guard let v = vault, v.note(titled: old) == nil else { return 0 }
         var total = 0
         for n in v.notes where pending[n.rel] == nil && !writing.contains(n.rel) {
@@ -535,6 +562,9 @@ final class AppModel {
         let folder = (rel as NSString).deletingLastPathComponent
         renameNote(rel, to: NoteRef(rel: v.uniqueRel(title: name, folder: folder)).title)
     }
+
+    /// Twain's own files under `.twain/` changed (plugins, data drops); extended by later features.
+    func twainFilesChanged(_ paths: Set<String>) {}
 
     static func isUntitled(_ title: String) -> Bool {
         title.range(of: #"^未命名( \d+)?$"#, options: .regularExpression) != nil
@@ -696,9 +726,25 @@ final class AppModel {
         s.effort = effort.isEmpty ? effectiveEffort(agent) : effort
         let readOnly = s.source == .automation
 
-        let git = gitSnapshot && !readOnly ? Git.snapshot(v.root, message: "Twain: snapshot before \(agent.displayName)") : nil
-        runSnapshots[s.id] = (v.snapshotAll(), git)
+        let proc = AgentProcess(kind: agent)
+        s.process = proc
+        let root = v.root, rels = v.notes.map(\.rel), takeGit = gitSnapshot && !readOnly
+        // The snapshot reads every note (and may commit to git): never on the main thread.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let git = takeGit ? Git.snapshot(root, message: "Twain: snapshot before \(agent.displayName)") : nil
+            let snap = VaultSnapshot.take(root: root, rels: rels)
+            DispatchQueue.main.async {
+                guard let self, s.process === proc, s.running else { return }
+                self.runSnapshots[s.id] = (snap, git)
+                self.start(s, proc: proc, exe: exe, prompt: prompt, model: model, effort: effort, readOnly: readOnly)
+            }
+        }
+        return true
+    }
 
+    private func start(_ s: AgentSession, proc: AgentProcess, exe: String, prompt: String, model: String, effort: String, readOnly: Bool) {
+        guard let v = vault else { return }
+        let agent = s.agent
         let tool = TwainTool.prepare()
         var env = ["TWAIN_SESSION": s.id.uuidString]
         if let tool { env["PATH"] = tool.path }
@@ -711,8 +757,6 @@ final class AppModel {
         let args = AgentArguments.build(kind: agent, prompt: prompt, context: context, root: v.rootPath,
                                         resume: s.cliSessionID, model: model, effort: effort, socket: server?.path,
                                         version: cli[agent]?.version, mcp: mcp, readOnly: readOnly)
-        let proc = AgentProcess(kind: agent)
-        s.process = proc
         emit("session.started", source: eventSource(for: s), ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue)])
         do {
             try proc.start(executable: exe, arguments: args, cwd: v.root, env: env, onEvents: { [weak self, weak s] events in
@@ -734,12 +778,11 @@ final class AppModel {
                 self.emit("session.finished", source: self.eventSource(for: s),
                           ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue), "status": JSONValue(Int(status))])
             })
-            return true
         } catch {
             s.items.append(SessionItem(kind: .error("无法启动 \(exe)：\(error.localizedDescription)")))
             s.running = false
+            s.process = nil
             runSnapshots[s.id] = nil
-            return false
         }
     }
 
@@ -765,7 +808,17 @@ final class AppModel {
         return parts.joined()
     }
 
-    func stopAgent(_ s: AgentSession) { s.process?.stop() }
+    func stopAgent(_ s: AgentSession) {
+        guard let p = s.process else { return }
+        if p.pid == 0 {
+            // Still taking the snapshot: the CLI never started.
+            s.process = nil
+            s.running = false
+            s.items.append(SessionItem(kind: .error("已停止")))
+        } else {
+            p.stop()
+        }
+    }
 
     #if DEBUG
     /// Mimics an agent run without calling a CLI: snapshot, write to disk, finish.
@@ -789,20 +842,24 @@ final class AppModel {
 
     /// Compares the vault with the snapshot taken before the run and queues each changed file.
     private func finishRun(_ s: AgentSession) {
-        guard let v = vault, let snap = runSnapshots.removeValue(forKey: s.id) else { return }
+        guard let snap = runSnapshots.removeValue(forKey: s.id) else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let changes = snap.snap.changes()
+            DispatchQueue.main.async { self?.applyRun(s, changes: changes, git: snap.git) }
+        }
+    }
+
+    private func applyRun(_ s: AgentSession, changes: [(rel: String, before: String?, after: String?)], git: String?) {
+        guard let v = vault else { return }
         v.scan()
-        let rels = Set(snap.files.keys).union(v.notes.map(\.rel))
         var changed: [String] = []
-        for rel in rels.sorted() {
-            let before = snap.files[rel]
-            let after = v.diskContent(rel)
+        for c in changes {
             // Skip files that only Twain itself saved during the run.
-            guard before != after, let after, after != v.knownContent(rel) else { continue }
-            changed.append(rel)
-            let base = pending[rel]?.baseline ?? Markdown.lines(v.knownContent(rel) ?? before ?? "")
-            queueReview(rel: rel, baseline: base,
-                        proposed: after, by: s.agent, source: s.source, snapshot: snap.git, session: s)
-            emit("note.changed", source: eventSource(for: s), ["path": .string(rel)])
+            guard let after = c.after, after != v.knownContent(c.rel) else { continue }
+            changed.append(c.rel)
+            let base = pending[c.rel]?.baseline ?? Markdown.lines(v.knownContent(c.rel) ?? c.before ?? "")
+            queueReview(rel: c.rel, baseline: base, proposed: after, by: s.agent, source: s.source, snapshot: git, session: s)
+            emit("note.changed", source: eventSource(for: s), ["path": .string(c.rel)])
         }
         for rel in writing where !changed.contains(rel) { v.acknowledge(rel, content: v.diskContent(rel)) }
         writing.removeAll()
@@ -854,6 +911,7 @@ final class AppModel {
     private func filesChanged(_ rels: [String]) {
         guard let v = vault else { return }
         let appRunning = sessions.contains { $0.source == .app && $0.running }
+        var outside: [String] = []
         for rel in rels {
             let disk = v.diskContent(rel)
             if disk == v.knownContent(rel) { continue }
@@ -866,32 +924,61 @@ final class AppModel {
                 writing.insert(rel)
                 continue
             }
-            let outside = watchTerminal ? mostRecentTerminalSession().map(eventSource) ?? "external" : "external"
-            emit(disk == nil ? "note.deleted" : "note.changed", source: outside, ["path": .string(rel)])
+            outside.append(rel)
+        }
+        guard !outside.isEmpty else { return }
+        // Who wrote it? Only a terminal agent whose transcript shows the write gets the credit;
+        // anything else (another editor, sync) is loaded as is, without a review.
+        let root = v.rootPath
+        let terminals = watchTerminal ? sessions.filter { $0.source == .terminal && $0.alive }.compactMap { s in
+            s.transcript.map { (id: s.id, url: $0, agent: s.agent) }
+        } : []
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            var writer: [String: UUID] = [:]
+            for t in terminals {
+                let recent = TerminalWatcher.recentWrites(transcript: t.url, agent: t.agent, root: root)
+                for rel in outside where writer[rel] == nil {
+                    let abs = (root as NSString).appendingPathComponent(rel)
+                    let name = (rel as NSString).lastPathComponent
+                    if recent.paths.contains(abs) || recent.paths.contains(rel) || recent.steps.contains(where: { $0.contains(name) }) {
+                        writer[rel] = t.id
+                    }
+                }
+            }
+            DispatchQueue.main.async { self?.applyOutsideChanges(outside, writer: writer) }
+        }
+    }
+
+    private func applyOutsideChanges(_ rels: [String], writer: [String: UUID]) {
+        guard let v = vault else { return }
+        var reloaded: [String] = []
+        for rel in rels {
+            let disk = v.diskContent(rel)
+            if disk == v.knownContent(rel) { continue }
+            let term = writer[rel].flatMap { id in sessions.first { $0.id == id } }
+            emit(disk == nil ? "note.deleted" : "note.changed", source: term.map(eventSource) ?? "external", ["path": .string(rel)])
             guard let disk else {
-                // Deleted.
                 v.acknowledge(rel, content: nil)
                 pending[rel] = nil
                 if rel == activeRel, let next = v.notes.first { open(next.rel) }
                 continue
             }
-            let base = pending[rel]?.baseline ?? Markdown.lines(v.knownContent(rel) ?? "")
-            if watchTerminal, let term = mostRecentTerminalSession() {
-                queueReview(rel: rel, baseline: base, proposed: disk, by: term.agent, source: .terminal,
-                            snapshot: nil, session: term)
+            if let term {
+                let base = pending[rel]?.baseline ?? Markdown.lines(v.knownContent(rel) ?? "")
+                queueReview(rel: rel, baseline: base, proposed: disk, by: term.agent, source: .terminal, snapshot: nil, session: term)
                 if pending[rel] != nil {
                     showToast("\(term.agent.displayName) 在终端中修改了 \((rel as NSString).lastPathComponent) · 待审阅")
                 }
             } else {
                 v.acknowledge(rel, content: disk)
+                reloaded.append(rel)
             }
             if rel == activeRel {
-                if dirty {
-                    flushSave()
-                } else {
-                    reloadActiveFromDisk()
-                }
+                if dirty { flushSave() } else { reloadActiveFromDisk() }
             }
+        }
+        if reloaded.contains(where: { $0 == activeRel }) {
+            showToast("「\(((activeRel ?? "") as NSString).lastPathComponent)」在其他程序中被修改，已载入新内容")
         }
     }
 
@@ -906,10 +993,6 @@ final class AppModel {
     }
 
     // MARK: terminal sessions
-
-    func mostRecentTerminalSession() -> AgentSession? {
-        sessions.filter { $0.source == .terminal && $0.alive }.max { $0.lastActivity < $1.lastActivity }
-    }
 
     private func dropTerminalSessions() {
         sessions.removeAll { $0.source == .terminal }

@@ -21,13 +21,18 @@ final class Vault {
     private(set) var folders: [String] = []
     /// Non-note files by lowercased file name, for resolving `![[name.png]]` like Obsidian does.
     @ObservationIgnored private(set) var attachments: [String: [String]] = [:]
+    /// Each folder's subfolders and notes, in sidebar order ("" is the root).
+    private(set) var tree: [String: (folders: [String], notes: [NoteRef])] = [:]
+    @ObservationIgnored private var byRel: [String: NoteRef] = [:]
+    @ObservationIgnored private var scanWork: DispatchWorkItem?
+    @ObservationIgnored private var scanGeneration = 0
     private(set) var isGitRepo = false
 
     @ObservationIgnored private(set) var known: [String: String] = [:]
     @ObservationIgnored private var watcher: FileWatcher?
     @ObservationIgnored var onFilesChanged: (([String]) -> Void)?
     /// `.twain/commands` or `.twain/automations` changed.
-    @ObservationIgnored var onTwainFilesChanged: (() -> Void)?
+    @ObservationIgnored var onTwainFilesChanged: ((Set<String>) -> Void)?
 
     init(root: URL) {
         self.root = root.standardizedFileURL.resolvingSymlinksInPath()
@@ -43,30 +48,78 @@ final class Vault {
 
     func url(_ rel: String) -> URL { root.appendingPathComponent(rel) }
 
-    func scan() {
+    struct Listing {
+        var notes: [NoteRef] = []
+        var folders: [String] = []
+        var attachments: [String: [String]] = [:]
+        var isGitRepo = false
+    }
+
+    /// Everything under the root; safe to call off the main thread.
+    static func list(_ root: URL) -> Listing {
         let fm = FileManager.default
-        isGitRepo = fm.fileExists(atPath: root.appendingPathComponent(".git").path)
-        var found: [NoteRef] = []
-        var dirs: [String] = []
-        var files: [String: [String]] = [:]
+        var out = Listing()
+        out.isGitRepo = fm.fileExists(atPath: root.appendingPathComponent(".git").path)
+        let base = root.path.hasSuffix("/") ? root.path : root.path + "/"
         let keys: [URLResourceKey] = [.isDirectoryKey]
         if let e = fm.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
             for case let u as URL in e {
-                let rel = relative(u.path)
+                let p = u.standardizedFileURL.resolvingSymlinksInPath().path
+                guard p.hasPrefix(base) else { continue }
+                let rel = String(p.dropFirst(base.count))
                 if (try? u.resourceValues(forKeys: Set(keys)).isDirectory) == true {
-                    if ["node_modules"].contains(u.lastPathComponent) { e.skipDescendants(); continue }
-                    dirs.append(rel)
+                    if u.lastPathComponent == "node_modules" { e.skipDescendants(); continue }
+                    out.folders.append(rel)
                 } else if u.pathExtension.lowercased() == "md" {
-                    found.append(NoteRef(rel: rel))
+                    out.notes.append(NoteRef(rel: rel))
                 } else {
-                    files[u.lastPathComponent.lowercased(), default: []].append(rel)
+                    out.attachments[u.lastPathComponent.lowercased(), default: []].append(rel)
                 }
             }
         }
-        attachments = files
         let cmp: (String, String) -> Bool = { $0.localizedStandardCompare($1) == .orderedAscending }
-        notes = found.sorted { cmp($0.rel, $1.rel) }
-        folders = dirs.sorted(by: cmp)
+        out.notes.sort { cmp($0.rel, $1.rel) }
+        out.folders.sort(by: cmp)
+        return out
+    }
+
+    private func apply(_ l: Listing) {
+        isGitRepo = l.isGitRepo
+        attachments = l.attachments
+        byRel = Dictionary(l.notes.map { ($0.rel, $0) }, uniquingKeysWith: { a, _ in a })
+        var t: [String: (folders: [String], notes: [NoteRef])] = ["": ([], [])]
+        for f in l.folders {
+            t[f, default: ([], [])] = t[f] ?? ([], [])
+            t[(f as NSString).deletingLastPathComponent, default: ([], [])].folders.append(f)
+        }
+        for n in l.notes { t[n.folder, default: ([], [])].notes.append(n) }
+        if l.notes != notes { notes = l.notes }
+        if l.folders != folders { folders = l.folders }
+        let same = tree.count == t.count && t.allSatisfy { k, v in tree[k].map { $0.folders == v.folders && $0.notes == v.notes } ?? false }
+        if !same { tree = t }
+    }
+
+    /// Re-reads the folder now. File events use `scanSoon` instead.
+    func scan() {
+        scanGeneration += 1
+        apply(Self.list(root))
+    }
+
+    /// Re-reads the folder in the background, coalescing bursts of file events.
+    func scanSoon(then done: (() -> Void)? = nil) {
+        scanWork?.cancel()
+        scanGeneration += 1
+        let gen = scanGeneration, root = root
+        let w = DispatchWorkItem { [weak self] in
+            let l = Self.list(root)
+            DispatchQueue.main.async {
+                guard let self, gen == self.scanGeneration else { return }
+                self.apply(l)
+                done?()
+            }
+        }
+        scanWork = w
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.15, execute: w)
     }
 
     func relative(_ path: String) -> String {
@@ -75,7 +128,7 @@ final class Vault {
         return p.hasPrefix(r) ? String(p.dropFirst(r.count)) : p
     }
 
-    func note(_ rel: String) -> NoteRef? { notes.first { $0.rel == rel } }
+    func note(_ rel: String) -> NoteRef? { byRel[rel] }
 
     /// `name.png`, `folder/name.png` or `name.png|300` → the file's path in the vault.
     func attachment(_ target: String, from noteRel: String?) -> String? {
@@ -111,6 +164,8 @@ final class Vault {
         known[rel] = text
         return text
     }
+
+    func forget(_ rel: String) { known[rel] = nil }
 
     /// Marks the current disk content as seen without changing the editor.
     func acknowledge(_ rel: String, content: String?) {
@@ -182,21 +237,62 @@ final class Vault {
         return new
     }
 
-    func snapshotAll() -> [String: String] {
-        var out: [String: String] = [:]
-        for n in notes { out[n.rel] = diskContent(n.rel) }
-        return out
-    }
+    func snapshotAll() -> VaultSnapshot { VaultSnapshot.take(root: root, rels: notes.map(\.rel)) }
 
-    func noteCount(in folder: String) -> Int { notes.filter { $0.folder == folder }.count }
+    func noteCount(in folder: String) -> Int { tree[folder]?.notes.count ?? 0 }
 
     private func handleEvents(_ paths: [String]) {
-        scan()
         let all = Set(paths.map(relative))
         // Hidden folders are not notes; Twain's own config lives in one of them.
-        let rels = all.filter { $0.lowercased().hasSuffix(".md") && !$0.split(separator: "/").contains { $0.hasPrefix(".") } }
-        if !rels.isEmpty { onFilesChanged?(Array(rels)) }
-        if all.contains(where: { $0.hasPrefix(".twain/commands") || $0.hasPrefix(".twain/automations") }) { onTwainFilesChanged?() }
+        let visible = all.filter { !$0.split(separator: "/").contains { $0.hasPrefix(".") } }
+        let rels = visible.filter { $0.lowercased().hasSuffix(".md") }
+        if !visible.isEmpty {
+            scanSoon { [weak self] in if !rels.isEmpty { self?.onFilesChanged?(Array(rels)) } }
+        }
+        if all.contains(where: { $0.hasPrefix(".twain/") }) { onTwainFilesChanged?(all.filter { $0.hasPrefix(".twain/") }) }
+    }
+}
+
+/// The notes as they were before an agent ran. Taken and compared off the main thread: a vault
+/// can hold hundreds of notes, some in iCloud and slow to read.
+struct VaultSnapshot: Sendable {
+    let root: URL
+    var files: [String: (stamp: Date?, text: String?)]
+
+    static func stamp(_ u: URL) -> Date? {
+        try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+
+    static func take(root: URL, rels: [String]) -> VaultSnapshot {
+        var files: [String: (Date?, String?)] = [:]
+        for rel in rels {
+            let u = root.appendingPathComponent(rel)
+            files[rel] = (stamp(u), try? String(contentsOf: u, encoding: .utf8))
+        }
+        return VaultSnapshot(root: root, files: files)
+    }
+
+    /// Notes whose file changed since the snapshot (new ones included), with before and after.
+    func changes() -> [(rel: String, before: String?, after: String?)] {
+        var rels = Set(files.keys)
+        let fm = FileManager.default
+        if let e = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            let base = root.path.hasSuffix("/") ? root.path : root.path + "/"
+            for case let u as URL in e where u.pathExtension.lowercased() == "md" {
+                let p = u.standardizedFileURL.resolvingSymlinksInPath().path
+                if p.hasPrefix(base) { rels.insert(String(p.dropFirst(base.count))) }
+            }
+        }
+        var out: [(String, String?, String?)] = []
+        for rel in rels.sorted() {
+            let u = root.appendingPathComponent(rel)
+            let old = files[rel]
+            let now = Self.stamp(u)
+            if let old, old.stamp == now, now != nil { continue }
+            let after = try? String(contentsOf: u, encoding: .utf8)
+            if after != old?.text { out.append((rel, old?.text, after)) }
+        }
+        return out
     }
 }
 

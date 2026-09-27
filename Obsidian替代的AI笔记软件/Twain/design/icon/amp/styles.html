@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:NY;src:url('file:///System/Library/Fonts/NewYork.ttf')}
+@font-face{font-family:NYI;src:url('file:///System/Library/Fonts/NewYorkItalic.ttf')}
+@font-face{font-family:SFR;src:url('file:///System/Library/Fonts/SFNSRounded.ttf')}
+body{margin:0;background:#E6E6E6;padding:30px;display:grid;grid-template-columns:repeat(4,360px);gap:40px 30px;font-synthesis:none}
+.t{width:360px;height:360px;border-radius:80px;position:relative;overflow:hidden;display:grid;place-items:center;
+   box-shadow:0 10px 24px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.25)}
+.a{line-height:1;display:block;position:relative}
+/* 1 纯色大字：白色圆体 & 放在鲜亮渐变上 */
+.s1{background:linear-gradient(160deg,#6A7BFF 0%,#3A38E0 55%,#2A1FB8 100%)}
+.s1 .a{font:800 250px SFR;color:#fff;transform:translateY(-8px);text-shadow:0 10px 26px rgba(20,10,120,.35)}
+/* 2 书卷：黑色衬线斜体 & 放在纸白上 */
+.s2{background:linear-gradient(180deg,#FFFFFF,#F1F1EE)}
+.s2 .a{font:italic 400 300px NYI;color:#111;transform:translate(4px,6px)}
+/* 3 双色：& 被斜线切成两半，一半一色 */
+.s3{background:#0E0E12}
+.s3 .a{font:900 262px 'Avenir Next';background:linear-gradient(135deg,#FFFFFF 50%,#FF5A7A 50%);-webkit-background-clip:text;color:transparent;transform:translateY(-6px)}
+/* 4 单线：一根连续的细线写出 & */
+.s4{background:radial-gradient(120% 120% at 30% 20%,#1C2440,#070A14)}
+.s4 .a{font:200 290px 'Avenir Next';color:transparent;-webkit-text-stroke:0;background:linear-gradient(135deg,#7CF3FF,#B98CFF 55%,#FF7FC8);-webkit-background-clip:text;transform:translateY(-6px)}
+/* 5 镂空：& 从彩色块里挖出来 */
+.s5{background:#F4F4F6}
+.s5 .card{position:absolute;inset:44px;border-radius:58px;background:linear-gradient(145deg,#FF8A5B,#FF3D77 50%,#8B3DFF)}
+.s5 .a{font:800 236px SFR;color:#F4F4F6;transform:translateY(-6px)}
+/* 6 叠印：两个 & 错开叠印，重叠处混色 */
+.s6{background:#FFFDF8}
+.s6 .a{font:italic 400 280px NYI;position:absolute;left:50%;top:50%;mix-blend-mode:multiply}
+.s6 .a1{color:#1FA6FF;transform:translate(-56%,-54%)}
+.s6 .a2{color:#FF4F8B;transform:translate(-44%,-47%)}
+/* 7 极光：白底上的渐变 & */
+.s7{background:linear-gradient(180deg,#FFFFFF,#F2F3F7)}
+.s7 .a{font:900 262px 'Avenir Next';background:conic-gradient(from 200deg at 45% 55%,#3D7BFF,#8F5BFF,#FF5FA2,#FFB057,#3DD6C6,#3D7BFF);-webkit-background-clip:text;color:transparent;transform:translateY(-6px)}
+/* 8 徽章：& 放在黑色圆形印章里，Didot 高对比 */
+.s8{background:linear-gradient(160deg,#F7F7F5,#E4E4E0)}
+.s8 .seal{width:250px;height:250px;border-radius:50%;background:#101012;display:grid;place-items:center;box-shadow:0 12px 28px rgba(0,0,0,.25)}
+.s8 .a{font:italic 400 190px Didot;color:#F5F5F0;transform:translate(2px,4px)}
+</style></head><body>
+<div class="t s1"><span class="a">&amp;</span></div>
+<div class="t s2"><span class="a">&amp;</span></div>
+<div class="t s3"><span class="a">&amp;</span></div>
+<div class="t s4"><span class="a">&amp;</span></div>
+<div class="t s5"><div class="card"></div><span class="a">&amp;</span></div>
+<div class="t s6"><span class="a a1">&amp;</span><span class="a a2">&amp;</span></div>
+<div class="t s7"><span class="a">&amp;</span></div>
+<div class="t s8"><div class="seal"><span class="a">&amp;</span></div></div>
+</body></html>
