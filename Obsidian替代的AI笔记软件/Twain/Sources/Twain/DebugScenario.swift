@@ -128,6 +128,16 @@ enum DebugScenario {
             m.requestFocus(caret: 40)
         case "caret":
             m.requestFocus(caret: Int(parts.count > 2 ? parts[2] : "0") ?? 0)
+        case "select":
+            // select:<note>:<from>:<length> — a multi-line selection, to check how it is drawn.
+            let from = Int(parts.count > 2 ? parts[2] : "0") ?? 0
+            m.requestFocus(caret: from)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let tv = textView()!
+                let len = (tv.string as NSString).length
+                let n = Int(parts.count > 3 ? parts[3] : "") ?? len
+                tv.setSelectedRange(NSRange(location: min(from, len), length: min(n, len - min(from, len))))
+            }
         case "slash":
             m.requestFocus(caret: (m.editorText as NSString).length)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

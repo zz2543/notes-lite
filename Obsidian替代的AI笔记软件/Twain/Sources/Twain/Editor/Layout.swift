@@ -43,9 +43,12 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     var highlights: [(range: NSRange, color: NSColor, selected: Bool)] = []
 
     /// Inline code and highlights: a rounded box around the glyphs instead of the whole line height.
+    /// The selection comes through here too, as one tall rect for all its middle lines; it is
+    /// left to the default fill (it is not the run's own background color).
     override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int,
                                           forCharacterRange charRange: NSRange, color: NSColor) {
         guard let storage = textStorage, charRange.location < storage.length,
+              storage.attribute(.backgroundColor, at: charRange.location, effectiveRange: nil) as? NSColor == color,
               let font = storage.attribute(.font, at: charRange.location, effectiveRange: nil) as? NSFont,
               (storage.attribute(.paragraphStyle, at: charRange.location, effectiveRange: nil) as? NSParagraphStyle)?.lineSpacing ?? 0 > 0 else {
             super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: color)
