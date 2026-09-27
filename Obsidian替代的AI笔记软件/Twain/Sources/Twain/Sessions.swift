@@ -94,6 +94,20 @@ final class AgentSession: Identifiable {
     }
 
     var lastActivity: Date { transcriptStamp ?? .distantPast }
+
+    /// The conversation as Markdown, for copying out whole.
+    var markdown: String {
+        items.compactMap { item -> String? in
+            switch item.kind {
+            case let .user(t): return "**你**：" + t
+            case let .agent(t): return t
+            case let .step(_, t, _): return "> " + t
+            case let .change(rel, p, m): return "> 修改 \(rel) +\(p) −\(m)"
+            case let .error(t): return "> ⚠︎ " + t
+            case .question, .feedback: return nil
+            }
+        }.joined(separator: "\n\n")
+    }
 }
 
 /// Finds `claude` / `codex` processes whose working directory is inside the vault and

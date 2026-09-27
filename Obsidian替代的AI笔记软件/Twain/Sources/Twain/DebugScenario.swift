@@ -36,6 +36,25 @@ enum DebugScenario {
                     else { tv.insertText(s, replacementRange: tv.selectedRange()) }
                 }
             }
+        case "reply":
+            let s = AgentSession(agent: .claude, source: .app, title: "续写")
+            s.apply([.user("根据上下文续写这篇笔记"), .step(id: "1", text: "读取 AGENTS.md", write: nil), .stepDone(id: "1"),
+                     .text("""
+                     我在「找回生活的掌控感」末尾续写了几条，已经提交到共笔等你审阅，**还没写进文件**。写法跟前两条一样：
+
+                     ```
+                     每天睡前花五分钟写下第二天最重要的三件事
+                     固定起床和睡觉的时间，周末也不要差太多
+                     ```
+
+                     续写接在最后一条“深度工作四小时”后面：
+                     - 第一条理由，带 `代码` 和 [链接](https://example.com)
+                     - 第二条
+                     1. 有序
+                     > 你要是其实想在别的位置续写，告诉我在哪就行。
+                     """)])
+            m.sessions.append(s)
+            m.activeSessionID = s.id
         case "bench":
             // Types into the middle of the note, one key per run-loop turn so the async work
             // (SwiftUI updates, height fitting, drawing) counts too, and reports per-key costs.

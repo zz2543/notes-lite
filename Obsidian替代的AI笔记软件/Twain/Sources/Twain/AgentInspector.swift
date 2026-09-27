@@ -117,6 +117,13 @@ struct AgentInspector: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
             }
             .scrollEdgeEffectStyle(.soft, for: .all)
+            .contextMenu {
+                Button("拷贝整个会话（Markdown）", systemImage: "doc.on.doc") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(sess.markdown, forType: .string)
+                    model.showToast("已拷贝会话")
+                }
+            }
             .onChange(of: sess.items.count) { _, _ in
                 withAnimation { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
             }
