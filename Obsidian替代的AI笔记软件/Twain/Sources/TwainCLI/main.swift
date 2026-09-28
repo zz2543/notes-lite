@@ -22,7 +22,7 @@ func out(_ s: String) {
 }
 
 var args = Array(CommandLine.arguments.dropFirst())
-func takeFlag(_ f: String) -> Bool {
+@MainActor func takeFlag(_ f: String) -> Bool {
     guard let i = args.firstIndex(of: f) else { return false }
     args.remove(at: i)
     return true

@@ -97,13 +97,14 @@ final class MCPTests: XCTestCase {
     }
 
     func testCallsForwardAndErrorsStayInBand() {
-        var seen: (String, [String: JSONValue])?
+        final class Seen: @unchecked Sendable { var value: (String, [String: JSONValue])? }
+        let box = Seen()
         let server = MCPServer(version: "t") { spec, params in
-            seen = (spec.id, params)
+            box.value = (spec.id, params)
             return params["query"] == "空" ? .failure(RPCError(RPCError.notFound, "没找到")) : .success(["query": params["query"]!, "results": []])
         }
         let ok = decode(server.handle(line(#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search","arguments":{"query":"计划"}}}"#)))
-        XCTAssertEqual(seen?.0, "search")
+        XCTAssertEqual(box.value?.0, "search")
         XCTAssertEqual(ok?["result"]?["isError"], false)
         XCTAssertEqual(ok?["result"]?["content"]?.array?.first?["text"], "没有找到“计划”")
 

@@ -12,8 +12,8 @@ let package = Package(
         .executable(name: "twain-cli", targets: ["TwainCLI"]),
     ],
     targets: [
-        .target(name: "TwainCore"),
-        .executableTarget(name: "TwainCLI", dependencies: ["TwainCore"]),
+        .target(name: "TwainCore", swiftSettings: [.swiftLanguageMode(.v6)]),
+        .executableTarget(name: "TwainCLI", dependencies: ["TwainCore"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .executableTarget(
             name: "Twain",
             dependencies: ["TwainCore"],
@@ -22,7 +22,8 @@ let package = Package(
         .testTarget(
             name: "TwainCoreTests",
             dependencies: ["TwainCore"],
-            resources: [.copy("Fixtures")]
+            resources: [.copy("Fixtures")],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ],
     swiftLanguageModes: [.v5]

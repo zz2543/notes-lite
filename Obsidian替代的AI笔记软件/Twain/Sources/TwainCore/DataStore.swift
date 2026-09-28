@@ -26,7 +26,8 @@ public final class DataStore {
 
     func url(_ name: String) -> URL { dir.appendingPathComponent(name + ".jsonl") }
 
-    public static let iso: ISO8601DateFormatter = {
+    // Date formatters are safe to share across threads once configured (macOS 10.9 and later).
+    nonisolated(unsafe) public static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f

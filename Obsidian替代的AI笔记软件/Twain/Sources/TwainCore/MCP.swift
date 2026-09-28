@@ -3,8 +3,8 @@ import Foundation
 /// The Model Context Protocol side of `twain mcp`: newline-delimited JSON-RPC on stdio, answering
 /// `initialize`, `tools/list` and `tools/call`. Each tool call is handed to `call`, which in the CLI
 /// forwards it to the app (or answers from files), so this type holds only protocol logic.
-public final class MCPServer {
-    public typealias Call = (_ spec: CommandSpec, _ params: [String: JSONValue]) -> Result<JSONValue, RPCError>
+public final class MCPServer: Sendable {
+    public typealias Call = @Sendable (_ spec: CommandSpec, _ params: [String: JSONValue]) -> Result<JSONValue, RPCError>
 
     public static let protocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
 
