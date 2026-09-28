@@ -68,11 +68,33 @@ final class BlockRenderer: NSObject, WKNavigationDelegate {
 
     private let disk = DispatchQueue(label: "twain.render.disk", qos: .userInitiated)
     private lazy var cacheDir: URL = {
-        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let d = base.appendingPathComponent("app.twain.notes/render-\(Self.version)", isDirectory: true)
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("app.twain.notes")
+        let d = base.appendingPathComponent("render-\(Self.version)", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        disk.async { Self.prune(d, olderVersionsIn: base) }
         return d
     }()
+
+    /// Keeps the picture cache from growing forever: pictures not used for 60 days go, then the
+    /// oldest until the folder is under 200 MB. Caches of older renderer versions are removed whole.
+    static func prune(_ dir: URL, olderVersionsIn base: URL, now: Date = Date(), maxAge: TimeInterval = 60 * 86400, maxBytes: Int = 200 << 20) {
+        let fm = FileManager.default
+        for old in (try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil)) ?? []
+        where old.lastPathComponent.hasPrefix("render-") && old.lastPathComponent != dir.lastPathComponent {
+            try? fm.removeItem(at: old)
+        }
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        var files = ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys)) ?? []).compactMap { u -> (URL, Date, Int)? in
+            guard let v = try? u.resourceValues(forKeys: Set(keys)) else { return nil }
+            return (u, v.contentModificationDate ?? .distantPast, v.fileSize ?? 0)
+        }
+        files.sort { $0.1 < $1.1 }
+        var total = files.reduce(0) { $0 + $1.2 }
+        for (u, date, size) in files where now.timeIntervalSince(date) > maxAge || total > maxBytes {
+            try? fm.removeItem(at: u)
+            total -= size
+        }
+    }
 
     /// The picture for `key` if it is ready; otherwise nil, and `ready` runs on the main queue
     /// once it is (from the disk cache or a fresh render).
@@ -84,6 +106,12 @@ final class BlockRenderer: NSObject, WKNavigationDelegate {
         let file = cacheFile(key)
         disk.async {
             let hit = Self.load(file)
+            // A hit counts as use, so pruning keeps what is still being shown.
+            if hit != nil {
+                for ext in ["json", "png"] {
+                    try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.appendingPathExtension(ext).path)
+                }
+            }
             DispatchQueue.main.async {
                 if let hit { self.finish(key, hit) } else { self.enqueue(key) }
             }

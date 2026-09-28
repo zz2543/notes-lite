@@ -288,3 +288,13 @@ final class EditorContextTests: XCTestCase {
         XCTAssertEqual(c["selection"]?["truncated"], true)
     }
 }
+
+final class SecretsTests: XCTestCase {
+    func testEqualComparesWholeTokens() {
+        XCTAssertTrue(Secrets.equal("tw_abc", "tw_abc"))
+        XCTAssertFalse(Secrets.equal("tw_abc", "tw_abd"))
+        XCTAssertFalse(Secrets.equal("tw_abc", "tw_ab"))
+        XCTAssertFalse(Secrets.equal("", "x"))
+        XCTAssertTrue(Secrets.equal("", ""))
+    }
+}

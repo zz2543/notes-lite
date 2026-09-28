@@ -253,8 +253,6 @@ final class AppModel {
     private let defaults = UserDefaults.standard
 
     init() {
-        LegacyPlume.migrateDefaults()
-        LegacyPlume.migrateTool()
         loadPrefs()
         DispatchQueue.global(qos: .userInitiated).async {
             let found = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, CLIEnvironment.detect($0)) })
@@ -320,7 +318,6 @@ final class AppModel {
     func openVault(_ url: URL) {
         flushSave()
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        LegacyPlume.migrateVault(url)
         let v = Vault(root: url)
         v.onFilesChanged = { [weak self] rels in self?.filesChanged(rels) }
         vault = v

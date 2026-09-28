@@ -12,7 +12,7 @@ extension AppModel {
         let fm = FileManager.default
         if !fm.fileExists(atPath: dir.path) {
             // First time: the workbench, so the feature is visible and editable from day one.
-            try? installTemplate(SpaceTemplate.workbench, name: "工作台", folder: "", open: false)
+            _ = try? installTemplate(SpaceTemplate.workbench, name: "工作台", folder: "", open: false)
         }
         var found: [Plugin] = []
         for u in (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey])) ?? [] {

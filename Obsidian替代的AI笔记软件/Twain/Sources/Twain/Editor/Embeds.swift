@@ -42,9 +42,22 @@ final class Embed: NSObject {
 }
 
 /// Decodes embeds off the main thread and remembers them per file, so re-styling a line is free.
+/// Holds at most `limit` pictures or `byteLimit` of decoded pixels, dropping the least recently
+/// used first; a line already styled keeps its picture, so only a later restyle decodes it again.
 final class EmbedCache {
     static let shared = EmbedCache()
     private var cache: [URL: Embed] = [:]
+    /// Least recently used first.
+    private var order: [URL] = []
+    private var bytes: [URL: Int] = [:]
+    private var total = 0
+    let limit: Int
+    let byteLimit: Int
+
+    init(limit: Int = 160, byteLimit: Int = 320 << 20) {
+        self.limit = limit
+        self.byteLimit = byteLimit
+    }
     private var waiting: [URL: [() -> Void]] = [:]
     private let queue = DispatchQueue(label: "twain.embeds", qos: .userInitiated, attributes: .concurrent)
 
@@ -56,15 +69,20 @@ final class EmbedCache {
             e.failed = url == nil
             return e
         }
-        if let e = cache[url] { return e }
+        if let e = cache[url] {
+            touch(url)
+            return e
+        }
         let e = Embed(target: target, url: url, kind: kind)
         cache[url] = e
+        order.append(url)
         waiting[url, default: []].append(ready)
         queue.async {
             let img = kind == .video ? Self.videoFrame(url) : Self.thumbnail(url)
             DispatchQueue.main.async {
                 e.image = img
                 e.failed = img == nil
+                if self.cache[url] === e { self.account(url, img) }
                 for w in self.waiting.removeValue(forKey: url) ?? [] { w() }
             }
         }
@@ -72,7 +90,35 @@ final class EmbedCache {
     }
 
     /// Drops a file whose content changed on disk.
-    func forget(_ url: URL) { cache[url] = nil }
+    func forget(_ url: URL) {
+        cache[url] = nil
+        order.removeAll { $0 == url }
+        total -= bytes.removeValue(forKey: url) ?? 0
+    }
+
+    var count: Int { cache.count }
+    var decodedBytes: Int { total }
+
+    private func touch(_ url: URL) {
+        guard order.last != url, let i = order.firstIndex(of: url) else { return }
+        order.remove(at: i)
+        order.append(url)
+    }
+
+    private func account(_ url: URL, _ img: NSImage?) {
+        let px = img.flatMap { $0.representations.first }.map { $0.pixelsWide * $0.pixelsHigh * 4 } ?? 0
+        bytes[url] = px
+        total += px
+        // Never drop one still decoding: its waiters expect it to be there when they restyle.
+        var i = 0
+        while (cache.count > limit || total > byteLimit), i < order.count {
+            let u = order[i]
+            if waiting[u] != nil || u == url { i += 1; continue }
+            order.remove(at: i)
+            cache[u] = nil
+            total -= bytes.removeValue(forKey: u) ?? 0
+        }
+    }
 
     /// Downsampled to what the page can show; keeps memory flat for big photos.
     static func thumbnail(_ url: URL) -> NSImage? {

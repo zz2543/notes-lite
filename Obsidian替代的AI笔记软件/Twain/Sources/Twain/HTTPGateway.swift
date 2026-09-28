@@ -27,16 +27,24 @@ final class HTTPGateway {
             .appendingPathComponent("Twain/http-token")
     }
 
+    /// Read once: every request checks it, and the file only changes when Twain resets it.
+    private static var cachedToken: String?
+
     /// The token, created on first use (random, 0600).
     static func token(reset: Bool = false) -> String {
+        if !reset, let t = cachedToken { return t }
         let u = tokenURL
-        if !reset, let t = try? String(contentsOf: u, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), t.count >= 32 { return t }
+        if !reset, let t = try? String(contentsOf: u, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), t.count >= 32 {
+            cachedToken = t
+            return t
+        }
         var bytes = [UInt8](repeating: 0, count: 24)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         let t = "tw_" + bytes.map { String(format: "%02x", $0) }.joined()
         try? FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? t.write(to: u, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: u.path)
+        cachedToken = t
         return t
     }
 
@@ -147,7 +155,7 @@ final class HTTPGateway {
             return reply(200, ["app": "twain", "api": 1, "vault": JSONValue(m.vault?.name)])
         }
         let auth = r.headers["authorization"].map { $0.replacingOccurrences(of: "Bearer ", with: "") } ?? r.headers["x-twain-token"]
-        guard auth == Self.token() else { return reply(401, ["error": "需要令牌：Authorization: Bearer <令牌>（在共笔的 设置 → 开放接口 里查看）"]) }
+        guard let auth, Secrets.equal(auth, Self.token()) else { return reply(401, ["error": "需要令牌：Authorization: Bearer <令牌>（在共笔的 设置 → 开放接口 里查看）"]) }
         guard m.vault != nil else { return reply(503, ["error": "共笔没有打开任何库"]) }
         let body: JSONValue = r.body.isEmpty ? .object([:]) : ((try? JSONDecoder().decode(JSONValue.self, from: r.body)) ?? .null)
         if !r.body.isEmpty, body.isNull { return reply(400, ["error": "请求体不是合法的 JSON"]) }
