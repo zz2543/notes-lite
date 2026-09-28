@@ -25,6 +25,7 @@
 |---|---|---|
 | 一种新的“模式”（日记、自律、读书……） | 插件：`manifest.json` + 模板 + 规则 | `.twain/plugins/<id>/` |
 | 仪表盘上的一块内容 | 声明式模块（JSON）或 HTML 模块 | 插件的 `manifest.json` / `widgets/*.html` |
+| 笔记里一种新的代码块（```` ```chart ````、```` ```timeline ````） | 代码块渲染器：一个 HTML 页面 | 插件的 `manifest.json` 的 `blocks` / `blocks/*.html`（见 4.1） |
 | 一个 agent 命令（⌘K、斜杠菜单、`twain run`） | Markdown 提示词 | `.twain/commands/*.md` 或插件的 `commands/` |
 | 多步协作流程（带审阅关口） | Markdown 流水线 | `.twain/pipelines/*.md` 或插件的 `pipelines/` |
 | 事件触发的 agent 任务 | Markdown 自动化 | `.twain/automations/*.md` |
@@ -133,6 +134,73 @@ CSS 变量随浅色、深色模式自动切换：`--tw-text`、`--tw-secondary`�
 - 读命令和 `data.add` 直接执行。
 - 改动笔记要用 `propose` 提交，照样进入用户的审阅。
 - 完整示例见自律空间的 `widgets/streaks.html`。
+
+### 4.1 代码块渲染器 `blocks`
+
+插件可以接管一种代码块语言：笔记里写 ```` ```chart ````，光标不在块里时，编辑器显示插件画出来的图，光标进去就回到源码，下方保留预览。和 Mermaid、公式走的是同一套机制。
+
+`manifest.json` 里声明语言和页面（页面路径相对插件文件夹）；插件不必是空间，可以只有这一项：
+
+```json
+{
+  "id": "chart",
+  "name": "条形图",
+  "blocks": { "chart": "blocks/chart.html" }
+}
+```
+
+页面里定义一个全局函数 `twainRenderBlock(source, ctx)`，把内容画进页面即可，可以是异步的：
+
+| 参数 | 说明 |
+|---|---|
+| `source` | 代码块里的文字（不含 ```` ``` ```` 两行） |
+| `ctx.width` | 正文栏的宽度（像素），按它排版 |
+| `ctx.dark` | 是否深色模式；深浅色各画一次 |
+| `ctx.color` | 正文文字颜色，CSS 写法 |
+| `ctx.fontSize` | 正文字号 |
+
+返回值可省略。省略时共笔按页面内容的实际大小截图；也可以返回 `{ width, height }` 指定截图范围。
+
+```html
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; font: 13px -apple-system, "PingFang SC", sans-serif; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+  .label { width: 90px; text-align: right; opacity: .7; }
+  .bar { height: 16px; border-radius: 4px; }
+</style>
+<div id="root"></div>
+<script>
+// 每行“名称: 数值”画成一根条
+window.twainRenderBlock = (source, ctx) => {
+  const rows = source.split('\n').map(l => l.split(/[:：]/))
+    .filter(p => p.length === 2 && !isNaN(parseFloat(p[1])))
+    .map(([k, v]) => [k.trim(), parseFloat(v)]);
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  const root = document.getElementById('root');
+  root.style.color = ctx.color;
+  root.innerHTML = '';
+  for (const [k, v] of rows) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span class="label"></span><span class="bar"></span><span></span>';
+    row.children[0].textContent = k;
+    row.children[1].style.width = Math.round((ctx.width - 180) * v / max) + 'px';
+    row.children[1].style.background = ctx.dark ? '#5e9cff' : '#2f6fde';
+    row.children[2].textContent = v;
+    root.appendChild(row);
+  }
+};
+</script>
+```
+
+规则：
+- 页面在隐藏的沙盒里运行：**不能联网**，只能读自己所在的文件夹；没有 `window.twain`，渲染器只负责画图。
+- 页面不在屏幕上，`requestAnimationFrame` 不会触发，排版请同步完成或用 `setTimeout`。
+- 5 秒内没画完会显示“插件渲染超时”；抛出的错误会显示在代码块的位置。
+- 结果按“内容 + 深浅色 + 宽度”缓存在内存里。改动插件文件夹后，共笔会重新加载页面并重画。
+- `mermaid` 由共笔内置处理，插件不能接管。
 
 ---
 

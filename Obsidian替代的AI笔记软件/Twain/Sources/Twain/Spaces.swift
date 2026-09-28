@@ -25,6 +25,9 @@ extension AppModel {
         }
         // The workbench first, then by name.
         plugins = found.sorted { ($0.id == "workbench" ? 0 : 1, $0.name) < ($1.id == "workbench" ? 0 : 1, $1.name) }
+        // Code blocks a plugin draws are drawn again with its current page.
+        BlockRenderer.shared.reloadPlugins()
+        noteFilesChanged?()
     }
 
     var spaces: [Plugin] { plugins.filter { $0.space != nil } }

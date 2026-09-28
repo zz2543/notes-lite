@@ -362,12 +362,22 @@ final class BlockRenderer: NSObject, WKNavigationDelegate {
         let js = """
         if (typeof window.twainRenderBlock !== 'function') throw new Error('页面没有定义 twainRenderBlock(source, ctx)');
         const r = await window.twainRenderBlock(source, ctx);
-        await new Promise(f => requestAnimationFrame(() => f()));
+        // No requestAnimationFrame here: a page that is never on screen gets no frames.
         const d = document.documentElement;
         return { w: Math.ceil((r && r.width) || Math.min(ctx.width, d.scrollWidth)), h: Math.ceil((r && r.height) || d.scrollHeight) };
         """
+        // A page that never answers mustn't hold up every other picture.
+        var done = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            guard let self, !done else { return }
+            done = true
+            self.finish(key, Rendered(image: nil, size: CGSize(width: width, height: 24), baseline: 18, error: "插件渲染超时（5 秒）"))
+            self.busy = false
+            self.pump()
+        }
         web.callAsyncJavaScript(js, arguments: ["source": key.source, "ctx": ctx], in: nil, in: .page) { [weak self] result in
-            guard let self else { return }
+            guard let self, !done else { return }
+            done = true
             guard case let .success(v) = result, let box = v as? [String: Any] else {
                 var msg = "插件渲染失败"
                 if case let .failure(e) = result { msg += "：" + ((e as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? e.localizedDescription) }
