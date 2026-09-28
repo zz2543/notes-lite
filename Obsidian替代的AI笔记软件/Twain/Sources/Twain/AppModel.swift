@@ -341,7 +341,7 @@ final class AppModel {
         writing = []
         loadProposals()
         sessions.removeAll { $0.source == .terminal }
-        if syncContext { ensureContextFiles() }
+        if syncContext { ensureContextFiles() } else { refreshContextSync() }
         if v.notes.filter({ !$0.isAgentFile }).isEmpty {
             _ = v.create(title: "欢迎使用共笔", content: Self.welcomeNote)
         }
@@ -428,6 +428,7 @@ final class AppModel {
         if !fm.fileExists(atPath: v.url("AGENTS.md").path) { v.forceWrite("AGENTS.md", Self.agentsTemplate) }
         if !fm.fileExists(atPath: v.url("CLAUDE.md").path) { v.forceWrite("CLAUDE.md", Self.claudeTemplate) }
         v.scan()
+        refreshContextSync()
     }
 
     /// `.twain/` marks the folder as a vault for the `twain` command and holds Twain's own files.
@@ -441,9 +442,16 @@ final class AppModel {
         try? "proposals/\nindex/\n".write(to: ignore, atomically: true, encoding: .utf8)
     }
 
-    var contextInSync: Bool {
-        guard let v = vault, let c = v.diskContent("CLAUDE.md") else { return false }
-        return c.contains("@AGENTS.md") && FileManager.default.fileExists(atPath: v.url("AGENTS.md").path)
+    /// CLAUDE.md imports AGENTS.md. Kept up to date when either file changes, rather than read
+    /// from disk each time the sidebar draws.
+    private(set) var contextInSync = false
+
+    func refreshContextSync() {
+        let now: Bool = {
+            guard let v = vault, let c = v.diskContent("CLAUDE.md") else { return false }
+            return c.contains("@AGENTS.md") && FileManager.default.fileExists(atPath: v.url("AGENTS.md").path)
+        }()
+        if now != contextInSync { contextInSync = now }
     }
 
     var activeNote: NoteRef? { activeRel.flatMap { vault?.note($0) } ?? activeRel.map { NoteRef(rel: $0) } }

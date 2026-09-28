@@ -298,3 +298,49 @@ final class SecretsTests: XCTestCase {
         XCTAssertTrue(Secrets.equal("", ""))
     }
 }
+
+final class JSONLinesTests: XCTestCase {
+    func testDrainKeepsThePartialLine() {
+        var d = Data("{\"a\":1}\n\n{\"b\":2}\n{\"c\"".utf8)
+        let objs = JSONLines.drain(&d)
+        XCTAssertEqual(objs.count, 2)
+        XCTAssertEqual(String(decoding: d, as: UTF8.self), "{\"c\"")
+    }
+
+    func testReadContinuesFromTheCursor() throws {
+        let u = FileManager.default.temporaryDirectory.appendingPathComponent("jsonl-\(UUID()).jsonl")
+        defer { try? FileManager.default.removeItem(at: u) }
+        try Data("{\"n\":1}\n{\"n\":2}\n{\"n\":".utf8).write(to: u)
+        let first = JSONLines.read(u, after: nil)
+        XCTAssertTrue(first.fresh)
+        XCTAssertEqual(first.objects.compactMap { $0["n"] as? Int }, [1, 2])
+        XCTAssertEqual(first.cursor.lines, 2)
+
+        let h = try FileHandle(forWritingTo: u)
+        try h.seekToEnd()
+        try h.write(contentsOf: Data("3}\n{\"n\":4}\n".utf8))
+        try h.close()
+        let second = JSONLines.read(u, after: first.cursor)
+        XCTAssertFalse(second.fresh)
+        XCTAssertEqual(second.objects.compactMap { $0["n"] as? Int }, [3, 4])
+        XCTAssertEqual(second.cursor.lines, 4)
+
+        // Nothing new: nothing read.
+        XCTAssertTrue(JSONLines.read(u, after: second.cursor).objects.isEmpty)
+
+        // Replaced by a shorter file: start over.
+        try Data("{\"n\":9}\n".utf8).write(to: u)
+        let third = JSONLines.read(u, after: second.cursor)
+        XCTAssertTrue(third.fresh)
+        XCTAssertEqual(third.objects.compactMap { $0["n"] as? Int }, [9])
+    }
+
+    func testReadTailSkipsTheCutLine() throws {
+        let u = FileManager.default.temporaryDirectory.appendingPathComponent("jsonl-\(UUID()).jsonl")
+        defer { try? FileManager.default.removeItem(at: u) }
+        try Data("{\"n\":1111111}\n{\"n\":2}\n".utf8).write(to: u)
+        let r = JSONLines.read(u, after: nil, cap: 12)
+        XCTAssertEqual(r.objects.compactMap { $0["n"] as? Int }, [2])
+        XCTAssertEqual(r.cursor.offset, UInt64("{\"n\":1111111}\n{\"n\":2}\n".utf8.count))
+    }
+}

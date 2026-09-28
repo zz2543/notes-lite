@@ -53,6 +53,8 @@ final class AgentSession: Identifiable {
     var deskID: String?
     @ObservationIgnored var transcript: URL?
     @ObservationIgnored var transcriptStamp: Date?
+    /// How far the terminal session's transcript has been read, so each scan reads only what was added.
+    @ObservationIgnored var transcriptCursor: JSONLines.Cursor?
     @ObservationIgnored var changeItems: [SessionItem] = []
     @ObservationIgnored var process: AgentProcess?
 
@@ -247,18 +249,22 @@ final class TerminalWatcher {
 
     /// Parses (the tail of) a transcript into events.
     static func events(transcript u: URL, agent: AgentKind, root: String, cap: UInt64 = 3 * 1024 * 1024) -> [AgentEvent] {
-        guard let h = try? FileHandle(forReadingFrom: u) else { return [] }
-        defer { try? h.close() }
-        let size = (try? h.seekToEnd()) ?? 0
-        try? h.seek(toOffset: size > cap ? size - cap : 0)
-        var data = h.readDataToEndOfFile()
-        if size > cap, let nl = data.firstIndex(of: 0x0A) { data.removeSubrange(data.startIndex...nl) }
-        data.append(0x0A)
-        let objs = JSONLines.drain(&data)
+        let r = JSONLines.read(u, after: nil, cap: cap)
+        return events(r.objects, agent: agent, root: root, first: 0)
+    }
+
+    /// What was added to a transcript since `cursor` (all of its tail when nil).
+    static func read(transcript u: URL, agent: AgentKind, root: String, after cursor: JSONLines.Cursor?) -> (events: [AgentEvent], cursor: JSONLines.Cursor, fresh: Bool) {
+        let r = JSONLines.read(u, after: cursor)
+        return (events(r.objects, agent: agent, root: root, first: r.fresh ? 0 : cursor?.lines ?? 0), r.cursor, r.fresh)
+    }
+
+    /// `first` numbers the objects, so step ids stay unique across incremental reads.
+    static func events(_ objs: [[String: Any]], agent: AgentKind, root: String, first: Int) -> [AgentEvent] {
         var out: [AgentEvent] = []
         for (i, o) in objs.enumerated() {
             out += agent == .claude ? ClaudeStream.events(from: o, root: root, transcript: true)
-                                    : CodexRollout.events(from: o, root: root, index: i)
+                                    : CodexRollout.events(from: o, root: root, index: first + i)
         }
         return out.filter { if case .finished = $0 { return false }; return true }
     }

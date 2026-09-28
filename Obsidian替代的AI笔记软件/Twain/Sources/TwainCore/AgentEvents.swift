@@ -255,13 +255,58 @@ public enum CodexRollout {
 
 public enum JSONLines {
     /// Splits a buffer into complete lines and leaves the trailing partial line in `buffer`.
+    /// Linear: the consumed lines are cut off once at the end, not one at a time from the front.
     public static func drain(_ buffer: inout Data) -> [[String: Any]] {
         var out: [[String: Any]] = []
-        while let nl = buffer.firstIndex(of: 0x0A) {
-            let line = buffer[buffer.startIndex..<nl]
-            buffer.removeSubrange(buffer.startIndex...nl)
-            if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] { out.append(obj) }
+        var start = buffer.startIndex
+        while let nl = buffer[start...].firstIndex(of: 0x0A) {
+            if nl > start, let obj = try? JSONSerialization.jsonObject(with: buffer[start..<nl]) as? [String: Any] { out.append(obj) }
+            start = buffer.index(after: nl)
         }
+        if start > buffer.startIndex { buffer = Data(buffer[start...]) }
         return out
+    }
+
+    /// Where the next read of a growing JSONL file starts: just past the last complete line.
+    public struct Cursor: Equatable, Sendable {
+        public var offset: UInt64
+        /// Objects read so far, for numbering what comes next.
+        public var lines: Int
+
+        public init(offset: UInt64 = 0, lines: Int = 0) {
+            self.offset = offset
+            self.lines = lines
+        }
+    }
+
+    /// The complete lines of `url` after `cursor`, or of its last `cap` bytes when there is no
+    /// cursor (or the file got shorter, i.e. was replaced). `fresh` is true when reading started
+    /// over, so earlier results must be dropped rather than extended.
+    public static func read(_ url: URL, after cursor: Cursor?, cap: UInt64 = 3 << 20) -> (objects: [[String: Any]], cursor: Cursor, fresh: Bool) {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return ([], cursor ?? Cursor(), cursor == nil) }
+        defer { try? h.close() }
+        let size = (try? h.seekToEnd()) ?? 0
+        var fresh = false
+        var start: UInt64
+        var lines = cursor?.lines ?? 0
+        if let c = cursor, c.offset <= size {
+            start = c.offset
+        } else {
+            fresh = true
+            lines = 0
+            start = size > cap ? size - cap : 0
+        }
+        try? h.seek(toOffset: start)
+        var data = h.readDataToEndOfFile()
+        // Starting mid-file: the first line is a fragment.
+        if fresh, start > 0 {
+            guard let nl = data.firstIndex(of: 0x0A) else { return ([], Cursor(offset: start, lines: 0), true) }
+            start += UInt64(data.distance(from: data.startIndex, to: nl) + 1)
+            data = Data(data[data.index(after: nl)...])
+        }
+        let total = data.count
+        let objects = drain(&data)
+        let consumed = UInt64(total - data.count)
+        return (objects, Cursor(offset: start + consumed, lines: lines + objects.count), fresh)
     }
 }

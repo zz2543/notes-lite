@@ -313,6 +313,7 @@ extension AppModel {
     /// Changes that did not come from Twain's own writes.
     func filesChanged(_ rels: [String]) {
         guard let v = vault else { return }
+        if rels.contains("CLAUDE.md") || rels.contains("AGENTS.md") { refreshContextSync() }
         // Notes shown embedded in the open one may be among them.
         if rels.contains(where: { $0 != activeRel && $0.hasSuffix(".md") }) { noteFilesChanged?() }
         let appRunning = sessions.contains { $0.source == .app && $0.running }
@@ -404,50 +405,75 @@ extension AppModel {
         if activeSession == nil { activeSessionID = sessions.first?.id }
     }
 
+    /// What a scan found in one terminal session's transcript.
+    struct TranscriptUpdate {
+        var url: URL
+        var stamp: Date
+        var cursor: JSONLines.Cursor
+        var events: [AgentEvent]
+        /// The transcript was read from its start (new, replaced, or another file): replace, don't extend.
+        var fresh: Bool
+    }
+
     func pollTerminal() {
         guard watchTerminal, let v = vault else { return }
         let root = v.rootPath
+        // Taken here, on the main thread, so the scan never has to wait for it.
+        let known: [Int32: (url: URL?, stamp: Date?, cursor: JSONLines.Cursor?)] = Dictionary(
+            sessions.compactMap { s in s.pid.map { ($0, (s.transcript, s.transcriptStamp, s.transcriptCursor)) } },
+            uniquingKeysWith: { a, _ in a })
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let found = TerminalWatcher.scan(root: root)
-            let transcripts = found.map { f in
-                (f, f.agent == .claude ? TerminalWatcher.claudeTranscript(cwd: f.cwd) : TerminalWatcher.codexTranscript(cwd: f.cwd))
-            }
-            var parsed: [Int32: (URL, Date, [AgentEvent])] = [:]
-            let known = DispatchQueue.main.sync { [weak self] in
-                Dictionary(uniqueKeysWithValues: (self?.sessions ?? []).compactMap { s in s.pid.map { ($0, s.transcriptStamp) } })
-            }
-            for (f, u) in transcripts {
+            var updates: [Int32: TranscriptUpdate] = [:]
+            for f in found {
+                let u = f.agent == .claude ? TerminalWatcher.claudeTranscript(cwd: f.cwd) : TerminalWatcher.codexTranscript(cwd: f.cwd)
                 guard let u, let m = TerminalWatcher.modified(u) else { continue }
-                if let stamp = known[f.pid], stamp == m { continue }
-                parsed[f.pid] = (u, m, TerminalWatcher.events(transcript: u, agent: f.agent, root: root))
+                let k = known[f.pid]
+                if k?.url == u, k?.stamp == m { continue }
+                let r = TerminalWatcher.read(transcript: u, agent: f.agent, root: root, after: k?.url == u ? k?.cursor : nil)
+                updates[f.pid] = TranscriptUpdate(url: u, stamp: m, cursor: r.cursor, events: r.events, fresh: r.fresh)
             }
-            DispatchQueue.main.async { self?.applyTerminalScan(found, parsed) }
+            DispatchQueue.main.async { self?.applyTerminalScan(found, updates) }
         }
     }
 
-    func applyTerminalScan(_ found: [TerminalWatcher.Found], _ parsed: [Int32: (URL, Date, [AgentEvent])]) {
+    /// Only what changed is assigned: an observed property notifies the UI on every assignment,
+    /// equal value or not, and this runs every three seconds.
+    func applyTerminalScan(_ found: [TerminalWatcher.Found], _ updates: [Int32: TranscriptUpdate]) {
         let pids = Set(found.map(\.pid))
+        let now = Date()
+        for (pid, up) in updates {
+            guard let s = sessions.first(where: { $0.pid == pid }) else { continue }
+            s.transcriptStamp = up.stamp
+        }
         for s in sessions where s.source == .terminal {
-            s.alive = s.pid.map(pids.contains) ?? false
-            s.running = s.alive && Date().timeIntervalSince(s.lastActivity) < 15
+            let alive = s.pid.map(pids.contains) ?? false
+            if s.alive != alive { s.alive = alive }
+            let running = alive && now.timeIntervalSince(s.lastActivity) < 15
+            if s.running != running { s.running = running }
         }
         for f in found where !sessions.contains(where: { $0.pid == f.pid }) {
             let s = AgentSession(agent: f.agent, source: .terminal, title: "终端会话")
             s.pid = f.pid
+            s.transcriptStamp = updates[f.pid]?.stamp
             sessions.insert(s, at: 0)
             if activeSessionID == nil { activeSessionID = s.id }
         }
-        for (pid, (u, stamp, events)) in parsed {
+        for (pid, up) in updates {
             guard let s = sessions.first(where: { $0.pid == pid }) else { continue }
-            s.transcript = u
-            s.transcriptStamp = stamp
-            s.items = []
-            s.title = "终端会话"
-            s.apply(events)
+            s.transcript = up.url
+            s.transcriptCursor = up.cursor
+            if up.fresh {
+                s.items = []
+                if s.title != "终端会话" { s.title = "终端会话" }
+            }
+            guard up.fresh || !up.events.isEmpty else { continue }
+            s.apply(up.events)
             s.settleSteps()
-            s.items += s.changeItems
+            // Changes it made are kept across a fresh read of the transcript.
+            if up.fresh { s.items += s.changeItems }
             if let firstUser = s.items.first(where: { if case .user = $0.kind { return true }; return false }),
-               case let .user(t) = firstUser.kind {
+               case let .user(t) = firstUser.kind, s.title != String(t.prefix(10)) {
                 s.title = String(t.prefix(10))
             }
         }
