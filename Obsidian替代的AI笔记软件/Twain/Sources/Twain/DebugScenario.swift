@@ -117,6 +117,8 @@ enum DebugScenario {
             }
         case "perf":
             perf(m)
+        case "stress":
+            DebugStress.run(m, count: parts.count > 1 ? Int(parts[1]) ?? 44 : 44)
         case "rendertest":
             // Renders a few formulas and a diagram and writes them next to TWAIN_RENDER_OUT.
             let out = ProcessInfo.processInfo.environment["TWAIN_RENDER_OUT"] ?? "/tmp/twain-render"
