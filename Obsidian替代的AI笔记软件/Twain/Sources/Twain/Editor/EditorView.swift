@@ -45,7 +45,7 @@ struct EditorView: NSViewRepresentable {
         tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.usesFindBar = true
         tv.isIncrementalSearchingEnabled = true
-        tv.registerForDraggedTypes([.fileURL, .png, .tiff])
+        tv.registerForDraggedTypes([.fileURL] + Coordinator.imageTypes)
 
         let scroll = EditorScrollView()
         scroll.documentView = tv
@@ -560,11 +560,18 @@ struct EditorView: NSViewRepresentable {
             return urls.filter { mediaExtensions.contains($0.pathExtension.lowercased()) }
         }
 
-        /// Pictures and video files: from Finder, a screenshot, or a copied image. Text wins when both are there.
+        static let imageTypes: [NSPasteboard.PasteboardType] = [.png, .tiff, NSPasteboard.PasteboardType("public.jpeg"),
+                                                                 NSPasteboard.PasteboardType("public.heic")]
+
+        /// Pictures and video files: from Finder, a screenshot, or a copied image. Real text wins
+        /// when both are there; a browser's "Copy Image" also puts the picture's address as text,
+        /// and then the picture wins.
         static func hasMedia(_ pb: NSPasteboard) -> Bool {
             if !mediaURLs(pb).isEmpty { return true }
-            let hasText = pb.availableType(from: [.string]) != nil
-            return !hasText && pb.availableType(from: [.png, .tiff]) != nil
+            guard pb.availableType(from: imageTypes) != nil else { return false }
+            guard let text = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return true }
+            let isAddress = !text.contains("\n") && !text.contains(" ") && (text.hasPrefix("http://") || text.hasPrefix("https://") || text.hasPrefix("file://"))
+            return isAddress
         }
 
         /// Stores the pasted or dropped media as attachments and links them on their own lines.
@@ -576,8 +583,11 @@ struct EditorView: NSViewRepresentable {
                 names = urls.compactMap { model.importAttachment($0) }
             } else if let data = pb.data(forType: .png) {
                 names = model.saveAttachment(data, ext: "png").map { [$0] } ?? []
-            } else if let data = pb.data(forType: .tiff), let rep = NSBitmapImageRep(data: data),
-                      let png = rep.representation(using: .png, properties: [:]) {
+            } else if let data = pb.data(forType: NSPasteboard.PasteboardType("public.jpeg")) {
+                // Photos stay JPEG: re-encoding them as PNG makes them several times larger.
+                names = model.saveAttachment(data, ext: "jpg").map { [$0] } ?? []
+            } else if let data = pb.data(forType: .tiff) ?? pb.data(forType: NSPasteboard.PasteboardType("public.heic")),
+                      let rep = NSBitmapImageRep(data: data), let png = rep.representation(using: .png, properties: [:]) {
                 names = model.saveAttachment(png, ext: "png").map { [$0] } ?? []
             }
             guard !names.isEmpty else { return false }

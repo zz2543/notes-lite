@@ -134,7 +134,7 @@ final class TwainTextView: NSTextView {
     // MARK: paste & drop
 
     override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
-        super.readablePasteboardTypes + [.fileURL, .png, .tiff]
+        super.readablePasteboardTypes + [.fileURL] + EditorView.Coordinator.imageTypes
     }
 
     override func paste(_ sender: Any?) {

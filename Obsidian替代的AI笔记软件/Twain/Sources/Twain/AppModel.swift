@@ -81,6 +81,8 @@ final class AppModel {
     var font: EditorFont = .serif { didSet { save("font", font.rawValue) } }
     var typewriter = true { didSet { save("typewriter", typewriter) } }
     var dim = true { didSet { save("dim", dim) } }
+    /// How pasted pictures are named (`Attachments.swift`).
+    var attachmentNaming: AttachmentNaming = .pasted { didSet { save("attachmentName", attachmentNaming.rawValue) } }
     var ghostOn = false { didSet { save("ghostOn", ghostOn); if !ghostOn { clearGhost() } } }
     var syncContext = true { didSet { save("syncCtx", syncContext); if syncContext { ensureContextFiles() } } }
     var watchTerminal = true { didSet { save("watchExt", watchTerminal); if !watchTerminal { dropTerminalSessions() } } }
@@ -286,6 +288,7 @@ final class AppModel {
         font = EditorFont(rawValue: defaults.string(forKey: "pref.font") ?? "") ?? .serif
         typewriter = b("typewriter", true)
         dim = b("dim", true)
+        attachmentNaming = AttachmentNaming(rawValue: defaults.string(forKey: "pref.attachmentName") ?? "") ?? .pasted
         ghostOn = b("ghostOn", false)
         syncContext = b("syncCtx", true)
         watchTerminal = b("watchExt", true)

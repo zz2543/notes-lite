@@ -85,7 +85,21 @@ enum DebugScenario {
         let parts = name.split(separator: ":").map(String.init)
         let rel = parts.count > 1 ? parts[1] : "项目/2.0 发布计划.md"
         if parts.first == "space" { apply2(parts, m); return }
-        if parts.first == "settings" { m.openSettings(SettingsTab(rawValue: parts.count > 1 ? parts[1] : "open") ?? .open); return }
+        if parts.first == "settings" {
+            m.openSettings(SettingsTab(rawValue: parts.count > 1 ? parts[1] : "open") ?? .open)
+            // settings:<tab>:bottom — scrolls the page to its end, for sections below the fold.
+            if parts.count > 2, parts[2] == "bottom" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    func views(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(views) }
+                    for w in NSApp.windows where w.isVisible {
+                        for case let sv as NSScrollView in views(w.contentView ?? NSView()) {
+                            if let doc = sv.documentView { doc.scroll(NSPoint(x: 0, y: doc.isFlipped ? doc.bounds.height : 0)) }
+                        }
+                    }
+                }
+            }
+            return
+        }
         if m.vault?.note(rel) != nil { m.open(rel) }
         switch parts.first ?? "" {
         case "toggles":
@@ -176,6 +190,31 @@ enum DebugScenario {
                 DispatchQueue.main.async { step() }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { step() }
+        case "pastetest":
+            // pastetest:<note>:<attachmentFolderPath>:<naming> — pastes a picture twice (with its
+            // address as text, like a browser's Copy Image) and reports the files and the note.
+            if parts.count > 2 { m.attachmentSetting = parts[2] }
+            if parts.count > 3, let n = AttachmentNaming(rawValue: parts[3]) { m.attachmentNaming = n }
+            m.requestFocus(caret: (m.editorText as NSString).length)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                let img = NSImage(size: NSSize(width: 40, height: 30), flipped: false) { r in NSColor.systemTeal.setFill(); r.fill(); return true }
+                let pb = NSPasteboard(name: NSPasteboard.Name("twain.pastetest"))
+                pb.clearContents()
+                pb.setData(NSBitmapImageRep(data: img.tiffRepresentation!)!.representation(using: .png, properties: [:])!, forType: .png)
+                pb.setString("https://example.com/a.png", forType: .string)
+                let tv = textView()!
+                let c = tv.coordinator!
+                let ok1 = c.pasteMedia(from: pb, at: nil)
+                let ok2 = c.pasteMedia(from: pb, at: nil)
+                let text = NSPasteboard(name: NSPasteboard.Name("twain.pastetest2"))
+                text.clearContents()
+                text.setString("第一行\n第二行 普通文字", forType: .string)
+                text.setData(pb.data(forType: .png), forType: .png)
+                let ok3 = c.pasteMedia(from: text, at: nil)
+                let files = (FileManager.default.enumerator(atPath: m.vault!.rootPath)?.allObjects as? [String] ?? []).filter { $0.hasSuffix(".png") }.sorted()
+                let log = "pastetest ok=\(ok1),\(ok2) textWins=\(!ok3) setting=\(m.attachmentSetting) files=\(files) tail=\(m.editorText.suffix(80).replacingOccurrences(of: "\n", with: "⏎"))\n"
+                FileHandle.standardError.write(log.data(using: .utf8)!)
+            }
         case "scroll":
             // scroll:<note>:<y> — scrolls the editor to y points without touching the caret.
             let y = CGFloat(Double(parts.count > 2 ? parts[2] : "0") ?? 0)

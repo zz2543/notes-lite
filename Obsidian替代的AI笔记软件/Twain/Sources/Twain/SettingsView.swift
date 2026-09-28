@@ -79,8 +79,91 @@ struct EditorSettings: View {
                 }
                 .disabled(model.cli[.claude]?.found == false)
             }
+            AttachmentSettings(model: model)
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Where pasted and dropped pictures are saved, and what they are called.
+struct AttachmentSettings: View {
+    @Bindable var model: AppModel
+    @State private var place: AttachmentPlace = .folder
+    @State private var name = "附件"
+    @State private var loaded = false
+
+    var body: some View {
+        Section {
+            Picker("保存到", selection: $place) {
+                ForEach(AttachmentPlace.allCases) { Text($0.label).tag($0) }
+            }
+            if place == .folder || place == .subfolder {
+                LabeledContent(place == .folder ? "文件夹" : "子文件夹名") {
+                    HStack {
+                        TextField("", text: $name, prompt: Text(place == .folder ? "附件" : "assets"))
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(apply)
+                        if place == .folder {
+                            Button("选择…", action: choose)
+                        }
+                    }
+                }
+            }
+            Picker("文件名", selection: $model.attachmentNaming) {
+                ForEach(AttachmentNaming.allCases) { Text($0.label).tag($0) }
+            }
+            LabeledContent("示例") {
+                Text(example).font(.callout.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            }
+        } header: {
+            Text("粘贴的图片")
+        } footer: {
+            Text(model.attachmentSettingIsShared
+                 ? "粘贴或拖入图片时保存到这里，并在笔记里插入 ![[文件名]]。这个位置写在 .obsidian/app.json 里，和 Obsidian 共用。"
+                 : "粘贴或拖入图片时保存到这里，并在笔记里插入 ![[文件名]]。")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .disabled(model.vault == nil)
+        .onAppear {
+            let (p, n) = AttachmentPlace.parse(model.attachmentSetting)
+            place = p
+            name = n.isEmpty ? (p == .subfolder ? "assets" : "附件") : n
+            loaded = true
+        }
+        .onChange(of: place) { if loaded { apply() } }
+        .onChange(of: name) { if loaded { apply() } }
+    }
+
+    private var example: String {
+        let note = model.activeRel ?? "笔记.md"
+        let folder: String = switch place {
+        case .folder: name.isEmpty ? "附件" : name
+        case .root: ""
+        case .noteFolder: (note as NSString).deletingLastPathComponent
+        case .subfolder: ((note as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name.isEmpty ? "assets" : name)
+        }
+        let file = model.pastedName(ext: "png")
+        return folder.isEmpty ? file : folder + "/" + file
+    }
+
+    private func apply() {
+        let value = place.setting(name)
+        if value != model.attachmentSetting { model.attachmentSetting = value }
+    }
+
+    /// Picks a folder inside the vault.
+    private func choose() {
+        guard let v = model.vault else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = v.root.appendingPathComponent(name)
+        panel.prompt = "选择"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let rel = v.relative(url.path)
+        guard !rel.hasPrefix("/") else { model.showToast("请选择库里的文件夹"); return }
+        name = rel
     }
 }
 
