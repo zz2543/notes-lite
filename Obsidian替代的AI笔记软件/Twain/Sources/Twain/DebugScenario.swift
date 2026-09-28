@@ -33,8 +33,8 @@ enum DebugScenario {
         guard let v = m.vault else { return }
         log(String(format: "perf launch→ready %.0fms (includes the 1.5s scenario delay)", uptime() * 1000))
         log(String(format: "perf notes=%d folders=%d", v.notes.count, v.folders.count))
-        log(String(format: "perf vault.scan %.1fms", ms { v.scan() }))
-        let cold = VaultIndex(root: v.root)
+        log(String(format: "perf vault walk %.1fms", ms { _ = VaultListing.walk(v.root) }))
+        var cold = VaultIndex(root: v.root)
         log(String(format: "perf index cold %.1fms", ms { cold.refresh() }))
         log(String(format: "perf index warm %.1fms", ms { cold.refresh() }))
         let store = SummaryStore(vault: v.root)
@@ -332,6 +332,8 @@ enum DebugScenario {
             ]
             m.propose(CommandCall(params: ["note": .string(m.activeRel!), "edits": .array(edits), "reason": "精简措辞，让每段先说结论"],
                                   session: s)) { _ in }
+            // The proposal is made once the index has caught up (a moment later).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             m.setHunk(1, .rejected)
             m.setFeedback(1, "这里需要保留原来的解释")
             m.showDiff = parts.count < 3 || parts[2] != "panel"
@@ -343,6 +345,7 @@ enum DebugScenario {
                 s.items.append(SessionItem(kind: .question(q.id)))
                 s.items.append(SessionItem(kind: .feedback(rel: m.activeRel!, message: "我审阅了你的修改：接受 1 处，拒绝 1 处。", sent: false)))
                 m.agentPanel = true
+            }
             }
         case "ime":
             // Return while Pinyin is composing must commit the candidate, not send; plain Return must send.

@@ -200,7 +200,7 @@ extension AppModel {
             showToast("没能保存图片：\(error.localizedDescription)")
             return nil
         }
-        v.scan()
+        v.attachmentAdded(rel)
         return embedName(rel)
     }
 
@@ -217,7 +217,7 @@ extension AppModel {
             showToast("没能复制 \(url.lastPathComponent)：\(error.localizedDescription)")
             return nil
         }
-        v.scan()
+        v.attachmentAdded(rel)
         return embedName(rel)
     }
 }

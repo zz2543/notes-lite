@@ -257,11 +257,13 @@ extension AppModel {
         NSApp.activate(ignoringOtherApps: true)
         switch host {
         case "open":
-            guard let ref = q["note"] ?? q["path"], let index, let rel = (try? freshIndex()).flatMap({ $0.0.resolve(ref) }) ?? index.resolve(ref) else {
-                return showToast("找不到笔记：\(q["note"] ?? "")")
+            guard let ref = q["note"] ?? q["path"] else { return showToast("找不到笔记：") }
+            withFreshIndex { [weak self] r in
+                guard let self else { return }
+                guard case let .success((index, _)) = r, let rel = index.resolve(ref) else { return self.showToast("找不到笔记：\(ref)") }
+                self.open(rel)
+                if let line = q["line"].flatMap(Int.init) { self.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: self.editorText)) }
             }
-            open(rel)
-            if let line = q["line"].flatMap(Int.init) { requestFocus(caret: CommandRegistry.offset(ofLine: line, in: editorText)) }
         case "new":
             var body: [String: JSONValue] = ["content": .string(q["content"] ?? "# \(q["title"] ?? "未命名")\n"), "open": true]
             if let t = q["title"] { body["title"] = .string(t) }

@@ -134,7 +134,7 @@ final class VaultIndexTests: XCTestCase {
     }
 
     func testResolve() {
-        let i = VaultIndex(root: root)
+        var i = VaultIndex(root: root)
         i.refresh()
         XCTAssertEqual(i.paths.count, 4)
         XCTAssertEqual(i.resolve("收件箱"), "收件箱.md")
@@ -146,7 +146,7 @@ final class VaultIndexTests: XCTestCase {
     }
 
     func testBacklinks() {
-        let i = VaultIndex(root: root)
+        var i = VaultIndex(root: root)
         i.refresh()
         let hits = i.backlinks(to: "项目/同步引擎.md")
         // The explicit path link counts; the bare title resolves to the other note of that name.
@@ -155,7 +155,7 @@ final class VaultIndexTests: XCTestCase {
     }
 
     func testSearchRanksTitleFirst() {
-        let i = VaultIndex(root: root)
+        var i = VaultIndex(root: root)
         i.refresh()
         let hits = i.search("同步引擎")
         XCTAssertEqual(hits.first?.line, nil)
@@ -165,7 +165,7 @@ final class VaultIndexTests: XCTestCase {
     }
 
     func testSearchMatchesEditedTextAndSkipsDamagedFiles() throws {
-        let i = VaultIndex(root: root)
+        var i = VaultIndex(root: root)
         // A file of NULs (a broken iCloud download) is indexed empty rather than searched.
         try Data(repeating: 0, count: 4096).write(to: root.appendingPathComponent("坏文件.md"))
         i.refresh()
@@ -180,7 +180,7 @@ final class VaultIndexTests: XCTestCase {
     }
 
     func testTasksAndRefresh() throws {
-        let i = VaultIndex(root: root)
+        var i = VaultIndex(root: root)
         i.refresh()
         XCTAssertEqual(i.tasks().map(\.task.text), ["读 [[同步引擎]] 的方案", "压测"])
         XCTAssertEqual(i.tasks(includeDone: true).count, 3)
@@ -198,7 +198,7 @@ final class VaultIndexTests: XCTestCase {
     }
 
     func testQueriesShareOneShape() throws {
-        let i = VaultIndex(root: root)
+        var i = VaultIndex(root: root)
         i.refresh()
         let out = try VaultQueries.run("outline", ["note": "同步引擎"], index: i, current: nil)
         XCTAssertEqual(out["note"], "日记/同步引擎.md")

@@ -80,7 +80,7 @@ func offline(_ spec: CommandSpec, _ params: [String: JSONValue]) throws -> JSONV
     guard let root = vaultRoot else {
         throw RPCError(RPCError.appNotRunning, "共笔没有运行，当前目录也不在任何库里（找不到 .twain/）")
     }
-    let index = VaultIndex(root: root)
+    var index = VaultIndex(root: root)
     index.refresh()
     return try VaultQueries.run(spec.id, params, index: index, current: nil)
 }

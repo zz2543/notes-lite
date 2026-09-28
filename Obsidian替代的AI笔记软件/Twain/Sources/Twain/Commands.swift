@@ -44,9 +44,27 @@ struct AppCommand {
     init(spec: CommandSpec, palette: PaletteInfo? = nil, agents: Bool = true,
          run: @escaping @MainActor (AppModel, CommandCall) throws -> JSONValue) {
         self.init(spec: spec, palette: palette, agents: agents) { m, call, reply in
-            do { reply(.success(try run(m, call))) } catch let e as RPCError { reply(.failure(e)) } catch {
-                reply(.failure(RPCError(RPCError.internalError, error.localizedDescription)))
+            reply(Self.attempt { try run(m, call) })
+        }
+    }
+
+    /// Answers from the index once it has caught up with the disk (walked off the main thread)
+    /// and with the editor's unsaved text.
+    init(spec: CommandSpec, palette: PaletteInfo? = nil, agents: Bool = true,
+         indexed run: @escaping @MainActor (AppModel, CommandCall, VaultIndex, Vault) throws -> JSONValue) {
+        self.init(spec: spec, palette: palette, agents: agents) { m, call, reply in
+            m.withFreshIndex { result in
+                switch result {
+                case let .success((index, v)): reply(Self.attempt { try run(m, call, index, v) })
+                case let .failure(e): reply(.failure(e))
+                }
             }
+        }
+    }
+
+    static func attempt(_ f: () throws -> JSONValue) -> Result<JSONValue, RPCError> {
+        do { return .success(try f()) } catch let e as RPCError { return .failure(e) } catch {
+            return .failure(RPCError(RPCError.internalError, error.localizedDescription))
         }
     }
 }
@@ -159,8 +177,8 @@ enum CommandRegistry {
         AppCommand(spec: CommandSpec("debug.aireview", "（调试）AI 审阅一篇笔记，等运行结束", effect: .write, params: [
             ParamSpec("note", required: true, positional: true, help: "笔记"),
             ParamSpec("model", help: "模型"),
-        ])) { m, call, reply in
-            guard let (index, _) = try? m.freshIndex(), let rel = index.resolve(call.params["note"]?.string ?? "") else {
+        ])) { m, call, reply in m.withFreshIndex { r in
+            guard case let .success((index, _)) = r, let rel = index.resolve(call.params["note"]?.string ?? "") else {
                 return reply(.failure(RPCError(RPCError.notFound, "找不到笔记")))
             }
             m.open(rel)
@@ -172,7 +190,7 @@ enum CommandRegistry {
                 else { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { poll() } }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { poll() }
-        },
+        } },
         AppCommand(spec: CommandSpec("debug.companion", "（调试）在当前笔记末尾写一段，等伴写给出一句话", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "追加的文字"),
         ])) { m, call, reply in
@@ -292,7 +310,7 @@ enum CommandRegistry {
     // MARK: agent-facing
 
     static let agentCommands: [AppCommand] = [
-        AppCommand(spec: TwainCommands.context) { m, call in try m.contextJSON(session: call.session) },
+        AppCommand(spec: TwainCommands.context) { m, call, index, v in m.contextJSON(session: call.session, index: index, vault: v) },
         query(TwainCommands.notes),
         query(TwainCommands.search),
         query(TwainCommands.skim),
@@ -301,8 +319,7 @@ enum CommandRegistry {
         query(TwainCommands.outline),
         query(TwainCommands.tasks),
         query(TwainCommands.reviews),
-        AppCommand(spec: TwainCommands.open) { m, call in
-            let (index, _) = try m.freshIndex()
+        AppCommand(spec: TwainCommands.open) { m, call, index, _ in
             let rel = try VaultQueries.note(call.params, index: index, current: nil)
             var line = call.params["line"]?.int
             if let heading = call.params["heading"]?.string {
@@ -317,8 +334,7 @@ enum CommandRegistry {
             m.requestFocus(caret: caret)
             return ["note": .string(rel), "line": JSONValue(line ?? 1)]
         },
-        AppCommand(spec: TwainCommands.reveal) { m, call in
-            let (index, _) = try m.freshIndex()
+        AppCommand(spec: TwainCommands.reveal) { m, call, index, _ in
             let rel = try VaultQueries.note(call.params, index: index, current: nil)
             if m.columnVisibility == .detailOnly { m.columnVisibility = .all }
             m.revealInSidebar(rel)
@@ -345,8 +361,8 @@ enum CommandRegistry {
             return ["command": .string(cmd.key), "session": .string(s.id.uuidString), "agent": .string(cmd.agent.rawValue)]
         },
         AppCommand(spec: TwainCommands.watch) { m, call, reply in m.watch(call, reply: reply) },
-        AppCommand(spec: TwainCommands.annotate) { m, call in try m.annotateCommand(call) },
-        AppCommand(spec: TwainCommands.cards) { m, call in try m.cardsCommand(call) },
+        AppCommand(spec: TwainCommands.annotate) { m, call, index, v in try m.annotateCommand(call, index: index, vault: v) },
+        AppCommand(spec: TwainCommands.cards) { m, call, index, _ in try m.cardsCommand(call, index: index) },
     ] + TwainCommands.dataCommands.map { spec in
         AppCommand(spec: spec) { m, call in
             guard let v = m.vault else { throw RPCError(RPCError.noVault, "共笔没有打开任何库") }
@@ -355,7 +371,7 @@ enum CommandRegistry {
             return r
         }
     } + [
-        AppCommand(spec: TwainCommands.annotations) { m, call in try m.annotationsCommand(call) },
+        AppCommand(spec: TwainCommands.annotations) { m, call, index, v in try m.annotationsCommand(call, index: index, vault: v) },
         AppCommand(spec: TwainCommands.commands) { m, _ in
             ["commands": .array(exposed(m).map(\.spec.json))]
         },
@@ -373,9 +389,8 @@ enum CommandRegistry {
 
     /// A read command answered from the index, identically to the CLI's offline mode.
     static func query(_ spec: CommandSpec) -> AppCommand {
-        AppCommand(spec: spec) { m, call in
-            let (index, _) = try m.freshIndex()
-            return try VaultQueries.run(spec.id, call.params, index: index, current: m.activeRel)
+        AppCommand(spec: spec) { m, call, index, _ in
+            try VaultQueries.run(spec.id, call.params, index: index, current: m.activeRel)
         }
     }
 
@@ -443,16 +458,19 @@ enum CommandRegistry {
 }
 
 extension AppModel {
-    /// The index brought up to date with the disk and with the editor's unsaved text.
-    func freshIndex() throws -> (VaultIndex, Vault) {
-        guard let v = vault, let index else { throw RPCError(RPCError.noVault, "共笔没有打开任何库") }
-        index.refresh()
-        if dirty, let rel = activeRel { index.update(rel, text: editorText) }
-        return (index, v)
+    /// The index brought up to date with the disk (walked off the main thread) and with the
+    /// editor's unsaved text; `body` runs on the main thread.
+    func withFreshIndex(_ body: @escaping @MainActor (Result<(VaultIndex, Vault), RPCError>) -> Void) {
+        guard let v = vault else { return body(.failure(RPCError(RPCError.noVault, "共笔没有打开任何库"))) }
+        v.refresh { [weak self] fresh in
+            guard let self, self.vault === v else { return body(.failure(RPCError(RPCError.noVault, "共笔没有打开任何库"))) }
+            var index = fresh
+            if self.dirty, let rel = self.activeRel { index.update(rel, text: self.editorText) }
+            body(.success((index, v)))
+        }
     }
 
-    func contextJSON(session: AgentSession?) throws -> JSONValue {
-        let (index, v) = try freshIndex()
+    func contextJSON(session: AgentSession?, index: VaultIndex, vault v: Vault) -> JSONValue {
         var out: [String: JSONValue] = [
             "vault": .string(v.rootPath),
             "protocol": JSONValue(RPC.protocolVersion),

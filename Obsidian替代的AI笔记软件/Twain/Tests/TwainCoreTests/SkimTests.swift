@@ -15,7 +15,7 @@ final class SkimTests: XCTestCase {
     override func tearDownWithError() throws { try? FileManager.default.removeItem(at: root) }
 
     func testCardsPreferFrontmatterThenStoreThenAuto() throws {
-        let index = VaultIndex(root: root)
+        var index = VaultIndex(root: root)
         index.refresh()
         let store = SummaryStore(vault: root)
         let a = Skim.card(index.notes["项目/同步引擎.md"]!, store: store)
@@ -40,7 +40,7 @@ final class SkimTests: XCTestCase {
     }
 
     func testReadLevels() throws {
-        let index = VaultIndex(root: root)
+        var index = VaultIndex(root: root)
         index.refresh()
         let outline = try VaultQueries.run("read", ["note": "读书笔记", "level": 2], index: index, current: nil)
         let o = outline["outline"]!.array!

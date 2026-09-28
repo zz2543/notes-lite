@@ -94,11 +94,10 @@ extension AppModel {
         agentPanel = false
     }
 
-    func cardsCommand(_ call: CommandCall) throws -> JSONValue {
+    func cardsCommand(_ call: CommandCall, index: VaultIndex) throws -> JSONValue {
         guard let s = call.session, let deskID = s.deskID, var d = desks.first(where: { $0.id == deskID }) else {
             throw RPCError(RPCError.invalidParams, "cards 只能在问库发起的会话里使用")
         }
-        let (index, _) = try freshIndex()
         let cards = try ResearchCard.parse(call.params["items"]?.array ?? [], index: index, parent: nil)
         d.cards += cards
         saveDesk(d)
@@ -121,7 +120,6 @@ extension AppModel {
             name = String(name.prefix(30)).trimmingCharacters(in: .whitespaces)
             let rel = v.uniqueRel(title: name.isEmpty ? "研究草稿" : name, folder: "研究台")
             v.forceWrite(rel, "# \(d.question)\n")
-            v.scan()
             d.draft = rel
         }
         guard let rel = d.draft else { return }

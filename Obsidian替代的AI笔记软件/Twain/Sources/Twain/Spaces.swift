@@ -74,7 +74,7 @@ extension AppModel {
             let rel = fill(path)
             if !fm.fileExists(atPath: v.url(rel).path) { v.forceWrite(rel, fill(text)) }
         }
-        v.scan()
+        v.scanSoon()
         loadPlugins()
         loadPipelines()
         loadVaultConfig()
@@ -108,7 +108,6 @@ extension AppModel {
                 text = Template.render(raw, vars.merging(["title": title]) { a, _ in a })
             }
             v.forceWrite(rel, text)
-            v.scan()
             emit("note.created", source: "user", ["path": .string(rel)])
         }
         open(rel)
@@ -169,7 +168,6 @@ extension AppModel {
         guard lines.indices.contains(line - 1) else { return }
         lines[line - 1] = Markdown.toggleTask(lines[line - 1])
         _ = v.write(rel, lines.joined(separator: "\n"))
-        index?.update(rel, text: lines.joined(separator: "\n"))
         tick += 1
     }
 }

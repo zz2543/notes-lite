@@ -16,13 +16,11 @@ extension AppModel {
     func countNotesWantingSummary(_ done: @escaping (Int) -> Void) {
         guard let v = vault else { return done(0) }
         let root = v.root
-        DispatchQueue.global(qos: .utility).async {
-            let index = VaultIndex(root: root)
-            index.refresh()
+        v.refresh { index in DispatchQueue.global(qos: .utility).async {
             let store = SummaryStore(vault: root)
             let n = index.paths.filter { p in index.notes[p].map { Skim.wantsSummary($0, store: store) } ?? false }.count
             DispatchQueue.main.async { done(n) }
-        }
+        } }
     }
 
     /// Summarizes up to `limit` notes (default: what's left of today's budget), `only` when given.
@@ -33,9 +31,7 @@ extension AppModel {
         guard cap > 0 else { showToast("今天的摘要额度（\(summaryDailyLimit) 篇）已用完"); return }
         let root = v.root
         summarizing = (0, 0)
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let index = VaultIndex(root: root)
-            index.refresh()
+        v.refresh { [weak self] index in DispatchQueue.global(qos: .utility).async {
             let store = SummaryStore(vault: root)
             let wanted = (only ?? index.paths).filter { p in
                 guard let n = index.notes[p] else { return false }
@@ -66,7 +62,7 @@ extension AppModel {
                 }
                 for _ in 0..<min(lanes, batches.count) { next() }
             }
-        }
+        } }
     }
 
     private func finishSummaries() {
@@ -110,7 +106,7 @@ extension AppModel {
 
     /// The open note's card, for the info popover.
     func activeCard() -> NoteCard? {
-        guard let v = vault, let rel = activeRel, let index else { return nil }
+        guard let v = vault, let rel = activeRel, var index else { return nil }
         index.update(rel, text: editorText)
         guard let n = index.notes[rel] else { return nil }
         return Skim.card(n, store: SummaryStore(vault: v.root))

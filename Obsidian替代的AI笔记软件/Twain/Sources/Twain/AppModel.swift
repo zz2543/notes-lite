@@ -189,8 +189,10 @@ final class AppModel {
     @ObservationIgnored var applyEditorEdit: ((NSRange, String) -> Void)?
     @ObservationIgnored var selectEditorRange: ((NSRange) -> Void)?
 
-    /// Links, headings and tasks of the open vault, for agents' queries.
-    @ObservationIgnored var index: VaultIndex?
+    /// Links, headings and tasks of the open vault, as of the last walk of the folder. Replaced
+    /// (never changed in place) by each walk that found something new; commands that must see
+    /// the disk as it is now use `withFreshIndex`.
+    var index: VaultIndex?
     /// Answers the `twain` command; nil until started or when another Twain already answers.
     @ObservationIgnored var server: AgentServer?
     /// Agents waiting (`propose --wait`) for the user to finish reviewing a proposal, by proposal id.
@@ -320,9 +322,15 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         let v = Vault(root: url)
         v.onFilesChanged = { [weak self] rels in self?.filesChanged(rels) }
+        v.onIndex = { [weak self] fresh in
+            guard let self, self.vault === v, fresh.generation != self.index?.generation || self.index == nil else { return }
+            self.index = fresh
+        }
         vault = v
-        index = VaultIndex(root: v.root)
-        warmIndex(for: v)
+        index = nil
+        // Reads every note into the index off the main thread, so the first search, space or
+        // agent call only has to check modification dates.
+        v.refresh()
         ensureTwainFolder()
         loadPlugins()
         v.onTwainFilesChanged = { [weak self] paths in
@@ -356,21 +364,6 @@ final class AppModel {
         openDesk = nil
         loadDesks()
         importInbox()
-    }
-
-    /// Reads the whole vault into a fresh index off the main thread, so the first search, space
-    /// or agent call only has to check modification dates rather than read every note.
-    private func warmIndex(for v: Vault) {
-        let root = v.root
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let fresh = VaultIndex(root: root)
-            fresh.refresh()
-            DispatchQueue.main.async {
-                guard let self, self.vault === v else { return }
-                self.index = fresh
-                self.tick += 1
-            }
-        }
     }
 
     static let welcomeNote = """
@@ -427,7 +420,6 @@ final class AppModel {
         let fm = FileManager.default
         if !fm.fileExists(atPath: v.url("AGENTS.md").path) { v.forceWrite("AGENTS.md", Self.agentsTemplate) }
         if !fm.fileExists(atPath: v.url("CLAUDE.md").path) { v.forceWrite("CLAUDE.md", Self.claudeTemplate) }
-        v.scan()
         refreshContextSync()
     }
 
@@ -740,7 +732,7 @@ final class AppModel {
         guard let v = vault else { return }
         NSWorkspace.shared.recycle([v.url(rel)]) { _, _ in
             DispatchQueue.main.async {
-                v.scan()
+                v.noteRemoved(rel)
                 self.pending[rel] = nil
                 self.emit("note.deleted", source: "user", ["path": .string(rel)])
                 if rel == self.activeRel, let next = v.notes.first { self.open(next.rel) }

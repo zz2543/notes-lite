@@ -228,7 +228,7 @@ extension AppModel {
         sessions.append(s)
         activeSessionID = s.id
         s.running = true
-        runSnapshots[s.id] = (v.snapshotAll(), nil)
+        runSnapshots[s.id] = (VaultSnapshot.take(root: v.root, rels: v.notes.map(\.rel)), nil)
         writing.insert(rel)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             try? ((v.diskContent(rel) ?? "") + append).write(to: v.url(rel), atomically: true, encoding: .utf8)
@@ -251,7 +251,7 @@ extension AppModel {
 
     func applyRun(_ s: AgentSession, changes: [(rel: String, before: String?, after: String?)], git: String?) {
         guard let v = vault else { return }
-        v.scan()
+        v.scanSoon()
         var changed: [String] = []
         for c in changes {
             // Skip files that only Twain itself saved during the run.

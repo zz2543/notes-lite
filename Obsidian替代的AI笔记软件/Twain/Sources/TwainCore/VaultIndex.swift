@@ -92,8 +92,11 @@ public struct NoteOutline: Equatable, Sendable {
 
 /// An in-memory index over a vault folder, rebuilt from the files on demand. It keeps no
 /// state on disk: `refresh()` re-reads only the notes whose modification date changed.
-public final class VaultIndex {
-    public struct Note {
+///
+/// A value: `VaultService` keeps the working copy on its own queue and hands out copies, which
+/// share storage until one of them changes, so readers on any thread never see a half-done refresh.
+public struct VaultIndex: Sendable {
+    public struct Note: Sendable {
         public let rel: String
         public var title: String { ((rel as NSString).lastPathComponent as NSString).deletingPathExtension }
         public var folder: String { (rel as NSString).deletingLastPathComponent }
@@ -115,6 +118,10 @@ public final class VaultIndex {
     public private(set) var notes: [String: Note] = [:]
     /// Lowercased title → paths, for resolving `[[links]]`.
     private var byTitle: [String: [String]] = [:]
+    /// Bumped whenever a note is added, changed or removed, so a holder can tell copies apart cheaply.
+    public private(set) var generation = 0
+    /// Every tag in the vault, sorted.
+    public private(set) var tags: [String] = []
 
     public init(root: URL) {
         self.root = root.standardizedFileURL.resolvingSymlinksInPath()
@@ -123,54 +130,62 @@ public final class VaultIndex {
     /// Sorted paths of every note, in the same order the sidebar shows them.
     public private(set) var paths: [String] = []
 
-    public func refresh() {
-        let fm = FileManager.default
-        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey]
+    /// Walks the folder and re-reads what changed.
+    public mutating func refresh() {
+        apply(VaultListing.walk(root))
+    }
+
+    /// Brings the index in line with a walk of the folder: reads the Markdown notes that are new
+    /// or have a new modification date, and drops the ones that are gone.
+    public mutating func apply(_ listing: VaultListing) {
         var seen = Set<String>()
-        let base = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        if let e = fm.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-            for case let u as URL in e {
-                let values = try? u.resourceValues(forKeys: Set(keys))
-                if values?.isDirectory == true {
-                    if u.lastPathComponent == "node_modules" { e.skipDescendants() }
-                    continue
-                }
-                guard u.pathExtension.lowercased() == "md" else { continue }
-                let path = u.standardizedFileURL.resolvingSymlinksInPath().path
-                let rel = path.hasPrefix(base) ? String(path.dropFirst(base.count)) : u.lastPathComponent
-                seen.insert(rel)
-                let stamp = values?.contentModificationDate
-                if let old = notes[rel], old.stamp == stamp, stamp != nil { continue }
-                var text = (try? String(contentsOf: u, encoding: .utf8)) ?? ""
-                // A damaged file (e.g. an iCloud placeholder filled with NULs) is not a note:
-                // index it empty so search, skim and summaries do not chew on megabytes of zeros.
-                if text.utf8.prefix(8192).contains(0) { text = "" }
-                store(rel, text, stamp: stamp)
-            }
+        var changed = false
+        for e in listing.notes where (e.rel as NSString).pathExtension.lowercased() == "md" {
+            seen.insert(e.rel)
+            if let old = notes[e.rel], old.stamp == e.stamp, e.stamp != nil { continue }
+            var text = (try? String(contentsOf: root.appendingPathComponent(e.rel), encoding: .utf8)) ?? ""
+            // A damaged file (e.g. an iCloud placeholder filled with NULs) is not a note:
+            // index it empty so search, skim and summaries do not chew on megabytes of zeros.
+            if text.utf8.prefix(8192).contains(0) { text = "" }
+            store(e.rel, text, stamp: e.stamp)
+            changed = true
         }
-        for rel in notes.keys where !seen.contains(rel) { notes[rel] = nil }
-        rebuildTitles()
+        for rel in notes.keys where !seen.contains(rel) {
+            notes[rel] = nil
+            changed = true
+        }
+        if changed {
+            rebuildTitles()
+            generation += 1
+        }
     }
 
     /// Uses `text` for `rel` instead of what is on disk, e.g. the editor's unsaved buffer.
-    public func update(_ rel: String, text: String) {
+    public mutating func update(_ rel: String, text: String) {
+        let isNew = notes[rel] == nil
         store(rel, text, stamp: nil)
-        rebuildTitles()
+        if isNew { rebuildTitles() } else { rebuildTags() }
+        generation += 1
     }
 
-    private func store(_ rel: String, _ text: String, stamp: Date?) {
+    private mutating func store(_ rel: String, _ text: String, stamp: Date?) {
         let lines = Markdown.lines(text)
         notes[rel] = Note(rel: rel, lines: lines, outline: NoteOutline.parse(lines: lines), stamp: stamp,
                           lower: lines.map { $0.lowercased() })
     }
 
-    private func rebuildTitles() {
+    private mutating func rebuildTitles() {
         paths = notes.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         var t: [String: [String]] = [:]
         for rel in paths {
             t[notes[rel]!.title.lowercased(), default: []].append(rel)
         }
         byTitle = t
+        rebuildTags()
+    }
+
+    private mutating func rebuildTags() {
+        tags = Array(Set(notes.values.flatMap(\.outline.tags))).sorted()
     }
 
     // MARK: queries
@@ -200,10 +215,18 @@ public final class VaultIndex {
     /// Lines in other notes that `[[link]]` to `rel`.
     public func backlinks(to rel: String) -> [Hit] {
         var out: [Hit] = []
+        // Many links share a target; resolving a path-style one scans every note.
+        var resolved: [String: String?] = [:]
+        func target(_ t: String) -> String? {
+            if let r = resolved[t] { return r }
+            let r = resolve(t)
+            resolved[t] = r
+            return r
+        }
         for p in paths where p != rel {
             guard let n = notes[p] else { continue }
             var lastLine = 0
-            for l in n.outline.links where l.line != lastLine && resolve(l.target) == rel {
+            for l in n.outline.links where l.line != lastLine && target(l.target) == rel {
                 lastLine = l.line
                 out.append(Hit(rel: p, line: l.line, text: Self.snippet(n.lines[l.line - 1], around: nil)))
             }

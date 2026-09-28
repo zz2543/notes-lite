@@ -313,14 +313,15 @@ private struct QueryModule: View {
 private struct TasksModule: View {
     @Bindable var model: AppModel
     let module: JSONValue
-    @State private var tasks: [VaultIndex.TaskHit] = []
 
     var body: some View {
+        // From the index as of the last walk: it follows the files without reading any here.
+        let tasks = model.index?.tasks(folder: module["folder"]?.string, tag: module["tag"]?.string) ?? []
         VStack(alignment: .leading, spacing: 4) {
             if tasks.isEmpty { Text("没有未完成的待办").font(.callout).foregroundStyle(.secondary) }
             ForEach(Array(tasks.prefix(module["limit"]?.int ?? 8).enumerated()), id: \.offset) { _, t in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Button { model.toggleTask(rel: t.rel, line: t.task.line); refresh() } label: {
+                    Button { model.toggleTask(rel: t.rel, line: t.task.line) } label: {
                         Image(systemName: t.task.done ? "checkmark.square.fill" : "square").foregroundStyle(.tint)
                     }
                     .buttonStyle(.plain)
@@ -337,14 +338,6 @@ private struct TasksModule: View {
             if tasks.count > (module["limit"]?.int ?? 8) { Text("还有 \(tasks.count - (module["limit"]?.int ?? 8)) 条").font(.caption).foregroundStyle(.tertiary) }
         }
         .font(.callout)
-        .onAppear(perform: refresh)
-        .onChange(of: model.tick) { _, _ in refresh() }
-    }
-
-    private func refresh() {
-        guard let index = model.index else { return }
-        index.refresh()
-        tasks = index.tasks(folder: module["folder"]?.string, tag: module["tag"]?.string)
     }
 }
 

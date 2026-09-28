@@ -21,10 +21,17 @@ extension AppModel {
     /// `propose`: turns an agent's suggested content into a review. The file is left alone until
     /// the user accepts hunks; with `wait`, the agent hears back only then.
     func propose(_ call: CommandCall, reply: @escaping AppCommand.Reply) {
+        flushSave()
+        withFreshIndex { [weak self] r in
+            switch r {
+            case let .success((index, v)): self?.propose(call, index: index, vault: v, reply: reply)
+            case let .failure(e): reply(.failure(e))
+            }
+        }
+    }
+
+    private func propose(_ call: CommandCall, index: VaultIndex, vault v: Vault, reply: @escaping AppCommand.Reply) {
         do {
-            guard let v = vault, let index else { throw RPCError(RPCError.noVault, "共笔没有打开任何库") }
-            flushSave()
-            index.refresh()
             let ref = call.params["note"]?.string ?? ""
             let rel = try index.resolve(ref) ?? Self.newNotePath(ref)
             if let existing = pending[rel] {
@@ -172,7 +179,7 @@ extension AppModel {
         if !(r.isNew && accepted == 0) { v.forceWrite(rel, result) }
         pending[rel] = nil
         showDiff = false
-        if r.isNew, accepted > 0 { v.scan(); emit("note.created", source: "user", ["path": .string(rel)]) }
+        if r.isNew, accepted > 0 { emit("note.created", source: "user", ["path": .string(rel)]) }
         if activeRel == rel { reloadEditor() }
 
         // Keep the outcome: agents learn from it (`twain reviews`) and waiters get their answer.

@@ -3,78 +3,6 @@ import TwainCore
 
 /// Folders as first-class things: create, rename, move into, delete, and the folder note —
 /// `Folder/Folder.md`, opened by clicking the folder (the Obsidian Folder Notes convention).
-extension Vault {
-    /// `Folder/Folder.md` when it exists.
-    func folderNote(_ folder: String) -> NoteRef? {
-        guard !folder.isEmpty else { return nil }
-        return note(folder + "/" + (folder as NSString).lastPathComponent + ".md")
-    }
-
-    func isFolderNote(_ n: NoteRef) -> Bool {
-        !n.folder.isEmpty && (n.folder as NSString).lastPathComponent == n.title
-    }
-
-    static func validName(_ name: String) throws -> String {
-        let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { throw RenameError.empty }
-        guard !t.contains("/"), !t.contains(":"), !t.hasPrefix(".") else { throw RenameError.invalid }
-        return t
-    }
-
-    func createFolder(in parent: String, name: String) throws -> String {
-        let t = try Self.validName(name)
-        var rel = parent.isEmpty ? t : parent + "/" + t
-        var n = 2
-        while FileManager.default.fileExists(atPath: url(rel).path) {
-            rel = (parent.isEmpty ? "" : parent + "/") + "\(t) \(n)"
-            n += 1
-        }
-        try FileManager.default.createDirectory(at: url(rel), withIntermediateDirectories: true)
-        scan()
-        return rel
-    }
-
-    /// Renames the folder, and its folder note with it. Returns the new path.
-    func renameFolder(_ folder: String, to name: String) throws -> String {
-        let t = try Self.validName(name)
-        let parent = (folder as NSString).deletingLastPathComponent
-        let new = parent.isEmpty ? t : parent + "/" + t
-        guard new != folder else { return folder }
-        if new.lowercased() != folder.lowercased(), FileManager.default.fileExists(atPath: url(new).path) {
-            throw RenameError.taken(t)
-        }
-        let oldName = (folder as NSString).lastPathComponent
-        let hadNote = folderNote(folder) != nil
-        try FileManager.default.moveItem(at: url(folder), to: url(new))
-        if hadNote {
-            try? FileManager.default.moveItem(at: url(new + "/" + oldName + ".md"), to: url(new + "/" + t + ".md"))
-        }
-        // What we knew of the files moves with them.
-        for (k, v) in known where k.hasPrefix(folder + "/") {
-            var nk = new + String(k.dropFirst(folder.count))
-            if hadNote, nk == new + "/" + oldName + ".md" { nk = new + "/" + t + ".md" }
-            forget(k)
-            acknowledge(nk, content: v)
-        }
-        scan()
-        return new
-    }
-
-    /// Moves a note into `folder`, keeping its name (numbered when taken). Returns the new path.
-    func move(_ rel: String, to folder: String) throws -> String {
-        guard (rel as NSString).deletingLastPathComponent != folder else { return rel }
-        let ref = NoteRef(rel: rel)
-        let new = uniqueRel(title: ref.title, folder: folder, ext: ref.ext.isEmpty ? "md" : ref.ext)
-        try FileManager.default.createDirectory(at: url(folder), withIntermediateDirectories: true)
-        try FileManager.default.moveItem(at: url(rel), to: url(new))
-        let k = known[rel]
-        forget(rel)
-        acknowledge(new, content: k)
-        scan()
-        return new
-    }
-}
-
 extension AppModel {
     func newNote(in folder: String) {
         guard let v = vault else { return }
@@ -108,7 +36,6 @@ extension AppModel {
         let name = (folder as NSString).lastPathComponent
         let head = "# " + name + "\n"
         v.forceWrite(folder + "/" + name + ".md", head)
-        v.scan()
         emit("note.created", source: "user", ["path": .string(folder + "/" + name + ".md")])
         open(folder + "/" + name + ".md")
         requestFocus(caret: (head as NSString).length)
@@ -194,7 +121,7 @@ extension AppModel {
         NSWorkspace.shared.recycle([v.url(folder)]) { _, error in
             DispatchQueue.main.async {
                 if let error { self.showToast(error.localizedDescription); return }
-                v.scan()
+                v.folderRemoved(folder)
                 for rel in self.pending.keys where rel.hasPrefix(folder + "/") { self.pending[rel] = nil }
                 self.emit("folder.deleted", source: "user", ["path": .string(folder)])
                 if self.activeRel?.hasPrefix(folder + "/") == true, let next = v.notes.first { self.open(next.rel) }

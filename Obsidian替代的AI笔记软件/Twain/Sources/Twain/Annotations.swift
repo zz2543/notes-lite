@@ -96,8 +96,7 @@ extension AppModel {
 
     // MARK: agent commands
 
-    func annotateCommand(_ call: CommandCall) throws -> JSONValue {
-        let (index, v) = try freshIndex()
+    func annotateCommand(_ call: CommandCall, index: VaultIndex, vault v: Vault) throws -> JSONValue {
         let rel = try VaultQueries.note(call.params, index: index, current: activeRel)
         let store = AnnotationStore(vault: v.root)
         let s = call.session
@@ -127,8 +126,7 @@ extension AppModel {
                 "missing": JSONValue(missing)]
     }
 
-    func annotationsCommand(_ call: CommandCall) throws -> JSONValue {
-        let (index, v) = try freshIndex()
+    func annotationsCommand(_ call: CommandCall, index: VaultIndex, vault v: Vault) throws -> JSONValue {
         let rel = try VaultQueries.note(call.params, index: index, current: activeRel)
         let all = call.params["all"]?.bool == true
         let list = AnnotationStore(vault: v.root).load(rel).filter { all || $0.status == .open }
