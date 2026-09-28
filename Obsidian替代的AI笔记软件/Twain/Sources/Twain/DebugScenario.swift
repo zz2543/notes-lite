@@ -103,6 +103,58 @@ enum DebugScenario {
             }
         case "perf":
             perf(m)
+        case "rendertest":
+            // Renders a few formulas and a diagram and writes them next to TWAIN_RENDER_OUT.
+            let out = ProcessInfo.processInfo.environment["TWAIN_RENDER_OUT"] ?? "/tmp/twain-render"
+            let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let keys: [BlockRenderer.Key] = [
+                .init(kind: .block, source: #"d_{nodal} = d_{proc} + d_{queue} + \frac{L}{R}"#, dark: dark, fontSize: 17),
+                .init(kind: .inline, source: #"x^2 + \sqrt{y}"#, dark: dark, fontSize: 17),
+                .init(kind: .block, source: #"\ce{H2O ->[\Delta] H2 + O2}"#, dark: dark, fontSize: 17),
+                .init(kind: .block, source: #"\badcommand{x}"#, dark: dark, fontSize: 17),
+                .init(kind: .diagram, source: "graph TD\nA(通信网络)-->B1(电路交换)\nA-->B2(分组交换)", dark: dark, fontSize: 17),
+                .init(kind: .diagram, source: "graph TD\nA-->", dark: dark, fontSize: 17),
+            ]
+            let t = CACurrentMediaTime()
+            var left = keys.count
+            for (i, k) in keys.enumerated() {
+                func write(_ r: Rendered) {
+                    let rep = r.image.flatMap { $0.cgImage(forProposedRect: nil, context: nil, hints: nil) }.map(NSBitmapImageRep.init(cgImage:))
+                    try? rep?.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(out)-\(i).png"))
+                    FileHandle.standardError.write(String(format: "rendertest %d %.0fx%.0f base %.1f err %@ at %.0fms\n", i, r.size.width, r.size.height, r.baseline,
+                                                          r.error ?? "-", (CACurrentMediaTime() - t) * 1000).data(using: .utf8)!)
+                    left -= 1
+                }
+                if let r = BlockRenderer.shared.rendered(k, ready: { write(BlockRenderer.shared.cached(k)!) }) { write(r) }
+            }
+        case "openbench":
+            // openbench:<a.md>,<b.md>,… — opens each note three times and reports the time until
+            // its first screen is typeset (the second and third opens show the warm cost).
+            let rels = (parts.count > 1 ? parts[1] : "").split(separator: ",").map(String.init)
+            var queue = rels.flatMap { [$0, $0, $0] }
+            func next() {
+                guard !queue.isEmpty else { FileHandle.standardError.write("openbench done\n".data(using: .utf8)!); return }
+                let rel = queue.removeFirst()
+                m.open("", focus: false)
+                DispatchQueue.main.async {
+                    let t = CACurrentMediaTime()
+                    m.open(rel)
+                    let t1 = CACurrentMediaTime()
+                    DispatchQueue.main.async {
+                        let t2 = CACurrentMediaTime()
+                        if let tv = textView(), let lm = tv.layoutManager, let tc = tv.textContainer {
+                            lm.ensureLayout(forBoundingRect: tv.visibleRect, in: tc)
+                            let t3 = CACurrentMediaTime()
+                            tv.display()
+                            FileHandle.standardError.write(String(format: "openbench parts open %.1f turn %.1f layout %.1f draw %.1f\n", (t1 - t) * 1000, (t2 - t1) * 1000, (t3 - t2) * 1000, (CACurrentMediaTime() - t3) * 1000).data(using: .utf8)!)
+                        }
+                        FileHandle.standardError.write(String(format: "openbench %@ %d chars %.1fms\n", rel,
+                                                              (m.editorText as NSString).length, (CACurrentMediaTime() - t) * 1000).data(using: .utf8)!)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { next() }
+                    }
+                }
+            }
+            next()
         case "resize":
             // Sweeps the window width a few points at a time, the way a user dragging its edge
             // would, to catch layouts whose size depends on their own size.
@@ -124,6 +176,15 @@ enum DebugScenario {
                 DispatchQueue.main.async { step() }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { step() }
+        case "scroll":
+            // scroll:<note>:<y> — scrolls the editor to y points without touching the caret.
+            let y = CGFloat(Double(parts.count > 2 ? parts[2] : "0") ?? 0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                guard let tv = textView(), let clip = tv.enclosingScrollView?.contentView else { return }
+                if let lm = tv.layoutManager, let tc = tv.textContainer { lm.ensureLayout(forBoundingRect: CGRect(x: 0, y: 0, width: 4000, height: y + 2000), in: tc) }
+                clip.scroll(to: NSPoint(x: 0, y: y))
+                tv.enclosingScrollView?.reflectScrolledClipView(clip)
+            }
         case "focus":
             m.requestFocus(caret: 40)
         case "caret":

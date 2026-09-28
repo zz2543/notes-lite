@@ -67,6 +67,35 @@ enum Theme {
         static let codeBlock = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.04) }
         static var highlight: NSColor { .systemYellow }
         static var tag: NSColor { .systemPurple }
+        static var tableLine: NSColor { .separatorColor }
+        static let tableHeader = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.07) : NSColor(white: 0, alpha: 0.045) }
+        static let tableStripe = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.025) : NSColor(white: 0, alpha: 0.018) }
+
+        /// Code colours, after Xcode's default themes.
+        private static func pair(_ light: UInt32, _ dark: UInt32) -> NSColor {
+            NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(hex: dark) : NSColor(hex: light) }
+        }
+        static let codeKeyword = pair(0x9B2393, 0xFF7AB2)
+        static let codeString = pair(0xC41A16, 0xFF8170)
+        static let codeComment = pair(0x707F8C, 0x7F8C98)
+        static let codeNumber = pair(0x1C00CF, 0xD9C97C)
+        static let codeType = pair(0x0B4F79, 0x5DD8FF)
+        static let codeLiteral = pair(0x9B2393, 0xFF7AB2)
+        static let codeTag = pair(0x0B4F79, 0x5DD8FF)
+        static let codeAttribute = pair(0x815F03, 0xFD8F3F)
+
+        static func code(_ t: CodeHighlight.Token) -> NSColor {
+            switch t {
+            case .keyword: codeKeyword
+            case .string: codeString
+            case .comment: codeComment
+            case .number: codeNumber
+            case .type: codeType
+            case .literal: codeLiteral
+            case .tag: codeTag
+            case .attribute: codeAttribute
+            }
+        }
     }
 }
 

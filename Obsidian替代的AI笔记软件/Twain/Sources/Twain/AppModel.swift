@@ -236,6 +236,8 @@ final class AppModel {
     var openDesk: String?
     var writing: Set<String> = []
 
+    /// The editor refreshes embedded notes when other notes change on disk.
+    @ObservationIgnored var noteFilesChanged: (() -> Void)?
     @ObservationIgnored private var saveWork: DispatchWorkItem?
     @ObservationIgnored private var toastWork: DispatchWorkItem?
     @ObservationIgnored private var ghostWork: DispatchWorkItem?

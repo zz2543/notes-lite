@@ -157,6 +157,34 @@ final class TwainTextView: NSTextView {
         return super.performDragOperation(sender)
     }
 
+    // MARK: footnotes
+
+    private var hoverArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let a = NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(a)
+        hoverArea = a
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        guard let lm = layoutManager, let tc = textContainer, let storage = textStorage, storage.length > 0 else { return }
+        let p = convert(event.locationInWindow, from: nil)
+        let local = NSPoint(x: p.x - textContainerOrigin.x, y: p.y - textContainerOrigin.y)
+        let gi = lm.glyphIndex(for: local, in: tc)
+        var tip: String?
+        if gi < lm.numberOfGlyphs, lm.boundingRect(forGlyphRange: NSRange(location: gi, length: 1), in: tc).insetBy(dx: -2, dy: -2).contains(local) {
+            let ci = lm.characterIndexForGlyph(at: gi)
+            if ci < storage.length, let label = storage.attribute(.twainFootnote, at: ci, effectiveRange: nil) as? String {
+                tip = coordinator?.footnoteText(label) ?? "没有找到脚注 [^\(label)] 的内容"
+            }
+        }
+        if toolTip != tip { toolTip = tip }
+    }
+
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         if let c = coordinator, c.handleClick(at: p, event: event) { return }
@@ -229,6 +257,7 @@ final class TwainTextView: NSTextView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        coordinator?.appearanceChanged()
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let accent = NSColor.controlAccentColor
             caret.backgroundColor = accent.cgColor
@@ -373,6 +402,9 @@ final class TwainTextView: NSTextView {
         if let lm = layoutManager as? TwainLayoutManager {
             lm.taskHitRects = []
             lm.embedHitRects = []
+            // Only rects in the redrawn area are rebuilt; keep the rest.
+            lm.blockHitRects.removeAll { $0.rect.intersects(dirtyRect) }
+            lm.foldHitRects.removeAll { $0.0.intersects(dirtyRect) }
         }
         super.draw(dirtyRect)
         drawGhost()

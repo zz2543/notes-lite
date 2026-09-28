@@ -38,6 +38,10 @@ public struct InlineSpan: Equatable, Sendable {
         /// `![alt](url)`.
         case image(String)
         case tag(String)
+        /// `$x^2$`: inline math, the TeX source.
+        case math(String)
+        /// `[^1]`: a footnote reference, by label.
+        case footnote(String)
     }
     public var kind: Kind
     /// Visible content, UTF-16 range within the line.
@@ -55,6 +59,10 @@ public struct LineMarkup: Equatable, Sendable {
     public var depth: Int = 0
     /// `> [!note] Title`: the callout kind, lowercased.
     public var callout: String?
+    /// `> [!note]-` starts folded (true), `> [!note]+` open (false); nil when it can't fold.
+    public var calloutFolded: Bool?
+    /// `[^1]: text` defines footnote `1`; the prefix covers `[^1]: `.
+    public var footnoteLabel: String?
 
     public var allMarks: [NSRange] {
         var r = prefix.length > 0 ? [prefix] : []
@@ -81,11 +89,33 @@ public enum BlockContext: Equatable, Sendable {
     case frontmatter
 }
 
+/// The ASCII characters present in part of a string, as a bitmap.
+struct ASCIISet {
+    private var lo: UInt64 = 0, hi: UInt64 = 0
+
+    init(_ ns: NSString, _ r: NSRange) {
+        var buf = [unichar](repeating: 0, count: r.length)
+        ns.getCharacters(&buf, range: r)
+        for c in buf where c < 0x80 {
+            if c < 64 { lo |= 1 << UInt64(c) } else { hi |= 1 << UInt64(c - 64) }
+        }
+    }
+
+    func contains(_ c: unichar) -> Bool {
+        c < 64 ? lo & (1 << UInt64(c)) != 0 : c < 128 ? hi & (1 << UInt64(c - 64)) != 0 : false
+    }
+}
+
 public enum Markdown {
     static let listRe = try! NSRegularExpression(pattern: #"^([ \t]*)([-*+] \[[ xX]\] |[-*+] |\d{1,9}[.)] )"#)
     static let headingRe = try! NSRegularExpression(pattern: #"^(#{1,6}) "#)
     static let quoteRe = try! NSRegularExpression(pattern: #"^((?:> ?)+)"#)
-    static let calloutRe = try! NSRegularExpression(pattern: #"^\[!([A-Za-z-]+)\][+-]?"#)
+    static let calloutRe = try! NSRegularExpression(pattern: #"^\[!([A-Za-z-]+)\]([+-]?)"#)
+    /// `$…$` as Obsidian and Pandoc read it: no space inside either `$`, and no digit right
+    /// after the closing one, so prices ("$5 and $6") stay text.
+    static let mathRe = try! NSRegularExpression(pattern: #"(?<![\\$0-9A-Za-z])\$(?![\s$])((?:\\.|[^$\\])+?)(?<![\s\\])\$(?![0-9$])"#)
+    static let footnoteRe = try! NSRegularExpression(pattern: #"\[\^([^\]\s]+)\]"#)
+    static let footnoteDefRe = try! NSRegularExpression(pattern: #"^\[\^([^\]\s]+)\]:[ \t]?"#)
     static let codeRe = try! NSRegularExpression(pattern: #"`([^`]+)`"#)
     static let boldRe = try! NSRegularExpression(pattern: #"\*\*(.+?)\*\*|__(.+?)__"#)
     static let italicRe = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*\s](?:[^*]*[^*\s])?)\*(?!\*)|(?<![_\p{L}\p{N}])_([^_\s](?:[^_]*[^_\s])?)_(?![_\p{L}\p{N}])"#)
@@ -118,7 +148,9 @@ public enum Markdown {
             let depth = ns.substring(with: m.range).filter { $0 == ">" }.count - 1
             return (.quote, m.range.length, depth)
         }
-        if let m = listRe.firstMatch(in: t, range: all) {
+        // Lists start with indentation, a bullet or a digit; everything else skips the regex.
+        let listy = first == 0x20 || first == 0x09 || first == 0x2D || first == 0x2A || first == 0x2B || (first >= 0x30 && first <= 0x39)
+        if listy, let m = listRe.firstMatch(in: t, range: all) {
             let marker = ns.substring(with: m.range(at: 2))
             let type: BlockType = marker.contains("[") ? .task : marker.first!.isNumber ? .ol : .li
             return (type, m.range.length, indentLevel(ns.substring(with: m.range(at: 1))))
@@ -145,6 +177,7 @@ public enum Markdown {
     }
 
     static func isRule(_ t: String) -> Bool {
+        guard let f = t.utf16.first(where: { $0 != 0x20 && $0 != 0x09 }), f == 0x2D || f == 0x2A || f == 0x5F else { return false }
         let s = t.trimmingCharacters(in: .whitespaces)
         guard s.count >= 3, let c = s.first, c == "-" || c == "*" || c == "_" else { return false }
         return s.allSatisfy { $0 == c || $0 == " " } && s.filter { $0 == c }.count >= 3
@@ -152,6 +185,7 @@ public enum Markdown {
 
     /// The fence a line opens or closes with (```` ``` ````, `~~~~`…), nil if it is not a fence.
     public static func isFence(_ t: String) -> String? {
+        guard let f = t.utf16.first(where: { $0 != 0x20 }), f == 0x60 || f == 0x7E else { return nil }
         let s = t.drop { $0 == " " }
         guard t.count - s.count <= 3, let c = s.first, c == "`" || c == "~" else { return nil }
         let run = s.prefix { $0 == c }
@@ -159,6 +193,23 @@ public enum Markdown {
         // A backtick fence's info string may not contain backticks.
         if c == "`", s.dropFirst(run.count).contains("`") { return nil }
         return String(run)
+    }
+
+    /// The language named after an opening fence (```` ```mermaid ```` → "mermaid"), lowercased; "" when none.
+    public static func fenceInfo(_ t: String) -> String {
+        guard let f = isFence(t) else { return "" }
+        let s = t.drop { $0 == " " }.dropFirst(f.count)
+        let word = s.trimmingCharacters(in: .whitespaces).prefix { !$0.isWhitespace }
+        return word.trimmingCharacters(in: CharacterSet(charactersIn: "{}.")).lowercased()
+    }
+
+    /// `$$E = mc^2$$` on a line of its own: display math in one line. Returns the TeX.
+    public static func displayMath(_ t: String) -> String? {
+        let s = t.trimmingCharacters(in: .whitespaces)
+        guard s.hasPrefix("$$"), s.hasSuffix("$$"), s.utf16.count > 4 else { return nil }
+        let inner = s.dropFirst(2).dropLast(2)
+        guard !inner.contains("$$"), !inner.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return String(inner)
     }
 
     /// Role of each line given the lines before it: fences, code, front matter, math.
@@ -253,15 +304,27 @@ public enum Markdown {
         let pl = pre.type == type ? pre.length : 0
         var markup = LineMarkup(type: type, prefix: NSRange(location: 0, length: pl), spans: [], depth: pre.depth)
         var bodyStart = pl
-        if type == .quote, let m = calloutRe.firstMatch(in: t, range: NSRange(location: pl, length: ns.length - pl)) {
+        if type == .quote, pl < ns.length, ns.character(at: pl) == 0x5B,
+           let m = calloutRe.firstMatch(in: t, range: NSRange(location: pl, length: ns.length - pl)) {
             markup.callout = ns.substring(with: m.range(at: 1)).lowercased()
+            let fold = m.range(at: 2)
+            if fold.length > 0 { markup.calloutFolded = ns.character(at: fold.location) == 0x2D }
             markup.prefix.length = NSMaxRange(m.range)
             // Keep one space after the marker hidden with it.
             if markup.prefix.length < ns.length, ns.character(at: markup.prefix.length) == 0x20 { markup.prefix.length += 1 }
             bodyStart = markup.prefix.length
         }
+        if type == .p, pl == 0, ns.length > 3, ns.character(at: 0) == 0x5B, ns.character(at: 1) == 0x5E,
+           let m = footnoteDefRe.firstMatch(in: t, range: NSRange(location: 0, length: ns.length)) {
+            markup.footnoteLabel = ns.substring(with: m.range(at: 1))
+            markup.prefix = NSRange(location: 0, length: m.range.length)
+            bodyStart = m.range.length
+        }
         let body = NSRange(location: bodyStart, length: ns.length - bodyStart)
         guard body.length > 0 else { return markup }
+        // Which syntax characters the line has at all: most lines skip most expressions.
+        let has = ASCIISet(ns, body)
+        let hasURL = has.contains(0x3A) && (t.contains("http://") || t.contains("https://"))
         var taken: [NSRange] = []
         func free(_ r: NSRange) -> Bool { !taken.contains { NSIntersectionRange($0, r).length > 0 } }
         func add(_ kind: InlineSpan.Kind, _ content: NSRange, _ marks: [NSRange], take: NSRange) {
@@ -275,36 +338,51 @@ public enum Markdown {
             (1..<m.numberOfRanges).map { m.range(at: $0) }.first { $0.location != NSNotFound } ?? m.range
         }
 
-        for m in codeRe.matches(in: t, range: body) {
-            add(.code, m.range(at: 1), edges(m, 1, 1), take: m.range)
+        if has.contains(0x60) {   // `
+            for m in codeRe.matches(in: t, range: body) {
+                add(.code, m.range(at: 1), edges(m, 1, 1), take: m.range)
+            }
         }
-        for m in embedRe.matches(in: t, range: body) where free(m.range) {
+        // Math before links and emphasis: `_` and `*` inside TeX are not Markdown.
+        if has.contains(0x24) {   // $
+            for m in mathRe.matches(in: t, range: body) where free(m.range) {
+                add(.math(ns.substring(with: m.range(at: 1))), m.range(at: 1), edges(m, 1, 1), take: m.range)
+            }
+        }
+        let bracket = has.contains(0x5B)   // [
+        if bracket, has.contains(0x5E) {   // ^
+            for m in footnoteRe.matches(in: t, range: body) where free(m.range) {
+                add(.footnote(ns.substring(with: m.range(at: 1))), m.range(at: 1), edges(m, 2, 1), take: m.range)
+            }
+        }
+        for m in (bracket && has.contains(0x21) ? embedRe.matches(in: t, range: body) : []) where free(m.range) {
             add(.embed(ns.substring(with: m.range(at: 1))), m.range(at: 1), edges(m, 3, 2), take: m.range)
         }
-        for m in imageRe.matches(in: t, range: body) where free(m.range) {
+        for m in (bracket && has.contains(0x21) ? imageRe.matches(in: t, range: body) : []) where free(m.range) {
             let alt = m.range(at: 1)
             let url = ns.substring(with: m.range(at: 2))
             // The alt text stays visible; everything else is syntax.
             add(.image(url), alt, [NSRange(location: m.range.location, length: 2),
                                    NSRange(location: NSMaxRange(alt), length: NSMaxRange(m.range) - NSMaxRange(alt))], take: m.range)
         }
-        for m in wikiRe.matches(in: t, range: body) where free(m.range) {
+        for m in (bracket ? wikiRe.matches(in: t, range: body) : []) where free(m.range) {
             add(.wikilink(ns.substring(with: m.range(at: 1))), m.range(at: 1), edges(m, 2, 2), take: m.range)
         }
-        for m in linkRe.matches(in: t, range: body) where free(m.range) {
+        for m in (bracket && has.contains(0x28) ? linkRe.matches(in: t, range: body) : []) where free(m.range) {
             let text = m.range(at: 1)
             add(.link(ns.substring(with: m.range(at: 2))), text,
                 [NSRange(location: m.range.location, length: 1),
                  NSRange(location: NSMaxRange(text), length: NSMaxRange(m.range) - NSMaxRange(text))], take: m.range)
         }
-        for m in urlRe.matches(in: t, range: body) where free(m.range) {
+        for m in (hasURL ? urlRe.matches(in: t, range: body) : []) where free(m.range) {
             add(.link(ns.substring(with: m.range)), m.range, [], take: m.range)
         }
         // Emphasis may nest inside each other but not inside the spans above.
         let locked = taken
         func open(_ r: NSRange) -> Bool { !locked.contains { NSIntersectionRange($0, r).length > 0 } }
         var markerRanges: [NSRange] = []
-        func emphasis(_ re: NSRegularExpression, _ kind: InlineSpan.Kind, _ width: Int) {
+        func emphasis(_ re: NSRegularExpression, _ kind: InlineSpan.Kind, _ width: Int, _ triggers: [unichar]) {
+            guard triggers.contains(where: { has.contains($0) }) else { return }
             for m in re.matches(in: t, range: body) where open(m.range) {
                 let marks = edges(m, width, width)
                 if marks.contains(where: { mk in markerRanges.contains { NSIntersectionRange($0, mk).length > 0 } }) { continue }
@@ -312,12 +390,12 @@ public enum Markdown {
                 markup.spans.append(InlineSpan(kind: kind, content: group(m), marks: marks))
             }
         }
-        emphasis(boldRe, .bold, 2)
-        emphasis(strikeRe, .strike, 2)
-        emphasis(highlightRe, .highlight, 2)
-        emphasis(italicRe, .italic, 1)
+        emphasis(boldRe, .bold, 2, [0x2A, 0x5F])
+        emphasis(strikeRe, .strike, 2, [0x7E])
+        emphasis(highlightRe, .highlight, 2, [0x3D])
+        emphasis(italicRe, .italic, 1, [0x2A, 0x5F])
         taken += markerRanges
-        for m in tagRe.matches(in: t, range: body) where free(m.range) {
+        for m in (has.contains(0x23) ? tagRe.matches(in: t, range: body) : []) where free(m.range) {
             markup.spans.append(InlineSpan(kind: .tag(ns.substring(with: m.range(at: 1))), content: m.range, marks: []))
         }
         return markup

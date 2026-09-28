@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- Twain's offscreen renderer: turns TeX and Mermaid into pictures the native editor draws.
+     Loaded once into a hidden, network-less web view; see Editor/Renderer.swift. -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="katex.min.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { font: 16px -apple-system, "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; left: 0; top: 0; width: 3000px; }
+  .item { position: absolute; left: 0; padding: 2px 3px; white-space: nowrap; }
+  .katex { font-size: 1.12em; }
+  .item.block .katex-display { margin: 0; }
+  .item.diagram { padding: 4px; }
+  .item.diagram svg { display: block; max-width: none !important; }
+  .base { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
+  .error { font: 13px ui-monospace, Menlo, monospace; color: #d33; white-space: pre-wrap; max-width: 640px; }
+</style>
+<script src="katex.min.js"></script>
+<script src="mhchem.min.js"></script>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+let mermaidTheme = null;
+let diagramCount = 0;
+
+function setupMermaid(dark, font) {
+  const theme = dark ? 'dark' : 'default';
+  if (mermaidTheme === theme) return;
+  mermaidTheme = theme;
+  mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'strict', fontFamily: font,
+                       flowchart: { htmlLabels: true }, themeVariables: { fontFamily: font } });
+}
+
+// items: [{id, kind: 'block'|'inline'|'diagram', src}], opts: {color, dark, fontSize, font}
+// Lays the items out top to bottom and returns where each one ended up, in CSS pixels.
+window.renderBatch = async function (items, opts) {
+  const stage = document.getElementById('stage');
+  stage.innerHTML = '';
+  stage.style.color = opts.color;
+  stage.style.fontSize = opts.fontSize + 'px';
+  const els = [];
+  for (const it of items) {
+    const el = document.createElement('div');
+    el.className = 'item ' + it.kind;
+    stage.appendChild(el);
+    els.push(el);
+    try {
+      if (it.kind === 'diagram') {
+        setupMermaid(opts.dark, opts.font);
+        // Parse first: a failed render leaves Mermaid's own error picture in the page.
+        await mermaid.parse(it.src);
+        const { svg } = await mermaid.render('twain-d' + (++diagramCount), it.src);
+        el.innerHTML = svg;
+        const s = el.querySelector('svg');
+        const vb = s && s.viewBox && s.viewBox.baseVal;
+        if (vb && vb.width) {
+          s.setAttribute('width', vb.width);
+          s.setAttribute('height', vb.height);
+          s.style.maxWidth = 'none';
+        }
+      } else {
+        katex.render(it.src, el, { displayMode: it.kind === 'block', throwOnError: false, output: 'html',
+                                   trust: false, strict: 'ignore' });
+        if (it.kind === 'inline') {
+          const b = document.createElement('span');
+          b.className = 'base';
+          el.appendChild(b);
+        }
+      }
+    } catch (e) {
+      el.innerHTML = '';
+      const err = document.createElement('div');
+      err.className = 'error';
+      err.textContent = String((e && e.message) || e).split('\n').slice(0, 6).join('\n');
+      el.appendChild(err);
+      it.error = err.textContent;
+    }
+    // Whatever Mermaid left behind outside the stage.
+    document.querySelectorAll('body > :not(#stage):not(script)').forEach(e => e.remove());
+  }
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  // Stack them with a gap so the snapshot can be cut into pieces.
+  let y = 0;
+  const out = [];
+  for (let i = 0; i < items.length; i++) {
+    const el = els[i];
+    el.style.top = y + 'px';
+    const r = el.getBoundingClientRect();
+    let w = Math.ceil(r.width), h = Math.ceil(r.height);
+    if (items[i].kind === 'block' || items[i].kind === 'diagram') {
+      // Block math is as wide as its content, not the stage.
+      const inner = el.querySelector('.katex-html, svg, .error');
+      if (inner) w = Math.ceil(inner.getBoundingClientRect().width) + 8;
+    }
+    let baseline = h;
+    const b = el.querySelector('.base');
+    if (b) baseline = b.getBoundingClientRect().top - r.top;
+    out.push({ id: items[i].id, x: 0, y, w: Math.max(1, w), h: Math.max(1, h), baseline, error: items[i].error || null });
+    y += h + 12;
+  }
+  return out;
+};
+window.twainReady = true;
+</script>
+</body>
+</html>

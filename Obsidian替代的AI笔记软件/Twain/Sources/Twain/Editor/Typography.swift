@@ -72,7 +72,7 @@ final class Typography {
     }
 
     /// Gives every run of CJK characters in `range` the CJK face of the font it has now.
-    func applyCJK(_ storage: NSTextStorage, in range: NSRange) {
+    func applyCJK(_ storage: NSMutableAttributedString, in range: NSRange) {
         guard range.length > 0 else { return }
         let ns = storage.string as NSString
         var chars = [unichar](repeating: 0, count: range.length)

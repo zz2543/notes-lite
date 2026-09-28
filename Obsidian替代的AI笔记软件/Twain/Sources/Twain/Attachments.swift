@@ -28,6 +28,31 @@ extension AppModel {
         return v.url(rel)
     }
 
+    /// `![[另一篇笔记]]`, `![[笔记#小节]]`, `![[文件夹/笔记|别名]]` → that note and its text.
+    func resolveEmbeddedNote(_ target: String) -> (rel: String, title: String, text: String)? {
+        guard let v = vault else { return nil }
+        var name = target.split(separator: "|", maxSplits: 1).first.map(String.init) ?? target
+        name = (name.split(separator: "#", maxSplits: 1).first.map(String.init) ?? name).trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return nil }
+        let ref: NoteRef?
+        if name.contains("/") {
+            let rel = name.hasSuffix(".md") ? name : name + ".md"
+            ref = v.note(rel) ?? v.notes.first { $0.rel.lowercased().hasSuffix(rel.lowercased()) }
+        } else {
+            ref = v.note(titled: name.hasSuffix(".md") ? String(name.dropLast(3)) : name)
+        }
+        guard let ref, !ref.isHTML, ref.rel != activeRel, let text = v.diskContent(ref.rel) else { return nil }
+        return (ref.rel, ref.title, text)
+    }
+
+    /// The plugin page that renders fenced blocks of `lang` (manifest `"blocks": {"chart": "blocks/chart.html"}`).
+    func blockRendererPage(_ lang: String) -> String? {
+        for p in plugins {
+            if let page = p.raw["blocks"]?[lang]?.string { return p.dir + "/" + page }
+        }
+        return nil
+    }
+
     /// A free path for `name` in the attachment folder.
     private func attachmentPath(_ name: String) -> String {
         guard let v = vault else { return name }

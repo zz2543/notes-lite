@@ -313,6 +313,8 @@ extension AppModel {
     /// Changes that did not come from Twain's own writes.
     func filesChanged(_ rels: [String]) {
         guard let v = vault else { return }
+        // Notes shown embedded in the open one may be among them.
+        if rels.contains(where: { $0 != activeRel && $0.hasSuffix(".md") }) { noteFilesChanged?() }
         let appRunning = sessions.contains { $0.source == .app && $0.running }
         var outside: [String] = []
         for rel in rels {

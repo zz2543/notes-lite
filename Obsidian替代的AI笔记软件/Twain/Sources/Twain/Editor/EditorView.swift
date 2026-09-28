@@ -92,6 +92,12 @@ struct EditorView: NSViewRepresentable {
             self.model = model
             super.init()
             styler.resolveEmbed = { [weak model] target in model?.resolveEmbed(target) }
+            styler.resolveNote = { [weak model] target in model?.resolveEmbeddedNote(target) }
+            styler.pluginPage = { [weak model] lang in model?.blockRendererPage(lang) }
+            model.noteFilesChanged = { [weak self] in
+                self?.styler.notesChanged()
+                self?.restyle()
+            }
             model.applyEditorEdit = { [weak self] range, text in
                 guard let tv = self?.textView, NSMaxRange(range) <= (tv.string as NSString).length else { return }
                 tv.window?.makeFirstResponder(tv)
@@ -116,11 +122,17 @@ struct EditorView: NSViewRepresentable {
             if v != version {
                 version = v
                 if tv.string != text {
+                    styler.newDocument()
+                    BlockRenderer.shared.vaultRoot = model.vault?.root
+                    #if DEBUG
+                    let t0 = CACurrentMediaTime()
+                    defer { if Self.profile { FileHandle.standardError.write(String(format: "sync swap %.1fms\n", (CACurrentMediaTime() - t0) * 1000).data(using: .utf8)!) } }
+                    #endif
                     let sel = tv.selectedRange()
-                    styler.reset()
                     swapping = true
                     storage.beginEditing()
-                    storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
+                    storage.replaceCharacters(in: NSRange(location: 0, length: storage.length),
+                                              with: NSAttributedString(string: text, attributes: styler.baseAttributes()))
                     storage.endEditing()
                     tv.undoManager?.removeAllActions()
                     let len = (text as NSString).length
@@ -180,6 +192,15 @@ struct EditorView: NSViewRepresentable {
             tv.updateCaret(animated: false)
         }
 
+        /// Pictures are drawn for the light or the dark look.
+        func appearanceChanged() {
+            guard let tv = textView else { return }
+            let dark = tv.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            guard dark != styler.dark else { return }
+            styler.dark = dark
+            restyle()
+        }
+
         func focusChanged() {
             DispatchQueue.main.async {
                 self.restyle()
@@ -208,20 +229,38 @@ struct EditorView: NSViewRepresentable {
         }
 
         /// Restyles what changed since last time; cheap when nothing did.
+        #if DEBUG
+        static let profile = ProcessInfo.processInfo.environment["TWAIN_PROFILE"] != nil
+        #endif
+
         func restyle() {
             guard let tv = textView, let storage, let lm = tv.layoutManager, !restyling else { return }
             if tv.hasMarkedText() { return }
             restyling = true
             defer { restyling = false }
             let caret = isFocused ? tv.selectedRange().location : nil
+            styler.dark = tv.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            styler.priorityLine = topVisibleLine() ?? caret.map { styler.lineIndex(at: $0) } ?? 0
             var ranges: [NSRange] = []
             tv.holdingHeight {
+                #if DEBUG
+                let t0 = CACurrentMediaTime()
+                #endif
                 ranges = styler.restyle(storage, caret: caret)
+                #if DEBUG
+                let t1 = CACurrentMediaTime()
+                #endif
                 for r in ranges {
                     lm.invalidateGlyphs(forCharacterRange: r, changeInLength: 0, actualCharacterRange: nil)
                     lm.invalidateLayout(forCharacterRange: r, actualCharacterRange: nil)
                     lm.invalidateDisplay(forCharacterRange: r)
                 }
+                #if DEBUG
+                if Self.profile, CACurrentMediaTime() - t0 > 0.004 {
+                    FileHandle.standardError.write(String(format: "restyle style %.1fms invalidate %.1fms lines %d\n", (t1 - t0) * 1000,
+                                                          (CACurrentMediaTime() - t1) * 1000, ranges.count).data(using: .utf8)!)
+                }
+                #endif
             }
             let body = styler.typo.body
             let p = NSMutableParagraphStyle()
@@ -232,6 +271,29 @@ struct EditorView: NSViewRepresentable {
             p.tailIndent = -MarkdownStyler.gutter
             tv.typingAttributes = [.font: body, .foregroundColor: Theme.NS.ink, .paragraphStyle: p]
             tv.updateCaret(animated: true)
+            // A long note is styled in slices, nearest to the screen first; the rest follows
+            // on later turns so typing and scrolling stay responsive.
+            if styler.pending, !continuing {
+                continuing = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.continuing = false
+                    self?.restyle()
+                }
+            }
+        }
+
+        private var continuing = false
+
+        /// The line at the top of the visible area, when layout already knows it.
+        private func topVisibleLine() -> Int? {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer, tv.textStorage?.length ?? 0 > 0,
+                  let clip = scrollView?.contentView else { return nil }
+            let top = tv.convert(clip.bounds, from: clip).minY - tv.textContainerOrigin.y
+            guard top > 0 else { return 0 }
+            // Only ask layout where it already has laid out: it must not typeset the whole note to answer.
+            guard lm.firstUnlaidCharacterIndex() > 0 || !lm.allowsNonContiguousLayout else { return nil }
+            let gi = lm.glyphIndex(for: NSPoint(x: 0, y: top), in: tc)
+            return styler.lineIndex(at: lm.characterIndexForGlyph(at: gi))
         }
 
         // MARK: annotations
@@ -280,7 +342,7 @@ struct EditorView: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             textView?.updateCaret(animated: true)
-            guard let tv = textView, !tv.hasMarkedText(), !restyling else { return }
+            guard let tv = textView, !tv.hasMarkedText(), !restyling, !swapping else { return }
             model.editorSelection = tv.selectedRange()
             restyle()
             updateSlash()
@@ -539,6 +601,13 @@ struct EditorView: NSViewRepresentable {
                 toggleTask(lineStart: hit.1)
                 return true
             }
+            if let hit = lm.foldHitRects.first(where: { $0.0.contains(p) }) {
+                styler.toggleFold(hit.1)
+                return true
+            }
+            if let hit = lm.blockHitRects.last(where: { $0.rect.contains(p) }), hit.start <= storage.length {
+                return clickBlock(hit.deco, start: hit.start, at: p, event: event)
+            }
             if let hit = lm.embedHitRects.first(where: { $0.0.contains(p) }), let url = hit.1.url {
                 if hit.1.kind == .video || event.clickCount == 2 || event.modifierFlags.contains(.command) {
                     NSWorkspace.shared.open(url)
@@ -561,7 +630,62 @@ struct EditorView: NSViewRepresentable {
                 NSWorkspace.shared.open(u)
                 return true
             }
+            if followable, let label = storage.attribute(.twainFootnote, at: ci, effectiveRange: nil) as? String,
+               let def = footnoteDefinition(label) {
+                tv.setSelectedRange(NSRange(location: def.location, length: 0))
+                tv.scrollRangeToVisible(def)
+                return true
+            }
             return false
+        }
+
+        /// A click on a drawn block. Tables put the caret in the clicked cell's source; formulas
+        /// and diagrams reveal their source; embedded notes open on a double click (or ⌘-click).
+        private func clickBlock(_ deco: BlockDeco, start: Int, at p: NSPoint, event: NSEvent) -> Bool {
+            guard let tv = textView else { return false }
+            let len = (tv.string as NSString).length
+            var caret = start
+            switch deco.content {
+            case let .note(e):
+                if event.clickCount >= 2 || event.modifierFlags.contains(.command) {
+                    model.open(e.rel)
+                    return true
+                }
+                if deco.revealed { return false }
+                // The end of the `![[…]]` line: the source shows and the card stays below it.
+                let line = (tv.string as NSString).lineRange(for: NSRange(location: min(start, len), length: 0))
+                caret = NSMaxRange(line) - (NSMaxRange(line) > line.location && NSMaxRange(line) <= len && (tv.string as NSString).character(at: NSMaxRange(line) - 1) == 0x0A ? 1 : 0)
+            case let .table(t):
+                if let rect = (textView?.layoutManager as? TwainLayoutManager)?.blockHitRects.last(where: { $0.deco === deco })?.rect,
+                   let off = t.sourceOffset(at: NSPoint(x: p.x - rect.minX, y: p.y - rect.minY)) {
+                    caret = start + off
+                }
+            case .picture:
+                if deco.revealed { return false }
+                // Just inside the opening `$$` or fence line.
+                let line = (tv.string as NSString).lineRange(for: NSRange(location: min(start, len), length: 0))
+                caret = max(line.location, NSMaxRange(line) - 1)
+            }
+            tv.window?.makeFirstResponder(tv)
+            tv.setSelectedRange(NSRange(location: min(max(0, caret), len), length: 0))
+            return true
+        }
+
+        /// The `[^label]: …` line for a footnote reference.
+        func footnoteDefinition(_ label: String) -> NSRange? {
+            guard let tv = textView else { return nil }
+            let pattern = "^\\[\\^" + NSRegularExpression.escapedPattern(for: label) + "\\]:.*$"
+            guard let re = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else { return nil }
+            let ns = tv.string as NSString
+            return re.firstMatch(in: tv.string, range: NSRange(location: 0, length: ns.length))?.range
+        }
+
+        /// The text of a footnote, for the tooltip over its reference.
+        func footnoteText(_ label: String) -> String? {
+            guard let tv = textView, let r = footnoteDefinition(label) else { return nil }
+            let line = (tv.string as NSString).substring(with: r)
+            let m = Markdown.parseLine(line)
+            return (line as NSString).substring(from: m.prefix.length).trimmingCharacters(in: .whitespaces)
         }
 
         private func toggleTask(lineStart: Int) {

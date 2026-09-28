@@ -17,7 +17,7 @@ let package = Package(
         .executableTarget(
             name: "Twain",
             dependencies: ["TwainCore"],
-            resources: [.process("Resources")]
+            resources: [.process("Resources"), .copy("Render")]
         ),
         .testTarget(
             name: "TwainCoreTests",

@@ -15,30 +15,51 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                        characterIndexes: UnsafePointer<Int>, font: NSFont, forGlyphRange range: NSRange) -> Int {
         guard let storage = lm.textStorage else { return 0 }
         var newProps: [NSLayoutManager.GlyphProperty]?
-        var hiddenEnd = -1
+        // Attribute runs are looked up once each, not per character.
+        var runEnd = -1
+        var hidden = false, inline = false
         for i in 0..<range.length {
             let ci = characterIndexes[i]
             guard ci < storage.length else { continue }
-            if ci >= hiddenEnd {
+            if ci >= runEnd {
                 var eff = NSRange()
-                if storage.attribute(.twainHidden, at: ci, effectiveRange: &eff) == nil {
-                    hiddenEnd = -1
-                    continue
-                }
-                hiddenEnd = NSMaxRange(eff)
+                let attrs = storage.attributes(at: ci, effectiveRange: &eff)
+                hidden = attrs[.twainHidden] != nil
+                inline = attrs[.twainInline] != nil
+                runEnd = NSMaxRange(eff)
             }
+            guard hidden || inline else { continue }
             if newProps == nil { newProps = Array(UnsafeBufferPointer(start: props, count: range.length)) }
-            newProps![i] = .null
+            // Inline math: one control glyph as wide as the picture (see boundingBoxForControlGlyph).
+            newProps![i] = inline ? .controlCharacter : .null
         }
         guard let newProps else { return 0 }
         lm.setGlyphs(glyphs, properties: newProps, characterIndexes: characterIndexes, font: font, forGlyphRange: range)
         return range.length
     }
 
+    func layoutManager(_ lm: NSLayoutManager, shouldUse action: NSLayoutManager.ControlCharacterAction,
+                       forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
+        if let s = lm.textStorage, charIndex < s.length, s.attribute(.twainInline, at: charIndex, effectiveRange: nil) != nil { return .whitespace }
+        return action
+    }
+
+    func layoutManager(_ lm: NSLayoutManager, boundingBoxForControlGlyphAt glyphIndex: Int, for textContainer: NSTextContainer,
+                       proposedLineFragment proposedRect: NSRect, glyphPosition: NSPoint, characterIndex: Int) -> NSRect {
+        guard let s = lm.textStorage, characterIndex < s.length,
+              let pic = s.attribute(.twainInline, at: characterIndex, effectiveRange: nil) as? InlinePicture else { return .zero }
+        let r = pic.rendered
+        return NSRect(x: glyphPosition.x, y: glyphPosition.y - r.baseline, width: r.size.width + 2, height: r.size.height)
+    }
+
     /// Checkbox rects in text-view coordinates with the start of their line, rebuilt on every draw.
     var taskHitRects: [(CGRect, Int)] = []
     /// Pictures and videos drawn in place, for clicks.
     var embedHitRects: [(CGRect, Embed)] = []
+    /// Tables, formulas, diagrams and embedded notes, with where their source starts.
+    var blockHitRects: [(rect: CGRect, deco: BlockDeco, start: Int)] = []
+    /// Callout fold chevrons, by the callout's key.
+    var foldHitRects: [(CGRect, String)] = []
     /// Passages with an annotation: a soft marker under the text, stronger for the selected one.
     var highlights: [(range: NSRange, color: NSColor, selected: Bool)] = []
 
@@ -96,6 +117,33 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             guard let e = value as? EmbedDeco else { return }
             draw(e, range: range, origin: origin)
         }
+        storage.enumerateAttribute(.twainBlock, in: paras) { value, range, _ in
+            guard let b = value as? BlockDeco else { return }
+            draw(b, range: range, origin: origin, width: width)
+        }
+        storage.enumerateAttribute(.twainInline, in: paras) { value, range, _ in
+            guard let pic = value as? InlinePicture, let img = pic.rendered.image else { return }
+            let gi = glyphIndexForCharacter(at: range.location)
+            guard gi < numberOfGlyphs else { return }
+            let frag = lineFragmentRect(forGlyphAt: gi, effectiveRange: nil)
+            let loc = location(forGlyphAt: gi)
+            let r = pic.rendered
+            let rect = CGRect(x: origin.x + frag.minX + loc.x + 1, y: origin.y + frag.minY + loc.y - r.baseline, width: r.size.width, height: r.size.height)
+            // Dimmed paragraphs dim their formulas too.
+            let fraction = (storage.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor)?.alphaComponent ?? 1
+            img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: min(1, fraction), respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+        }
+    }
+
+    private func draw(_ b: BlockDeco, range: NSRange, origin: NSPoint, width: CGFloat) {
+        let fs = frags(range)
+        guard let first = fs.first, let last = fs.last else { return }
+        let para = textStorage?.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
+        let y = b.revealed ? origin.y + last.used.maxY + 14 : origin.y + first.rect.minY + (para?.paragraphSpacingBefore ?? 0)
+        let gutter = MarkdownStyler.gutter
+        let frame = CGRect(x: origin.x + gutter, y: y, width: max(40, width - 2 * gutter), height: b.height)
+        let drawn = b.draw(in: frame)
+        blockHitRects.append((drawn, b, range.location))
     }
 
     /// Line fragments of a paragraph. Hidden glyphs at a line's start sit in the previous
@@ -168,7 +216,7 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             } else {
                 Theme.NS.taskBorder.setStroke(); path.stroke()
             }
-        case let .quote(depth, tint):
+        case let .quote(depth, tint, head):
             let fs = frags(range)
             guard let firstRect = fs.first?.rect, let lastRect = fs.last?.rect else { return }
             let para = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
@@ -183,6 +231,14 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                 (tint ?? Theme.NS.quoteBar).setFill()
                 CGRect(x: origin.x + gutter + CGFloat(k) * MarkdownStyler.quoteUnit, y: top, width: 3, height: bottom - top).fill()
             }
+            if let head, let tint, let l = firstLine(range, storage: storage, origin: origin) {
+                drawCalloutHead(head, tint: tint, x: x0, line: l, right: origin.x + width - gutter)
+            }
+        case let .footnote(label):
+            guard let l = firstLine(range, storage: storage, origin: origin) else { return }
+            let font = NSFont.systemFont(ofSize: max(10, l.font.pointSize * 0.78), weight: .medium)
+            let s = NSAttributedString(string: label, attributes: [.font: font.monospacedDigits, .foregroundColor: Theme.NS.accent])
+            s.draw(at: NSPoint(x: x0 - 8 - s.size().width, y: l.baseline - font.ascender))
         case .hr:
             guard let f = frags(range).first else { return }
             let para = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
@@ -227,6 +283,37 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                 rect.fill()
             }
         }
+    }
+
+    /// A callout's icon before its title (or its kind when it has none) and, when it folds, a chevron.
+    private func drawCalloutHead(_ head: CalloutHead, tint: NSColor, x: CGFloat, line l: (top: CGFloat, baseline: CGFloat, mid: CGFloat, font: NSFont), right: CGFloat) {
+        let side: CGFloat = 16
+        // From the line's top: an untitled head has only hidden glyphs, whose baseline isn't the text's.
+        let baseline = l.top + l.font.ascender
+        let capMid = baseline - l.font.capHeight / 2
+        if let icon = NSImage(systemSymbolName: CalloutHead.symbol(head.kind), accessibilityDescription: head.kind)?
+            .withSymbolConfiguration(.init(pointSize: side * 0.85, weight: .semibold)) {
+            let s = icon.size
+            let scale = min(side / s.width, side / s.height)
+            let r = CGRect(x: x + 1, y: capMid - s.height * scale / 2, width: s.width * scale, height: s.height * scale)
+            icon.tinted(tint).draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
+        if head.untitled {
+            let title = NSAttributedString(string: CalloutHead.title(head.kind),
+                                           attributes: [.font: NSFont.systemFont(ofSize: l.font.pointSize, weight: .semibold), .foregroundColor: tint])
+            let font = title.attribute(.font, at: 0, effectiveRange: nil) as! NSFont
+            title.draw(at: NSPoint(x: x + MarkdownStyler.calloutIcon, y: baseline - font.ascender))
+        }
+        guard let folded = head.folded else { return }
+        let chevron = NSImage(systemSymbolName: folded ? "chevron.right" : "chevron.down", accessibilityDescription: folded ? "展开" : "收起")?
+            .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
+        let c = CGRect(x: right - 26, y: capMid - 10, width: 20, height: 20)
+        if let chevron {
+            let s = chevron.size
+            chevron.tinted(tint).draw(in: CGRect(x: c.midX - s.width / 2, y: c.midY - s.height / 2, width: s.width, height: s.height),
+                                      from: .zero, operation: .sourceOver, fraction: 0.9, respectFlipped: true, hints: nil)
+        }
+        foldHitRects.append((c.insetBy(dx: -6, dy: -6), head.key))
     }
 
     private func draw(_ e: EmbedDeco, range: NSRange, origin: NSPoint) {
