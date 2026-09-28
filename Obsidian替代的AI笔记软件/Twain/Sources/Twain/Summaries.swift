@@ -51,7 +51,7 @@ extension AppModel {
                 let lanes = 3
                 var queue = batches
                 var running = 0
-                func next() {
+                @MainActor func next() {
                     guard let b = queue.first else {
                         if running == 0 { self.finishSummaries() }
                         return

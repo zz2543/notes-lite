@@ -273,7 +273,7 @@ struct RenameField: NSViewRepresentable {
         context.coordinator.parent = self
     }
 
-    final class Coordinator: NSObject, NSTextFieldDelegate {
+    @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: RenameField
         private var done = false
 

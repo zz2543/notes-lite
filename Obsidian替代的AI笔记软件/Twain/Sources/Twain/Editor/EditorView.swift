@@ -75,7 +75,7 @@ struct EditorView: NSViewRepresentable {
 
     // MARK: Coordinator
 
-    final class Coordinator: NSObject, NSTextViewDelegate, NSTextStorageDelegate {
+    @MainActor final class Coordinator: NSObject, NSTextViewDelegate, NSTextStorageDelegate {
         let model: AppModel
         weak var textView: TwainTextView?
         weak var scrollView: NSScrollView?
@@ -110,7 +110,8 @@ struct EditorView: NSViewRepresentable {
             }
             styler.needsRestyle = { [weak self] in self?.restyle() }
             NotificationCenter.default.addObserver(forName: .twainApplySlash, object: nil, queue: .main) { [weak self] n in
-                if let item = n.object as? SlashItem { self?.applySlash(item) }
+                let item = n.object as? SlashItem
+                MainActor.assumeIsolated { if let item { self?.applySlash(item) } }
             }
         }
 
@@ -218,9 +219,11 @@ struct EditorView: NSViewRepresentable {
             return tv.window?.firstResponder === tv
         }
 
-        func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
-                         range editedRange: NSRange, changeInLength delta: Int) {
-            if editedMask.contains(.editedCharacters) { styler.noteEdit(editedRange, delta: delta) }
+        /// The note's storage is only ever edited on the main thread.
+        nonisolated func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
+                                     range editedRange: NSRange, changeInLength delta: Int) {
+            guard editedMask.contains(.editedCharacters) else { return }
+            MainActor.assumeIsolated { styler.noteEdit(editedRange, delta: delta) }
         }
 
         func currentLine() -> Int? {

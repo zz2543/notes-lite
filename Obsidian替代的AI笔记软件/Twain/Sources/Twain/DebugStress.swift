@@ -14,6 +14,7 @@ import TwainCore
 /// - memory at the start and the end
 ///
 /// Every line starts with `stress `; `TWAIN_EXIT=1` quits when done.
+@MainActor
 enum DebugStress {
     static func log(_ s: String) { FileHandle.standardError.write(("stress " + s + "\n").data(using: .utf8)!) }
 
@@ -33,7 +34,7 @@ enum DebugStress {
     }
 
     /// Frame intervals from the display link while an animation runs.
-    final class FrameMeter: NSObject {
+    @MainActor final class FrameMeter: NSObject {
         private var link: CADisplayLink?
         private var stamps: [CFTimeInterval] = []
         private var frame: CFTimeInterval = 1.0 / 60
@@ -61,7 +62,7 @@ enum DebugStress {
     }
 
     /// The longest the main thread made a 5 ms timer wait beyond its time.
-    final class StallMeter {
+    @MainActor final class StallMeter {
         private var timer: Timer?
         private var last = CACurrentMediaTime()
         private(set) var worst = 0.0
@@ -70,15 +71,18 @@ enum DebugStress {
         func start() {
             last = CACurrentMediaTime()
             let t = Timer(timeInterval: 0.005, repeats: true) { [weak self] _ in
-                guard let self else { return }
-                let now = CACurrentMediaTime()
-                let late = (now - self.last - 0.005) * 1000
-                if late > 16 { self.stalls += 1 }
-                self.worst = max(self.worst, late)
-                self.last = now
+                MainActor.assumeIsolated { self?.fire() }
             }
             RunLoop.main.add(t, forMode: .common)
             timer = t
+        }
+
+        private func fire() {
+            let now = CACurrentMediaTime()
+            let late = (now - last - 0.005) * 1000
+            if late > 16 { stalls += 1 }
+            worst = max(worst, late)
+            last = now
         }
 
         func stop() { timer?.invalidate(); timer = nil }
@@ -100,7 +104,7 @@ enum DebugStress {
         var opens: [Double] = []
         steps.append { next in
             var queue = picks
-            func one() {
+            @MainActor func one() {
                 guard !queue.isEmpty else {
                     log("open " + stats(opens))
                     return next()
@@ -126,9 +130,9 @@ enum DebugStress {
             { next in
                 var round = 0
                 var hide: [(Int, Int, Double)] = [], show: [(Int, Int, Double)] = []
-                func once() {
+                @MainActor func once() {
                     guard round < 8 else {
-                        func sum(_ xs: [(Int, Int, Double)]) -> String {
+                        @MainActor func sum(_ xs: [(Int, Int, Double)]) -> String {
                             String(format: "frames=%d dropped=%d longest=%.1fms", xs.map(\.0).reduce(0, +), xs.map(\.1).reduce(0, +), xs.map(\.2).max() ?? 0)
                         }
                         log("\(name) hide " + sum(hide))
@@ -181,7 +185,7 @@ enum DebugStress {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 guard let tv = DebugScenario.textView() else { return next() }
                 var keys: [Double] = []
-                func type(_ i: Int) {
+                @MainActor func type(_ i: Int) {
                     guard i < 80 else {
                         log("type \(len) chars " + stats(keys))
                         return moves()
@@ -194,11 +198,11 @@ enum DebugStress {
                         type(i + 1)
                     } }
                 }
-                func moves() {
+                @MainActor func moves() {
                     var near: [Double] = [], far: [Double] = []
-                    func move(_ at: Int, _ i: Int, into: @escaping ([Double]) -> Void, then: @escaping () -> Void) {
+                    @MainActor func move(_ at: Int, _ i: Int, into: @escaping ([Double]) -> Void, then: @escaping () -> Void) {
                         var xs: [Double] = []
-                        func step(_ k: Int) {
+                        @MainActor func step(_ k: Int) {
                             guard k < i else { into(xs); return then() }
                             let t = CACurrentMediaTime()
                             tv.doCommand(by: k % 2 == 0 ? #selector(NSResponder.moveDown(_:)) : #selector(NSResponder.moveUp(_:)))

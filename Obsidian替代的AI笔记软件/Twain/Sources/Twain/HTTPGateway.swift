@@ -146,7 +146,7 @@ final class HTTPGateway {
 
     // MARK: routes
 
-    private func handle(_ r: Request, reply: @escaping (Int, JSONValue) -> Void) {
+    @MainActor private func handle(_ r: Request, reply: @escaping (Int, JSONValue) -> Void) {
         guard let m = model else { return reply(503, ["error": "共笔没有就绪"]) }
         let parts = r.path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         guard parts.first == "v1" else { return reply(404, ["error": .string("没有这个接口：\(r.path)")]) }
@@ -160,7 +160,7 @@ final class HTTPGateway {
         let body: JSONValue = r.body.isEmpty ? .object([:]) : ((try? JSONDecoder().decode(JSONValue.self, from: r.body)) ?? .null)
         if !r.body.isEmpty, body.isNull { return reply(400, ["error": "请求体不是合法的 JSON"]) }
 
-        func run(_ id: String, _ params: [String: JSONValue]) {
+        @MainActor func run(_ id: String, _ params: [String: JSONValue]) {
             guard let cmd = CommandRegistry.command(id, in: m), cmd.agents else { return reply(404, ["error": .string("没有命令 \(id)")]) }
             do { try cmd.spec.validate(params) } catch let e as RPCError { return reply(400, ["error": .string(e.message)]) } catch {}
             cmd.perform(m, CommandCall(params: params)) { result in

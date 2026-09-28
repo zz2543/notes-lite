@@ -27,7 +27,7 @@ struct SessionItem: Identifiable, Equatable {
     var kind: Kind
 }
 
-@Observable
+@MainActor @Observable
 final class AgentSession: Identifiable {
     let id = UUID()
     let agent: AgentKind

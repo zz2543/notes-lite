@@ -140,6 +140,7 @@ extension AppModel {
 
 /// Annotation cards beside the text, each level with its passage. Lives inside the text view so
 /// the cards scroll with the page for free; repositioned only when layout changes.
+@MainActor
 final class AnnotationRail {
     static let width: CGFloat = 300
     private var hosts: [String: NSHostingView<AnyView>] = [:]

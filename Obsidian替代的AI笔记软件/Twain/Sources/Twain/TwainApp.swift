@@ -66,6 +66,7 @@ struct TwainApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel? {
         didSet { if !snapshotMode { model?.startServer() } }

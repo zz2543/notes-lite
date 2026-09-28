@@ -75,7 +75,7 @@ struct SlashState: Equatable {
     var anchor: CGPoint
 }
 
-@Observable
+@MainActor @Observable
 final class AppModel {
     // MARK: preferences
     var font: EditorFont = .serif { didSet { save("font", font.rawValue) } }
@@ -261,7 +261,7 @@ final class AppModel {
         refreshModels()
         // The CLIs rewrite their model lists as they update; pick that up whenever Twain comes back.
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.refreshModels()
+            MainActor.assumeIsolated { self?.refreshModels() }
         }
         #if DEBUG
         // A scratch vault for snapshots and manual checks; never saved as the user's vault.
@@ -273,8 +273,8 @@ final class AppModel {
             openVault(URL(fileURLWithPath: path))
         }
         if !defaults.bool(forKey: "onboarded") || vault == nil { onboardingStep = 0 }
-        timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.tick += 1 })
-        timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.pollTerminal() })
+        timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick += 1 } })
+        timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollTerminal() } })
     }
 
     // MARK: prefs

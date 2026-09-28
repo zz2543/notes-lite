@@ -3,6 +3,7 @@ import AppKit
 import TwainCore
 
 /// Puts the app into a known state for offscreen snapshots (see AppDelegate.snapshot).
+@MainActor
 enum DebugScenario {
     static func textView() -> TwainTextView? {
         func find(_ v: NSView) -> TwainTextView? {

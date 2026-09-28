@@ -14,11 +14,11 @@ struct CommandCall {
 
 /// How a command appears in ⌘K. Labels can depend on state ("进入/退出专注模式").
 struct PaletteInfo {
-    var label: (AppModel) -> String
+    var label: @MainActor (AppModel) -> String
     var hint: String = ""
     var icon: String
     var tint: Color? = nil
-    var visible: (AppModel) -> Bool = { _ in true }
+    var visible: @MainActor (AppModel) -> Bool = { _ in true }
 }
 
 /// A command the app knows how to run. The same entry feeds ⌘K and the socket, so anything
@@ -31,10 +31,10 @@ struct AppCommand {
     /// False for commands that only make sense with the user at the keyboard (modal panels).
     var agents = true
     /// Answers through `reply`, possibly much later (a question waits for the user).
-    let perform: (AppModel, CommandCall, @escaping Reply) -> Void
+    let perform: @MainActor (AppModel, CommandCall, @escaping Reply) -> Void
 
     init(spec: CommandSpec, palette: PaletteInfo? = nil, agents: Bool = true,
-         async perform: @escaping (AppModel, CommandCall, @escaping Reply) -> Void) {
+         async perform: @escaping @MainActor (AppModel, CommandCall, @escaping Reply) -> Void) {
         self.spec = spec
         self.palette = palette
         self.agents = agents
@@ -42,7 +42,7 @@ struct AppCommand {
     }
 
     init(spec: CommandSpec, palette: PaletteInfo? = nil, agents: Bool = true,
-         run: @escaping (AppModel, CommandCall) throws -> JSONValue) {
+         run: @escaping @MainActor (AppModel, CommandCall) throws -> JSONValue) {
         self.init(spec: spec, palette: palette, agents: agents) { m, call, reply in
             do { reply(.success(try run(m, call))) } catch let e as RPCError { reply(.failure(e)) } catch {
                 reply(.failure(RPCError(RPCError.internalError, error.localizedDescription)))
@@ -51,6 +51,7 @@ struct AppCommand {
     }
 }
 
+@MainActor
 enum CommandRegistry {
     static let builtin: [AppCommand] = agentCommands + paletteCommands + debugCommands
 
@@ -149,11 +150,11 @@ enum CommandRegistry {
             ParamSpec("limit", .int, help: "最多几篇"),
         ])) { m, call, reply in
             m.summarizeNotes(limit: call.params["limit"]?.int)
-            func poll() {
+            @MainActor func poll() {
                 if m.summarizing == nil { reply(.success(["toast": JSONValue(m.toast)])) }
-                else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll) }
+                else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll() } }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll() }
         },
         AppCommand(spec: CommandSpec("debug.aireview", "（调试）AI 审阅一篇笔记，等运行结束", effect: .write, params: [
             ParamSpec("note", required: true, positional: true, help: "笔记"),
@@ -165,12 +166,12 @@ enum CommandRegistry {
             m.open(rel)
             m.startAIReview(model: call.params["model"]?.string)
             let s = m.activeSession
-            func poll() {
+            @MainActor func poll() {
                 if s?.running == false { reply(.success(["annotations": .array(m.annotations.map(\.json)),
                                                           "transcript": .string(s?.markdown ?? "")])) }
-                else { DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: poll) }
+                else { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { poll() } }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: poll)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { poll() }
         },
         AppCommand(spec: CommandSpec("debug.companion", "（调试）在当前笔记末尾写一段，等伴写给出一句话", effect: .write, params: [
             ParamSpec("text", required: true, positional: true, help: "追加的文字"),
@@ -182,12 +183,12 @@ enum CommandRegistry {
             m.editorDidChange(t)
             m.editorSelection = NSRange(location: (t as NSString).length, length: 0)
             let start = Date()
-            func poll() {
+            @MainActor func poll() {
                 if let tip = m.companionTip {
                     reply(.success(["kind": .string(tip.kind.rawValue), "text": .string(tip.text), "quote": JSONValue(tip.quote),
                                     "seconds": JSONValue(Int(Date().timeIntervalSince(start)))]))
                 } else if Date().timeIntervalSince(start) > 60 { reply(.success(["tip": .null])) }
-                else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll) }
+                else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll() } }
             }
             poll()
         },
@@ -215,13 +216,13 @@ enum CommandRegistry {
                 default: break
                 }
             } catch let e as RPCError { return reply(.failure(e)) } catch {}
-            func poll() {
+            @MainActor func poll() {
                 guard let id, let r = m.pipelineRuns[id] else { return reply(.failure(RPCError(RPCError.notFound, "没有流水线在运行"))) }
-                if r.status == .running { DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: poll); return }
+                if r.status == .running { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { poll() }; return }
                 reply(.success(["step": JSONValue(r.step + 1), "status": .string("\(r.status)"), "output": .string(r.outputs.last ?? ""),
                                 "pending": JSONValue(m.pending.keys.sorted())]))
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: poll)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { poll() }
         },
         AppCommand(spec: CommandSpec("debug.desk", "（调试）在问库里提问，等 agent 交完卡片", effect: .write, params: [
             ParamSpec("question", required: true, positional: true, help: "问题"),
@@ -232,16 +233,16 @@ enum CommandRegistry {
             m.ask(desk: id, question: call.params["question"]?.string ?? "", scope: call.params["scope"]?.string ?? "",
                   model: call.params["model"]?.string)
             let sid = m.currentDesk?.session
-            func poll() {
+            @MainActor func poll() {
                 let s = m.sessions.first { $0.id.uuidString == sid }
                 if s?.running == false, let d = m.desks.first(where: { $0.id == id }) {
                     reply(.success(["desk": .string(id), "cards": .array(d.cards.map { c in
                         ["kind": .string(c.kind.rawValue), "title": .string(c.title), "body": .string(c.body),
                          "sources": .array(c.sources.map { .string($0.path + ":" + ($0.line.map(String.init) ?? "")) })]
                     }), "said": .string(s?.markdown.suffix(300).description ?? "")]))
-                } else { DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: poll) }
+                } else { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { poll() } }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: poll)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { poll() }
         },
         AppCommand(spec: CommandSpec("debug.space", "（调试）用模板新建空间", effect: .write, params: [
             ParamSpec("template", required: true, positional: true, help: "模板 id"),
