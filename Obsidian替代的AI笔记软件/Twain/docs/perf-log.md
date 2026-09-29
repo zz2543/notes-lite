@@ -131,7 +131,7 @@ memory start=134MB end=177MB
 done
 ```
 
-## motion · 92e0fe1 · 2026-09-29 10:47
+## motion 第一版（字数滚动动画，内存问题已在最终版修复）· 92e0fe1 · 2026-09-29 10:47
 
 ```
 vault notes=397 picks=44 dim=false
