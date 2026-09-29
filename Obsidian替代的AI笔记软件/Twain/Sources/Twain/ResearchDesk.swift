@@ -371,7 +371,7 @@ private struct CardView: View {
             if !c.sources.isEmpty {
                 FlowSources(sources: c.sources) { s in
                     model.open(s.path)
-                    if let line = s.line { model.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: model.editor.editorText)) }
+                    if let line = s.line { model.requestFocus(caret: NoteFile.offset(ofLine: line, in: model.editor.editorText)) }
                 }
             }
         }

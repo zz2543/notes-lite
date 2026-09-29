@@ -330,7 +330,7 @@ enum CommandRegistry {
                 line = h.line
             }
             m.open(rel)
-            let caret = line.map { Self.offset(ofLine: $0, in: m.editor.editorText) } ?? 0
+            let caret = line.map { NoteFile.offset(ofLine: $0, in: m.editor.editorText) } ?? 0
             m.requestFocus(caret: caret)
             return ["note": .string(rel), "line": JSONValue(line ?? 1)]
         },
@@ -392,18 +392,6 @@ enum CommandRegistry {
         AppCommand(spec: spec) { m, call, index, _ in
             try VaultQueries.run(spec.id, call.params, index: index, current: m.editor.activeRel)
         }
-    }
-
-    /// UTF-16 offset of the start of 1-based `line`, clamped to the text.
-    static func offset(ofLine line: Int, in text: String) -> Int {
-        let ns = text as NSString
-        var loc = 0, n = 1
-        while n < line, loc < ns.length {
-            let r = ns.lineRange(for: NSRange(location: loc, length: 0))
-            loc = NSMaxRange(r)
-            n += 1
-        }
-        return min(loc, ns.length)
     }
 
     // MARK: ⌘K

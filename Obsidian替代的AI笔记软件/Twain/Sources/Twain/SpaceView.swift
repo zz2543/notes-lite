@@ -332,7 +332,7 @@ private struct TasksModule: View {
                         Text(t.task.text).lineLimit(2)
                         Button(NoteRef(rel: t.rel).title + ":\(t.task.line)") {
                             model.open(t.rel)
-                            model.requestFocus(caret: CommandRegistry.offset(ofLine: t.task.line, in: model.editor.editorText))
+                            model.requestFocus(caret: NoteFile.offset(ofLine: t.task.line, in: model.editor.editorText))
                         }
                         .buttonStyle(.plain).font(.caption).foregroundStyle(.tertiary)
                     }

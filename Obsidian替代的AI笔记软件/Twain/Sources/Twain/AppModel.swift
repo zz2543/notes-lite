@@ -441,36 +441,15 @@ final class AppModel {
         }
     }
 
-    nonisolated static func unreadableReason(_ u: URL) -> String? {
-        let size = (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        if size > 8 * 1024 * 1024 { return "这个文件有 \(size / 1024 / 1024) MB，超出了编辑器能流畅打开的大小。" }
-        guard let h = try? FileHandle(forReadingFrom: u) else { return nil }
-        defer { try? h.close() }
-        let head = h.readData(ofLength: 8192)
-        if head.contains(0) { return "这个文件含有二进制内容（例如全是空字节），不是文本笔记，可能已经损坏。" }
-        return nil
-    }
+    nonisolated static func unreadableReason(_ u: URL) -> String? { NoteFile.unreadableReason(u) }
 
-    nonisolated static let oversizedLine = 100_000
-
-    nonisolated static func hasOversizedLine(_ text: String) -> Bool {
-        guard text.utf8.count > oversizedLine else { return false }
-        var run = 0
-        for b in text.utf8 {
-            if b == 0x0A { run = 0 } else { run += 1; if run > oversizedLine { return true } }
-        }
-        return false
-    }
+    nonisolated static func hasOversizedLine(_ text: String) -> Bool { NoteFile.hasOversizedLine(text) }
 
     /// The text the editor shows: the note, or its clipped display copy when it is oversized.
     var editorDisplayText: String {
         guard editor.oversized else { return editor.editorText }
         if let d = editor.oversizedDisplay { return d }
-        let d = Markdown.lines(editor.editorText).map { line -> String in
-            let n = (line as NSString).length
-            guard n > 2000 else { return line }
-            return (line as NSString).substring(to: 2000) + " …（此行还有 \(n - 2000) 个字符未显示）"
-        }.joined(separator: "\n")
+        let d = NoteFile.clippedForDisplay(editor.editorText)
         editor.oversizedDisplay = d
         return d
     }

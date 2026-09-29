@@ -268,7 +268,7 @@ extension AppModel {
                 guard let self else { return }
                 guard case let .success((index, _)) = r, let rel = index.resolve(ref) else { return self.showToast("找不到笔记：\(ref)") }
                 self.open(rel)
-                if let line = q["line"].flatMap(Int.init) { self.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: self.editor.editorText)) }
+                if let line = q["line"].flatMap(Int.init) { self.requestFocus(caret: NoteFile.offset(ofLine: line, in: self.editor.editorText)) }
             }
         case "new":
             var body: [String: JSONValue] = ["content": .string(q["content"] ?? "# \(q["title"] ?? "未命名")\n"), "open": true]

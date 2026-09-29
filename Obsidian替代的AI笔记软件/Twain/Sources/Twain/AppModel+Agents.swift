@@ -343,12 +343,9 @@ extension AppModel {
             var writer: [String: UUID] = [:]
             for t in terminals {
                 let recent = TerminalWatcher.recentWrites(transcript: t.url, agent: t.agent, root: root)
-                for rel in outside where writer[rel] == nil {
-                    let abs = (root as NSString).appendingPathComponent(rel)
-                    let name = (rel as NSString).lastPathComponent
-                    if recent.paths.contains(abs) || recent.paths.contains(rel) || recent.steps.contains(where: { $0.contains(name) }) {
-                        writer[rel] = t.id
-                    }
+                for rel in outside where writer[rel] == nil
+                    && WriteAttribution.explains(rel, root: root, paths: recent.paths, steps: recent.steps) {
+                    writer[rel] = t.id
                 }
             }
             DispatchQueue.main.async { self?.applyOutsideChanges(outside, writer: writer) }

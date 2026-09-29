@@ -184,7 +184,7 @@ final class TerminalWatcher {
     // MARK: transcripts
 
     static func claudeTranscript(cwd: String) -> URL? {
-        let escaped = String(cwd.map { $0.isASCII && ($0.isLetter || $0.isNumber) ? $0 : "-" })
+        let escaped = ClaudeStream.projectFolderName(cwd: cwd)
         let dir = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects/" + escaped)
         return newest(in: dir) { $0.pathExtension == "jsonl" }
     }
@@ -235,16 +235,7 @@ final class TerminalWatcher {
     /// `within` seconds, so an edit made in another editor is never pinned on an idle agent.
     static func recentWrites(transcript u: URL, agent: AgentKind, root: String, within: TimeInterval = 30) -> (paths: Set<String>, steps: [String]) {
         guard let m = modified(u), Date().timeIntervalSince(m) < within else { return ([], []) }
-        let events = events(transcript: u, agent: agent, root: root, cap: 256 * 1024)
-        var paths = Set<String>()
-        var steps: [String] = []
-        for e in events.suffix(40) {
-            if case let .step(_, text, write) = e {
-                if let write { paths.insert(write) }
-                steps.append(text)
-            }
-        }
-        return (paths, steps)
+        return WriteAttribution.recent(events(transcript: u, agent: agent, root: root, cap: 256 * 1024))
     }
 
     /// Parses (the tail of) a transcript into events.

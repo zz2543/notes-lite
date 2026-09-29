@@ -33,7 +33,7 @@ extension AppModel {
     private func propose(_ call: CommandCall, index: VaultIndex, vault v: Vault, reply: @escaping AppCommand.Reply) {
         do {
             let ref = call.params["note"]?.string ?? ""
-            let rel = try index.resolve(ref) ?? Self.newNotePath(ref)
+            let rel = try index.resolve(ref) ?? NoteFile.newNotePath(ref)
             if let existing = agents.pending[rel] {
                 throw RPCError(1006, "\(rel) 还有 \(existing.hunks.count) 处改动等用户审阅，等用户处理完再提交",
                                data: ["pendingProposal": JSONValue(existing.proposalID)])
@@ -99,17 +99,6 @@ extension AppModel {
         } catch {
             reply(.failure(RPCError(RPCError.internalError, error.localizedDescription)))
         }
-    }
-
-    /// Where a proposal for a note that doesn't exist yet goes. Refuses paths outside the vault.
-    static func newNotePath(_ ref: String) throws -> String {
-        var rel = ref.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let parts = rel.split(separator: "/")
-        guard !rel.isEmpty, !parts.contains(where: { $0 == ".." || $0.hasPrefix(".") }) else {
-            throw RPCError(RPCError.invalidParams, "笔记路径不合法：\(ref)")
-        }
-        if !rel.lowercased().hasSuffix(".md") { rel += ".md" }
-        return rel
     }
 
     func review(from p: Proposal, session: AgentSession?) -> PendingReview {
