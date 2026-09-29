@@ -255,6 +255,8 @@ struct PipelineCard: View {
                     ForEach(Array(run.pipeline.steps.enumerated()), id: \.offset) { i, step in
                         HStack(spacing: 8) {
                             stateIcon(i, run).frame(width: 16)
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                                .id("\(i)-\(Self.iconKey(i, run))")
                             Text("\(i + 1). \(step.title)").font(.callout)
                                 .foregroundStyle(i == run.step ? .primary : .secondary)
                             Spacer(minLength: 0)
@@ -263,11 +265,14 @@ struct PipelineCard: View {
                     }
                 }
                 gate(run)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .id(Self.gateKey(run.status))
             }
             .controlSize(.small)
             .buttonBorderShape(.capsule)
             .padding(12)
             .contentCard()
+            .motion(Motion.pop, value: "\(run.step)-\(Self.gateKey(run.status))")
         }
     }
 
@@ -329,6 +334,21 @@ struct PipelineCard: View {
             Label("全部完成", systemImage: "checkmark.seal").font(.caption).foregroundStyle(.green)
         case .running:
             Button("停止") { model.stopPipeline(runID) }.buttonStyle(.glass)
+        }
+    }
+
+    /// What a step's icon shows, so a change of icon can transition.
+    static func iconKey(_ i: Int, _ run: PipelineRun) -> String {
+        i < run.step || run.status == .done ? "done" : i == run.step ? gateKey(run.status) : "todo"
+    }
+
+    static func gateKey(_ s: PipelineRun.Status) -> String {
+        switch s {
+        case .running: "running"
+        case .waitingReview: "review"
+        case .waitingUser: "user"
+        case .stopped: "stopped"
+        case .done: "done"
         }
     }
 

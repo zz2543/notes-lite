@@ -252,6 +252,7 @@ struct StatusPill: View {
                 Circle()
                     .fill(model.editor.dirty ? AnyShapeStyle(.orange) : AnyShapeStyle(.green.opacity(0.8)))
                     .frame(width: 6, height: 6)
+                    .motion(Motion.quick, value: model.editor.dirty)
                 Text(model.editor.dirty ? "编辑中" : "已保存")
                 if model.prefs.companionOn {
                     if model.editor.companionThinking { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkle").foregroundStyle(.tint) }

@@ -333,19 +333,20 @@ private struct CardView: View {
                 }
                 .padding(6)
                 .background(.fill.quaternary, in: .rect(cornerRadius: 8, style: .continuous))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
             HStack(spacing: 4) {
                 iconButton(card.state == .pinned ? "pin.fill" : "pin", card.state == .pinned ? "取消钉住" : "钉住") {
-                    model.setCard(card.id, in: deskID, .pinned)
+                    withMotion(Motion.pop) { model.setCard(card.id, in: deskID, .pinned) }
                 }
                 iconButton(card.state == .drafted ? "checkmark.circle.fill" : "text.badge.plus", "收进草稿") {
                     model.draftCard(card.id, in: deskID)
                 }
-                iconButton("bubble.left.and.text.bubble.right", "追问") { asking.toggle() }
+                iconButton("bubble.left.and.text.bubble.right", "追问") { withMotion(Motion.quick) { asking.toggle() } }
                     .disabled(!canFollowUp)
                 Spacer()
                 iconButton(card.state == .discarded ? "arrow.uturn.backward" : "xmark", card.state == .discarded ? "恢复" : "划掉") {
-                    model.setCard(card.id, in: deskID, .discarded)
+                    withMotion(Motion.quick) { model.setCard(card.id, in: deskID, .discarded) }
                 }
             }
         }
@@ -356,6 +357,7 @@ private struct CardView: View {
                           lineWidth: card.state == .pinned ? 1.5 : 0.5))
         .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
         .opacity(card.state == .discarded ? 0.45 : 1)
+        .motion(Motion.standard, value: replies.map(\.id))
     }
 
     @ViewBuilder
@@ -381,14 +383,17 @@ private struct CardView: View {
     }
 
     private func iconButton(_ icon: String, _ help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: icon).frame(width: 26, height: 22) }
-            .buttonStyle(.borderless).help(help)
+        Button(action: action) {
+            Image(systemName: icon).frame(width: 26, height: 22)
+                .contentTransition(Motion.style == .minimal ? .identity : .symbolEffect(.replace))
+        }
+        .buttonStyle(.borderless).help(help)
     }
 
     private func send() {
         model.followUp(card.id, in: deskID, question: draft)
         draft = ""
-        asking = false
+        withMotion(Motion.quick) { asking = false }
     }
 
     static func tint(_ k: ResearchCard.Kind) -> Color {

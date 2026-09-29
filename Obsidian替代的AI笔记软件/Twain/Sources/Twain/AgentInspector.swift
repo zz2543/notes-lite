@@ -14,13 +14,18 @@ struct AgentInspector: View {
 
     var body: some View {
         let sess = model.activeSession
-        VStack(spacing: 0) {
+        ZStack {
+            // Another session (or the first reply) cross-fades in instead of replacing the view at once.
             if let sess, !sess.items.isEmpty {
                 transcript(sess)
+                    .id(sess.id)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
             } else {
                 emptyState
+                    .transition(.opacity)
             }
         }
+        .motion(Motion.standard, value: sess.map { $0.items.isEmpty ? UUID?.none : $0.id } ?? nil)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaBar(edge: .top) {
             VStack(spacing: 8) {
@@ -69,6 +74,7 @@ struct AgentInspector: View {
                     if let sess, sess.source == .app, sess.running {
                         Button("停止", systemImage: "stop.fill") { model.stopAgent(sess) }
                             .help("停止")
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
                     }
                     Button("新会话", systemImage: "square.and.pencil", action: model.newSession)
                         .help("新会话")
@@ -78,6 +84,7 @@ struct AgentInspector: View {
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
             }
+            .motion(Motion.pop, value: sess?.running == true && sess?.source == .app)
         }
     }
 
@@ -131,6 +138,8 @@ struct AgentInspector: View {
             .onChange(of: sess.items.count) { _, _ in
                 withMotion { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
             }
+            // A session switched to opens at its latest message.
+            .onAppear { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
         }
     }
 
@@ -585,6 +594,8 @@ private struct QuestionCard: View {
             if let answer = question.answer {
                 Label("你的回答：" + answer, systemImage: "checkmark.circle.fill")
                     .font(.callout).foregroundStyle(.secondary)
+                    .symbolEffect(.bounce, options: .nonRepeating, value: Motion.style == .lively)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
             } else if question.expired {
                 Label("没有回答，\(question.agent.displayName) 已继续", systemImage: "clock.badge.xmark")
                     .font(.callout).foregroundStyle(.secondary)
@@ -621,6 +632,8 @@ private struct QuestionCard: View {
         .buttonBorderShape(.capsule)
         .padding(12)
         .contentCard()
+        // Answering folds the options into the answer.
+        .motion(Motion.standard, value: question.answer != nil || question.expired)
         .onAppear { if question.answer == nil, !question.expired, question.options.isEmpty { focused = true } }
     }
 }
@@ -647,10 +660,12 @@ private struct FeedbackCard: View {
             if expanded {
                 Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
             if sent {
                 Label("已发回给 \(session.agent.displayName)", systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.secondary)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
             } else {
                 Button("把意见发回给 \(session.agent.displayName)", systemImage: "arrowshape.turn.up.left") {
                     model.sendFeedback(itemID, in: session)
@@ -658,11 +673,13 @@ private struct FeedbackCard: View {
                 .buttonStyle(.glassProminent)
                 .disabled(session.running)
                 .help("在这个会话里继续，让 \(session.agent.displayName) 根据你的审阅意见重新修改")
+                .transition(.opacity)
             }
         }
         .controlSize(.small)
         .buttonBorderShape(.capsule)
         .padding(12)
         .contentCard()
+        .motion(Motion.standard, value: sent)
     }
 }

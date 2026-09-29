@@ -122,7 +122,7 @@ struct AttachmentSettings: View {
 
     var body: some View {
         Section {
-            Picker("保存到", selection: $place) {
+            Picker("保存到", selection: $place.animation(Motion.standard)) {
                 ForEach(AttachmentPlace.allCases) { Text($0.label).tag($0) }
             }
             if place == .folder || place == .subfolder {
@@ -136,6 +136,7 @@ struct AttachmentSettings: View {
                         }
                     }
                 }
+                .transition(.opacity)
             }
             Picker("文件名", selection: Bindable(model.prefs).attachmentNaming) {
                 ForEach(AttachmentNaming.allCases) { Text($0.label).tag($0) }

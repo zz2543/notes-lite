@@ -152,6 +152,7 @@ private struct HunkCard: View {
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(.fill.quaternary, in: .rect(cornerRadius: Metrics.rowRadius, style: .continuous))
                 .padding(.horizontal, 10).padding(.bottom, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
                 .onAppear { why = feedback ?? "" }
                 .onChange(of: why) { _, v in model.setFeedback(index, v) }
             }

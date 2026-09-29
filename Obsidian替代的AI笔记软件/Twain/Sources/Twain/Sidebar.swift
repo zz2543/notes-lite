@@ -203,14 +203,19 @@ struct NoteRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if model.agents.writing.contains(note.rel) {
-                    ProgressView().controlSize(.mini).help("Agent 正在写入")
-                } else if let p = model.agents.pending[note.rel] {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 7))
-                        .foregroundStyle(p.by.map(Theme.agentColor) ?? .secondary)
-                        .help("\(agentLabel(p.by)) 的改动待审阅")
+                ZStack {
+                    if model.agents.writing.contains(note.rel) {
+                        ProgressView().controlSize(.mini).help("Agent 正在写入")
+                            .transition(.opacity)
+                    } else if let p = model.agents.pending[note.rel] {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(p.by.map(Theme.agentColor) ?? .secondary)
+                            .help("\(agentLabel(p.by)) 的改动待审阅")
+                            .transition(.scale(scale: 0.2).combined(with: .opacity))
+                    }
                 }
+                .motion(Motion.pop, value: model.agents.writing.contains(note.rel) ? 2 : model.agents.pending[note.rel] != nil ? 1 : 0)
             }
         } icon: {
             Image(systemName: note.isAgentFile ? "doc.badge.gearshape" : note.isHTML ? "globe" : "doc.text")
