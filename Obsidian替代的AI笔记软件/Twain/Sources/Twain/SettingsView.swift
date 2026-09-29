@@ -79,9 +79,37 @@ struct EditorSettings: View {
                 }
                 .disabled(model.agents.cli[.claude]?.found == false)
             }
+            MotionSettings(prefs: model.prefs)
             AttachmentSettings(model: model)
         }
         .formStyle(.grouped)
+    }
+}
+
+/// How much the app moves, and whether finishing things makes a sound.
+struct MotionSettings: View {
+    @Bindable var prefs: Preferences
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Section {
+            Picker("动效", selection: $prefs.motionStyle) {
+                ForEach(MotionStyle.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Text(prefs.motionStyle.detail).font(.callout).foregroundStyle(.secondary)
+            Toggle(isOn: $prefs.motionSound) {
+                Text("完成时播放音效")
+                Text("勾选待办、打卡、接受改动、agent 完成时播放一声短促的系统音效")
+            }
+            .disabled(prefs.motionStyle == .minimal)
+        } header: {
+            Text("动效")
+        } footer: {
+            if reduceMotion {
+                Text("系统开启了“减弱动态效果”，所有动效都只保留短暂的淡入淡出。").font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

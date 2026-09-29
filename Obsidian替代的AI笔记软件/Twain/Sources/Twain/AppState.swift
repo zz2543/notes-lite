@@ -49,6 +49,10 @@ final class Preferences {
         didSet { for k in AgentKind.allCases { save("effort." + k.rawValue, agentEffort[k] ?? "") } }
     }
     var editorWidth: CGFloat = 680
+    /// How much the app moves (Motion.swift).
+    var motionStyle: MotionStyle { didSet { save("motion", motionStyle.rawValue); Motion.style = motionStyle } }
+    /// Short sounds when something is finished.
+    var motionSound: Bool { didSet { save("motionSound", motionSound); Motion.sound = motionSound } }
 
     /// Reads every setting (assignments in init neither save nor notify).
     init(store: UserDefaults = .standard) {
@@ -74,6 +78,10 @@ final class Preferences {
         httpPort = UInt16(store.object(forKey: "pref.httpPort") as? Int ?? Int(HTTPGateway.defaultPort))
         agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, store.string(forKey: "pref.model." + $0.rawValue) ?? "") })
         agentEffort = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, store.string(forKey: "pref.effort." + $0.rawValue) ?? "") })
+        motionStyle = MotionStyle(rawValue: store.string(forKey: "pref.motion") ?? "") ?? .calm
+        motionSound = b("motionSound", false)
+        Motion.style = motionStyle
+        Motion.sound = motionSound
     }
 
     private func save(_ key: String, _ value: Any) { store.set(value, forKey: "pref." + key) }
