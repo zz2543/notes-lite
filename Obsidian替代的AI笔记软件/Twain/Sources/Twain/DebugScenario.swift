@@ -118,6 +118,34 @@ enum DebugScenario {
             }
         case "perf":
             perf(m)
+        case "taskfx":
+            // taskfx:<note>:<style>:<scale>:<stroke> — checks the first open task with the check box
+            // effect frozen at that state, and writes the text layer to TWAIN_FX_OUT.
+            Motion.style = MotionStyle(rawValue: parts.count > 2 ? parts[2] : "") ?? .calm
+            let freeze = parts.count > 4 ? (CGFloat(Double(parts[3]) ?? 1), CGFloat(Double(parts[4]) ?? 1)) : nil
+            EditorEffects.still = freeze.map { (scale: $0.0, stroke: $0.1) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                guard let tv = textView(), let c = tv.coordinator else { return }
+                if freeze != nil { c.debugCheckFirstTask() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    tv.display()
+                    guard let layer = tv.layer, let out = ProcessInfo.processInfo.environment["TWAIN_FX_OUT"] else { return }
+                    let scale: CGFloat = 2
+                    let visible = tv.visibleRect
+                    let w = Int(visible.width * scale), h = Int(min(visible.height, 500) * scale)
+                    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                    ctx.scaleBy(x: scale, y: scale)
+                    if layer.contentsAreFlipped() { ctx.translateBy(x: 0, y: visible.height); ctx.scaleBy(x: 1, y: -1) }
+                    ctx.translateBy(x: -visible.minX, y: -visible.minY)
+                    layer.render(in: ctx)
+                    if let img = ctx.makeImage() {
+                        try? NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out))
+                    }
+                    FileHandle.standardError.write("taskfx done flipped=\(layer.contentsAreFlipped())\n".data(using: .utf8)!)
+                    exit(0)
+                }
+            }
         case "stress":
             DebugStress.run(m, count: parts.count > 1 ? Int(parts[1]) ?? 44 : 44)
         case "rendertest":

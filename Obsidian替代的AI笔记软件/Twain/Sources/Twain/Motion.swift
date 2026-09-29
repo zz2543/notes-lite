@@ -87,6 +87,30 @@ enum Motion {
         return a
     }
 
+    /// Scale keyframes: a quick press down to `down`, then a spring back to `from` that
+    /// overshoots (SwiftUI's response / dampingFraction). For the lively style's pops.
+    static func windUpAndSpring(from: Double, down: Double, response: Double, damping: Double) -> CAKeyframeAnimation {
+        let press = 0.09
+        let k = pow(2 * .pi / response, 2), c = 4 * .pi * damping / response, dt = 1.0 / 120
+        var x = down, v = 0.0, values = [from, down], times = [0, press]
+        var t = press
+        for i in 0..<360 {
+            let a = -k * (x - from) - c * v
+            v += a * dt
+            x += v * dt
+            t += dt
+            if i % 2 == 1 { values.append(x); times.append(t) }
+            if i > 10, abs(x - from) < 0.001, abs(v) < 0.01 { break }
+        }
+        values.append(from); times.append(t + dt)
+        let anim = CAKeyframeAnimation(keyPath: "transform.scale")
+        anim.values = values
+        anim.keyTimes = times.map { NSNumber(value: $0 / (t + dt)) }
+        anim.duration = t + dt
+        anim.calculationMode = .linear
+        return anim
+    }
+
     // MARK: feedback
 
     enum Moment { case done, celebrate, notice }

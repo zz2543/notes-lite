@@ -662,10 +662,29 @@ struct EditorView: NSViewRepresentable {
 
         // MARK: clicks
 
+        #if DEBUG
+        /// Clicks the first unchecked task's box, as the mouse would.
+        func debugCheckFirstTask() {
+            guard let tv = textView, let lm = tv.layoutManager as? TwainLayoutManager, let tc = tv.textContainer else { return }
+            lm.ensureLayout(forBoundingRect: tv.visibleRect, in: tc)
+            tv.display()
+            let ns = tv.string as NSString
+            guard let hit = lm.taskHitRects.first(where: { $0.1 < ns.length && !Markdown.isTaskDone(ns.substring(with: ns.lineRange(for: NSRange(location: $0.1, length: 0)))) }),
+                  let e = NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                             context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return }
+            _ = handleClick(at: NSPoint(x: hit.0.midX, y: hit.0.midY), event: e)
+        }
+        #endif
+
         func handleClick(at p: NSPoint, event: NSEvent) -> Bool {
             guard let tv = textView, let lm = tv.layoutManager as? TwainLayoutManager, let tc = tv.textContainer, let storage else { return false }
             if let hit = lm.taskHitRects.first(where: { $0.0.contains(p) }) {
                 toggleTask(lineStart: hit.1)
+                // Checked (not unchecked): the box animates into its new state.
+                let ns = tv.string as NSString
+                if hit.1 < ns.length, Markdown.isTaskDone(ns.substring(with: ns.lineRange(for: NSRange(location: hit.1, length: 0)))) {
+                    EditorEffects.taskChecked(in: tv, box: hit.0.insetBy(dx: 5, dy: 5))
+                }
                 return true
             }
             if let hit = lm.foldHitRects.first(where: { $0.0.contains(p) }) {
