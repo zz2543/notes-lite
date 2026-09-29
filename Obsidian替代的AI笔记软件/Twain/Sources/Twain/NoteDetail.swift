@@ -354,6 +354,7 @@ private struct NoteToolbar: ToolbarContent {
 struct SlashMenu: View {
     @Bindable var model: AppModel
     let state: SlashState
+    @Namespace private var highlight
 
     static func icon(_ key: String) -> String {
         ["h1": "textformat.size.larger", "h2": "textformat.size", "h3": "textformat.size.smaller", "list": "list.bullet",
@@ -375,7 +376,7 @@ struct SlashMenu: View {
                 }
                 .foregroundStyle(sel ? .white : .primary)
                 .padding(.horizontal, 10).frame(height: 30)
-                .background(RowHighlight(on: sel))
+                .slidingHighlight(sel, in: highlight)
                 .contentShape(.rect)
                 .onTapGesture { NotificationCenter.default.post(name: .twainApplySlash, object: item) }
                 .onHover { if $0 { model.editor.slash?.selection = i } }
@@ -383,6 +384,7 @@ struct SlashMenu: View {
         }
         .padding(6)
         .frame(width: 260)
+        .motion(Motion.quick, value: state.selection)
         .floatingGlass(radius: Metrics.cardRadius)
     }
 }

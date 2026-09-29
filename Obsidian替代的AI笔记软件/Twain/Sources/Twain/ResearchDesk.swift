@@ -36,7 +36,7 @@ extension AppModel {
 
     func saveDesk(_ d: ResearchDesk) {
         guard let dir = desksDir else { return }
-        if let i = desks.firstIndex(where: { $0.id == d.id }) { desks[i] = d } else { desks.insert(d, at: 0) }
+        if let i = desks.firstIndex(where: { $0.id == d.id }) { desks[i] = d } else { withMotion { desks.insert(d, at: 0) } }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         enc.dateEncodingStrategy = .iso8601
@@ -47,7 +47,7 @@ extension AppModel {
     func deleteDesk(_ id: String) {
         guard let dir = desksDir else { return }
         try? FileManager.default.removeItem(at: dir.appendingPathComponent(id + ".json"))
-        desks.removeAll { $0.id == id }
+        withMotion { desks.removeAll { $0.id == id } }
         if chrome.openDesk == id { chrome.openDesk = nil }
     }
 

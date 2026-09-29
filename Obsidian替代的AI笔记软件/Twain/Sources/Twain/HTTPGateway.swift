@@ -242,7 +242,7 @@ extension AppModel {
             if let failure { throw failure }
             return ["path": .string(rel), "created": false, "status": "proposed", "proposal": result]
         }
-        let rel = v.create(title: title, folder: folder, content: content.hasSuffix("\n") ? content : content + "\n")
+        let rel = withMotion { v.create(title: title, folder: folder, content: content.hasSuffix("\n") ? content : content + "\n") }
         if let key {
             map[key] = rel
             try? FileManager.default.createDirectory(at: mapURL.deletingLastPathComponent(), withIntermediateDirectories: true)

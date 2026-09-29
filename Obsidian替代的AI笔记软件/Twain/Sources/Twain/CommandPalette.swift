@@ -15,6 +15,7 @@ struct PaletteEntry: Identifiable {
 /// ⌘K: one field that finds notes and runs commands, floating above the window like Spotlight.
 struct CommandPalette: View {
     @Bindable var model: AppModel
+    @Namespace private var highlight
     @FocusState private var focused: Bool
 
     private var entries: [PaletteEntry] {
@@ -119,6 +120,7 @@ struct CommandPalette: View {
                     }
                 }
                 .padding(8)
+                .motion(Motion.quick, value: sel)
             }
             .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
@@ -142,7 +144,7 @@ struct CommandPalette: View {
         }
         .foregroundStyle(on ? .white : .primary)
         .padding(.horizontal, 8).frame(height: 42)
-        .background(RowHighlight(on: on))
+        .slidingHighlight(on, in: highlight)
         .contentShape(.rect)
     }
 

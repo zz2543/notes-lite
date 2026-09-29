@@ -27,7 +27,7 @@ extension AppModel {
         if rel == editor.activeRel { flushSave() }
         let old = NoteRef(rel: rel).title
         let new: String
-        do { new = try v.rename(rel, to: title) } catch {
+        do { new = try withMotion { try v.rename(rel, to: title) } } catch {
             showToast(error.localizedDescription)
             return false
         }

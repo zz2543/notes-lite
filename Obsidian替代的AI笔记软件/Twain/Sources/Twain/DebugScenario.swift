@@ -126,7 +126,12 @@ enum DebugScenario {
             EditorEffects.still = freeze.map { (scale: $0.0, stroke: $0.1) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 guard let tv = textView(), let c = tv.coordinator else { return }
-                if freeze != nil { c.debugCheckFirstTask() }
+                if parts.count > 2, parts[2] == "fade" {
+                    // taskfx:<note>:fade — lays the cross-fade's picture over the text, kept fully shown.
+                    Motion.style = .calm
+                    EditorEffects.stillFade = true
+                    EditorEffects.fadeNextDraw(of: tv)
+                } else if freeze != nil { c.debugCheckFirstTask() }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     tv.display()
                     guard let layer = tv.layer, let out = ProcessInfo.processInfo.environment["TWAIN_FX_OUT"] else { return }

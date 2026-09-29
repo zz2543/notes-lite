@@ -311,6 +311,8 @@ private struct QueryModule: View {
             }
         }
         .font(.callout)
+        // A note saved elsewhere moves to the top of a “recent” list instead of jumping there.
+        .motion(Motion.standard, value: sorted.prefix(limit).map(\.rel))
     }
 }
 
@@ -323,9 +325,12 @@ private struct TasksModule: View {
         let tasks = model.index?.tasks(folder: module["folder"]?.string, tag: module["tag"]?.string) ?? []
         VStack(alignment: .leading, spacing: 4) {
             if tasks.isEmpty { Text("没有未完成的待办").font(.callout).foregroundStyle(.secondary) }
-            ForEach(Array(tasks.prefix(module["limit"]?.int ?? 8).enumerated()), id: \.offset) { _, t in
+            ForEach(Array(tasks.prefix(module["limit"]?.int ?? 8)), id: \.rowID) { t in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Button { model.toggleTask(rel: t.rel, line: t.task.line) } label: {
+                    Button {
+                        model.toggleTask(rel: t.rel, line: t.task.line)
+                        if !t.task.done { Motion.feedback(.done) }
+                    } label: {
                         Image(systemName: t.task.done ? "checkmark.square.fill" : "square").foregroundStyle(.tint)
                     }
                     .buttonStyle(.plain)
@@ -338,10 +343,13 @@ private struct TasksModule: View {
                         .buttonStyle(.plain).font(.caption).foregroundStyle(.tertiary)
                     }
                 }
+                .transition(.opacity.combined(with: .move(edge: .leading)))
             }
             if tasks.count > (module["limit"]?.int ?? 8) { Text("还有 \(tasks.count - (module["limit"]?.int ?? 8)) 条").font(.caption).foregroundStyle(.tertiary) }
         }
         .font(.callout)
+        // A task checked here leaves the list; the ones below move up.
+        .motion(Motion.standard, value: tasks.map(\.rowID))
     }
 }
 
@@ -723,4 +731,9 @@ struct NewSpaceSheet: View {
         .padding(24)
         .frame(width: 660)
     }
+}
+
+extension VaultIndex.TaskHit {
+    /// Stable across refreshes of the index, so a list of tasks can animate its changes.
+    var rowID: String { rel + ":" + String(task.line) + ":" + task.text }
 }

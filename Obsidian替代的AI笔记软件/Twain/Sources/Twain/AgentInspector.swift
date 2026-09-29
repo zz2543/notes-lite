@@ -14,12 +14,12 @@ struct AgentInspector: View {
 
     var body: some View {
         let sess = model.activeSession
-        ZStack {
+        VStack(spacing: 0) {
             // Another session (or the first reply) cross-fades in instead of replacing the view at once.
             if let sess, !sess.items.isEmpty {
                 transcript(sess)
                     .id(sess.id)
-                    .transition(.opacity.combined(with: .offset(y: 6)))
+                    .transition(.opacity)
             } else {
                 emptyState
                     .transition(.opacity)

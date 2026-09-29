@@ -7,7 +7,7 @@ extension AppModel {
     func newNote(in folder: String) {
         guard let v = vault else { return }
         flushSave()
-        let rel = v.create(title: "未命名", folder: folder, content: "# 未命名\n")
+        let rel = withMotion { v.create(title: "未命名", folder: folder, content: "# 未命名\n") }
         emit("note.created", source: "user", ["path": .string(rel)])
         chrome.palette = false
         revealInSidebar(rel)
@@ -18,7 +18,7 @@ extension AppModel {
     func newFolder(in parent: String) {
         guard let v = vault else { return }
         do {
-            let rel = try v.createFolder(in: parent, name: "未命名文件夹")
+            let rel = try withMotion { try v.createFolder(in: parent, name: "未命名文件夹") }
             if !parent.isEmpty, !chrome.openFolders.contains(parent) { chrome.openFolders.insert(parent) }
             if chrome.columnVisibility == .detailOnly { chrome.columnVisibility = .all }
             chrome.renaming = "dir:" + rel
@@ -48,7 +48,7 @@ extension AppModel {
         if editor.activeRel?.hasPrefix(folder + "/") == true { flushSave() }
         let oldName = (folder as NSString).lastPathComponent
         let new: String
-        do { new = try v.renameFolder(folder, to: name) } catch {
+        do { new = try withMotion { try v.renameFolder(folder, to: name) } } catch {
             showToast(error.localizedDescription)
             return false
         }
@@ -98,7 +98,7 @@ extension AppModel {
         if agents.writing.contains(rel) { showToast("Agent 正在写入这篇笔记，稍后再移动"); return }
         if rel == editor.activeRel { flushSave() }
         do {
-            let new = try v.move(rel, to: folder)
+            let new = try withMotion { try v.move(rel, to: folder) }
             guard new != rel else { return }
             if var p = agents.pending.removeValue(forKey: rel) { p.rel = new; agents.pending[new] = p }
             carryNoteData(from: rel, to: new)
@@ -121,7 +121,7 @@ extension AppModel {
         NSWorkspace.shared.recycle([v.url(folder)]) { _, error in
             DispatchQueue.main.async {
                 if let error { self.showToast(error.localizedDescription); return }
-                v.folderRemoved(folder)
+                withMotion { v.folderRemoved(folder) }
                 for rel in self.agents.pending.keys where rel.hasPrefix(folder + "/") { self.agents.pending[rel] = nil }
                 self.emit("folder.deleted", source: "user", ["path": .string(folder)])
                 if self.editor.activeRel?.hasPrefix(folder + "/") == true, let next = v.notes.first { self.open(next.rel) }

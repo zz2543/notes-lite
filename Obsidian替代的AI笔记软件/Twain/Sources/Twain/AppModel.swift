@@ -535,7 +535,8 @@ final class AppModel {
     func newNote() {
         guard let v = vault else { return }
         flushSave()
-        let rel = v.create(title: "未命名", content: "# 未命名\n")
+        // The new row slides into the sidebar.
+        let rel = withMotion { v.create(title: "未命名", content: "# 未命名\n") }
         emit("note.created", source: "user", ["path": .string(rel)])
         chrome.palette = false
         open(rel)
@@ -547,7 +548,7 @@ final class AppModel {
         if let n = v.note(titled: title) { open(n.rel); return }
         flushSave()
         let head = "# " + title + "\n"
-        let rel = v.create(title: title, content: head)
+        let rel = withMotion { v.create(title: title, content: head) }
         open(rel)
         requestFocus(caret: (head as NSString).length)
         showToast("已创建 " + (rel as NSString).lastPathComponent)
@@ -672,7 +673,7 @@ final class AppModel {
         guard let v = vault else { return }
         NSWorkspace.shared.recycle([v.url(rel)]) { _, _ in
             DispatchQueue.main.async {
-                v.noteRemoved(rel)
+                withMotion { v.noteRemoved(rel) }
                 self.agents.pending[rel] = nil
                 self.emit("note.deleted", source: "user", ["path": .string(rel)])
                 if rel == self.editor.activeRel, let next = v.notes.first { self.open(next.rel) }

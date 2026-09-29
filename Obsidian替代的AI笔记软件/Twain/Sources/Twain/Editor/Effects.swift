@@ -7,6 +7,8 @@ enum EditorEffects {
     #if DEBUG
     /// Debug scenarios freeze the check box effect in one state (no animation, not removed).
     static var still: (scale: CGFloat, stroke: CGFloat)?
+    /// Debug scenarios keep the cross-fade's picture fully shown (no animation, not removed).
+    static var stillFade = false
     #endif
 
     /// A task was checked. 克制: the box presses in and settles, the check mark draws itself.
@@ -86,6 +88,39 @@ enum EditorEffects {
         }
         check.add(draw, forKey: "draw")
         DispatchQueue.main.asyncAfter(deadline: .now() + total + 0.05) { root.removeFromSuperlayer() }
+    }
+
+    /// The view's next redraw cross-fades from what it shows now: for content that arrives on
+    /// its own (a rendered formula or diagram, a loaded picture, a folded callout, Tab 续写's
+    /// suggestion) rather than from typing. A picture of just the visible part is laid over the
+    /// view and faded out while the new content draws underneath, then dropped — a Core
+    /// Animation transition would instead rasterize the whole (possibly very tall) document.
+    static func fadeNextDraw(of view: NSView, lively: TimeInterval = 0.26, calm: TimeInterval = 0.2) {
+        guard Motion.style != .minimal, !Motion.reduce, let host = view.layer else { return }
+        let rect = view.visibleRect
+        guard rect.width > 1, rect.height > 1, let rep = view.bitmapImageRepForCachingDisplay(in: rect) else { return }
+        view.cacheDisplay(in: rect, to: rep)
+        let shot = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        shot.contents = rep.cgImage
+        shot.frame = rect
+        shot.zPosition = 4
+        shot.opacity = 0
+        host.addSublayer(shot)
+        CATransaction.commit()
+        #if DEBUG
+        if stillFade { shot.opacity = 1; return }
+        #endif
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = Motion.style == .lively ? lively : calm
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { shot.removeFromSuperlayer() }
+        shot.add(fade, forKey: "fade")
+        CATransaction.commit()
     }
 
     /// Dots flying out of `center` and falling away. Returns how long they take.

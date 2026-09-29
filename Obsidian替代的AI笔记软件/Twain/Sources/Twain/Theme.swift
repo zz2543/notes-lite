@@ -118,6 +118,16 @@ extension View {
 }
 
 /// Selection highlight used by lists drawn inside glass (palette, slash menu).
+extension View {
+    /// The selection highlight of a list drawn inside glass, sliding from row to row: rows of
+    /// one list share `namespace`, and the list animates on its selection (`.motion(…, value:)`).
+    func slidingHighlight(_ on: Bool, in namespace: Namespace.ID) -> some View {
+        background {
+            if on { RowHighlight(on: true).matchedGeometryEffect(id: "highlight", in: namespace) }
+        }
+    }
+}
+
 struct RowHighlight: View {
     let on: Bool
     var body: some View {

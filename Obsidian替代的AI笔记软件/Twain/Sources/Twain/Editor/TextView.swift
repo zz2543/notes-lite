@@ -5,7 +5,14 @@ import TwainCore
 
 final class TwainTextView: NSTextView {
     weak var coordinator: EditorView.Coordinator?
-    var ghost = "" { didSet { if ghost != oldValue { needsDisplay = true } } }
+    var ghost = "" {
+        didSet {
+            guard ghost != oldValue else { return }
+            // A suggestion fades in; it disappears at once, since that happens as the user types.
+            if oldValue.isEmpty { EditorEffects.fadeNextDraw(of: self, lively: 0.3, calm: 0.25) }
+            needsDisplay = true
+        }
+    }
     var topInset: CGFloat = 56
     var bottomInset: CGFloat = 300
 

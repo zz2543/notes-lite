@@ -225,3 +225,22 @@ focus dim n=12 median=24.3ms p90=25.4ms max=27.6ms
 memory start=130MB end=149MB
 done
 ```
+
+## motion audit (lively) · 5faad7a · 2026-09-29 11:58
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=65.3ms p90=77.6ms max=96.7ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=0 longest=20.2ms
+agent show frames=159 dropped=1 longest=28.1ms
+idle space worst=1.2ms stalls>16ms=0
+idle note worst=1.2ms stalls>16ms=0
+type 80665 chars n=80 median=0.9ms p90=8.2ms max=60.2ms
+caret start n=30 median=0.2ms p90=0.6ms max=2.8ms
+caret end n=30 median=0.2ms p90=0.3ms max=1.1ms
+focus dim n=12 median=23.0ms p90=24.7ms max=25.1ms
+memory start=131MB end=173MB
+done
+```

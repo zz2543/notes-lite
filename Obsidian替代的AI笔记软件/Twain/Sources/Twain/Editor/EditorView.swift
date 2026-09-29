@@ -140,7 +140,11 @@ struct EditorView: NSViewRepresentable {
                 tv.setSelectedRange(range)
                 tv.scrollRangeToVisible(range)
             }
-            styler.needsRestyle = { [weak self] in self?.restyle() }
+            // Pictures that finished rendering or loading, and folded callouts, fade in.
+            styler.needsRestyle = { [weak self] in
+                if let tv = self?.textView { EditorEffects.fadeNextDraw(of: tv) }
+                self?.restyle()
+            }
             NotificationCenter.default.addObserver(forName: .twainApplySlash, object: nil, queue: .main) { [weak self] n in
                 let item = n.object as? SlashItem
                 MainActor.assumeIsolated { if let item { self?.applySlash(item) } }
