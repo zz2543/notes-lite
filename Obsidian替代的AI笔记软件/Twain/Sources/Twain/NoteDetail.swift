@@ -2,6 +2,10 @@ import TwainCore
 import SwiftUI
 
 /// The detail column: the page itself, or the review of an agent's changes to it.
+///
+/// Split into small views that each read only what they show: opening a note changes a dozen
+/// properties, and a view is only redrawn when one it read changes. The title, the toolbar,
+/// the banners and the floating controls no longer redraw with the page around them.
 struct NoteDetail: View {
     @Bindable var model: AppModel
 
@@ -11,14 +15,19 @@ struct NoteDetail: View {
         Group {
             if let space = model.currentSpace {
                 SpaceView(model: model, plugin: space)
+                    .transition(.opacity)
             } else if let desk = model.currentDesk {
                 ResearchDeskView(model: model, desk: desk)
+                    .transition(.opacity)
             } else if reviewing, let pend {
                 ReviewView(model: model, review: pend)
+                    .transition(.opacity)
             } else {
-                page(pending: pend)
+                NotePage(model: model)
+                    .transition(.opacity)
             }
         }
+        .animation(Motion.standard, value: PageKind(space: model.activeSpace, desk: model.openDesk, reviewing: reviewing))
         // The page takes whatever width the split view gives it. Letting its content report a
         // minimum width feeds back into the column sizes, and a width-dependent layout (the
         // dashboards) can then keep re-solving the window until AppKit aborts.
@@ -27,14 +36,34 @@ struct NoteDetail: View {
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .navigationTitle(model.currentSpace?.name ?? (model.currentDesk != nil ? "问库" : model.activeNote?.displayName ?? "共笔"))
-        .navigationSubtitle(model.currentSpace.map { _ in "空间" } ?? model.currentDesk.map { $0.question.isEmpty ? "新问题" : $0.question }
-                            ?? model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
-        .toolbar { toolbar(reviewing: reviewing) }
+        .modifier(DetailTitle(model: model))
+        .toolbar { NoteToolbar(model: model, reviewing: reviewing) }
     }
 
-    @ViewBuilder
-    private func page(pending: PendingReview?) -> some View {
+    /// Which kind of page is showing; switching kinds cross-fades, switching notes does not.
+    private struct PageKind: Equatable {
+        var space: String?
+        var desk: String?
+        var reviewing: Bool
+    }
+}
+
+private struct DetailTitle: ViewModifier {
+    @Bindable var model: AppModel
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(model.currentSpace?.name ?? (model.currentDesk != nil ? "问库" : model.activeNote?.displayName ?? "共笔"))
+            .navigationSubtitle(model.currentSpace.map { _ in "空间" } ?? model.currentDesk.map { $0.question.isEmpty ? "新问题" : $0.question }
+                                ?? model.activeNote.map { $0.folder.isEmpty ? (model.vault?.name ?? "") : $0.folder } ?? "")
+    }
+}
+
+/// The open note: its text, or why it can't be shown.
+private struct NotePage: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
         if model.downloading != nil {
             ProgressView("正在从 iCloud 下载这篇笔记…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -51,91 +80,134 @@ struct NoteDetail: View {
             }
         } else if let n = model.activeNote, n.isHTML, !model.htmlSource, let v = model.vault {
             HTMLNoteView(url: v.url(n.rel), root: v.root, version: model.editorVersion)
-                .overlay(alignment: .top) { if !model.zen { banners(pending: pending) } }
+                .overlay(alignment: .top) { Banners(model: model) }
         } else {
-            editorPage(pending: pending)
+            EditorView(model: model)
+                // The page runs under the toolbar; the text view keeps its own top margin.
+                .overlay(alignment: .topLeading) { SlashLayer(model: model) }
+                .overlay(alignment: .top) { Banners(model: model) }
+                .overlay(alignment: .bottomTrailing) { StatusLayer(model: model) }
+                .overlay(alignment: .topTrailing) { CompanionLayer(model: model) }
+                .overlay(alignment: .topTrailing) { ZenExit(model: model) }
         }
     }
+}
 
-    private func editorPage(pending: PendingReview?) -> some View {
-        EditorView(model: model)
-            // The page runs under the toolbar; the text view keeps its own top margin.
-            .overlay(alignment: .topLeading) {
-                if let s = model.slash {
-                    SlashMenu(model: model, state: s).offset(x: s.anchor.x, y: s.anchor.y)
-                }
-            }
-            .overlay(alignment: .top) {
-                if !model.zen { banners(pending: pending) }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if !model.zen { StatusPill(model: model).padding(Metrics.floatInset) }
-            }
-            .overlay(alignment: .topTrailing) {
-                if let tip = model.companionTip, tip.rel == model.activeRel {
-                    CompanionBubble(model: model, tip: tip)
-                        .padding(.top, 64).padding(.trailing, Metrics.floatInset)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-            }
-            .animation(.snappy(duration: 0.3), value: model.companionTip)
-            .overlay(alignment: .topTrailing) {
-                if model.zen {
-                    Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.capsule)
-                        .keyboardShortcut(.cancelAction)
-                        .padding(18)
-                        .opacity(0.7)
-                }
-            }
-            .animation(.snappy(duration: 0.25), value: pending?.hunks.count)
+private struct SlashLayer: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        if let s = model.slash {
+            SlashMenu(model: model, state: s).offset(x: s.anchor.x, y: s.anchor.y)
+                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
+        }
     }
+}
 
-    @ViewBuilder
-    private func banners(pending: PendingReview?) -> some View {
-        GlassEffectContainer(spacing: 8) {
-            VStack(spacing: 8) {
-                if let pending {
-                    Banner(tint: pending.by.map(Theme.agentColor) ?? .secondary) {
-                        Image(systemName: "doc.badge.clock")
-                    } text: {
-                        let where_ = pending.source == .terminal ? "在终端中" : pending.source == .automation ? "在自动化中" : "在共笔中"
-                        let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
-                        Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
-                    } action: {
-                        Button("审阅") { model.showDiff = true }
-                            .buttonStyle(.glassProminent)
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                if model.oversized {
-                    Banner(tint: .secondary) {
-                        Image(systemName: "text.alignleft")
-                    } text: {
-                        Text("含有极长的行（如内嵌 base64 图片）\(Text(" · 以纯文本只读显示").foregroundStyle(.secondary))")
-                    } action: {
-                        Button("在 Finder 中显示") {
-                            if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+private struct StatusLayer: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        if !model.zen {
+            StatusPill(model: model).padding(Metrics.floatInset)
+                .transition(.opacity)
+        }
+    }
+}
+
+private struct CompanionLayer: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            if let tip = model.companionTip, tip.rel == model.activeRel {
+                CompanionBubble(model: model, tip: tip)
+                    .padding(.top, 64).padding(.trailing, Metrics.floatInset)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.standard, value: model.companionTip)
+    }
+}
+
+private struct ZenExit: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        if model.zen {
+            Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .keyboardShortcut(.cancelAction)
+                .padding(18)
+                .opacity(0.7)
+                .transition(.opacity)
+        }
+    }
+}
+
+/// What the page wants the user to know: an agent's change to review, a read-only note, a write in progress.
+private struct Banners: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        let pending = model.activePending
+        let writingHere = model.activeRel.map { model.writing.contains($0) } ?? false
+        ZStack(alignment: .top) {
+            if !model.zen {
+                GlassEffectContainer(spacing: 8) {
+                    VStack(spacing: 8) {
+                        if let pending {
+                            Banner(tint: pending.by.map(Theme.agentColor) ?? .secondary) {
+                                Image(systemName: "doc.badge.clock")
+                            } text: {
+                                let where_ = pending.source == .terminal ? "在终端中" : pending.source == .automation ? "在自动化中" : "在共笔中"
+                                let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
+                                Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
+                            } action: {
+                                Button("审阅") { model.showDiff = true }
+                                    .buttonStyle(.glassProminent)
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
-                        .buttonStyle(.glass)
+                        if model.oversized {
+                            Banner(tint: .secondary) {
+                                Image(systemName: "text.alignleft")
+                            } text: {
+                                Text("含有极长的行（如内嵌 base64 图片）\(Text(" · 以纯文本只读显示").foregroundStyle(.secondary))")
+                            } action: {
+                                Button("在 Finder 中显示") {
+                                    if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+                                }
+                                .buttonStyle(.glass)
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        if writingHere {
+                            let agent = model.sessions.first { $0.running && $0.source == .app }?.agent
+                            Banner(tint: agent.map(Theme.agentColor) ?? Theme.claude) {
+                                ProgressView().controlSize(.small)
+                            } text: {
+                                Text("\(agent?.displayName ?? "Agent") 正在写入此文件，完成后可以继续编辑")
+                            } action: {
+                                EmptyView()
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
                 }
-                if let rel = model.activeRel, model.writing.contains(rel) {
-                    let agent = model.sessions.first { $0.running && $0.source == .app }?.agent
-                    Banner(tint: agent.map(Theme.agentColor) ?? Theme.claude) {
-                        ProgressView().controlSize(.small)
-                    } text: {
-                        Text("\(agent?.displayName ?? "Agent") 正在写入此文件，完成后可以继续编辑")
-                    } action: {
-                        EmptyView()
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
+                .padding(.top, Metrics.floatInset)
+                .padding(.horizontal, 24)
+                .transition(.opacity)
             }
         }
-        .padding(.top, Metrics.floatInset)
-        .padding(.horizontal, 24)
+        .animation(Motion.standard, value: BannerState(hunks: pending?.hunks.count, oversized: model.oversized, writing: writingHere))
+    }
+
+    private struct BannerState: Equatable {
+        var hunks: Int?
+        var oversized: Bool
+        var writing: Bool
     }
 }
 
@@ -194,9 +266,11 @@ struct StatusPill: View {
 
 // MARK: - Toolbar
 
-extension NoteDetail {
-    @ToolbarContentBuilder
-    fileprivate func toolbar(reviewing: Bool) -> some ToolbarContent {
+private struct NoteToolbar: ToolbarContent {
+    @Bindable var model: AppModel
+    let reviewing: Bool
+
+    var body: some ToolbarContent {
         if model.currentDesk != nil || model.currentSpace != nil {
             ToolbarItem(placement: .primaryAction) {
                 Button("返回笔记", systemImage: "doc.text") {

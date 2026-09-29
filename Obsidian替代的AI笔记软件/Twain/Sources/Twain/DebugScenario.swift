@@ -148,6 +148,9 @@ enum DebugScenario {
             // openbench:<a.md>,<b.md>,… — opens each note three times and reports the time until
             // its first screen is typeset (the second and third opens show the warm cost).
             let rels = (parts.count > 1 ? parts[1] : "").split(separator: ",").map(String.init)
+            // openbench:<notes>:nosidebar / :noagent — the same opens with a column hidden.
+            if parts.contains("nosidebar") { m.columnVisibility = .detailOnly }
+            if parts.contains("noagent") { m.agentPanel = false }
             var queue = rels.flatMap { [$0, $0, $0] }
             func next() {
                 guard !queue.isEmpty else { FileHandle.standardError.write("openbench done\n".data(using: .utf8)!); return }
