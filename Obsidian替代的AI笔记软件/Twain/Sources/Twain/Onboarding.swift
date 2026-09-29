@@ -6,7 +6,7 @@ struct OnboardingSheet: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        let step = model.onboardingStep ?? 0
+        let step = model.chrome.onboardingStep ?? 0
         VStack(spacing: 0) {
             Group {
                 switch step {
@@ -34,7 +34,7 @@ struct OnboardingSheet: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                 if step > 0 {
-                    Button("上一步") { withAnimation(.snappy) { model.onboardingStep = step - 1 } }
+                    Button("上一步") { withAnimation(.snappy) { model.chrome.onboardingStep = step - 1 } }
                         .buttonStyle(.glass)
                 }
                 Button(step == 2 ? "开始写作" : "继续") { next(step) }
@@ -50,8 +50,8 @@ struct OnboardingSheet: View {
 
     private func next(_ step: Int) {
         if step == 0, model.vault == nil { model.openVault(AppModel.defaultVaultURL) }
-        if step == 1, model.syncContext { model.ensureContextFiles() }
-        if step == 2 { model.finishOnboarding() } else { withAnimation(.snappy) { model.onboardingStep = step + 1 } }
+        if step == 1, model.prefs.syncContext { model.ensureContextFiles() }
+        if step == 2 { model.finishOnboarding() } else { withAnimation(.snappy) { model.chrome.onboardingStep = step + 1 } }
     }
 
     private func header(_ icon: String, _ kicker: String, _ title: String, _ body: String?) -> some View {
@@ -107,11 +107,11 @@ struct OnboardingSheet: View {
                             .frame(width: 20)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(k.displayName)
-                            Text(model.cli[k]?.path.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? k.executable)
+                            Text(model.agents.cli[k]?.path.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? k.executable)
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
-                        switch model.cli[k]?.found {
+                        switch model.agents.cli[k]?.found {
                         case .some(true): Label("已检测", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                         case .some(false): Label("未找到", systemImage: "xmark.circle").foregroundStyle(.secondary)
                         case .none: ProgressView().controlSize(.small)
@@ -131,13 +131,13 @@ struct OnboardingSheet: View {
             header("textformat", "3 / 3", "选一种写字的感觉。", nil)
             FontCards(model: model)
             VStack(spacing: 0) {
-                Toggle(isOn: $model.typewriter) {
+                Toggle(isOn: Bindable(model.prefs).typewriter) {
                     Text("打字机滚动")
                     Text("当前行始终停在视线高度").font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 Divider().padding(.leading, 14)
-                Toggle(isOn: $model.dim) {
+                Toggle(isOn: Bindable(model.prefs).dim) {
                     Text("段落聚焦")
                     Text("淡化正在编辑之外的段落").font(.caption).foregroundStyle(.secondary)
                 }

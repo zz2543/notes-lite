@@ -77,118 +77,29 @@ struct SlashState: Equatable {
 
 @MainActor @Observable
 final class AppModel {
-    // MARK: preferences
-    var font: EditorFont = .serif { didSet { save("font", font.rawValue) } }
-    var typewriter = true { didSet { save("typewriter", typewriter) } }
-    var dim = true { didSet { save("dim", dim) } }
-    /// How pasted pictures are named (`Attachments.swift`).
-    var attachmentNaming: AttachmentNaming = .pasted { didSet { save("attachmentName", attachmentNaming.rawValue) } }
-    var ghostOn = false { didSet { save("ghostOn", ghostOn); if !ghostOn { clearGhost() } } }
-    var syncContext = true { didSet { save("syncCtx", syncContext); if syncContext { ensureContextFiles() } } }
-    var watchTerminal = true { didSet { save("watchExt", watchTerminal); if !watchTerminal { dropTerminalSessions() } } }
-    var gitSnapshot = true { didSet { save("snapshot", gitSnapshot) } }
-    var reviewMode: ReviewMode = .queue { didSet { save("review", reviewMode.rawValue) } }
-    var claudeOn = true { didSet { save("claudeOn", claudeOn) } }
-    var codexOn = true { didSet { save("codexOn", codexOn) } }
-    /// Give runs Twain's MCP tools (propose_edit, ask_user, …) besides the `twain` command.
-    var mcpOn = true { didSet { save("mcpOn", mcpOn) } }
-    /// Master switch for `.twain/automations/`.
-    var automationsOn = true { didSet { save("automationsOn", automationsOn) } }
-    var automationDailyLimit = 20 { didSet { save("automationLimit", automationDailyLimit) } }
-    /// AI summaries a day at most (each is one note in a batched call to a small model).
-    var summaryDailyLimit = 100 { didSet { save("summaryLimit", summaryDailyLimit) } }
+    // The state, by part of the window (AppState.swift). The parts are fixed; what changes is inside them.
+    @ObservationIgnored let prefs = Preferences()
+    @ObservationIgnored let chrome = ChromeState()
+    @ObservationIgnored let editor = EditorState()
+    @ObservationIgnored let agents = AgentState()
+
     /// Progress of an AI summary run.
     var summarizing: (done: Int, total: Int)?
-    var noteInfoOpen = false
-    /// The writing companion (`Companion.swift`): off unless the user turns it on.
-    var companionOn = false { didSet { save("companion", companionOn) } }
-    var companionTip: CompanionTip?
-    var companionThinking = false
     @ObservationIgnored var companionWork: DispatchWorkItem?
     @ObservationIgnored var companionLast = Date.distantPast
     @ObservationIgnored var companionLength = 0
     @ObservationIgnored var companionCalls: [Date] = []
     @ObservationIgnored var companionModel: LiveModel?
-    /// Model per agent; "" means whatever the CLI is configured to use.
-    var agentModel: [AgentKind: String] = [:] {
-        didSet { for k in AgentKind.allCases { save("model." + k.rawValue, agentModel[k] ?? "") } }
-    }
-    /// Thinking level per agent; "" means the CLI's own default for the chosen model.
-    var agentEffort: [AgentKind: String] = [:] {
-        didSet { for k in AgentKind.allCases { save("effort." + k.rawValue, agentEffort[k] ?? "") } }
-    }
-    var editorWidth: CGFloat = 680
-
-    // MARK: chrome
-    var columnVisibility: NavigationSplitViewVisibility = .all
-    var agentPanel = true
-    var modelPickerOpen = false
-    var zen = false
-    var palette = false
-    var paletteQuery = ""
-    var paletteSel = 0
-    var settingsTab: SettingsTab = .editor
-    var sidebarFilter = ""
-    /// The sidebar row whose name is being edited in place.
-    var renaming: String?
-    /// Sidebar list selection; choosing a row opens the note.
-    var selection: String? {
-        didSet {
-            guard let s = selection, s != activeRel else { return }
-            if s.hasPrefix("desk:") {
-                flushSave()
-                activeSpace = nil
-                openDesk = nil
-                openDesk = String(s.dropFirst(5))
-                return
-            }
-            if s.hasPrefix("space:") {
-                openSpace(String(s.dropFirst(6)))
-                return
-            }
-            if s.hasPrefix("dir:") {
-                // A folder without a folder note: selecting it just opens or closes it.
-                let f = String(s.dropFirst(4))
-                if openFolders.contains(f) { openFolders.remove(f) } else { openFolders.insert(f) }
-                return
-            }
-            open(s)
-        }
-    }
     @ObservationIgnored var openSettingsAction: (() -> Void)?
     @ObservationIgnored private var beforeZen: (NavigationSplitViewVisibility, Bool)?
-    var onboardingStep: Int?
-    var toast: String?
-    var openFolders: Set<String> = []
-    var showDiff = false
     /// Bumped when a daily counter or an approval stored in UserDefaults changes, so what shows
     /// them redraws then (and only then).
     var countersVersion = 0
     /// The local HTTP API as last reported by its listener.
     var httpStatus = HTTPStatus()
 
-    // MARK: vault & editor
+    // MARK: vault
     var vault: Vault?
-    var activeRel: String?
-    var editorText = ""
-    /// Bumped whenever the model replaces the editor's text (note switch, disk reload).
-    var editorVersion = 0 { didSet { recountWords(now: true) } }
-    var dirty = false
-    var focusRequest: (caret: Int, token: Int)?
-    /// The editor's selection (UTF-16), read by agents through `twain context`. Not observed:
-    /// nothing on screen depends on it.
-    @ObservationIgnored var editorSelection = NSRange(location: 0, length: 0) {
-        didSet {
-            guard editorSelection != oldValue else { return }
-            selectionChanged()
-            DispatchQueue.main.async { [weak self] in self?.adoptHeadingTitle() }
-        }
-    }
-    var ghost = ""
-    var slash: SlashState?
-    /// Annotations on the open note (`Annotations.swift`).
-    var annotations: [Annotation] = []
-    var selectedAnnotation: String?
     /// Set by the editor: replace a range as an undoable edit, or select one.
     @ObservationIgnored var applyEditorEdit: ((NSRange, String) -> Void)?
     @ObservationIgnored var selectEditorRange: ((NSRange) -> Void)?
@@ -201,8 +112,6 @@ final class AppModel {
     @ObservationIgnored var server: AgentServer?
     /// Agents waiting (`propose --wait`) for the user to finish reviewing a proposal, by proposal id.
     @ObservationIgnored var proposalWaiters: [String: [AppCommand.Reply]] = [:]
-    /// Questions agents asked, by id; answered ones stay so the transcript can show the answer.
-    var questions: [UUID: AgentQuestion] = [:]
     @ObservationIgnored var questionReplies: [UUID: AppCommand.Reply] = [:]
     /// `twain watch` clients: the events each wants (nil: all but the opt-in ones) and where to send them.
     @ObservationIgnored var subscribers: [UUID: (events: Set<String>?, send: (Data) -> Void)] = [:]
@@ -211,38 +120,13 @@ final class AppModel {
     var userCommands: [UserCommand] = []
     var automations: [Automation] = []
     @ObservationIgnored var automationTimers: [String: DispatchWorkItem] = [:]
-
-    // MARK: agents
-    var cli: [AgentKind: CLIInfo] = [:]
-    var sessions: [AgentSession] = []
-    var activeSessionID: UUID?
-    var agentInput = ""
-    var agentPick: AgentKind = .claude
-    var modelChoices: [AgentKind: [AgentModel]] = [:]
-    /// What each CLI runs when Twain passes no model, when we can tell.
-    var modelFallback: [AgentKind: String] = [:]
-    var effortFallback: [AgentKind: String] = [:]
-    var modelsListedBy: [AgentKind: String] = [:]
-    var pending: [String: PendingReview] = [:] {
-        didSet { if pipelineRuns.values.contains(where: { $0.status == .waitingReview }) { pipelineReviewsChanged() } }
-    }
-    /// The vault's pipelines (`.twain/pipelines/`) and the runs in progress (`Pipelines.swift`).
-    var pipelines: [Pipeline] = []
-    var pipelineRuns: [UUID: PipelineRun] = [:]
-    /// Local HTTP API for other apps (`HTTPGateway.swift`).
-    var httpOn = true { didSet { save("httpOn", httpOn); if oldValue != httpOn { startHTTP() } } }
-    var httpPort: UInt16 = HTTPGateway.defaultPort { didSet { save("httpPort", Int(httpPort)) } }
     @ObservationIgnored let http = HTTPGateway()
     /// Bumped whenever a data collection changes, so spaces redraw their charts.
     var dataVersion = 0
-    /// Plugins in `.twain/plugins/` and the space shown in place of a note (`Spaces.swift`).
+    /// Plugins in `.twain/plugins/` (`Spaces.swift`).
     var plugins: [Plugin] = []
-    var activeSpace: String?
-    var newSpaceSheet = false
-    /// 问库 desks (`ResearchDesk.swift`) and the one shown in place of a note.
+    /// 问库 desks (`ResearchDesk.swift`).
     var desks: [ResearchDesk] = []
-    var openDesk: String?
-    var writing: Set<String> = []
 
     /// The editor refreshes embedded notes when other notes change on disk.
     @ObservationIgnored var noteFilesChanged: (() -> Void)?
@@ -252,17 +136,61 @@ final class AppModel {
     @ObservationIgnored private let ghostCompleter = GhostCompleter()
     @ObservationIgnored private var timers: [Timer] = []
     @ObservationIgnored var runSnapshots: [UUID: (snap: VaultSnapshot, git: String?)] = [:]
-    @ObservationIgnored var typed: [(Date, Int)] = []
-    @ObservationIgnored var netTyped = 0
     @ObservationIgnored private var focusToken = 0
 
     private let defaults = UserDefaults.standard
 
+    /// What choosing a sidebar row does.
+    private func select(_ s: String) {
+        guard s != editor.activeRel else { return }
+        if s.hasPrefix("desk:") {
+            flushSave()
+            chrome.activeSpace = nil
+            chrome.openDesk = nil
+            chrome.openDesk = String(s.dropFirst(5))
+            return
+        }
+        if s.hasPrefix("space:") {
+            openSpace(String(s.dropFirst(6)))
+            return
+        }
+        if s.hasPrefix("dir:") {
+            // A folder without a folder note: selecting it just opens or closes it.
+            let f = String(s.dropFirst(4))
+            if chrome.openFolders.contains(f) { chrome.openFolders.remove(f) } else { chrome.openFolders.insert(f) }
+            return
+        }
+        open(s)
+    }
+
+    /// The parts' reactions that reach beyond themselves.
+    private func connectParts() {
+        prefs.changed = { [weak self] change in
+            guard let self else { return }
+            switch change {
+            case .ghost: if !self.prefs.ghostOn { self.clearGhost() }
+            case .syncContext: if self.prefs.syncContext { self.ensureContextFiles() }
+            case .watchTerminal: if !self.prefs.watchTerminal { self.dropTerminalSessions() }
+            case .http: self.startHTTP()
+            }
+        }
+        chrome.selected = { [weak self] s in self?.select(s) }
+        editor.versionChanged = { [weak self] in self?.recountWords(now: true) }
+        editor.selectionChanged = { [weak self] in
+            self?.selectionChanged()
+            DispatchQueue.main.async { [weak self] in self?.adoptHeadingTitle() }
+        }
+        agents.pendingChanged = { [weak self] in
+            guard let self, self.agents.pipelineRuns.values.contains(where: { $0.status == .waitingReview }) else { return }
+            self.pipelineReviewsChanged()
+        }
+    }
+
     init() {
-        loadPrefs()
+        connectParts()
         DispatchQueue.global(qos: .userInitiated).async {
             let found = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, CLIEnvironment.detect($0)) })
-            DispatchQueue.main.async { self.cli = found }
+            DispatchQueue.main.async { self.agents.cli = found }
         }
         refreshModels()
         // The CLIs rewrite their model lists as they update; pick that up whenever Twain comes back.
@@ -282,40 +210,8 @@ final class AppModel {
         if let path = snapshotVault ?? defaults.string(forKey: "vaultPath"), FileManager.default.fileExists(atPath: path) {
             openVault(URL(fileURLWithPath: path))
         }
-        if !defaults.bool(forKey: "onboarded") || vault == nil { onboardingStep = 0 }
+        if !defaults.bool(forKey: "onboarded") || vault == nil { chrome.onboardingStep = 0 }
         timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollTerminal() } })
-    }
-
-    // MARK: prefs
-
-    private func save(_ key: String, _ value: Any) { defaults.set(value, forKey: "pref." + key) }
-
-    private func loadPrefs() {
-        func b(_ k: String, _ d: Bool) -> Bool { defaults.object(forKey: "pref." + k) as? Bool ?? d }
-        font = EditorFont(rawValue: defaults.string(forKey: "pref.font") ?? "") ?? .serif
-        typewriter = b("typewriter", true)
-        dim = b("dim", true)
-        attachmentNaming = AttachmentNaming(rawValue: defaults.string(forKey: "pref.attachmentName") ?? "") ?? .pasted
-        ghostOn = b("ghostOn", false)
-        syncContext = b("syncCtx", true)
-        watchTerminal = b("watchExt", true)
-        gitSnapshot = b("snapshot", true)
-        reviewMode = ReviewMode(rawValue: defaults.string(forKey: "pref.review") ?? "") ?? .queue
-        claudeOn = b("claudeOn", true)
-        codexOn = b("codexOn", true)
-        mcpOn = b("mcpOn", true)
-        automationsOn = b("automationsOn", true)
-        automationDailyLimit = defaults.object(forKey: "pref.automationLimit") as? Int ?? 20
-        summaryDailyLimit = defaults.object(forKey: "pref.summaryLimit") as? Int ?? 100
-        companionOn = b("companion", false)
-        httpOn = b("httpOn", true)
-        httpPort = UInt16(defaults.object(forKey: "pref.httpPort") as? Int ?? Int(HTTPGateway.defaultPort))
-        agentModel = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
-            ($0, defaults.string(forKey: "pref.model." + $0.rawValue) ?? "")
-        })
-        agentEffort = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map {
-            ($0, defaults.string(forKey: "pref.effort." + $0.rawValue) ?? "")
-        })
     }
 
     // MARK: vault
@@ -352,23 +248,23 @@ final class AppModel {
         #else
         defaults.set(v.rootPath, forKey: "vaultPath")
         #endif
-        pending = [:]
-        writing = []
+        agents.pending = [:]
+        agents.writing = []
         loadProposals()
-        if sessions.contains(where: { $0.source == .terminal }) { sessions.removeAll { $0.source == .terminal } }
-        if syncContext { ensureContextFiles() } else { refreshContextSync() }
+        if agents.sessions.contains(where: { $0.source == .terminal }) { agents.sessions.removeAll { $0.source == .terminal } }
+        if prefs.syncContext { ensureContextFiles() } else { refreshContextSync() }
         if v.notes.filter({ !$0.isAgentFile }).isEmpty {
             _ = v.create(title: "欢迎使用共笔", content: Self.welcomeNote)
         }
-        openFolders = Set(v.folders.filter { !$0.contains("/") })
+        chrome.openFolders = Set(v.folders.filter { !$0.contains("/") })
         let first = v.notes.first { !$0.isAgentFile && $0.folder.isEmpty } ?? v.notes.first { !$0.isAgentFile } ?? v.notes.first
-        activeRel = nil
+        editor.activeRel = nil
         if let first { open(first.rel) }
         pollTerminal()
         companionModel?.stop()
         companionModel = nil
         warmCompanion()
-        openDesk = nil
+        chrome.openDesk = nil
         loadDesks()
         importInbox()
     }
@@ -453,41 +349,41 @@ final class AppModel {
         if now != contextInSync { contextInSync = now }
     }
 
-    var activeNote: NoteRef? { activeRel.flatMap { vault?.note($0) } ?? activeRel.map { NoteRef(rel: $0) } }
+    var activeNote: NoteRef? { editor.activeRel.flatMap { vault?.note($0) } ?? editor.activeRel.map { NoteRef(rel: $0) } }
 
     // MARK: editor
 
     func open(_ rel: String, focus: Bool = false) {
         guard let v = vault else { return }
-        if rel != activeRel {
+        if rel != editor.activeRel {
             flushSave()
             adoptHeadingTitle(leaving: true)
         }
-        activeRel = rel
-        openDesk = nil
-        activeSpace = nil
+        editor.activeRel = rel
+        chrome.openDesk = nil
+        chrome.activeSpace = nil
         // A note iCloud has moved off this Mac is downloaded in the background: reading it here
         // would block until the download finishes. Local notes are read right away, so
         // switching between them never shows an empty page first.
         let evicted = Self.isEvicted(v.url(rel))
-        downloading = evicted ? rel : nil
-        unreadable = evicted ? nil : Self.unreadableReason(v.url(rel))
-        editorText = unreadable == nil && !evicted ? v.read(rel) : ""
+        editor.downloading = evicted ? rel : nil
+        editor.unreadable = evicted ? nil : Self.unreadableReason(v.url(rel))
+        editor.editorText = editor.unreadable == nil && !evicted ? v.read(rel) : ""
         if evicted { fetchEvicted(rel) }
-        oversizedDisplay = nil
-        oversized = Self.hasOversizedLine(editorText)
-        if unreadable != nil { v.acknowledge(rel, content: nil) }
-        editorSelection = NSRange(location: 0, length: 0)
-        if pending[rel] == nil { showDiff = false }
-        dirty = false
+        editor.oversizedDisplay = nil
+        editor.oversized = Self.hasOversizedLine(editor.editorText)
+        if editor.unreadable != nil { v.acknowledge(rel, content: nil) }
+        editor.editorSelection = NSRange(location: 0, length: 0)
+        if agents.pending[rel] == nil { editor.showDiff = false }
+        editor.dirty = false
         clearGhost()
-        slash = nil
-        editorVersion += 1
-        palette = false
-        selectedAnnotation = nil
+        editor.slash = nil
+        editor.editorVersion += 1
+        chrome.palette = false
+        editor.selectedAnnotation = nil
         loadAnnotations()
-        if selection != rel { selection = rel }
-        if focus { requestFocus(caret: (editorText as NSString).length) }
+        if chrome.selection != rel { chrome.selection = rel }
+        if focus { requestFocus(caret: (editor.editorText as NSString).length) }
         revealInSidebar(rel)
         emit("note.opened", source: "user", ["path": .string(rel)])
     }
@@ -496,28 +392,22 @@ final class AppModel {
         var folder = (rel as NSString).deletingLastPathComponent
         var missing: [String] = []
         while !folder.isEmpty {
-            if !openFolders.contains(folder) { missing.append(folder) }
+            if !chrome.openFolders.contains(folder) { missing.append(folder) }
             folder = (folder as NSString).deletingLastPathComponent
         }
         // Inserting into an observed set notifies even when the folder is already open, and
         // the whole sidebar tree depends on it: change it only when something opens.
-        if !missing.isEmpty { openFolders.formUnion(missing) }
+        if !missing.isEmpty { chrome.openFolders.formUnion(missing) }
     }
 
     func requestFocus(caret: Int) {
         // The editor applies it on the next turn; agents asking right away see it already.
-        editorSelection = NSRange(location: min(caret, (editorText as NSString).length), length: 0)
+        editor.editorSelection = NSRange(location: min(caret, (editor.editorText as NSString).length), length: 0)
         focusToken += 1
-        focusRequest = (caret, focusToken)
+        editor.focusRequest = (caret, focusToken)
     }
 
-    /// HTML notes show their source in the editor instead of the rendered page.
-    var htmlSource = false
 
-    /// Why the open file can't be shown as text (binary, far too large); nil when it can.
-    var unreadable: String?
-    /// The open note while iCloud downloads it.
-    var downloading: String?
 
     static func isEvicted(_ u: URL) -> Bool {
         guard let s = try? u.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus else { return false }
@@ -535,17 +425,17 @@ final class AppModel {
             let why = Self.unreadableReason(u)
             let text = why == nil ? try? String(contentsOf: u, encoding: .utf8) : nil
             DispatchQueue.main.async {
-                guard let self, self.activeRel == rel, self.downloading == rel else { return }
-                self.downloading = nil
+                guard let self, self.editor.activeRel == rel, self.editor.downloading == rel else { return }
+                self.editor.downloading = nil
                 guard let text else {
-                    self.unreadable = why ?? "没能从 iCloud 下载这篇笔记。"
+                    self.editor.unreadable = why ?? "没能从 iCloud 下载这篇笔记。"
                     return
                 }
                 v.acknowledge(rel, content: text)
-                self.editorText = text
-                self.oversizedDisplay = nil
-                self.oversized = Self.hasOversizedLine(text)
-                self.editorVersion += 1
+                self.editor.editorText = text
+                self.editor.oversizedDisplay = nil
+                self.editor.oversized = Self.hasOversizedLine(text)
+                self.editor.editorVersion += 1
                 self.loadAnnotations()
             }
         }
@@ -561,12 +451,6 @@ final class AppModel {
         return nil
     }
 
-    /// The open note has a line too long to typeset and edit smoothly: it is shown as plain,
-    /// read-only text instead of risking a hang in the text system.
-    var oversized = false { didSet { if !oversized { oversizedDisplay = nil } } }
-    /// What the editor shows for an oversized note: the text with its huge lines clipped, since
-    /// TextKit cannot typeset a paragraph of millions of characters. The file is never written from it.
-    @ObservationIgnored var oversizedDisplay: String?
     static let oversizedLine = 100_000
 
     static func hasOversizedLine(_ text: String) -> Bool {
@@ -580,37 +464,37 @@ final class AppModel {
 
     /// The text the editor shows: the note, or its clipped display copy when it is oversized.
     var editorDisplayText: String {
-        guard oversized else { return editorText }
-        if let d = oversizedDisplay { return d }
-        let d = Markdown.lines(editorText).map { line -> String in
+        guard editor.oversized else { return editor.editorText }
+        if let d = editor.oversizedDisplay { return d }
+        let d = Markdown.lines(editor.editorText).map { line -> String in
             let n = (line as NSString).length
             guard n > 2000 else { return line }
             return (line as NSString).substring(to: 2000) + " …（此行还有 \(n - 2000) 个字符未显示）"
         }.joined(separator: "\n")
-        oversizedDisplay = d
+        editor.oversizedDisplay = d
         return d
     }
 
     var editorReadOnly: Bool {
-        guard let rel = activeRel, unreadable == nil, downloading == nil, !oversized else { return true }
-        return writing.contains(rel)
+        guard let rel = editor.activeRel, editor.unreadable == nil, editor.downloading == nil, !editor.oversized else { return true }
+        return agents.writing.contains(rel)
     }
 
     func editorDidChange(_ text: String) {
         // NSTextView can notify after a model-driven reload. It is not a user edit,
         // so it must not accept a pending agent review or schedule another save.
-        guard text != editorText else { return }
-        let delta = (text as NSString).length - (editorText as NSString).length
-        if delta > 0 && delta < 20 { typed.append((Date(), delta)) }
-        netTyped += delta
-        editorText = text
-        dirty = true
+        guard text != editor.editorText else { return }
+        let delta = (text as NSString).length - (editor.editorText as NSString).length
+        if delta > 0 && delta < 20 { editor.typed.append((Date(), delta)) }
+        editor.netTyped += delta
+        editor.editorText = text
+        editor.dirty = true
         recountWords()
         companionTextChanged()
-        if let rel = activeRel, pending[rel] != nil {
+        if let rel = editor.activeRel, agents.pending[rel] != nil {
             // Editing a file under review keeps the agent's version as the new base.
-            pending[rel] = nil
-            showDiff = false
+            agents.pending[rel] = nil
+            editor.showDiff = false
             showToast("已保留 agent 的改动并继续编辑")
         }
         scheduleSave()
@@ -625,35 +509,35 @@ final class AppModel {
 
     func flushSave() {
         saveWork?.cancel()
-        guard dirty, let v = vault, let rel = activeRel else { return }
-        if writing.contains(rel) { return }
-        switch v.write(rel, editorText) {
+        guard editor.dirty, let v = vault, let rel = editor.activeRel else { return }
+        if agents.writing.contains(rel) { return }
+        switch v.write(rel, editor.editorText) {
         case .ok:
-            dirty = false
+            editor.dirty = false
             emit("note.saved", source: "user", ["path": .string(rel)])
         case let .conflict(disk):
             // Someone else wrote the file after we last read it: theirs wins, ours goes to review.
-            let mine = editorText
+            let mine = editor.editorText
             v.acknowledge(rel, content: disk)
-            pending[rel] = PendingReview(rel: rel, by: nil, source: .terminal,
+            agents.pending[rel] = PendingReview(rel: rel, by: nil, source: .terminal,
                                          baseline: Markdown.lines(mine), proposed: Markdown.lines(disk),
                                          hunks: LineDiff.hunks(from: Markdown.lines(mine), to: Markdown.lines(disk)), snapshot: nil)
-            editorText = disk
-            oversizedDisplay = nil
-            oversized = Self.hasOversizedLine(disk)
-            dirty = false
-            editorVersion += 1
+            editor.editorText = disk
+            editor.oversizedDisplay = nil
+            editor.oversized = Self.hasOversizedLine(disk)
+            editor.dirty = false
+            editor.editorVersion += 1
             showToast("文件在外部被修改，已载入磁盘上的版本")
         }
     }
 
     func toggleTask(line: Int) {
-        var lines = Markdown.lines(editorText)
+        var lines = Markdown.lines(editor.editorText)
         guard lines.indices.contains(line) else { return }
         lines[line] = Markdown.toggleTask(lines[line])
-        editorText = lines.joined(separator: "\n")
-        dirty = true
-        editorVersion += 1
+        editor.editorText = lines.joined(separator: "\n")
+        editor.dirty = true
+        editor.editorVersion += 1
         scheduleSave()
     }
 
@@ -662,7 +546,7 @@ final class AppModel {
         flushSave()
         let rel = v.create(title: "未命名", content: "# 未命名\n")
         emit("note.created", source: "user", ["path": .string(rel)])
-        palette = false
+        chrome.palette = false
         open(rel)
         requestFocus(caret: ("# 未命名\n" as NSString).length)
     }
@@ -682,15 +566,15 @@ final class AppModel {
 
     func textPaused(paragraph: String, caretAtEnd: Bool, lineIndex: Int) {
         ghostWork?.cancel()
-        ghost = ""
-        guard ghostOn, caretAtEnd, Markdown.blockType(paragraph) == .p, paragraph.count > 6,
+        editor.ghost = ""
+        guard prefs.ghostOn, caretAtEnd, Markdown.blockType(paragraph) == .p, paragraph.count > 6,
               !paragraph.hasPrefix("/"), paragraph.last?.isWhitespace == false,
-              cli[.claude]?.found == true, let v = vault else { return }
-        let before = Markdown.lines(editorText).prefix(lineIndex).suffix(12).joined(separator: "\n")
+              agents.cli[.claude]?.found == true, let v = vault else { return }
+        let before = Markdown.lines(editor.editorText).prefix(lineIndex).suffix(12).joined(separator: "\n")
         let w = DispatchWorkItem { [weak self] in
             self?.ghostCompleter.complete(paragraph: paragraph, context: before, cwd: v.root) { text in
                 guard let self, self.currentParagraphForGhost == paragraph else { return }
-                self.ghost = text
+                self.editor.ghost = text
             }
         }
         ghostWork = w
@@ -704,15 +588,15 @@ final class AppModel {
         ghostWork?.cancel()
         ghostCompleter.cancel()
         currentParagraphForGhost = nil
-        if !ghost.isEmpty { ghost = "" }
+        if !editor.ghost.isEmpty { editor.ghost = "" }
     }
 
     // MARK: toast
 
     func showToast(_ m: String) {
         toastWork?.cancel()
-        toast = m
-        let w = DispatchWorkItem { [weak self] in self?.toast = nil }
+        chrome.toast = m
+        let w = DispatchWorkItem { [weak self] in self?.chrome.toast = nil }
         toastWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.6, execute: w)
     }
@@ -720,16 +604,14 @@ final class AppModel {
 
     // MARK: stats
 
-    /// Words in the open note, recounted a moment after typing stops rather than on every key.
-    var wordCount = 0
     @ObservationIgnored private var countWork: DispatchWorkItem?
 
     func recountWords(now: Bool = false) {
         countWork?.cancel()
-        let text = editorText
+        let text = editor.editorText
         let w = DispatchWorkItem { [weak self] in
             let n = Markdown.countWords(Markdown.lines(text))
-            DispatchQueue.main.async { if self?.wordCount != n { self?.wordCount = n } }
+            DispatchQueue.main.async { if self?.editor.wordCount != n { self?.editor.wordCount = n } }
         }
         countWork = w
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + (now ? 0 : 0.4), execute: w)
@@ -738,11 +620,11 @@ final class AppModel {
     /// Words, reading time and typing pace. The pace looks at the last minute, so the status pill
     /// redraws it on a timer of its own.
     var stats: String {
-        let words = wordCount
+        let words = editor.wordCount
         let now = Date()
-        let pace = typed.filter { now.timeIntervalSince($0.0) < 60 }.reduce(0) { $0 + $1.1 }
+        let pace = editor.typed.filter { now.timeIntervalSince($0.0) < 60 }.reduce(0) { $0 + $1.1 }
         var s = "\(words.formatted()) 字 · 约 \(max(1, Int(ceil(Double(words) / 400)))) 分钟"
-        if netTyped > 0 { s += " · 本次 +\(netTyped)" }
+        if editor.netTyped > 0 { s += " · 本次 +\(editor.netTyped)" }
         if pace > 0 { s += " · \(pace) 字/分" }
         return s
     }
@@ -750,34 +632,34 @@ final class AppModel {
     // MARK: chrome actions
 
     func toggleZen() {
-        palette = false
-        if zen {
-            zen = false
-            if let (cols, agent) = beforeZen { columnVisibility = cols; agentPanel = agent }
+        chrome.palette = false
+        if chrome.zen {
+            chrome.zen = false
+            if let (cols, agent) = beforeZen { chrome.columnVisibility = cols; chrome.agentPanel = agent }
             beforeZen = nil
         } else {
-            beforeZen = (columnVisibility, agentPanel)
-            zen = true
-            columnVisibility = .detailOnly
-            agentPanel = false
+            beforeZen = (chrome.columnVisibility, chrome.agentPanel)
+            chrome.zen = true
+            chrome.columnVisibility = .detailOnly
+            chrome.agentPanel = false
         }
     }
 
     func toggleAgent() {
-        if zen { toggleZen() }
-        agentPanel.toggle()
+        if chrome.zen { toggleZen() }
+        chrome.agentPanel.toggle()
     }
-    func openPalette() { palette = true; paletteQuery = ""; paletteSel = 0 }
+    func openPalette() { chrome.palette = true; chrome.paletteQuery = ""; chrome.paletteSel = 0 }
     func openSettings(_ tab: SettingsTab) {
-        settingsTab = tab
+        chrome.settingsTab = tab
         openSettingsAction?()
     }
 
     func reviewNext() {
-        guard let rel = activeRel.flatMap({ pending[$0] != nil ? $0 : nil }) ?? pending.keys.sorted().first else { return }
-        if zen { toggleZen() }
+        guard let rel = editor.activeRel.flatMap({ agents.pending[$0] != nil ? $0 : nil }) ?? agents.pending.keys.sorted().first else { return }
+        if chrome.zen { toggleZen() }
         open(rel)
-        showDiff = true
+        editor.showDiff = true
     }
 
     func trash(_ rel: String) {
@@ -785,19 +667,19 @@ final class AppModel {
         NSWorkspace.shared.recycle([v.url(rel)]) { _, _ in
             DispatchQueue.main.async {
                 v.noteRemoved(rel)
-                self.pending[rel] = nil
+                self.agents.pending[rel] = nil
                 self.emit("note.deleted", source: "user", ["path": .string(rel)])
-                if rel == self.activeRel, let next = v.notes.first { self.open(next.rel) }
+                if rel == self.editor.activeRel, let next = v.notes.first { self.open(next.rel) }
             }
         }
     }
 
     func finishOnboarding() {
         defaults.set(true, forKey: "onboarded")
-        onboardingStep = nil
+        chrome.onboardingStep = nil
         if vault == nil { openVault(Self.defaultVaultURL) }
-        let lines = Markdown.lines(editorText)
-        let caret = lines.count > 1 ? (lines[0] as NSString).length + 1 + (lines[1] as NSString).length : (editorText as NSString).length
+        let lines = Markdown.lines(editor.editorText)
+        let caret = lines.count > 1 ? (lines[0] as NSString).length + 1 + (lines[1] as NSString).length : (editor.editorText as NSString).length
         requestFocus(caret: caret)
     }
 

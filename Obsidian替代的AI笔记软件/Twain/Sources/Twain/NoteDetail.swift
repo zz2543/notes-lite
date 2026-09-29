@@ -11,7 +11,7 @@ struct NoteDetail: View {
 
     var body: some View {
         let pend = model.activePending
-        let reviewing = model.showDiff && pend != nil
+        let reviewing = model.editor.showDiff && pend != nil
         Group {
             if let space = model.currentSpace {
                 SpaceView(model: model, plugin: space)
@@ -27,7 +27,7 @@ struct NoteDetail: View {
                     .transition(.opacity)
             }
         }
-        .animation(Motion.standard, value: PageKind(space: model.activeSpace, desk: model.openDesk, reviewing: reviewing))
+        .animation(Motion.standard, value: PageKind(space: model.chrome.activeSpace, desk: model.chrome.openDesk, reviewing: reviewing))
         // The page takes whatever width the split view gives it. Letting its content report a
         // minimum width feeds back into the column sizes, and a width-dependent layout (the
         // dashboards) can then keep re-solving the window until AppKit aborts.
@@ -64,22 +64,22 @@ private struct NotePage: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if model.downloading != nil {
+        if model.editor.downloading != nil {
             ProgressView("正在从 iCloud 下载这篇笔记…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity)
-        } else if let why = model.unreadable {
+        } else if let why = model.editor.unreadable {
             ContentUnavailableView {
                 Label("无法作为笔记打开", systemImage: "doc.questionmark")
             } description: {
                 Text(why)
             } actions: {
                 Button("在 Finder 中显示") {
-                    if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+                    if let v = model.vault, let rel = model.editor.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
                 }
             }
-        } else if let n = model.activeNote, n.isHTML, !model.htmlSource, let v = model.vault {
-            HTMLNoteView(url: v.url(n.rel), root: v.root, version: model.editorVersion)
+        } else if let n = model.activeNote, n.isHTML, !model.editor.htmlSource, let v = model.vault {
+            HTMLNoteView(url: v.url(n.rel), root: v.root, version: model.editor.editorVersion)
                 .overlay(alignment: .top) { Banners(model: model) }
         } else {
             EditorView(model: model)
@@ -97,7 +97,7 @@ private struct SlashLayer: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if let s = model.slash {
+        if let s = model.editor.slash {
             SlashMenu(model: model, state: s).offset(x: s.anchor.x, y: s.anchor.y)
                 .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
         }
@@ -108,7 +108,7 @@ private struct StatusLayer: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if !model.zen {
+        if !model.chrome.zen {
             StatusPill(model: model).padding(Metrics.floatInset)
                 .transition(.opacity)
         }
@@ -120,13 +120,13 @@ private struct CompanionLayer: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            if let tip = model.companionTip, tip.rel == model.activeRel {
+            if let tip = model.editor.companionTip, tip.rel == model.editor.activeRel {
                 CompanionBubble(model: model, tip: tip)
                     .padding(.top, 64).padding(.trailing, Metrics.floatInset)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.standard, value: model.companionTip)
+        .animation(Motion.standard, value: model.editor.companionTip)
     }
 }
 
@@ -134,7 +134,7 @@ private struct ZenExit: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if model.zen {
+        if model.chrome.zen {
             Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
                 .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
@@ -152,9 +152,9 @@ private struct Banners: View {
 
     var body: some View {
         let pending = model.activePending
-        let writingHere = model.activeRel.map { model.writing.contains($0) } ?? false
+        let writingHere = model.editor.activeRel.map { model.agents.writing.contains($0) } ?? false
         ZStack(alignment: .top) {
-            if !model.zen {
+            if !model.chrome.zen {
                 GlassEffectContainer(spacing: 8) {
                     VStack(spacing: 8) {
                         if let pending {
@@ -165,26 +165,26 @@ private struct Banners: View {
                                 let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
                                 Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
                             } action: {
-                                Button("审阅") { model.showDiff = true }
+                                Button("审阅") { model.editor.showDiff = true }
                                     .buttonStyle(.glassProminent)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
-                        if model.oversized {
+                        if model.editor.oversized {
                             Banner(tint: .secondary) {
                                 Image(systemName: "text.alignleft")
                             } text: {
                                 Text("含有极长的行（如内嵌 base64 图片）\(Text(" · 以纯文本只读显示").foregroundStyle(.secondary))")
                             } action: {
                                 Button("在 Finder 中显示") {
-                                    if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+                                    if let v = model.vault, let rel = model.editor.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
                                 }
                                 .buttonStyle(.glass)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
                         if writingHere {
-                            let agent = model.sessions.first { $0.running && $0.source == .app }?.agent
+                            let agent = model.agents.sessions.first { $0.running && $0.source == .app }?.agent
                             Banner(tint: agent.map(Theme.agentColor) ?? Theme.claude) {
                                 ProgressView().controlSize(.small)
                             } text: {
@@ -201,7 +201,7 @@ private struct Banners: View {
                 .transition(.opacity)
             }
         }
-        .animation(Motion.standard, value: BannerState(hunks: pending?.hunks.count, oversized: model.oversized, writing: writingHere))
+        .animation(Motion.standard, value: BannerState(hunks: pending?.hunks.count, oversized: model.editor.oversized, writing: writingHere))
     }
 
     private struct BannerState: Equatable {
@@ -237,15 +237,15 @@ struct StatusPill: View {
 
     var body: some View {
         Button {
-            if let v = model.vault, let rel = model.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
+            if let v = model.vault, let rel = model.editor.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
         } label: {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(model.dirty ? AnyShapeStyle(.orange) : AnyShapeStyle(.green.opacity(0.8)))
+                    .fill(model.editor.dirty ? AnyShapeStyle(.orange) : AnyShapeStyle(.green.opacity(0.8)))
                     .frame(width: 6, height: 6)
-                Text(model.dirty ? "编辑中" : "已保存")
-                if model.companionOn {
-                    if model.companionThinking { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkle").foregroundStyle(.tint) }
+                Text(model.editor.dirty ? "编辑中" : "已保存")
+                if model.prefs.companionOn {
+                    if model.editor.companionThinking { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkle").foregroundStyle(.tint) }
                 }
                 // The pace covers the last minute: only this text redraws on a timer.
                 TimelineView(.periodic(from: .now, by: 5)) { _ in
@@ -259,8 +259,8 @@ struct StatusPill: View {
         }
         .buttonStyle(.plain)
         .glassCapsule(interactive: true)
-        .help((model.activeRel ?? "") + " · 在 Finder 中显示")
-        .disabled(model.activeRel == nil)
+        .help((model.editor.activeRel ?? "") + " · 在 Finder 中显示")
+        .disabled(model.editor.activeRel == nil)
     }
 }
 
@@ -274,15 +274,15 @@ private struct NoteToolbar: ToolbarContent {
         if model.currentDesk != nil || model.currentSpace != nil {
             ToolbarItem(placement: .primaryAction) {
                 Button("返回笔记", systemImage: "doc.text") {
-                    model.openDesk = nil
-                    model.activeSpace = nil
-                    if let rel = model.activeRel { model.selection = rel }
+                    model.chrome.openDesk = nil
+                    model.chrome.activeSpace = nil
+                    if let rel = model.editor.activeRel { model.chrome.selection = rel }
                 }
                 .help("回到刚才的笔记")
             }
         } else if reviewing {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("稍后", systemImage: "clock") { model.showDiff = false }
+                Button("稍后", systemImage: "clock") { model.editor.showDiff = false }
                     .help("稍后审阅 ⎋")
                 let proposal = model.activePending?.isProposal == true
                 Button(proposal ? "全部拒绝" : "全部还原", systemImage: "arrow.uturn.backward") { model.finishReview(all: .rejected) }
@@ -297,10 +297,10 @@ private struct NoteToolbar: ToolbarContent {
                     .keyboardShortcut(.defaultAction)
             }
         } else {
-            if !model.pending.isEmpty {
+            if !model.agents.pending.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: model.reviewNext) {
-                        Label("审阅 \(model.pending.values.reduce(0) { $0 + $1.hunks.count }) 处改动", systemImage: "checklist")
+                        Label("审阅 \(model.agents.pending.values.reduce(0) { $0 + $1.hunks.count }) 处改动", systemImage: "checklist")
                             .labelStyle(.titleAndIcon)
                     }
                     .buttonStyle(.glassProminent)
@@ -310,22 +310,22 @@ private struct NoteToolbar: ToolbarContent {
             }
             if model.activeNote?.isHTML == true {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(model.htmlSource ? "预览" : "源码", systemImage: model.htmlSource ? "eye" : "chevron.left.forwardslash.chevron.right") {
+                    Button(model.editor.htmlSource ? "预览" : "源码", systemImage: model.editor.htmlSource ? "eye" : "chevron.left.forwardslash.chevron.right") {
                         model.flushSave()
-                        model.htmlSource.toggle()
+                        model.editor.htmlSource.toggle()
                     }
-                    .help(model.htmlSource ? "显示渲染后的页面" : "编辑 HTML 源码")
+                    .help(model.editor.htmlSource ? "显示渲染后的页面" : "编辑 HTML 源码")
                 }
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("AI 审阅", systemImage: "text.bubble") { model.startAIReview() }
-                    .help("让 \(model.agentPick.displayName) 通读这篇笔记，在正文旁留下批注，不改动笔记")
-                    .disabled(model.activeRel == nil || model.activeNote?.isHTML == true)
-                Button("笔记信息", systemImage: "info.circle") { model.noteInfoOpen.toggle() }
+                    .help("让 \(model.agents.agentPick.displayName) 通读这篇笔记，在正文旁留下批注，不改动笔记")
+                    .disabled(model.editor.activeRel == nil || model.activeNote?.isHTML == true)
+                Button("笔记信息", systemImage: "info.circle") { model.chrome.noteInfoOpen.toggle() }
                     .help("笔记的名片：摘要、标签、反链")
-                    .disabled(model.activeRel == nil || model.activeNote?.isHTML == true)
-                    .popover(isPresented: $model.noteInfoOpen, arrowEdge: .bottom) { NoteInfoPopover(model: model) }
+                    .disabled(model.editor.activeRel == nil || model.activeNote?.isHTML == true)
+                    .popover(isPresented: Bindable(model.chrome).noteInfoOpen, arrowEdge: .bottom) { NoteInfoPopover(model: model) }
                 Button("专注模式", systemImage: "arrow.up.left.and.arrow.down.right", action: model.toggleZen)
                     .help("专注模式 ⌘.")
                 Button("命令面板", systemImage: "magnifyingglass", action: model.openPalette)
@@ -369,7 +369,7 @@ struct SlashMenu: View {
                 .background(RowHighlight(on: sel))
                 .contentShape(.rect)
                 .onTapGesture { NotificationCenter.default.post(name: .twainApplySlash, object: item) }
-                .onHover { if $0 { model.slash?.selection = i } }
+                .onHover { if $0 { model.editor.slash?.selection = i } }
             }
         }
         .padding(6)

@@ -9,13 +9,13 @@ extension AppModel {
 
     /// Edits the open note's name in its sidebar row.
     func beginRename() {
-        guard let rel = activeRel, vault?.note(rel) != nil else { return }
-        palette = false
-        sidebarFilter = ""
-        if zen { toggleZen() }
-        columnVisibility = .all
+        guard let rel = editor.activeRel, vault?.note(rel) != nil else { return }
+        chrome.palette = false
+        chrome.sidebarFilter = ""
+        if chrome.zen { toggleZen() }
+        chrome.columnVisibility = .all
         revealInSidebar(rel)
-        renaming = rel
+        chrome.renaming = rel
     }
 
     /// Renames the note's file and the `[[links]]` pointing at it. False when it didn't happen
@@ -23,8 +23,8 @@ extension AppModel {
     @discardableResult
     func renameNote(_ rel: String, to title: String) -> Bool {
         guard let v = vault else { return false }
-        if writing.contains(rel) { showToast("Agent 正在写入这篇笔记，稍后再改名"); return false }
-        if rel == activeRel { flushSave() }
+        if agents.writing.contains(rel) { showToast("Agent 正在写入这篇笔记，稍后再改名"); return false }
+        if rel == editor.activeRel { flushSave() }
         let old = NoteRef(rel: rel).title
         let new: String
         do { new = try v.rename(rel, to: title) } catch {
@@ -32,10 +32,10 @@ extension AppModel {
             return false
         }
         guard new != rel else { return true }
-        if var p = pending.removeValue(forKey: rel) { p.rel = new; pending[new] = p }
+        if var p = agents.pending.removeValue(forKey: rel) { p.rel = new; agents.pending[new] = p }
         carryNoteData(from: rel, to: new)
-        if activeRel == rel { activeRel = new }
-        if selection == rel { selection = new }
+        if editor.activeRel == rel { editor.activeRel = new }
+        if chrome.selection == rel { chrome.selection = new }
         let name = NoteRef(rel: new).title
         let links = relinkNotes(from: old, to: name)
         emit("note.renamed", source: "user", ["path": .string(new), "from": .string(rel)])
@@ -47,14 +47,14 @@ extension AppModel {
     func relinkNotes(from old: String, to new: String) -> Int {
         guard let v = vault, v.note(titled: old) == nil else { return 0 }
         var total = 0
-        for n in v.notes where pending[n.rel] == nil && !writing.contains(n.rel) {
-            let text = n.rel == activeRel ? editorText : v.diskContent(n.rel) ?? ""
+        for n in v.notes where agents.pending[n.rel] == nil && !agents.writing.contains(n.rel) {
+            let text = n.rel == editor.activeRel ? editor.editorText : v.diskContent(n.rel) ?? ""
             let (out, count) = Markdown.renamingWikiLinks(in: text, from: old, to: new)
             guard count > 0, case .ok = v.write(n.rel, out) else { continue }
             total += count
-            if n.rel == activeRel {
-                editorText = out
-                editorVersion += 1
+            if n.rel == editor.activeRel {
+                editor.editorText = out
+                editor.editorVersion += 1
             }
         }
         return total
@@ -63,11 +63,11 @@ extension AppModel {
     /// A note still named 未命名 takes its first heading as its name once the caret leaves
     /// that heading, or the note is closed.
     func adoptHeadingTitle(leaving: Bool = false) {
-        guard let v = vault, let rel = activeRel, !writing.contains(rel), pending[rel] == nil,
+        guard let v = vault, let rel = editor.activeRel, !agents.writing.contains(rel), agents.pending[rel] == nil,
               Self.isUntitled(NoteRef(rel: rel).title),
-              let heading = Markdown.titleHeading(editorText), !Self.isUntitled(heading) else { return }
-        let firstLine = (editorText.prefix { $0 != "\n" } as Substring).utf16.count
-        guard leaving || editorSelection.location > firstLine else { return }
+              let heading = Markdown.titleHeading(editor.editorText), !Self.isUntitled(heading) else { return }
+        let firstLine = (editor.editorText.prefix { $0 != "\n" } as Substring).utf16.count
+        guard leaving || editor.editorSelection.location > firstLine else { return }
         var name = heading.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
         while name.hasPrefix(".") { name.removeFirst() }
         guard !name.isEmpty else { return }
@@ -97,8 +97,8 @@ extension AppModel {
     }
 
     func selectAnnotation(_ id: String) {
-        selectedAnnotation = id
-        guard let a = annotations.first(where: { $0.id == id }), let r = Anchor.locate(a.quote, in: editorText, line: a.line) else { return }
+        editor.selectedAnnotation = id
+        guard let a = editor.annotations.first(where: { $0.id == id }), let r = Anchor.locate(a.quote, in: editor.editorText, line: a.line) else { return }
         selectEditorRange?(r)
     }
 

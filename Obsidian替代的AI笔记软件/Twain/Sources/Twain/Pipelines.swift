@@ -79,7 +79,7 @@ extension AppModel {
     ]
 
     func loadPipelines() {
-        guard let v = vault else { pipelines = []; return }
+        guard let v = vault else { agents.pipelines = []; return }
         let fm = FileManager.default
         let dir = v.root.appendingPathComponent(".twain/pipelines")
         if !fm.fileExists(atPath: dir.path) {
@@ -91,29 +91,29 @@ extension AppModel {
         let files = ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.pathExtension == "md" }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-        pipelines = files.compactMap { u in
+        agents.pipelines = files.compactMap { u in
             (try? String(contentsOf: u, encoding: .utf8)).flatMap { Pipeline.parse(file: v.relative(u.path), text: $0) }
         } + pluginFiles("pipelines").compactMap { Pipeline.parse(file: $0.0, text: $0.1) }
     }
 
     func pipeline(named name: String) -> Pipeline? {
         let n = name.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")).lowercased()
-        return pipelines.first { $0.key.lowercased() == n || $0.title == name }
+        return agents.pipelines.first { $0.key.lowercased() == n || $0.title == name }
     }
 
     /// The template variables a command or pipeline sees, taken from the editor.
     func templateVars(scope: UserCommand.Scope, title: String, input: String?) throws -> [String: String] {
-        let ns = editorText as NSString
-        let sel = NSIntersectionRange(editorSelection, NSRange(location: 0, length: ns.length))
-        let selected = activeRel == nil ? "" : ns.substring(with: sel)
-        if scope != .vault, activeRel == nil { throw RPCError(RPCError.invalidParams, "「\(title)」需要先打开一篇笔记") }
+        let ns = editor.editorText as NSString
+        let sel = NSIntersectionRange(editor.editorSelection, NSRange(location: 0, length: ns.length))
+        let selected = editor.activeRel == nil ? "" : ns.substring(with: sel)
+        if scope != .vault, editor.activeRel == nil { throw RPCError(RPCError.invalidParams, "「\(title)」需要先打开一篇笔记") }
         if scope == .selection, selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw RPCError(RPCError.invalidParams, "「\(title)」需要先在笔记里选中一段文字")
         }
-        let rel = activeRel ?? ""
+        let rel = editor.activeRel ?? ""
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
-        return ["selection": selected, "note": editorText, "path": rel,
+        return ["selection": selected, "note": editor.editorText, "path": rel,
                 "title": ((rel as NSString).lastPathComponent as NSString).deletingPathExtension,
                 "line": String(EditorContext.position(sel.location, in: ns).line),
                 "date": f.string(from: Date()), "input": input ?? ""]
@@ -133,18 +133,18 @@ extension AppModel {
         flushSave()
         let s = AgentSession(agent: p.agent, source: .app, title: "流水线 · " + p.title)
         s.extraTools = p.tools
-        sessions.append(s)
-        activeSessionID = s.id
+        agents.sessions.append(s)
+        agents.activeSessionID = s.id
         var run = PipelineRun(pipeline: p, sessionID: s.id, vars: vars)
         run.itemMark = 1
-        pipelineRuns[run.id] = run
+        agents.pipelineRuns[run.id] = run
         s.items.append(SessionItem(kind: .pipeline(run.id)))
         startPipelineStep(run.id)
         return s
     }
 
     private func startPipelineStep(_ id: UUID) {
-        guard var run = pipelineRuns[id], let s = sessions.first(where: { $0.id == run.sessionID }) else { return }
+        guard var run = agents.pipelineRuns[id], let s = agents.sessions.first(where: { $0.id == run.sessionID }) else { return }
         let step = run.pipeline.steps[run.step]
         var vars = run.vars
         vars["prev"] = run.outputs.last ?? ""
@@ -152,14 +152,14 @@ extension AppModel {
         let header = "（流水线「\(run.pipeline.title)」第 \(run.step + 1)/\(run.pipeline.steps.count) 步：\(step.title)）\n"
         run.status = .running
         run.itemMark = s.items.count
-        pipelineRuns[id] = run
+        agents.pipelineRuns[id] = run
         runAgent(prompt: header + Template.render(step.prompt, vars), agent: run.pipeline.agent,
                  model: step.model ?? run.pipeline.model, effort: step.effort, in: s)
     }
 
     /// Called when a run of `s` has finished and its changes are queued.
     func pipelineSessionFinished(_ s: AgentSession) {
-        guard let (id, run) = pipelineRuns.first(where: { $0.value.sessionID == s.id && $0.value.status == .running }) else { return }
+        guard let (id, run) = agents.pipelineRuns.first(where: { $0.value.sessionID == s.id && $0.value.status == .running }) else { return }
         var r = run
         let said = s.items.dropFirst(r.itemMark).compactMap { item -> String? in
             if case let .agent(t) = item.kind { return t }
@@ -168,62 +168,62 @@ extension AppModel {
         let failed = s.items.dropFirst(r.itemMark).contains { if case .error = $0.kind { return true }; return false }
         if failed && said.isEmpty {
             r.status = .stopped("第 \(r.step + 1) 步出错，流水线已停下")
-            pipelineRuns[id] = r
+            agents.pipelineRuns[id] = r
             return
         }
         r.outputs.append(said.last ?? "")
         switch r.pipeline.steps[r.step].gate {
         case .none:
-            pipelineRuns[id] = r
+            agents.pipelineRuns[id] = r
             advancePipeline(id)
         case .ask:
             r.status = .waitingUser
-            pipelineRuns[id] = r
+            agents.pipelineRuns[id] = r
             NSApp.requestUserAttention(.informationalRequest)
         case .review:
             r.status = .waitingReview
-            pipelineRuns[id] = r
+            agents.pipelineRuns[id] = r
             pipelineReviewsChanged()
         }
     }
 
     /// Moves every run waiting on reviews forward once its session has none left.
     func pipelineReviewsChanged() {
-        for (id, run) in pipelineRuns where run.status == .waitingReview {
-            if !pending.values.contains(where: { $0.sessionID == run.sessionID }) { advancePipeline(id) }
+        for (id, run) in agents.pipelineRuns where run.status == .waitingReview {
+            if !agents.pending.values.contains(where: { $0.sessionID == run.sessionID }) { advancePipeline(id) }
         }
     }
 
     func advancePipeline(_ id: UUID) {
-        guard var run = pipelineRuns[id] else { return }
+        guard var run = agents.pipelineRuns[id] else { return }
         run.step += 1
         if run.step >= run.pipeline.steps.count {
             run.status = .done
-            pipelineRuns[id] = run
+            agents.pipelineRuns[id] = run
             showToast("流水线「\(run.pipeline.title)」完成")
             return
         }
-        pipelineRuns[id] = run
+        agents.pipelineRuns[id] = run
         startPipelineStep(id)
     }
 
     /// Runs the current step again with the user's opinion of its result.
     func redoPipelineStep(_ id: UUID, feedback: String) {
-        guard var run = pipelineRuns[id], let s = sessions.first(where: { $0.id == run.sessionID }), !s.running else { return }
+        guard var run = agents.pipelineRuns[id], let s = agents.sessions.first(where: { $0.id == run.sessionID }), !s.running else { return }
         if !run.outputs.isEmpty { run.outputs.removeLast() }
         run.status = .running
         run.itemMark = s.items.count
-        pipelineRuns[id] = run
+        agents.pipelineRuns[id] = run
         let step = run.pipeline.steps[run.step]
         runAgent(prompt: "对第 \(run.step + 1) 步「\(step.title)」的结果，我的意见是：\(feedback)\n请按意见重做这一步，要求和之前一样。",
                  agent: run.pipeline.agent, model: step.model ?? run.pipeline.model, effort: step.effort, in: s)
     }
 
     func stopPipeline(_ id: UUID) {
-        guard var run = pipelineRuns[id] else { return }
-        if let s = sessions.first(where: { $0.id == run.sessionID }), s.running { stopAgent(s) }
+        guard var run = agents.pipelineRuns[id] else { return }
+        if let s = agents.sessions.first(where: { $0.id == run.sessionID }), s.running { stopAgent(s) }
         run.status = .stopped("已停止")
-        pipelineRuns[id] = run
+        agents.pipelineRuns[id] = run
     }
 
     static func promptForInput(title: String, message: String) -> String? {
@@ -248,7 +248,7 @@ struct PipelineCard: View {
     @State private var feedback = ""
 
     var body: some View {
-        if let run = model.pipelineRuns[runID] {
+        if let run = model.agents.pipelineRuns[runID] {
             VStack(alignment: .leading, spacing: 10) {
                 Label(run.pipeline.title, systemImage: run.pipeline.icon).font(.callout.weight(.semibold))
                 VStack(alignment: .leading, spacing: 6) {
@@ -298,10 +298,10 @@ struct PipelineCard: View {
                     .background(.fill.quaternary, in: .rect(cornerRadius: 8, style: .continuous))
                 HStack {
                     Button("继续下一步", systemImage: "arrow.right") {
-                        if var r = model.pipelineRuns[runID], !feedback.isEmpty {
+                        if var r = model.agents.pipelineRuns[runID], !feedback.isEmpty {
                             // The opinion carries into the next step as part of {{prev}}.
                             r.outputs[r.outputs.count - 1] += "\n\n（用户的意见：\(feedback)）"
-                            model.pipelineRuns[runID] = r
+                            model.agents.pipelineRuns[runID] = r
                         }
                         feedback = ""
                         model.advancePipeline(runID)
@@ -316,7 +316,7 @@ struct PipelineCard: View {
                 }
             }
         case .waitingReview:
-            let n = model.pending.values.filter { $0.sessionID == run.sessionID }.reduce(0) { $0 + $1.hunks.count }
+            let n = model.agents.pending.values.filter { $0.sessionID == run.sessionID }.reduce(0) { $0 + $1.hunks.count }
             HStack {
                 Text("等你审阅第 \(run.step + 1) 步的 \(n) 处改动，审阅完自动进入下一步").font(.caption).foregroundStyle(.secondary)
                 Spacer(minLength: 0)

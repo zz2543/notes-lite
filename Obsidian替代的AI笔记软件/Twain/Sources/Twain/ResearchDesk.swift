@@ -48,10 +48,10 @@ extension AppModel {
         guard let dir = desksDir else { return }
         try? FileManager.default.removeItem(at: dir.appendingPathComponent(id + ".json"))
         desks.removeAll { $0.id == id }
-        if openDesk == id { openDesk = nil }
+        if chrome.openDesk == id { chrome.openDesk = nil }
     }
 
-    var currentDesk: ResearchDesk? { openDesk.flatMap { id in desks.first { $0.id == id } } }
+    var currentDesk: ResearchDesk? { chrome.openDesk.flatMap { id in desks.first { $0.id == id } } }
 
     /// An empty desk to type a question into.
     func newDesk() {
@@ -59,9 +59,9 @@ extension AppModel {
         let d = ResearchDesk(id: String(UUID().uuidString.prefix(8)).lowercased(), question: "", scope: "", cards: [],
                              draft: nil, session: nil, created: Date())
         saveDesk(d)
-        activeSpace = nil
-        openDesk = d.id
-        selection = "desk:" + d.id
+        chrome.activeSpace = nil
+        chrome.openDesk = d.id
+        chrome.selection = "desk:" + d.id
     }
 
     /// Sends the desk's question to the agent picked in the panel.
@@ -71,11 +71,11 @@ extension AppModel {
         guard !q.isEmpty else { return }
         d.question = q
         d.scope = scope
-        let s = AgentSession(agent: agentPick, source: .app, title: "问库 · " + String(q.prefix(12)))
+        let s = AgentSession(agent: agents.agentPick, source: .app, title: "问库 · " + String(q.prefix(12)))
         s.extraTools = ["cards"]
         s.readOnly = true
         s.deskID = d.id
-        sessions.append(s)
+        agents.sessions.append(s)
         d.session = s.id.uuidString
         saveDesk(d)
         let range: String
@@ -91,7 +91,7 @@ extension AppModel {
         卡片要短：标题不超过 20 字，正文不超过 120 字。不要写成文章，不要修改任何文件。最后用一句话说明还缺什么资料。
         """
         runAgent(prompt: prompt, agent: s.agent, model: model, in: s)
-        agentPanel = false
+        chrome.agentPanel = false
     }
 
     func cardsCommand(_ call: CommandCall, index: VaultIndex) throws -> JSONValue {
@@ -123,11 +123,11 @@ extension AppModel {
             d.draft = rel
         }
         guard let rel = d.draft else { return }
-        if rel == activeRel { flushSave() }
+        if rel == editor.activeRel { flushSave() }
         let before = v.diskContent(rel) ?? ""
         let text = before + (before.hasSuffix("\n\n") ? "" : before.hasSuffix("\n") ? "\n" : "\n\n") + d.cards[i].markdown
         v.forceWrite(rel, text)
-        if rel == activeRel { reloadEditor() }
+        if rel == editor.activeRel { reloadEditor() }
         d.cards[i].state = .drafted
         saveDesk(d)
         showToast("已收进草稿「\(NoteRef(rel: rel).title)」")
@@ -137,7 +137,7 @@ extension AppModel {
     func followUp(_ cardID: String, in deskID: String, question: String, model: String? = nil) {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, let d = desks.first(where: { $0.id == deskID }), let card = d.cards.first(where: { $0.id == cardID }),
-              let sid = d.session, let s = sessions.first(where: { $0.id.uuidString == sid }) else {
+              let sid = d.session, let s = agents.sessions.first(where: { $0.id.uuidString == sid }) else {
             showToast("这张卡片所在的会话已经结束，重新提问吧")
             return
         }
@@ -147,7 +147,7 @@ extension AppModel {
         继续按同样的方式找资料，用 cards 回答，每张都填 parent=\(card.id)，同样带出处。
         """
         runAgent(prompt: prompt, agent: s.agent, model: model, in: s)
-        agentPanel = false
+        chrome.agentPanel = false
     }
 }
 
@@ -161,7 +161,7 @@ struct ResearchDeskView: View {
     @State private var filter: ResearchCard.Kind?
     @State private var showDiscarded = false
 
-    private var session: AgentSession? { desk.session.flatMap { id in model.sessions.first { $0.id.uuidString == id } } }
+    private var session: AgentSession? { desk.session.flatMap { id in model.agents.sessions.first { $0.id.uuidString == id } } }
 
     var body: some View {
         ScrollView {
@@ -213,14 +213,14 @@ struct ResearchDeskView: View {
             HStack(spacing: 8) {
                 if session?.running == true {
                     ProgressView().controlSize(.small)
-                    Text("\(model.agentPick.displayName) 正在找资料 · 已有 \(desk.cards.count) 张卡片").foregroundStyle(.secondary)
+                    Text("\(model.agents.agentPick.displayName) 正在找资料 · 已有 \(desk.cards.count) 张卡片").foregroundStyle(.secondary)
                 } else if !desk.cards.isEmpty {
                     Text("\(desk.scopeLabel) · \(desk.cards.count) 张卡片 · 钉住有用的，划掉没用的，收进草稿").foregroundStyle(.secondary)
                 } else {
                     Text("答案会是一组带出处的卡片：结论、证据、分歧、待解问题").foregroundStyle(.secondary)
                 }
                 Spacer()
-                if let s = session { Button("查看过程") { model.activeSessionID = s.id; model.agentPanel = true }.buttonStyle(.borderless) }
+                if let s = session { Button("查看过程") { model.agents.activeSessionID = s.id; model.chrome.agentPanel = true }.buttonStyle(.borderless) }
             }
             .font(.callout)
         }
@@ -371,7 +371,7 @@ private struct CardView: View {
             if !c.sources.isEmpty {
                 FlowSources(sources: c.sources) { s in
                     model.open(s.path)
-                    if let line = s.line { model.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: model.editorText)) }
+                    if let line = s.line { model.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: model.editor.editorText)) }
                 }
             }
         }

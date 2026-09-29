@@ -8,33 +8,33 @@ struct MainWindow: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $model.columnVisibility) {
+        NavigationSplitView(columnVisibility: Bindable(model.chrome).columnVisibility) {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
         } detail: {
             NoteDetail(model: model)
-                .inspector(isPresented: $model.agentPanel) {
+                .inspector(isPresented: Bindable(model.chrome).agentPanel) {
                     AgentInspector(model: model)
                         .inspectorColumnWidth(min: 300, ideal: 360, max: 520)
                 }
         }
-        .toolbar(model.zen ? .hidden : .automatic, for: .windowToolbar)
+        .toolbar(model.chrome.zen ? .hidden : .automatic, for: .windowToolbar)
         .overlay {
-            if model.palette {
+            if model.chrome.palette {
                 CommandPalette(model: model)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
         .overlay(alignment: .bottom) {
-            if let t = model.toast {
+            if let t = model.chrome.toast {
                 Toast(text: t)
                     .padding(.bottom, 56)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.snappy(duration: 0.22), value: model.palette)
-        .animation(.snappy(duration: 0.25), value: model.toast)
-        .sheet(isPresented: Binding(get: { model.onboardingStep != nil }, set: { if !$0 { model.onboardingStep = nil } })) {
+        .animation(.snappy(duration: 0.22), value: model.chrome.palette)
+        .animation(.snappy(duration: 0.25), value: model.chrome.toast)
+        .sheet(isPresented: Binding(get: { model.chrome.onboardingStep != nil }, set: { if !$0 { model.chrome.onboardingStep = nil } })) {
             OnboardingSheet(model: model)
         }
         .onAppear { model.openSettingsAction = { openSettings() } }

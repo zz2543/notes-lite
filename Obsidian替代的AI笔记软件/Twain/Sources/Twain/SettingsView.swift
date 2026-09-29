@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        TabView(selection: $model.settingsTab) {
+        TabView(selection: Bindable(model.chrome).settingsTab) {
             Tab("编辑器", systemImage: "textformat", value: SettingsTab.editor) {
                 EditorSettings(model: model)
             }
@@ -31,8 +31,8 @@ struct FontCards: View {
     var body: some View {
         HStack(spacing: 10) {
             ForEach(EditorFont.allCases) { f in
-                let on = model.font == f
-                Button { model.font = f } label: {
+                let on = model.prefs.font == f
+                Button { model.prefs.font = f } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Aa 文")
                             .font(f.swiftUIFont(size: 24))
@@ -61,23 +61,23 @@ struct EditorSettings: View {
             Section("正文字体") {
                 FontCards(model: model)
                 Text("专注，是一种选择。Focus is a choice.")
-                    .font(model.font.swiftUIFont(size: 16))
+                    .font(model.prefs.font.swiftUIFont(size: 16))
                     .foregroundStyle(.secondary)
             }
             Section("专注与输入") {
-                Toggle(isOn: $model.typewriter) {
+                Toggle(isOn: Bindable(model.prefs).typewriter) {
                     Text("打字机滚动")
                     Text("当前行始终停在视线高度")
                 }
-                Toggle(isOn: $model.dim) {
+                Toggle(isOn: Bindable(model.prefs).dim) {
                     Text("段落聚焦")
                     Text("淡化正在编辑之外的段落")
                 }
-                Toggle(isOn: $model.ghostOn) {
+                Toggle(isOn: Bindable(model.prefs).ghostOn) {
                     Text("Tab 行内续写")
                     Text("停顿后由 claude（haiku）给出灰色建议，Tab 接受。每次续写都会调用一次 claude，通常需要 5–15 秒。")
                 }
-                .disabled(model.cli[.claude]?.found == false)
+                .disabled(model.agents.cli[.claude]?.found == false)
             }
             AttachmentSettings(model: model)
         }
@@ -109,7 +109,7 @@ struct AttachmentSettings: View {
                     }
                 }
             }
-            Picker("文件名", selection: $model.attachmentNaming) {
+            Picker("文件名", selection: Bindable(model.prefs).attachmentNaming) {
                 ForEach(AttachmentNaming.allCases) { Text($0.label).tag($0) }
             }
             LabeledContent("示例") {
@@ -135,7 +135,7 @@ struct AttachmentSettings: View {
     }
 
     private var example: String {
-        let note = model.activeRel ?? "笔记.md"
+        let note = model.editor.activeRel ?? "笔记.md"
         let folder: String = switch place {
         case .folder: name.isEmpty ? "附件" : name
         case .root: ""
@@ -199,8 +199,8 @@ struct AgentSettings: View {
             }
 
             Section("命令行工具") {
-                cliRow(.claude, on: $model.claudeOn)
-                cliRow(.codex, on: $model.codexOn)
+                cliRow(.claude, on: Bindable(model.prefs).claudeOn)
+                cliRow(.codex, on: Bindable(model.prefs).codexOn)
             }
 
             Section {
@@ -227,7 +227,7 @@ struct AgentSettings: View {
                     }
                 }
                 if let toolError { Text(toolError).font(.caption).foregroundStyle(.red) }
-                Toggle(isOn: $model.mcpOn) {
+                Toggle(isOn: Bindable(model.prefs).mcpOn) {
                     Text("给 agent 挂载共笔工具（MCP）")
                     Text("共笔启动的 Claude Code 和 Codex 可以直接调用 propose_edit、ask_user 等工具：修改附理由、拿不准时向你提问。关闭后只能通过 twain 命令使用。")
                 }
@@ -266,10 +266,10 @@ struct AgentSettings: View {
             }
 
             Section {
-                Toggle("允许自动化运行", isOn: $model.automationsOn)
+                Toggle("允许自动化运行", isOn: Bindable(model.prefs).automationsOn)
                 LabeledContent("每天最多") {
-                    Stepper("\(model.automationDailyLimit) 次（今天已运行 \(model.automationRunsToday) 次）",
-                            value: $model.automationDailyLimit, in: 1...200)
+                    Stepper("\(model.prefs.automationDailyLimit) 次（今天已运行 \(model.automationRunsToday) 次）",
+                            value: Bindable(model.prefs).automationDailyLimit, in: 1...200)
                 }
                 if model.automations.isEmpty {
                     Text("没有自动化。把 .twain/automations/ 里的示例文件去掉 .example 后缀即可试用。").foregroundStyle(.secondary)
@@ -302,22 +302,22 @@ struct AgentSettings: View {
             }
 
             Section("衔接") {
-                Toggle(isOn: $model.syncContext) {
+                Toggle(isOn: Bindable(model.prefs).syncContext) {
                     Text("AGENTS.md 与 CLAUDE.md 同源")
                     Text("CLAUDE.md 只包含 @AGENTS.md，两个 agent 读同一份规则。缺失时由共笔创建。")
                 }
-                Toggle(isOn: $model.watchTerminal) {
+                Toggle(isOn: Bindable(model.prefs).watchTerminal) {
                     Text("监听终端会话")
                     Text("在库内运行的 claude / codex 会话出现在 Agent 面板，它们的改动进入审阅。")
                 }
-                Toggle(isOn: $model.gitSnapshot) {
+                Toggle(isOn: Bindable(model.prefs).gitSnapshot) {
                     Text("写入前 git 快照")
                     Text(model.vault?.isGitRepo == false ? "库不是 git 仓库，快照不会生效。在库目录运行 git init 后即可使用。" : "每次 agent 写入前自动提交，任何改动都能找回。")
                 }
             }
 
             Section("Agent 写入之后") {
-                Picker("改动", selection: $model.reviewMode) {
+                Picker("改动", selection: Bindable(model.prefs).reviewMode) {
                     Text("进入审阅队列").tag(ReviewMode.queue)
                     Text("直接接受").tag(ReviewMode.auto)
                 }
@@ -328,8 +328,8 @@ struct AgentSettings: View {
     }
 
     private func modelRow(_ k: AgentKind) -> some View {
-        let binding = Binding(get: { model.agentModel[k] ?? "" },
-                              set: { model.agentModel[k] = $0.trimmingCharacters(in: .whitespaces) })
+        let binding = Binding(get: { model.prefs.agentModel[k] ?? "" },
+                              set: { model.prefs.agentModel[k] = $0.trimmingCharacters(in: .whitespaces) })
         return LabeledContent {
             HStack(spacing: 8) {
                 TextField("模型名", text: binding, prompt: Text(model.modelName("", for: k)))
@@ -363,7 +363,7 @@ struct AgentSettings: View {
     }
 
     private func cliRow(_ k: AgentKind, on: Binding<Bool>) -> some View {
-        let info = model.cli[k]
+        let info = model.agents.cli[k]
         return Toggle(isOn: Binding(get: { on.wrappedValue && info?.found == true }, set: { on.wrappedValue = $0 })) {
             Label {
                 Text(k.displayName)
@@ -420,7 +420,7 @@ struct OpenSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle(isOn: $model.httpOn) {
+                Toggle(isOn: Bindable(model.prefs).httpOn) {
                     Text("启用本地 HTTP 接口")
                     Text("只监听本机 127.0.0.1，每个请求都要带令牌。其他 app（视频总结、健康数据、快捷指令……）用它导入笔记、写入数据、调用 agent 能用的命令。")
                 }
@@ -430,7 +430,7 @@ struct OpenSettings: View {
                         Text(p > 0 ? "http://127.0.0.1:" + String(p) + "/v1" : (model.httpStatus.error ?? "未运行")).foregroundStyle(p > 0 ? .primary : .secondary)
                             .textSelection(.enabled).lineLimit(1)
                         TextField("端口", text: $port).frame(width: 70)
-                            .onSubmit { if let n = UInt16(port) { model.httpPort = n; model.startHTTP() } }
+                            .onSubmit { if let n = UInt16(port) { model.prefs.httpPort = n; model.startHTTP() } }
                     }
                 }
                 LabeledContent("令牌") {
@@ -444,7 +444,7 @@ struct OpenSettings: View {
                         Button("重置") { token = HTTPGateway.token(reset: true) }
                     }
                 }
-                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:" + String(model.httpStatus.port > 0 ? model.httpStatus.port : model.httpPort) + "/v1/data/sleep")
+                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:" + String(model.httpStatus.port > 0 ? model.httpStatus.port : model.prefs.httpPort) + "/v1/data/sleep")
                     .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             } header: {
                 Text("开放接口")
@@ -485,18 +485,18 @@ struct OpenSettings: View {
                         Text(".twain/plugins/" + dir).font(.caption)
                     }
                 }
-                Button("新建空间…") { model.newSpaceSheet = true }
+                Button("新建空间…") { model.chrome.newSpaceSheet = true }
             }
 
             Section {
-                Stepper("AI 摘要每天最多 \(model.summaryDailyLimit) 篇", value: $model.summaryDailyLimit, in: 0...2000, step: 50)
+                Stepper("AI 摘要每天最多 \(model.prefs.summaryDailyLimit) 篇", value: Bindable(model.prefs).summaryDailyLimit, in: 0...2000, step: 50)
                 LabeledContent("今天已用") { Text("\(model.summariesToday) 篇").foregroundStyle(.secondary) }
                 HStack {
                     Button(model.summarizing.map { "正在生成 \($0.done)/\($0.total)…" } ?? "为笔记生成 AI 摘要") { model.summarizeNotes() }
                         .disabled(model.summarizing != nil)
                     if let wanting { Text("\(wanting) 篇需要").foregroundStyle(.secondary) }
                 }
-                Toggle(isOn: Binding(get: { model.companionOn }, set: { if $0 != model.companionOn { model.toggleCompanion() } })) {
+                Toggle(isOn: Binding(get: { model.prefs.companionOn }, set: { if $0 != model.prefs.companionOn { model.toggleCompanion() } })) {
                     Text("伴写")
                     Text("停笔时，页边偶尔出现一句提问或思路。用小模型，每分钟最多一次、每小时最多 30 次。")
                 }
@@ -509,7 +509,7 @@ struct OpenSettings: View {
         }
         .formStyle(.grouped)
         .onAppear {
-            port = String(model.httpPort)
+            port = String(model.prefs.httpPort)
             model.countNotesWantingSummary { wanting = $0 }
         }
     }

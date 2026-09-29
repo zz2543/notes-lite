@@ -184,9 +184,9 @@ extension AppModel {
     /// The agent session a caller belongs to: the one whose id it carries (runs Twain started),
     /// else the terminal session whose process it runs under.
     func session(for caller: RPCCaller?) -> AgentSession? {
-        if let id = caller?.session, let s = sessions.first(where: { $0.id.uuidString == id }) { return s }
+        if let id = caller?.session, let s = agents.sessions.first(where: { $0.id.uuidString == id }) { return s }
         guard let pid = caller?.pid else { return nil }
-        return sessions.first { s in
+        return agents.sessions.first { s in
             guard s.source == .terminal, let spid = s.pid else { return false }
             return spid == pid || TerminalWatcher.isDescendant(pid, of: spid)
         }
@@ -219,8 +219,8 @@ extension AppModel {
     /// The local HTTP API, when the user has it on (it is by default: bound to 127.0.0.1, token-gated).
     func startHTTP() {
         http.model = self
-        guard httpOn else { http.stop(); return }
-        var port = httpPort
+        guard prefs.httpOn else { http.stop(); return }
+        var port = prefs.httpPort
         #if DEBUG
         if let p = ProcessInfo.processInfo.environment["TWAIN_HTTP_PORT"].flatMap(UInt16.init) { port = p }
         #endif

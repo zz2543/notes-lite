@@ -29,9 +29,9 @@ extension AppModel {
     /// Summarizes up to `limit` notes (default: what's left of today's budget), `only` when given.
     func summarizeNotes(only: [String]? = nil, limit: Int? = nil) {
         guard let v = vault, summarizing == nil else { return }
-        let budget = max(0, summaryDailyLimit - summariesToday)
+        let budget = max(0, prefs.summaryDailyLimit - summariesToday)
         let cap = min(limit ?? budget, only == nil ? budget : Int.max)
-        guard cap > 0 else { showToast("今天的摘要额度（\(summaryDailyLimit) 篇）已用完"); return }
+        guard cap > 0 else { showToast("今天的摘要额度（\(prefs.summaryDailyLimit) 篇）已用完"); return }
         let root = v.root
         summarizing = (0, 0)
         v.refresh { [weak self] index in DispatchQueue.global(qos: .utility).async {
@@ -110,15 +110,15 @@ extension AppModel {
 
     /// The open note's card, for the info popover.
     func activeCard() -> NoteCard? {
-        guard let v = vault, let rel = activeRel, var index else { return nil }
-        index.update(rel, text: editorText)
+        guard let v = vault, let rel = editor.activeRel, var index else { return nil }
+        index.update(rel, text: editor.editorText)
         guard let n = index.notes[rel] else { return nil }
         return Skim.card(n, store: SummaryStore(vault: v.root))
     }
 
     func saveSummary(_ text: String) {
-        guard let v = vault, let rel = activeRel else { return }
-        SummaryStore(vault: v.root).set(rel, text: text, source: "user", hash: Skim.hash(Markdown.lines(editorText)))
+        guard let v = vault, let rel = editor.activeRel else { return }
+        SummaryStore(vault: v.root).set(rel, text: text, source: "user", hash: Skim.hash(Markdown.lines(editor.editorText)))
         countersVersion += 1
         showToast(text.isEmpty ? "已清除摘要" : "已保存摘要")
     }
@@ -168,7 +168,7 @@ struct NoteInfoPopover: View {
                     .font(.caption).foregroundStyle(.tertiary)
                 HStack {
                     Button("用 AI 重写", systemImage: "sparkle") {
-                        if let rel = model.activeRel { model.flushSave(); model.summarizeNotes(only: [rel]) }
+                        if let rel = model.editor.activeRel { model.flushSave(); model.summarizeNotes(only: [rel]) }
                     }
                     .disabled(model.summarizing != nil || card.source == "frontmatter")
                     Spacer()
@@ -188,7 +188,7 @@ struct NoteInfoPopover: View {
     private func refresh() {
         card = model.activeCard()
         draft = card?.summary ?? ""
-        if let rel = model.activeRel, let index = model.index { backlinks = Set(index.backlinks(to: rel).map(\.rel)).count }
+        if let rel = model.editor.activeRel, let index = model.index { backlinks = Set(index.backlinks(to: rel).map(\.rel)).count }
     }
 
     static func sourceLabel(_ s: String) -> String {

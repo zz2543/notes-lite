@@ -119,7 +119,7 @@ extension AppModel {
     """
 
     func companionTextChanged() {
-        guard companionOn else { return }
+        guard prefs.companionOn else { return }
         companionWork?.cancel()
         let w = DispatchWorkItem { [weak self] in self?.companionPause() }
         companionWork = w
@@ -127,19 +127,19 @@ extension AppModel {
     }
 
     private func companionPause() {
-        guard companionOn, let v = vault, let rel = activeRel, activeNote?.isHTML != true, !writing.contains(rel) else { return }
+        guard prefs.companionOn, let v = vault, let rel = editor.activeRel, activeNote?.isHTML != true, !agents.writing.contains(rel) else { return }
         let now = Date()
         guard now.timeIntervalSince(companionLast) > 50 else { return }
         companionCalls = companionCalls.filter { now.timeIntervalSince($0) < 3600 }
         guard companionCalls.count < 30 else { return }
-        let ns = editorText as NSString
-        let caret = min(editorSelection.location, ns.length)
+        let ns = editor.editorText as NSString
+        let caret = min(editor.editorSelection.location, ns.length)
         // Enough new writing since the last remark, measured by how the note grew.
         guard abs(ns.length - companionLength) >= 40 || companionLength == 0 && ns.length > 80 else { return }
         let start = max(0, caret - 1500)
         let recent = ns.substring(with: NSRange(location: start, length: caret - start))
         guard recent.trimmingCharacters(in: .whitespacesAndNewlines).count > 30 else { return }
-        let ctx = EditorContext.describe(text: editorText, selection: NSRange(location: caret, length: 0))
+        let ctx = EditorContext.describe(text: editor.editorText, selection: NSRange(location: caret, length: 0))
         let path = (ctx["headingPath"]?.array ?? []).compactMap(\.string).joined(separator: " › ")
         let prompt = """
         笔记《\(NoteRef(rel: rel).title)》\(path.isEmpty ? "" : "，光标在「\(path)」这一节")。作者刚写到这里：
@@ -151,45 +151,45 @@ extension AppModel {
         companionLength = ns.length
         companionCalls.append(now)
         if companionModel == nil { companionModel = LiveModel(system: Self.companionSystem, cwd: v.root) }
-        companionThinking = true
+        editor.companionThinking = true
         companionModel?.ask(prompt) { [weak self] reply in
             guard let self else { return }
-            self.companionThinking = false
-            guard self.activeRel == rel, let reply, let obj = ModelCall.jsonObject(reply),
+            self.editor.companionThinking = false
+            guard self.editor.activeRel == rel, let reply, let obj = ModelCall.jsonObject(reply),
                   obj["skip"] as? Bool != true, let text = obj["text"] as? String, !text.isEmpty else { return }
             let kind = CompanionTip.Kind(rawValue: obj["kind"] as? String ?? "") ?? .question
-            self.companionTip = CompanionTip(kind: kind, text: text, quote: (obj["quote"] as? String).flatMap { $0.isEmpty ? nil : $0 }, rel: rel)
+            self.editor.companionTip = CompanionTip(kind: kind, text: text, quote: (obj["quote"] as? String).flatMap { $0.isEmpty ? nil : $0 }, rel: rel)
         }
     }
 
     /// Keeps the remark as an annotation on its passage (or on the caret's paragraph).
     func keepCompanionTip() {
-        guard let tip = companionTip, tip.rel == activeRel, let store = annotationStore else { return }
-        let ns = editorText as NSString
-        var quote = tip.quote.flatMap { Anchor.locate($0, in: editorText, line: nil) != nil ? $0 : nil }
+        guard let tip = editor.companionTip, tip.rel == editor.activeRel, let store = annotationStore else { return }
+        let ns = editor.editorText as NSString
+        var quote = tip.quote.flatMap { Anchor.locate($0, in: editor.editorText, line: nil) != nil ? $0 : nil }
         if quote == nil {
-            var r = ns.lineRange(for: NSRange(location: min(editorSelection.location, ns.length), length: 0))
+            var r = ns.lineRange(for: NSRange(location: min(editor.editorSelection.location, ns.length), length: 0))
             if r.length > 0, ns.character(at: NSMaxRange(r) - 1) == 0x0A { r.length -= 1 }
             quote = String(ns.substring(with: r).suffix(40))
         }
         let kind: Annotation.Kind = tip.kind == .gap ? .structure : .question
-        _ = try? store.add(tip.rel, text: editorText, items: [["quote": .string(quote ?? ""), "text": .string(tip.text), "kind": .string(kind.rawValue)]],
+        _ = try? store.add(tip.rel, text: editor.editorText, items: [["quote": .string(quote ?? ""), "text": .string(tip.text), "kind": .string(kind.rawValue)]],
                            agent: "伴写", session: nil)
         loadAnnotations()
-        companionTip = nil
+        editor.companionTip = nil
     }
 
     func warmCompanion() {
-        guard companionOn, let v = vault else { return }
+        guard prefs.companionOn, let v = vault else { return }
         if companionModel == nil { companionModel = LiveModel(system: Self.companionSystem, cwd: v.root) }
         companionModel?.warm()
     }
 
     func toggleCompanion() {
-        companionOn.toggle()
-        if !companionOn { companionModel?.stop(); companionModel = nil; companionTip = nil }
+        prefs.companionOn.toggle()
+        if !prefs.companionOn { companionModel?.stop(); companionModel = nil; editor.companionTip = nil }
         else { warmCompanion() }
-        showToast(companionOn ? "伴写已开启：停笔片刻时，页边会偶尔出现一句提问或思路" : "伴写已关闭")
+        showToast(prefs.companionOn ? "伴写已开启：停笔片刻时，页边会偶尔出现一句提问或思路" : "伴写已关闭")
     }
 }
 
@@ -204,16 +204,16 @@ struct CompanionBubble: View {
                 Image(systemName: tip.icon).foregroundStyle(.tint)
                 Text("伴写 · " + tip.label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                Button { model.companionTip = nil } label: { Image(systemName: "xmark").font(.caption2.weight(.semibold)) }
+                Button { model.editor.companionTip = nil } label: { Image(systemName: "xmark").font(.caption2.weight(.semibold)) }
                     .buttonStyle(.plain).foregroundStyle(.tertiary)
             }
             Text(tip.text).font(.callout).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             HStack(spacing: 6) {
                 Button("留作批注", systemImage: "text.bubble") { model.keepCompanionTip() }
                 Button("问 agent", systemImage: "bubble.left.and.text.bubble.right") {
-                    model.agentPanel = true
-                    model.agentInput = tip.text
-                    model.companionTip = nil
+                    model.chrome.agentPanel = true
+                    model.agents.agentInput = tip.text
+                    model.editor.companionTip = nil
                 }
             }
             .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)

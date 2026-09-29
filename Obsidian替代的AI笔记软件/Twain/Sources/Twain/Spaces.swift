@@ -31,7 +31,7 @@ extension AppModel {
     }
 
     var spaces: [Plugin] { plugins.filter { $0.space != nil } }
-    var currentSpace: Plugin? { activeSpace.flatMap { id in plugins.first { $0.id == id } } }
+    var currentSpace: Plugin? { chrome.activeSpace.flatMap { id in plugins.first { $0.id == id } } }
 
     /// Commands and pipelines plugins bring along, read like the vault's own.
     func pluginFiles(_ sub: String) -> [(String, String)] {
@@ -90,9 +90,9 @@ extension AppModel {
 
     func openSpace(_ id: String) {
         flushSave()
-        openDesk = nil
-        activeSpace = id
-        if selection != "space:" + id { selection = "space:" + id }
+        chrome.openDesk = nil
+        chrome.activeSpace = id
+        if chrome.selection != "space:" + id { chrome.selection = "space:" + id }
     }
 
     /// Opens the space's entry for today (or `date`), creating it from the template if needed.
@@ -111,7 +111,7 @@ extension AppModel {
             emit("note.created", source: "user", ["path": .string(rel)])
         }
         open(rel)
-        requestFocus(caret: (editorText as NSString).length)
+        requestFocus(caret: (editor.editorText as NSString).length)
     }
 
     /// The entry note for a day, when it exists.
@@ -146,7 +146,7 @@ extension AppModel {
         guard let v = vault else { return }
         let marker = v.root.appendingPathComponent(p.dir).appendingPathComponent(".disabled")
         if on { try? FileManager.default.removeItem(at: marker) } else { FileManager.default.createFile(atPath: marker.path, contents: nil) }
-        if !on, activeSpace == p.id { activeSpace = nil }
+        if !on, chrome.activeSpace == p.id { chrome.activeSpace = nil }
         loadPlugins()
         loadPipelines()
         loadVaultConfig()
@@ -155,15 +155,15 @@ extension AppModel {
     /// Checks or unchecks a task in any note: through the editor when it is the open note (undoable), else on disk.
     func toggleTask(rel: String, line: Int) {
         guard let v = vault else { return }
-        if rel == activeRel {
-            var lines = Markdown.lines(editorText)
+        if rel == editor.activeRel {
+            var lines = Markdown.lines(editor.editorText)
             guard lines.indices.contains(line - 1) else { return }
             lines[line - 1] = Markdown.toggleTask(lines[line - 1])
             editorDidChange(lines.joined(separator: "\n"))
-            editorVersion += 1
+            editor.editorVersion += 1
             return
         }
-        guard pending[rel] == nil, !writing.contains(rel), let text = v.diskContent(rel) else { return }
+        guard agents.pending[rel] == nil, !agents.writing.contains(rel), let text = v.diskContent(rel) else { return }
         var lines = Markdown.lines(text)
         guard lines.indices.contains(line - 1) else { return }
         lines[line - 1] = Markdown.toggleTask(lines[line - 1])

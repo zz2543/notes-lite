@@ -9,7 +9,7 @@ extension AppModel {
         flushSave()
         let rel = v.create(title: "未命名", folder: folder, content: "# 未命名\n")
         emit("note.created", source: "user", ["path": .string(rel)])
-        palette = false
+        chrome.palette = false
         revealInSidebar(rel)
         open(rel)
         requestFocus(caret: ("# 未命名\n" as NSString).length)
@@ -19,9 +19,9 @@ extension AppModel {
         guard let v = vault else { return }
         do {
             let rel = try v.createFolder(in: parent, name: "未命名文件夹")
-            if !parent.isEmpty, !openFolders.contains(parent) { openFolders.insert(parent) }
-            if columnVisibility == .detailOnly { columnVisibility = .all }
-            renaming = "dir:" + rel
+            if !parent.isEmpty, !chrome.openFolders.contains(parent) { chrome.openFolders.insert(parent) }
+            if chrome.columnVisibility == .detailOnly { chrome.columnVisibility = .all }
+            chrome.renaming = "dir:" + rel
         } catch {
             showToast(error.localizedDescription)
         }
@@ -30,7 +30,7 @@ extension AppModel {
     /// Opens (creating when needed) the folder's own note.
     func openFolderNote(_ folder: String) {
         guard let v = vault, !folder.isEmpty else { return }
-        if !openFolders.contains(folder) { openFolders.insert(folder) }
+        if !chrome.openFolders.contains(folder) { chrome.openFolders.insert(folder) }
         if let n = v.folderNote(folder) { open(n.rel); return }
         flushSave()
         let name = (folder as NSString).lastPathComponent
@@ -44,8 +44,8 @@ extension AppModel {
     @discardableResult
     func renameFolder(_ folder: String, to name: String) -> Bool {
         guard let v = vault else { return false }
-        if writing.contains(where: { $0.hasPrefix(folder + "/") }) { showToast("Agent 正在写入这个文件夹，稍后再改名"); return false }
-        if activeRel?.hasPrefix(folder + "/") == true { flushSave() }
+        if agents.writing.contains(where: { $0.hasPrefix(folder + "/") }) { showToast("Agent 正在写入这个文件夹，稍后再改名"); return false }
+        if editor.activeRel?.hasPrefix(folder + "/") == true { flushSave() }
         let oldName = (folder as NSString).lastPathComponent
         let new: String
         do { new = try v.renameFolder(folder, to: name) } catch {
@@ -58,17 +58,17 @@ extension AppModel {
             if r == new + "/" + oldName + ".md" { r = new + "/" + (new as NSString).lastPathComponent + ".md" }
             return r
         }
-        for rel in pending.keys where rel.hasPrefix(folder + "/") {
-            if var p = pending.removeValue(forKey: rel) { p.rel = moved(rel); pending[p.rel] = p }
+        for rel in agents.pending.keys where rel.hasPrefix(folder + "/") {
+            if var p = agents.pending.removeValue(forKey: rel) { p.rel = moved(rel); agents.pending[p.rel] = p }
         }
         for n in v.notes where n.rel.hasPrefix(new + "/") {
             let old = folder + String(n.rel.dropFirst(new.count))
             let before = old == folder + "/" + (new as NSString).lastPathComponent + ".md" ? folder + "/" + oldName + ".md" : old
             carryNoteData(from: before, to: n.rel)
         }
-        openFolders = Set(openFolders.map { $0 == folder || $0.hasPrefix(folder + "/") ? new + String($0.dropFirst(folder.count)) : $0 })
-        if let a = activeRel, a.hasPrefix(folder + "/") { activeRel = moved(a) }
-        if let s = selection, s.hasPrefix(folder + "/") { selection = moved(s) }
+        chrome.openFolders = Set(chrome.openFolders.map { $0 == folder || $0.hasPrefix(folder + "/") ? new + String($0.dropFirst(folder.count)) : $0 })
+        if let a = editor.activeRel, a.hasPrefix(folder + "/") { editor.activeRel = moved(a) }
+        if let s = chrome.selection, s.hasPrefix(folder + "/") { chrome.selection = moved(s) }
         let newName = (new as NSString).lastPathComponent
         var links = 0
         if v.folderNote(new) != nil { links += relinkNotes(from: oldName, to: newName) }
@@ -82,28 +82,28 @@ extension AppModel {
     private func relinkFolder(from old: String, to new: String) -> Int {
         guard let v = vault else { return 0 }
         var total = 0
-        for n in v.notes where pending[n.rel] == nil && !writing.contains(n.rel) {
-            let text = n.rel == activeRel ? editorText : v.diskContent(n.rel) ?? ""
+        for n in v.notes where agents.pending[n.rel] == nil && !agents.writing.contains(n.rel) {
+            let text = n.rel == editor.activeRel ? editor.editorText : v.diskContent(n.rel) ?? ""
             guard text.contains("[[" + old + "/") else { continue }
             let (out, count) = Markdown.movingWikiLinks(in: text, from: old, to: new)
             guard count > 0, case .ok = v.write(n.rel, out) else { continue }
             total += count
-            if n.rel == activeRel { editorText = out; editorVersion += 1 }
+            if n.rel == editor.activeRel { editor.editorText = out; editor.editorVersion += 1 }
         }
         return total
     }
 
     func moveNote(_ rel: String, to folder: String) {
         guard let v = vault, v.note(rel) != nil else { return }
-        if writing.contains(rel) { showToast("Agent 正在写入这篇笔记，稍后再移动"); return }
-        if rel == activeRel { flushSave() }
+        if agents.writing.contains(rel) { showToast("Agent 正在写入这篇笔记，稍后再移动"); return }
+        if rel == editor.activeRel { flushSave() }
         do {
             let new = try v.move(rel, to: folder)
             guard new != rel else { return }
-            if var p = pending.removeValue(forKey: rel) { p.rel = new; pending[new] = p }
+            if var p = agents.pending.removeValue(forKey: rel) { p.rel = new; agents.pending[new] = p }
             carryNoteData(from: rel, to: new)
-            if activeRel == rel { activeRel = new }
-            if selection == rel { selection = new }
+            if editor.activeRel == rel { editor.activeRel = new }
+            if chrome.selection == rel { chrome.selection = new }
             revealInSidebar(new)
             // Title links still resolve; a new number in the name (笔记 2) needs relinking.
             let oldTitle = NoteRef(rel: rel).title, newTitle = NoteRef(rel: new).title
@@ -117,14 +117,14 @@ extension AppModel {
 
     func trashFolder(_ folder: String) {
         guard let v = vault, !folder.isEmpty else { return }
-        if activeRel?.hasPrefix(folder + "/") == true { flushSave() }
+        if editor.activeRel?.hasPrefix(folder + "/") == true { flushSave() }
         NSWorkspace.shared.recycle([v.url(folder)]) { _, error in
             DispatchQueue.main.async {
                 if let error { self.showToast(error.localizedDescription); return }
                 v.folderRemoved(folder)
-                for rel in self.pending.keys where rel.hasPrefix(folder + "/") { self.pending[rel] = nil }
+                for rel in self.agents.pending.keys where rel.hasPrefix(folder + "/") { self.agents.pending[rel] = nil }
                 self.emit("folder.deleted", source: "user", ["path": .string(folder)])
-                if self.activeRel?.hasPrefix(folder + "/") == true, let next = v.notes.first { self.open(next.rel) }
+                if self.editor.activeRel?.hasPrefix(folder + "/") == true, let next = v.notes.first { self.open(next.rel) }
                 self.showToast("已把「\((folder as NSString).lastPathComponent)」移到废纸篓")
             }
         }

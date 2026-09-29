@@ -134,8 +134,8 @@ struct SpaceView: View {
             ("图表", "chart.xyaxis.line", ["type": "chart", "title": "趋势", "collection": "sleep", "field": "hours", "days": 30, "kind": "line", "span": 2]),
             ("习惯打卡", "checkmark.circle", ["type": "habits", "title": "习惯", "collection": "habits", "items": ["早起", "运动"], "span": 2]),
             ("记一笔", "square.and.pencil", ["type": "log", "title": "记一笔", "fields": [["collection": "sleep", "field": "hours", "label": "睡了几小时"]]]),
-            ("流水线按钮", "arrow.triangle.branch", ["type": "pipelines", "title": "流水线", "items": .array(model.pipelines.prefix(3).map { .string($0.key) })]),
-            ("嵌入笔记", "doc.text", ["type": "note", "title": "笔记", "path": .string(model.activeRel ?? "")]),
+            ("流水线按钮", "arrow.triangle.branch", ["type": "pipelines", "title": "流水线", "items": .array(model.agents.pipelines.prefix(3).map { .string($0.key) })]),
+            ("嵌入笔记", "doc.text", ["type": "note", "title": "笔记", "path": .string(model.editor.activeRel ?? "")]),
             ("说明文字", "text.alignleft", ["type": "text", "title": "说明", "text": "在 manifest.json 里改这段文字。"]),
             ("库的概况", "chart.bar", ["type": "stats", "title": "概况"]),
         ]
@@ -332,7 +332,7 @@ private struct TasksModule: View {
                         Text(t.task.text).lineLimit(2)
                         Button(NoteRef(rel: t.rel).title + ":\(t.task.line)") {
                             model.open(t.rel)
-                            model.requestFocus(caret: CommandRegistry.offset(ofLine: t.task.line, in: model.editorText))
+                            model.requestFocus(caret: CommandRegistry.offset(ofLine: t.task.line, in: model.editor.editorText))
                         }
                         .buttonStyle(.plain).font(.caption).foregroundStyle(.tertiary)
                     }
@@ -365,7 +365,7 @@ private struct AskModule: View {
         let text = q.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
         model.newDesk()
-        if let id = model.openDesk { model.ask(desk: id, question: text, scope: module["scope"]?.string ?? "") }
+        if let id = model.chrome.openDesk { model.ask(desk: id, question: text, scope: module["scope"]?.string ?? "") }
         q = ""
     }
 }
@@ -525,7 +525,7 @@ private struct PipelinesModule: View {
 
     var body: some View {
         let keys = (module["items"]?.array ?? []).compactMap(\.string)
-        let list = keys.isEmpty ? model.pipelines : keys.compactMap { model.pipeline(named: $0) }
+        let list = keys.isEmpty ? model.agents.pipelines : keys.compactMap { model.pipeline(named: $0) }
         VStack(alignment: .leading, spacing: 6) {
             if list.isEmpty { Text("没有找到流水线：\(keys.joined(separator: "、"))").font(.callout).foregroundStyle(.secondary) }
             ForEach(list, id: \.key) { p in
@@ -570,7 +570,7 @@ private struct StatsModule: View {
     var body: some View {
         let notes = model.vault?.notes.count ?? 0
         let tasks = model.index?.tasks().count ?? 0
-        let pending = model.pending.values.reduce(0) { $0 + $1.hunks.count }
+        let pending = model.agents.pending.values.reduce(0) { $0 + $1.hunks.count }
         Loaded(key: DataKey(root: model.vault?.root, collection: "", field: "", days: 0, reduce: "", version: model.dataVersion),
                load: DataKey.collectionCount) { data in
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {

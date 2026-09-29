@@ -268,7 +268,7 @@ extension AppModel {
                 guard let self else { return }
                 guard case let .success((index, _)) = r, let rel = index.resolve(ref) else { return self.showToast("找不到笔记：\(ref)") }
                 self.open(rel)
-                if let line = q["line"].flatMap(Int.init) { self.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: self.editorText)) }
+                if let line = q["line"].flatMap(Int.init) { self.requestFocus(caret: CommandRegistry.offset(ofLine: line, in: self.editor.editorText)) }
             }
         case "new":
             var body: [String: JSONValue] = ["content": .string(q["content"] ?? "# \(q["title"] ?? "未命名")\n"), "open": true]
@@ -278,7 +278,7 @@ extension AppModel {
             do { _ = try importNote(.object(body)) } catch let e as RPCError { showToast(e.message) } catch {}
         case "ask":
             newDesk()
-            if let text = q["q"], !text.isEmpty, let id = openDesk { ask(desk: id, question: text, scope: q["scope"] ?? "") }
+            if let text = q["q"], !text.isEmpty, let id = chrome.openDesk { ask(desk: id, question: text, scope: q["scope"] ?? "") }
         case "run":
             guard let name = q["name"] else { return }
             do {

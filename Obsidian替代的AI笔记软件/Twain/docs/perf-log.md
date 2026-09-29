@@ -147,3 +147,22 @@ focus dim n=12 median=22.3ms p90=24.6ms max=25.5ms
 memory start=133MB end=183MB
 done
 ```
+
+## d3 state split · 72e458e · 2026-09-29 10:23
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=65.6ms p90=80.7ms max=104.6ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=0 longest=17.8ms
+agent show frames=159 dropped=1 longest=33.3ms
+idle space worst=1.3ms stalls>16ms=0
+idle note worst=1.4ms stalls>16ms=0
+type 80665 chars n=80 median=5.7ms p90=12.0ms max=59.7ms
+caret start n=30 median=0.3ms p90=0.4ms max=1.6ms
+caret end n=30 median=0.2ms p90=0.3ms max=1.1ms
+focus dim n=12 median=24.0ms p90=26.7ms max=28.3ms
+memory start=134MB end=177MB
+done
+```

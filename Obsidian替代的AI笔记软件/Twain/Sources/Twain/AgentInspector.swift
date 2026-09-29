@@ -25,7 +25,7 @@ struct AgentInspector: View {
         .safeAreaBar(edge: .top) {
             VStack(spacing: 8) {
                 AgentBar(model: model)
-                if !model.sessions.isEmpty { sessionBar(sess) }
+                if !model.agents.sessions.isEmpty { sessionBar(sess) }
             }
             .padding(.horizontal, Metrics.floatInset).padding(.top, 8)
         }
@@ -37,8 +37,8 @@ struct AgentInspector: View {
     private func sessionBar(_ sess: AgentSession?) -> some View {
         HStack(spacing: 8) {
             Menu {
-                Picker("会话", selection: Binding(get: { sess?.id }, set: { model.activeSessionID = $0 })) {
-                    ForEach(model.sessions) { s in
+                Picker("会话", selection: Binding(get: { sess?.id }, set: { model.agents.activeSessionID = $0 })) {
+                    ForEach(model.agents.sessions) { s in
                         Label(sessionTitle(s), systemImage: s.source == .terminal ? "apple.terminal" : Theme.agentSymbol(s.agent))
                             .tag(Optional(s.id))
                     }
@@ -89,7 +89,7 @@ struct AgentInspector: View {
         var parts: [String] = []
         if s.source == .terminal {
             parts.append("终端 pid \(s.pid.map(String.init) ?? "?")")
-            parts.append(!s.alive ? "已结束" : model.watchTerminal ? "监听中" : "未监听")
+            parts.append(!s.alive ? "已结束" : model.prefs.watchTerminal ? "监听中" : "未监听")
         } else {
             parts.append(s.model.map { model.modelName($0, for: s.agent) } ?? s.agent.displayName)
             if let e = s.effort { parts.append(Effort.name(e)) }
@@ -132,9 +132,9 @@ struct AgentInspector: View {
 
     private var emptyState: some View {
         VStack(spacing: 18) {
-            AgentLogo(agent: model.agentPick)
+            AgentLogo(agent: model.agents.agentPick)
                 .frame(width: 84, height: 84)
-                .id(model.agentPick)
+                .id(model.agents.agentPick)
                 .transition(.blurReplace)
             VStack(spacing: 6) {
                 Text("描述一个任务").font(.title3.weight(.semibold))
@@ -143,7 +143,7 @@ struct AgentInspector: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            if model.activeRel != nil {
+            if model.editor.activeRel != nil {
                 GlassEffectContainer(spacing: 8) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(suggestions, id: \.1) { icon, prompt, run in
@@ -175,7 +175,7 @@ struct AgentInspector: View {
                 do { try m.runUserCommand(c, input: nil) } catch let e as RPCError { m.showToast(e.message) } catch {}
             }) }
         }
-        return Self.suggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: m.agentPick) }) }
+        return Self.suggestions.map { icon, prompt in (icon, prompt, { m.runAgent(prompt: prompt, agent: m.agents.agentPick) }) }
     }
 
     // MARK: composer
@@ -194,7 +194,7 @@ struct AgentInspector: View {
             .labelStyle(TagLabelStyle())
 
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("让 \(model.agentPick.displayName) 修改当前笔记…", text: $model.agentInput, axis: .vertical)
+                TextField("让 \(model.agents.agentPick.displayName) 修改当前笔记…", text: Bindable(model.agents).agentInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
                     .lineLimit(2...8)
@@ -209,7 +209,7 @@ struct AgentInspector: View {
                     .labelStyle(.iconOnly)
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
-                    .disabled(model.agentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(model.agents.agentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .help("发送 ↩ · 换行 ⇧↩")
             }
         }
@@ -221,7 +221,7 @@ struct AgentInspector: View {
     }
 
     private func send() {
-        model.runAgent(prompt: model.agentInput, agent: model.agentPick)
+        model.runAgent(prompt: model.agents.agentInput, agent: model.agents.agentPick)
     }
 }
 
@@ -255,9 +255,9 @@ struct AgentBar: View {
     private func segments(icons: Bool) -> some View {
         HStack(spacing: 2) {
             ForEach(AgentKind.allCases, id: \.self) { k in
-                let on = model.agentPick == k
+                let on = model.agents.agentPick == k
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { model.agentPick = k }
+                    withAnimation(.snappy(duration: 0.25)) { model.agents.agentPick = k }
                 } label: {
                     HStack(spacing: 5) {
                         if icons {
@@ -284,10 +284,10 @@ struct AgentBar: View {
     }
 
     private func modelMenu(icon: Bool) -> some View {
-        let kind = model.agentPick
+        let kind = model.agents.agentPick
         return Button {
             model.refreshModels()
-            model.modelPickerOpen.toggle()
+            model.chrome.modelPickerOpen.toggle()
         } label: {
             HStack(spacing: 4) {
                 if icon { Image(systemName: "cpu").imageScale(.small) }
@@ -312,7 +312,7 @@ struct AgentBar: View {
         }
         .buttonStyle(.plain)
         .help("\(kind.displayName) 使用的模型与思考强度")
-        .popover(isPresented: $model.modelPickerOpen, arrowEdge: .bottom) {
+        .popover(isPresented: Bindable(model.chrome).modelPickerOpen, arrowEdge: .bottom) {
             ModelPicker(model: model, kind: kind)
         }
     }
@@ -320,7 +320,7 @@ struct AgentBar: View {
     /// "" (CLI default), the known models, and the current choice if it's a custom id.
     static func options(_ model: AppModel, _ kind: AgentKind) -> [String] {
         var ids = [""] + model.models(kind).map(\.id)
-        if let cur = model.agentModel[kind], !cur.isEmpty, !ids.contains(cur) { ids.append(cur) }
+        if let cur = model.prefs.agentModel[kind], !cur.isEmpty, !ids.contains(cur) { ids.append(cur) }
         return ids
     }
 }
@@ -336,7 +336,7 @@ struct ModelPicker: View {
         let all = model.models(kind)
         let primary = all.filter(\.primary)
         let more = all.filter { !$0.primary }
-        let current = model.agentModel[kind] ?? ""
+        let current = model.prefs.agentModel[kind] ?? ""
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
@@ -405,9 +405,9 @@ struct ModelPicker: View {
     }
 
     private func row(id: String, name: String, detail: String?) -> some View {
-        let on = (model.agentModel[kind] ?? "") == id
+        let on = (model.prefs.agentModel[kind] ?? "") == id
         return Button {
-            model.agentModel[kind] = id
+            model.prefs.agentModel[kind] = id
         } label: {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -430,7 +430,7 @@ struct ModelPicker: View {
 
     @ViewBuilder private var effort: some View {
         let levels = model.effortLevels(kind)
-        let explicit = !(model.agentEffort[kind] ?? "").isEmpty
+        let explicit = !(model.prefs.agentEffort[kind] ?? "").isEmpty
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("思考强度", systemImage: "brain").font(.callout.weight(.medium))
@@ -440,7 +440,7 @@ struct ModelPicker: View {
                         .font(.callout).foregroundStyle(.secondary).monospacedDigit()
                 }
                 if explicit {
-                    Button("重置", systemImage: "arrow.counterclockwise") { model.agentEffort[kind] = "" }
+                    Button("重置", systemImage: "arrow.counterclockwise") { model.prefs.agentEffort[kind] = "" }
                         .labelStyle(.iconOnly).buttonStyle(.borderless).controlSize(.small)
                         .help("跟随 \(kind.executable) 的默认强度")
                 }
@@ -448,12 +448,12 @@ struct ModelPicker: View {
             if levels.count >= 2 {
                 let index = Binding<Double>(
                     get: { Double(levels.firstIndex(of: model.effectiveEffort(kind) ?? "") ?? 0) },
-                    set: { model.agentEffort[kind] = levels[min(max(Int($0.rounded()), 0), levels.count - 1)] })
+                    set: { model.prefs.agentEffort[kind] = levels[min(max(Int($0.rounded()), 0), levels.count - 1)] })
                 Slider(value: index, in: 0...Double(levels.count - 1), step: 1)
                     .labelsHidden()
                 HStack(spacing: 0) {
                     ForEach(Array(levels.enumerated()), id: \.offset) { i, l in
-                        Button(Effort.name(l)) { model.agentEffort[kind] = l }
+                        Button(Effort.name(l)) { model.prefs.agentEffort[kind] = l }
                             .buttonStyle(.plain)
                             .font(.caption2)
                             .foregroundStyle(l == model.effectiveEffort(kind) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
@@ -512,13 +512,13 @@ struct ItemView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.orange.opacity(0.1), in: .rect(cornerRadius: Metrics.rowRadius + 2, style: .continuous))
         case let .question(id):
-            if let q = model.questions[id] { QuestionCard(model: model, question: q) }
+            if let q = model.agents.questions[id] { QuestionCard(model: model, question: q) }
         case let .feedback(rel, message, sent):
             FeedbackCard(model: model, session: session, itemID: item.id, rel: rel, message: message, sent: sent)
         case let .pipeline(id):
             PipelineCard(model: model, runID: id)
         case let .change(rel, plus, minus):
-            let pendingNow = model.pending[rel] != nil
+            let pendingNow = model.agents.pending[rel] != nil
             HStack(spacing: 10) {
                 Image(systemName: pendingNow ? "doc.badge.clock" : "doc.text")
                     .font(.title3)
@@ -535,7 +535,7 @@ struct ItemView: View {
                 if pendingNow {
                     Button("审阅") {
                         model.open(rel)
-                        model.showDiff = true
+                        model.editor.showDiff = true
                     }
                     .buttonStyle(.glassProminent)
                 } else if model.vault?.note(rel) != nil {

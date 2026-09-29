@@ -63,13 +63,13 @@ struct EditorView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
-        let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth,
-                                plain: model.activeNote?.isHTML == true || model.oversized,
-                                rail: model.visibleAnnotations.isEmpty || model.zen ? 0 : AnnotationRail.width)
-        c.sync(version: model.editorVersion, text: model.editorDisplayText, style: style,
-               ghost: model.ghost, readOnly: model.editorReadOnly, focus: model.focusRequest)
+        let style = EditorStyle(font: model.prefs.font, typewriter: model.prefs.typewriter, dim: model.prefs.dim, zen: model.chrome.zen, width: model.prefs.editorWidth,
+                                plain: model.activeNote?.isHTML == true || model.editor.oversized,
+                                rail: model.visibleAnnotations.isEmpty || model.chrome.zen ? 0 : AnnotationRail.width)
+        c.sync(version: model.editor.editorVersion, text: model.editorDisplayText, style: style,
+               ghost: model.editor.ghost, readOnly: model.editorReadOnly, focus: model.editor.focusRequest)
         // Annotations and the selected one change what the rail and highlights show.
-        _ = (model.annotations, model.selectedAnnotation)
+        _ = (model.editor.annotations, model.editor.selectedAnnotation)
         c.scheduleRail()
     }
 
@@ -184,7 +184,7 @@ struct EditorView: NSViewRepresentable {
         func layoutChanged() {
             guard let tv = textView, let style, let scroll = scrollView else { return }
             tv.updateInsets(style: style, visibleHeight: scroll.contentView.bounds.height)
-            if !model.annotations.isEmpty { scheduleRail() }
+            if !model.editor.annotations.isEmpty { scheduleRail() }
             if let tc = tv.textContainer {
                 let before = styler.containerWidth
                 styler.setContainerWidth(tc.size.width)
@@ -206,7 +206,7 @@ struct EditorView: NSViewRepresentable {
             DispatchQueue.main.async {
                 self.restyle()
                 if self.textView?.window?.firstResponder !== self.textView {
-                    self.model.slash = nil
+                    self.model.editor.slash = nil
                     self.model.clearGhost()
                 }
             }
@@ -335,18 +335,18 @@ struct EditorView: NSViewRepresentable {
 
         private func layoutRail() {
             guard let tv = textView, let lm = tv.layoutManager as? TwainLayoutManager else { return }
-            let list = model.zen ? [] : model.visibleAnnotations
+            let list = model.chrome.zen ? [] : model.visibleAnnotations
             let text = tv.string
             var anchors: [String: NSRange] = [:]
             for a in list { if let r = Anchor.locate(a.quote, in: text, line: a.line) { anchors[a.id] = r } }
             lm.highlights = list.compactMap { a in
-                anchors[a.id].map { ($0, NSColor(AnnotationCard.tint(a.kind)), a.id == model.selectedAnnotation) }
+                anchors[a.id].map { ($0, NSColor(AnnotationCard.tint(a.kind)), a.id == model.editor.selectedAnnotation) }
             }
             for r in lastHighlights + lm.highlights.map(\.range) where NSMaxRange(r) <= (text as NSString).length {
                 lm.invalidateDisplay(forCharacterRange: r)
             }
             lastHighlights = lm.highlights.map(\.range)
-            if list.isEmpty { rail.clear() } else { rail.layout(in: tv, model: model, anchors: anchors, selected: model.selectedAnnotation) }
+            if list.isEmpty { rail.clear() } else { rail.layout(in: tv, model: model, anchors: anchors, selected: model.editor.selectedAnnotation) }
         }
 
         // MARK: text changes
@@ -357,7 +357,7 @@ struct EditorView: NSViewRepresentable {
             // A native copy: comparing and slicing a bridged NSString is many times slower.
             model.editorDidChange(String(decoding: Array(tv.string.utf8), as: UTF8.self))
             restyle()
-            if !model.annotations.isEmpty { scheduleRail() }
+            if !model.editor.annotations.isEmpty { scheduleRail() }
             updateSlash()
             center(smooth: true)
             schedulePause()
@@ -366,7 +366,7 @@ struct EditorView: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText(), !restyling, !swapping else { return }
-            model.editorSelection = tv.selectedRange()
+            model.editor.editorSelection = tv.selectedRange()
             restyle()
             updateSlash()
             if tv.selectedRange().length == 0, !swapping { center(smooth: true) }
@@ -389,8 +389,8 @@ struct EditorView: NSViewRepresentable {
         }
 
         func acceptGhost() {
-            guard let tv = textView, !model.ghost.isEmpty else { return }
-            let g = model.ghost
+            guard let tv = textView, !model.editor.ghost.isEmpty else { return }
+            let g = model.editor.ghost
             model.clearGhost()
             tv.insertText(g, replacementRange: tv.selectedRange())
         }
@@ -402,7 +402,7 @@ struct EditorView: NSViewRepresentable {
         func updateSlash() {
             guard let tv = textView, isFocused, let info = lineInfo(), let items = SlashItem.matching(info.text, commands: model.userCommands),
                   let lm = tv.layoutManager, let tc = tv.textContainer, let scroll = scrollView else {
-                if model.slash != nil { model.slash = nil }
+                if model.editor.slash != nil { model.editor.slash = nil }
                 return
             }
             let gr = lm.glyphRange(forCharacterRange: NSRange(location: info.range.location, length: max(1, info.range.length)), actualCharacterRange: nil)
@@ -411,14 +411,14 @@ struct EditorView: NSViewRepresentable {
             rect.origin.y += tv.textContainerOrigin.y
             let inScroll = tv.convert(rect, to: scroll)
             let top = scroll.isFlipped ? inScroll.maxY : scroll.bounds.height - inScroll.minY
-            let sel = min(model.slash?.selection ?? 0, items.count - 1)
+            let sel = min(model.editor.slash?.selection ?? 0, items.count - 1)
             let state = SlashState(items: items, selection: sel, anchor: CGPoint(x: inScroll.minX, y: top + 6))
-            if model.slash != state { model.slash = state }
+            if model.editor.slash != state { model.editor.slash = state }
         }
 
         func applySlash(_ item: SlashItem) {
             guard let tv = textView, let info = lineInfo() else { return }
-            model.slash = nil
+            model.editor.slash = nil
             if let key = item.command, let cmd = model.userCommand(named: key) {
                 tv.insertText("", replacementRange: info.range)
                 do { try model.runUserCommand(cmd, input: nil) } catch let e as RPCError { model.showToast(e.message) } catch {}
@@ -436,17 +436,17 @@ struct EditorView: NSViewRepresentable {
         /// Keyboard commands. Returns true when handled.
         func handle(_ sel: Selector) -> Bool {
             guard let tv = textView else { return false }
-            if let s = model.slash {
+            if let s = model.editor.slash {
                 switch sel {
                 case #selector(NSResponder.moveDown(_:)):
-                    model.slash?.selection = (s.selection + 1) % s.items.count; return true
+                    model.editor.slash?.selection = (s.selection + 1) % s.items.count; return true
                 case #selector(NSResponder.moveUp(_:)):
-                    model.slash?.selection = (s.selection + s.items.count - 1) % s.items.count; return true
+                    model.editor.slash?.selection = (s.selection + s.items.count - 1) % s.items.count; return true
                 case #selector(NSResponder.insertNewline(_:)):
                     applySlash(s.items[min(s.selection, s.items.count - 1)]); return true
                 case #selector(NSResponder.cancelOperation(_:)):
                     if let info = lineInfo() { tv.insertText("", replacementRange: info.range) }
-                    model.slash = nil
+                    model.editor.slash = nil
                     return true
                 default: break
                 }
@@ -457,12 +457,12 @@ struct EditorView: NSViewRepresentable {
             case #selector(NSResponder.deleteBackward(_:)):
                 return deleteMarker()
             case #selector(NSResponder.insertTab(_:)):
-                if !model.ghost.isEmpty { acceptGhost(); return true }
+                if !model.editor.ghost.isEmpty { acceptGhost(); return true }
                 return shiftListLevel(by: 1)
             case #selector(NSResponder.insertBacktab(_:)):
                 return shiftListLevel(by: -1)
             case #selector(NSResponder.moveToEndOfLine(_:)), #selector(NSResponder.moveToRightEndOfLine(_:)):
-                if !model.ghost.isEmpty { acceptGhost(); return true }
+                if !model.editor.ghost.isEmpty { acceptGhost(); return true }
                 return false
             case #selector(NSResponder.cancelOperation(_:)):
                 model.clearGhost()

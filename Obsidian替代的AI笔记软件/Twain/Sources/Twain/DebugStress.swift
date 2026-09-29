@@ -180,7 +180,7 @@ enum DebugStress {
         steps.append { next in
             guard let longest else { return next() }
             m.open(longest.rel)
-            let len = (m.editorText as NSString).length
+            let len = (m.editor.editorText as NSString).length
             m.requestFocus(caret: len / 2)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 guard let tv = DebugScenario.textView() else { return next() }
@@ -224,13 +224,13 @@ enum DebugStress {
                 }
                 // Focus in and out with paragraph dimming on: every line's colour depends on it.
                 @MainActor func focus() {
-                    let wasDim = m.dim
-                    m.dim = true
+                    let wasDim = m.prefs.dim
+                    m.prefs.dim = true
                     var xs: [Double] = []
                     @MainActor func step(_ k: Int) {
                         guard k < 12 else {
                             log("focus dim " + stats(xs))
-                            m.dim = wasDim
+                            m.prefs.dim = wasDim
                             tv.window?.makeFirstResponder(tv)
                             return finish()
                         }
@@ -245,7 +245,7 @@ enum DebugStress {
                 }
                 @MainActor func finish() {
                     tv.undoManager?.removeAllActions()
-                    m.dirty = false
+                    m.editor.dirty = false
                     m.reloadActiveFromDisk()
                     next()
                 }
@@ -267,7 +267,7 @@ enum DebugStress {
             }
             steps[i]({ DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { runStep(i + 1) } })
         }
-        log("vault notes=\(v.notes.count) picks=\(picks.count) dim=\(m.dim)")
+        log("vault notes=\(v.notes.count) picks=\(picks.count) dim=\(m.prefs.dim)")
         runStep(0)
     }
 }

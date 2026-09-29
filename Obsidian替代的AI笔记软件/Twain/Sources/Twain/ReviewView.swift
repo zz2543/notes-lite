@@ -35,8 +35,8 @@ struct ReviewView: View {
                     }
                 }
             }
-            .font(Font(model.font.nsFont(size: 15)))
-            .frame(maxWidth: model.editorWidth + 60, alignment: .leading)
+            .font(Font(model.prefs.font.nsFont(size: 15)))
+            .frame(maxWidth: model.prefs.editorWidth + 60, alignment: .leading)
             .padding(.horizontal, 32).padding(.top, 28).padding(.bottom, 80)
             .frame(maxWidth: .infinity)
         }
@@ -46,7 +46,7 @@ struct ReviewView: View {
     }
 
     private var header: some View {
-        let name = ((model.activeRel ?? "") as NSString).lastPathComponent
+        let name = ((model.editor.activeRel ?? "") as NSString).lastPathComponent
         let tint = review.by.map(Theme.agentColor) ?? .secondary
         return HStack(alignment: .top, spacing: 14) {
             Image(systemName: review.by.map(Theme.agentSymbol) ?? "doc.badge.clock")

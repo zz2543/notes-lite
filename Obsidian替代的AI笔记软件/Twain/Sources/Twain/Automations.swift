@@ -49,8 +49,8 @@ extension AppModel {
         guard subscribers.values.contains(where: { $0.events?.contains("selection.changed") == true }) else { return }
         selectionEventWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, let rel = self.activeRel else { return }
-            let c = EditorContext.describe(text: self.editorText, selection: self.editorSelection)
+            guard let self, let rel = self.editor.activeRel else { return }
+            let c = EditorContext.describe(text: self.editor.editorText, selection: self.editor.editorSelection)
             self.emit("selection.changed", source: "user", ["path": .string(rel), "cursor": c["cursor"] ?? .null,
                                                             "selection": c["selection"] ?? .null])
         }
@@ -214,11 +214,11 @@ extension AppModel {
 
     /// Starts (or restarts) the quiet-period countdown of every automation the event concerns.
     func automationEvent(_ type: String, source: String, path: String?) {
-        guard automationsOn else { return }
+        guard prefs.automationsOn else { return }
         for a in automations where isApproved(a) && a.triggers(event: type, path: path) {
             // An automation never wakes itself up, and one run at a time is enough.
             if source == "automation:" + a.id { continue }
-            if sessions.contains(where: { $0.automationID == a.id && $0.running }) { continue }
+            if agents.sessions.contains(where: { $0.automationID == a.id && $0.running }) { continue }
             automationTimers[a.id]?.cancel()
             let work = DispatchWorkItem { [weak self] in self?.fireAutomation(a.id, event: type, path: path) }
             automationTimers[a.id] = work
@@ -228,10 +228,10 @@ extension AppModel {
 
     func fireAutomation(_ id: String, event: String, path: String?) {
         automationTimers[id] = nil
-        guard automationsOn, let a = automations.first(where: { $0.id == id }), isApproved(a), let v = vault else { return }
-        guard !sessions.contains(where: { $0.automationID == a.id && $0.running }) else { return }
-        guard automationRunsToday < automationDailyLimit else {
-            showToast("今天的自动化已运行 \(automationDailyLimit) 次，达到上限，「\(a.title)」没有运行")
+        guard prefs.automationsOn, let a = automations.first(where: { $0.id == id }), isApproved(a), let v = vault else { return }
+        guard !agents.sessions.contains(where: { $0.automationID == a.id && $0.running }) else { return }
+        guard automationRunsToday < prefs.automationDailyLimit else {
+            showToast("今天的自动化已运行 \(prefs.automationDailyLimit) 次，达到上限，「\(a.title)」没有运行")
             return
         }
         UserDefaults.standard.set(automationRunsToday + 1, forKey: runsKey)
@@ -245,8 +245,8 @@ extension AppModel {
         ])
         let s = AgentSession(agent: a.agent, source: .automation, title: "自动化 · " + a.title)
         s.automationID = a.id
-        sessions.append(s)
-        if activeSessionID == nil { activeSessionID = s.id }
+        agents.sessions.append(s)
+        if agents.activeSessionID == nil { agents.activeSessionID = s.id }
         if launch(s, prompt: prompt, model: a.model, effort: a.effort) {
             showToast("自动化「\(a.title)」开始运行")
         }

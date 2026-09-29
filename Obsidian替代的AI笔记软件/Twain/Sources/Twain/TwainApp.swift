@@ -25,19 +25,19 @@ struct TwainApp: App {
             SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("新建笔记") { model.newNote() }.keyboardShortcut("n")
-                Button("重命名笔记…") { model.beginRename() }.disabled(model.activeRel == nil)
+                Button("重命名笔记…") { model.beginRename() }.disabled(model.editor.activeRel == nil)
                 Button("打开库…") { model.chooseVault() }.keyboardShortcut("o")
             }
             CommandGroup(after: .sidebar) {
-                Button(model.agentPanel ? "隐藏 Agent 面板" : "显示 Agent 面板") { model.toggleAgent() }.keyboardShortcut("j")
-                Button("命令面板") { model.palette ? (model.palette = false) : model.openPalette() }.keyboardShortcut("k")
-                Button(model.zen ? "退出专注模式" : "进入专注模式") { model.toggleZen() }.keyboardShortcut(".")
+                Button(model.chrome.agentPanel ? "隐藏 Agent 面板" : "显示 Agent 面板") { model.toggleAgent() }.keyboardShortcut("j")
+                Button("命令面板") { model.chrome.palette ? (model.chrome.palette = false) : model.openPalette() }.keyboardShortcut("k")
+                Button(model.chrome.zen ? "退出专注模式" : "进入专注模式") { model.toggleZen() }.keyboardShortcut(".")
                 Divider()
-                Toggle("打字机滚动", isOn: $model.typewriter)
-                Toggle("段落聚焦", isOn: $model.dim)
-                Toggle("Tab 行内续写", isOn: $model.ghostOn)
-                Toggle("伴写（页边提问与思路）", isOn: Binding(get: { model.companionOn }, set: { if $0 != model.companionOn { model.toggleCompanion() } }))
-                Picker("正文字体", selection: $model.font) {
+                Toggle("打字机滚动", isOn: Bindable(model.prefs).typewriter)
+                Toggle("段落聚焦", isOn: Bindable(model.prefs).dim)
+                Toggle("Tab 行内续写", isOn: Bindable(model.prefs).ghostOn)
+                Toggle("伴写（页边提问与思路）", isOn: Binding(get: { model.prefs.companionOn }, set: { if $0 != model.prefs.companionOn { model.toggleCompanion() } }))
+                Picker("正文字体", selection: Bindable(model.prefs).font) {
                     ForEach(EditorFont.allCases) { Text($0.cardLabel).tag($0) }
                 }
                 Divider()
@@ -50,13 +50,13 @@ struct TwainApp: App {
                 }
                 if !model.userCommands.isEmpty { Divider() }
                 Button("问库…") { model.newDesk() }.keyboardShortcut("a", modifiers: [.command, .shift])
-                Button("AI 审阅当前笔记") { model.startAIReview() }.disabled(model.activeRel == nil)
+                Button("AI 审阅当前笔记") { model.startAIReview() }.disabled(model.editor.activeRel == nil)
                 Divider()
                 Button("审阅待定改动") { model.reviewNext() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .disabled(model.pending.isEmpty)
-                Button("停止运行") { model.sessions.filter { $0.running && $0.source == .app }.forEach(model.stopAgent) }
-                    .disabled(!model.sessions.contains { $0.running && $0.source == .app })
+                    .disabled(model.agents.pending.isEmpty)
+                Button("停止运行") { model.agents.sessions.filter { $0.running && $0.source == .app }.forEach(model.stopAgent) }
+                    .disabled(!model.agents.sessions.contains { $0.running && $0.source == .app })
             }
         }
 
@@ -131,8 +131,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Esc closes overlays, then leaves zen mode when nothing is being edited.
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             guard e.keyCode == 53, let m = self?.model else { return e }
-            if m.palette { m.palette = false; return nil }
-            if m.zen, !(NSApp.keyWindow?.firstResponder is NSTextView) { m.toggleZen(); return nil }
+            if m.chrome.palette { m.chrome.palette = false; return nil }
+            if m.chrome.zen, !(NSApp.keyWindow?.firstResponder is NSTextView) { m.toggleZen(); return nil }
             return e
         }
         #if DEBUG
@@ -156,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let scenario = ProcessInfo.processInfo.environment["TWAIN_SCENARIO"] ?? ""
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             guard let m = self?.model else { return }
-            m.onboardingStep = nil
+            m.chrome.onboardingStep = nil
             TwainTextView.forceCaret = true
             DebugScenario.apply(scenario, to: m)
             let delay = Double(ProcessInfo.processInfo.environment["TWAIN_SNAPSHOT_DELAY"] ?? "") ?? 2.5

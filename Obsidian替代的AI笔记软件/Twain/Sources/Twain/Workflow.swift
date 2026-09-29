@@ -34,7 +34,7 @@ extension AppModel {
         do {
             let ref = call.params["note"]?.string ?? ""
             let rel = try index.resolve(ref) ?? Self.newNotePath(ref)
-            if let existing = pending[rel] {
+            if let existing = agents.pending[rel] {
                 throw RPCError(1006, "\(rel) 还有 \(existing.hunks.count) 处改动等用户审阅，等用户处理完再提交",
                                data: ["pendingProposal": JSONValue(existing.proposalID)])
             }
@@ -76,17 +76,17 @@ extension AppModel {
             emit("proposal.created", source: s.map(eventSource) ?? "external",
                  ["path": .string(rel), "proposal": .string(p.id), "hunks": JSONValue(p.hunks.count)])
 
-            if reviewMode == .auto, s?.source != .automation {
+            if prefs.reviewMode == .auto, s?.source != .automation {
                 // The user chose to take agents' changes as they come.
                 p.resolve(p.hunks.map { var h = $0; h.state = .accepted; return h }, feedback: [])
                 v.forceWrite(rel, after)
                 proposalStore?.save(p)
-                if rel == activeRel { reloadEditor() }
+                if rel == editor.activeRel { reloadEditor() }
                 showToast("\(s?.agent.displayName ?? "Agent") 已写入 \((rel as NSString).lastPathComponent)")
                 reply(.success(p.resultJSON))
                 return
             }
-            pending[rel] = review(from: p, session: s)
+            agents.pending[rel] = review(from: p, session: s)
             let who = s?.agent.displayName ?? "Agent"
             showToast("\(who) 提议\(isNew ? "新建" : "修改") \((rel as NSString).lastPathComponent) · \(p.hunks.count) 处待审阅")
             if call.params["wait"]?.bool == true {
@@ -129,7 +129,7 @@ extension AppModel {
                 store.save(p)
                 continue
             }
-            if pending[p.path] == nil { pending[p.path] = review(from: p, session: nil) }
+            if agents.pending[p.path] == nil { agents.pending[p.path] = review(from: p, session: nil) }
         }
     }
 
@@ -139,7 +139,7 @@ extension AppModel {
         p.status = .stale
         p.resolvedAt = Date()
         proposalStore?.save(p)
-        if pending[r.rel]?.proposalID == id { pending[r.rel] = nil }
+        if agents.pending[r.rel]?.proposalID == id { agents.pending[r.rel] = nil }
         answerWaiters(p)
     }
 
@@ -148,15 +148,15 @@ extension AppModel {
     }
 
     func setFeedback(_ i: Int, _ text: String) {
-        guard let rel = activeRel, var p = pending[rel], p.hunks.indices.contains(i) else { return }
+        guard let rel = editor.activeRel, var p = agents.pending[rel], p.hunks.indices.contains(i) else { return }
         if p.feedback.count < p.hunks.count { p.feedback += Array(repeating: nil, count: p.hunks.count - p.feedback.count) }
         p.feedback[i] = text.isEmpty ? nil : text
-        pending[rel] = p
+        agents.pending[rel] = p
     }
 
     /// `all`: accept or reject everything; nil accepts whatever is still undecided.
     func finishReview(all: HunkState?) {
-        guard let v = vault, let rel = activeRel, let r = pending[rel] else { return }
+        guard let v = vault, let rel = editor.activeRel, let r = agents.pending[rel] else { return }
         let hunks = r.hunks.map { h -> Hunk in
             var h = h
             if let all { h.state = all } else if h.state == .pending { h.state = .accepted }
@@ -170,17 +170,17 @@ extension AppModel {
             let disk = v.diskContent(rel)
             guard r.isNew ? disk == nil : disk.map(Markdown.lines) == r.baseline else {
                 markStale(r)
-                showDiff = false
+                editor.showDiff = false
                 showToast("\(name) 在提案之后被改过，这份提案已作废")
                 return
             }
         }
         let result = LineDiff.apply(hunks, to: r.baseline).joined(separator: "\n")
         if !(r.isNew && accepted == 0) { v.forceWrite(rel, result) }
-        pending[rel] = nil
-        showDiff = false
+        agents.pending[rel] = nil
+        editor.showDiff = false
         if r.isNew, accepted > 0 { emit("note.created", source: "user", ["path": .string(rel)]) }
-        if activeRel == rel { reloadEditor() }
+        if editor.activeRel == rel { reloadEditor() }
 
         // Keep the outcome: agents learn from it (`twain reviews`) and waiters get their answer.
         var record = r.proposalID.flatMap { proposalStore?.load($0) }
@@ -195,7 +195,7 @@ extension AppModel {
                                                  "accepted": JSONValue(accepted), "rejected": JSONValue(hunks.count - accepted),
                                                  "proposal": JSONValue(r.proposalID)])
 
-        if let sid = r.sessionID, let s = sessions.first(where: { $0.id == sid }), s.source != .terminal,
+        if let sid = r.sessionID, let s = agents.sessions.first(where: { $0.id == sid }), s.source != .terminal,
            let message = record.feedbackMessage() {
             s.items.append(SessionItem(kind: .feedback(rel: rel, message: message, sent: false)))
         }
@@ -210,10 +210,10 @@ extension AppModel {
 
     /// Shows the file as it is on disk now, e.g. after a review wrote it.
     func reloadEditor() {
-        guard let v = vault, let rel = activeRel else { return }
-        editorText = v.read(rel)
-        dirty = false
-        editorVersion += 1
+        guard let v = vault, let rel = editor.activeRel else { return }
+        editor.editorText = v.read(rel)
+        editor.dirty = false
+        editor.editorVersion += 1
     }
 
     /// Sends a review's outcome back to the session that made the change, as its next turn.
@@ -236,18 +236,18 @@ extension AppModel {
         let text = call.params["question"]?.string ?? ""
         let options = (call.params["options"]?.array ?? []).compactMap(\.string).filter { !$0.isEmpty }
         let s = call.session ?? activeSession ?? {
-            let n = AgentSession(agent: agentPick, source: .terminal, title: "外部 agent")
-            sessions.append(n)
+            let n = AgentSession(agent: agents.agentPick, source: .terminal, title: "外部 agent")
+            agents.sessions.append(n)
             return n
         }()
         let q = AgentQuestion(id: UUID(), sessionID: s.id, agent: s.agent, question: text, options: options,
                               allowText: options.isEmpty || call.params["text"]?.bool == true)
-        questions[q.id] = q
+        agents.questions[q.id] = q
         questionReplies[q.id] = reply
         s.items.append(SessionItem(kind: .question(q.id)))
-        activeSessionID = s.id
-        if zen { toggleZen() }
-        agentPanel = true
+        agents.activeSessionID = s.id
+        if chrome.zen { toggleZen() }
+        chrome.agentPanel = true
         showToast("\(s.agent.displayName) 有一个问题等你回答")
         NSApp.requestUserAttention(.informationalRequest)
 
@@ -258,16 +258,16 @@ extension AppModel {
 
     func answer(_ id: UUID, _ text: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, var q = questions[id], q.answer == nil, !q.expired else { return }
+        guard !text.isEmpty, var q = agents.questions[id], q.answer == nil, !q.expired else { return }
         q.answer = text
-        questions[id] = q
+        agents.questions[id] = q
         questionReplies.removeValue(forKey: id)?(.success(["answered": true, "answer": .string(text)]))
     }
 
     private func expire(_ id: UUID, why: String) {
-        guard var q = questions[id], q.answer == nil, !q.expired else { return }
+        guard var q = agents.questions[id], q.answer == nil, !q.expired else { return }
         q.expired = true
-        questions[id] = q
+        agents.questions[id] = q
         questionReplies.removeValue(forKey: id)?(.success(["answered": false, "reason": .string(why)]))
     }
 }

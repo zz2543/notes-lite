@@ -8,10 +8,10 @@ extension AppModel {
     // MARK: agents
 
     var activeSession: AgentSession? {
-        sessions.first { $0.id == activeSessionID } ?? sessions.first
+        agents.sessions.first { $0.id == agents.activeSessionID } ?? agents.sessions.first
     }
 
-    func agentEnabled(_ k: AgentKind) -> Bool { k == .claude ? claudeOn : codexOn }
+    func agentEnabled(_ k: AgentKind) -> Bool { k == .claude ? prefs.claudeOn : prefs.codexOn }
 
     /// Re-reads each CLI's model list and defaults off the main thread.
     func refreshModels() {
@@ -19,40 +19,40 @@ extension AppModel {
             let models = Dictionary(uniqueKeysWithValues: AgentKind.allCases.map { ($0, CLIEnvironment.models($0)) })
             DispatchQueue.main.async {
                 let choices = models.mapValues(\.choices)
-                if choices != self.modelChoices { self.modelChoices = choices }
-                self.modelFallback = models.compactMapValues(\.fallback)
-                self.effortFallback = models.compactMapValues(\.fallbackEffort)
-                self.modelsListedBy = models.compactMapValues(\.listedBy)
+                if choices != self.agents.modelChoices { self.agents.modelChoices = choices }
+                self.agents.modelFallback = models.compactMapValues(\.fallback)
+                self.agents.effortFallback = models.compactMapValues(\.fallbackEffort)
+                self.agents.modelsListedBy = models.compactMapValues(\.listedBy)
             }
         }
     }
 
-    func models(_ k: AgentKind) -> [AgentModel] { modelChoices[k] ?? k.builtinModels }
+    func models(_ k: AgentKind) -> [AgentModel] { agents.modelChoices[k] ?? k.builtinModels }
 
     /// Set when the model list came from a newer client than the CLI Twain runs, e.g. the Codex app.
     func staleCLIWarning(_ k: AgentKind) -> String? {
-        guard let listed = modelsListedBy[k], let cliVersion = cli[k]?.version,
+        guard let listed = agents.modelsListedBy[k], let cliVersion = agents.cli[k]?.version,
               versionIsOlder(cliVersion, than: listed) else { return nil }
         return "模型列表来自 \(k.displayName) \(listed)，而共笔调用的 \(cliVersion) 较旧，新模型可能无法运行。升级 \(k.executable) 命令行后即可使用。"
     }
 
     /// Human name for a model id; "" is the CLI default.
     func modelName(_ id: String, for k: AgentKind) -> String {
-        if id.isEmpty { return modelFallback[k].map { "默认（\(modelName($0, for: k))）" } ?? "默认" }
+        if id.isEmpty { return agents.modelFallback[k].map { "默认（\(modelName($0, for: k))）" } ?? "默认" }
         return models(k).find(id)?.name ?? id
     }
 
     /// The name of the model the next run uses, without the "默认（…）" wrapper.
     func modelLabel(_ k: AgentKind) -> String {
-        let id = agentModel[k] ?? ""
-        if id.isEmpty, let f = modelFallback[k] { return modelName(f, for: k) }
+        let id = prefs.agentModel[k] ?? ""
+        if id.isEmpty, let f = agents.modelFallback[k] { return modelName(f, for: k) }
         return modelName(id, for: k)
     }
 
     /// The model the next run of `k` uses, if it's one we know.
     func currentModel(_ k: AgentKind) -> AgentModel? {
-        let id = agentModel[k] ?? ""
-        return models(k).find(id.isEmpty ? modelFallback[k] ?? "" : id)
+        let id = prefs.agentModel[k] ?? ""
+        return models(k).find(id.isEmpty ? agents.modelFallback[k] ?? "" : id)
     }
 
     /// Thinking levels the next run's model offers. Unknown model: the common levels.
@@ -62,7 +62,7 @@ extension AppModel {
 
     /// The level Twain passes on the command line: the user's pick, fitted to the model; "" to leave it to the CLI.
     func effortArgument(_ k: AgentKind) -> String {
-        let pick = agentEffort[k] ?? ""
+        let pick = prefs.agentEffort[k] ?? ""
         guard !pick.isEmpty else { return "" }
         return Effort.clamp(pick, to: effortLevels(k)) ?? ""
     }
@@ -73,7 +73,7 @@ extension AppModel {
         guard !levels.isEmpty else { return nil }
         let arg = effortArgument(k)
         if !arg.isEmpty { return arg }
-        if let f = effortFallback[k] { return Effort.clamp(f, to: levels) }
+        if let f = agents.effortFallback[k] { return Effort.clamp(f, to: levels) }
         return currentModel(k)?.defaultEffort
     }
 
@@ -89,15 +89,15 @@ extension AppModel {
         }
         if target == nil, session == nil || session!.source != .app || session!.agent != agent || session!.running {
             let s = AgentSession(agent: agent, source: .app, title: String(prompt.prefix(10)))
-            sessions.append(s)
+            agents.sessions.append(s)
             session = s
         }
         let s = session!
         if s.title == "新会话" { s.title = String(prompt.prefix(10)) }
-        activeSessionID = s.id
-        if zen { toggleZen() }
-        agentPanel = true
-        agentInput = ""
+        agents.activeSessionID = s.id
+        if chrome.zen { toggleZen() }
+        chrome.agentPanel = true
+        agents.agentInput = ""
         launch(s, prompt: prompt, model: model, effort: effort)
     }
 
@@ -108,7 +108,7 @@ extension AppModel {
         let agent = s.agent
         guard let v = vault else { return false }
         guard agentEnabled(agent) else { showToast(agent.displayName + " 已在设置中停用"); return false }
-        guard let exe = cli[agent]?.path ?? CLIEnvironment.locate(agent.executable) else {
+        guard let exe = agents.cli[agent]?.path ?? CLIEnvironment.locate(agent.executable) else {
             showToast("没有找到 " + agent.executable + " 命令")
             return false
         }
@@ -116,15 +116,15 @@ extension AppModel {
         clearGhost()
         s.items.append(SessionItem(kind: .user(prompt)))
         s.running = true
-        let model = model ?? agentModel[agent] ?? ""
+        let model = model ?? prefs.agentModel[agent] ?? ""
         let effort = effort ?? effortArgument(agent)
-        s.model = model.isEmpty ? modelFallback[agent] : model
+        s.model = model.isEmpty ? agents.modelFallback[agent] : model
         s.effort = effort.isEmpty ? effectiveEffort(agent) : effort
         let readOnly = s.source == .automation || s.readOnly
 
         let proc = AgentProcess(kind: agent)
         s.process = proc
-        let root = v.root, rels = v.notes.map(\.rel), takeGit = gitSnapshot && !readOnly
+        let root = v.root, rels = v.notes.map(\.rel), takeGit = prefs.gitSnapshot && !readOnly
         // The snapshot reads every note (and may commit to git): never on the main thread.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let git = takeGit ? Git.snapshot(root, message: "Twain: snapshot before \(agent.displayName)") : nil
@@ -146,21 +146,21 @@ extension AppModel {
         if !s.extraTools.isEmpty { env["TWAIN_MCP_EXTRA"] = s.extraTools.joined(separator: ",") }
         if let tool { env["PATH"] = tool.path }
         if let server { env["TWAIN_SOCK"] = server.path }
-        let mcp: AgentArguments.MCP? = mcpOn && tool != nil
+        let mcp: AgentArguments.MCP? = prefs.mcpOn && tool != nil
             ? AgentArguments.MCP(command: TwainTool.managedLink.path, env: env.filter { $0.key != "PATH" }) : nil
         // Claude Code gives up on a tool call after its own default; questions may wait longer.
         if mcp != nil { env["MCP_TOOL_TIMEOUT"] = "900000" }
         let context = agentContext(tool: tool != nil, mcp: mcp != nil, readOnly: readOnly)
         let args = AgentArguments.build(kind: agent, prompt: prompt, context: context, root: v.rootPath,
                                         resume: s.cliSessionID, model: model, effort: effort, socket: server?.path,
-                                        version: cli[agent]?.version, mcp: mcp, readOnly: readOnly)
+                                        version: agents.cli[agent]?.version, mcp: mcp, readOnly: readOnly)
         emit("session.started", source: eventSource(for: s), ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue)])
         do {
             try proc.start(executable: exe, arguments: args, cwd: v.root, env: env, onEvents: { [weak self, weak s] events in
                 guard let self, let s else { return }
                 for w in s.apply(events) {
                     let rel = v.relative(w)
-                    if !self.writing.contains(rel) { self.writing.insert(rel) }
+                    if !self.agents.writing.contains(rel) { self.agents.writing.insert(rel) }
                 }
             }, onExit: { [weak self, weak s] status, stderr, sawFinish in
                 guard let self, let s else { return }
@@ -185,7 +185,7 @@ extension AppModel {
 
     /// What every run is told about Twain, beyond the user's prompt.
     func agentContext(tool: Bool, mcp: Bool, readOnly: Bool) -> String {
-        let noteRel = activeRel ?? ""
+        let noteRel = editor.activeRel ?? ""
         var parts = ["你在共笔笔记库中工作，当前目录就是库的根目录，库里的笔记都是 Markdown 文件。"]
         if !noteRel.isEmpty, !readOnly { parts.append("用户当前打开的笔记是 \(noteRel)，“这篇笔记”“当前笔记”指的就是它。") }
         if mcp {
@@ -204,7 +204,7 @@ extension AppModel {
                                      : "直接修改文件即可，共笔会把改动交给用户审阅。")
         }
         parts.append("遵守 AGENTS.md 中的约定。")
-        if let r = spaceRules(for: activeRel) { parts.append("\n这篇笔记属于空间「\(r.name)」，另外遵守它的约定：\n" + r.rules) }
+        if let r = spaceRules(for: editor.activeRel) { parts.append("\n这篇笔记属于空间「\(r.name)」，另外遵守它的约定：\n" + r.rules) }
         return parts.joined()
     }
 
@@ -225,11 +225,11 @@ extension AppModel {
     func debugSimulateRun(rel: String, append: String) {
         guard let v = vault else { return }
         let s = AgentSession(agent: .claude, source: .app, title: "模拟")
-        sessions.append(s)
-        activeSessionID = s.id
+        agents.sessions.append(s)
+        agents.activeSessionID = s.id
         s.running = true
         runSnapshots[s.id] = (VaultSnapshot.take(root: v.root, rels: v.notes.map(\.rel)), nil)
-        writing.insert(rel)
+        agents.writing.insert(rel)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             try? ((v.diskContent(rel) ?? "") + append).write(to: v.url(rel), atomically: true, encoding: .utf8)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
@@ -257,19 +257,19 @@ extension AppModel {
             // Skip files that only Twain itself saved during the run.
             guard let after = c.after, after != v.knownContent(c.rel) else { continue }
             changed.append(c.rel)
-            let base = pending[c.rel]?.baseline ?? Markdown.lines(v.knownContent(c.rel) ?? c.before ?? "")
+            let base = agents.pending[c.rel]?.baseline ?? Markdown.lines(v.knownContent(c.rel) ?? c.before ?? "")
             queueReview(rel: c.rel, baseline: base, proposed: after, by: s.agent, source: s.source, snapshot: git, session: s)
             emit("note.changed", source: eventSource(for: s), ["path": .string(c.rel)])
         }
-        for rel in writing where !changed.contains(rel) { v.acknowledge(rel, content: v.diskContent(rel)) }
-        if !writing.isEmpty { writing.removeAll() }
-        if let rel = activeRel, changed.contains(rel) || dirty == false {
+        for rel in agents.writing where !changed.contains(rel) { v.acknowledge(rel, content: v.diskContent(rel)) }
+        if !agents.writing.isEmpty { agents.writing.removeAll() }
+        if let rel = editor.activeRel, changed.contains(rel) || editor.dirty == false {
             reloadActiveFromDisk()
         }
         if let first = changed.first {
             let name = (first as NSString).lastPathComponent
             let more = changed.count > 1 ? " 等 \(changed.count) 个文件" : ""
-            let auto = reviewMode == .auto && s.source != .automation
+            let auto = prefs.reviewMode == .auto && s.source != .automation
             showToast(auto ? "\(s.agent.displayName) 已写入 \(name)\(more)" : "\(s.agent.displayName) 修改了 \(name)\(more) · 待审阅")
         }
         pipelineSessionFinished(s)
@@ -289,25 +289,25 @@ extension AppModel {
             session.items.append(item)
         }
         // A proposal for this note no longer matches the file the agent just wrote.
-        if let old = pending[rel], old.isProposal { markStale(old) }
-        if hunks.isEmpty || (reviewMode == .auto && session?.source != .automation) {
-            pending[rel] = nil
+        if let old = agents.pending[rel], old.isProposal { markStale(old) }
+        if hunks.isEmpty || (prefs.reviewMode == .auto && session?.source != .automation) {
+            agents.pending[rel] = nil
             return
         }
-        pending[rel] = PendingReview(rel: rel, by: by, source: source, baseline: baseline, proposed: after,
+        agents.pending[rel] = PendingReview(rel: rel, by: by, source: source, baseline: baseline, proposed: after,
                                      hunks: hunks, snapshot: snapshot, sessionID: session?.id)
     }
 
     func reloadActiveFromDisk() {
-        guard let v = vault, let rel = activeRel else { return }
+        guard let v = vault, let rel = editor.activeRel else { return }
         let disk = v.read(rel)
-        if disk != editorText {
-            editorText = disk
-            oversizedDisplay = nil
-            oversized = Self.hasOversizedLine(disk)
-            editorVersion += 1
+        if disk != editor.editorText {
+            editor.editorText = disk
+            editor.oversizedDisplay = nil
+            editor.oversized = Self.hasOversizedLine(disk)
+            editor.editorVersion += 1
         }
-        dirty = false
+        editor.dirty = false
     }
 
     /// Changes that did not come from Twain's own writes.
@@ -315,19 +315,19 @@ extension AppModel {
         guard let v = vault else { return }
         if rels.contains("CLAUDE.md") || rels.contains("AGENTS.md") { refreshContextSync() }
         // Notes shown embedded in the open one may be among them.
-        if rels.contains(where: { $0 != activeRel && $0.hasSuffix(".md") }) { noteFilesChanged?() }
-        let appRunning = sessions.contains { $0.source == .app && $0.running }
+        if rels.contains(where: { $0 != editor.activeRel && $0.hasSuffix(".md") }) { noteFilesChanged?() }
+        let appRunning = agents.sessions.contains { $0.source == .app && $0.running }
         var outside: [String] = []
         for rel in rels {
             let disk = v.diskContent(rel)
             if disk == v.knownContent(rel) { continue }
-            if rel == activeRel, dirty, !appRunning {
+            if rel == editor.activeRel, editor.dirty, !appRunning {
                 // Unsaved edits meet an outside write: the save path turns it into a review.
                 flushSave()
                 continue
             }
             if appRunning {
-                if !writing.contains(rel) { writing.insert(rel) }
+                if !agents.writing.contains(rel) { agents.writing.insert(rel) }
                 continue
             }
             outside.append(rel)
@@ -336,7 +336,7 @@ extension AppModel {
         // Who wrote it? Only a terminal agent whose transcript shows the write gets the credit;
         // anything else (another editor, sync) is loaded as is, without a review.
         let root = v.rootPath
-        let terminals = watchTerminal ? sessions.filter { $0.source == .terminal && $0.alive }.compactMap { s in
+        let terminals = prefs.watchTerminal ? agents.sessions.filter { $0.source == .terminal && $0.alive }.compactMap { s in
             s.transcript.map { (id: s.id, url: $0, agent: s.agent) }
         } : []
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -361,48 +361,48 @@ extension AppModel {
         for rel in rels {
             let disk = v.diskContent(rel)
             if disk == v.knownContent(rel) { continue }
-            let term = writer[rel].flatMap { id in sessions.first { $0.id == id } }
+            let term = writer[rel].flatMap { id in agents.sessions.first { $0.id == id } }
             emit(disk == nil ? "note.deleted" : "note.changed", source: term.map(eventSource) ?? "external", ["path": .string(rel)])
             guard let disk else {
                 v.acknowledge(rel, content: nil)
-                pending[rel] = nil
-                if rel == activeRel, let next = v.notes.first { open(next.rel) }
+                agents.pending[rel] = nil
+                if rel == editor.activeRel, let next = v.notes.first { open(next.rel) }
                 continue
             }
             if let term {
-                let base = pending[rel]?.baseline ?? Markdown.lines(v.knownContent(rel) ?? "")
+                let base = agents.pending[rel]?.baseline ?? Markdown.lines(v.knownContent(rel) ?? "")
                 queueReview(rel: rel, baseline: base, proposed: disk, by: term.agent, source: .terminal, snapshot: nil, session: term)
-                if pending[rel] != nil {
+                if agents.pending[rel] != nil {
                     showToast("\(term.agent.displayName) 在终端中修改了 \((rel as NSString).lastPathComponent) · 待审阅")
                 }
             } else {
                 v.acknowledge(rel, content: disk)
                 reloaded.append(rel)
             }
-            if rel == activeRel {
-                if dirty { flushSave() } else { reloadActiveFromDisk() }
+            if rel == editor.activeRel {
+                if editor.dirty { flushSave() } else { reloadActiveFromDisk() }
             }
         }
-        if reloaded.contains(where: { $0 == activeRel }) {
-            showToast("「\(((activeRel ?? "") as NSString).lastPathComponent)」在其他程序中被修改，已载入新内容")
+        if reloaded.contains(where: { $0 == editor.activeRel }) {
+            showToast("「\(((editor.activeRel ?? "") as NSString).lastPathComponent)」在其他程序中被修改，已载入新内容")
         }
     }
 
     // MARK: review
 
-    var activePending: PendingReview? { activeRel.flatMap { pending[$0] } }
+    var activePending: PendingReview? { editor.activeRel.flatMap { agents.pending[$0] } }
 
     func setHunk(_ i: Int, _ state: HunkState) {
-        guard let rel = activeRel, var p = pending[rel], p.hunks.indices.contains(i) else { return }
+        guard let rel = editor.activeRel, var p = agents.pending[rel], p.hunks.indices.contains(i) else { return }
         p.hunks[i].state = state
-        pending[rel] = p
+        agents.pending[rel] = p
     }
 
     // MARK: terminal sessions
 
     func dropTerminalSessions() {
-        sessions.removeAll { $0.source == .terminal }
-        if activeSession == nil { activeSessionID = sessions.first?.id }
+        agents.sessions.removeAll { $0.source == .terminal }
+        if activeSession == nil { agents.activeSessionID = agents.sessions.first?.id }
     }
 
     /// What a scan found in one terminal session's transcript.
@@ -416,11 +416,11 @@ extension AppModel {
     }
 
     func pollTerminal() {
-        guard watchTerminal, let v = vault else { return }
+        guard prefs.watchTerminal, let v = vault else { return }
         let root = v.rootPath
         // Taken here, on the main thread, so the scan never has to wait for it.
         let known: [Int32: (url: URL?, stamp: Date?, cursor: JSONLines.Cursor?)] = Dictionary(
-            sessions.compactMap { s in s.pid.map { ($0, (s.transcript, s.transcriptStamp, s.transcriptCursor)) } },
+            agents.sessions.compactMap { s in s.pid.map { ($0, (s.transcript, s.transcriptStamp, s.transcriptCursor)) } },
             uniquingKeysWith: { a, _ in a })
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let found = TerminalWatcher.scan(root: root)
@@ -443,24 +443,24 @@ extension AppModel {
         let pids = Set(found.map(\.pid))
         let now = Date()
         for (pid, up) in updates {
-            guard let s = sessions.first(where: { $0.pid == pid }) else { continue }
+            guard let s = agents.sessions.first(where: { $0.pid == pid }) else { continue }
             s.transcriptStamp = up.stamp
         }
-        for s in sessions where s.source == .terminal {
+        for s in agents.sessions where s.source == .terminal {
             let alive = s.pid.map(pids.contains) ?? false
             if s.alive != alive { s.alive = alive }
             let running = alive && now.timeIntervalSince(s.lastActivity) < 15
             if s.running != running { s.running = running }
         }
-        for f in found where !sessions.contains(where: { $0.pid == f.pid }) {
+        for f in found where !agents.sessions.contains(where: { $0.pid == f.pid }) {
             let s = AgentSession(agent: f.agent, source: .terminal, title: "终端会话")
             s.pid = f.pid
             s.transcriptStamp = updates[f.pid]?.stamp
-            sessions.insert(s, at: 0)
-            if activeSessionID == nil { activeSessionID = s.id }
+            agents.sessions.insert(s, at: 0)
+            if agents.activeSessionID == nil { agents.activeSessionID = s.id }
         }
         for (pid, up) in updates {
-            guard let s = sessions.first(where: { $0.pid == pid }) else { continue }
+            guard let s = agents.sessions.first(where: { $0.pid == pid }) else { continue }
             s.transcript = up.url
             s.transcriptCursor = up.cursor
             if up.fresh {
@@ -479,13 +479,13 @@ extension AppModel {
         }
         // Forget terminal sessions that ended and never touched the vault.
         // Only when there is one: an in-place change of an observed array notifies even when it removes nothing.
-        let gone: (AgentSession) -> Bool = { $0.source == .terminal && !$0.alive && $0.changeItems.isEmpty && $0.id != self.activeSessionID }
-        if sessions.contains(where: gone) { sessions.removeAll(where: gone) }
+        let gone: (AgentSession) -> Bool = { $0.source == .terminal && !$0.alive && $0.changeItems.isEmpty && $0.id != self.agents.activeSessionID }
+        if agents.sessions.contains(where: gone) { agents.sessions.removeAll(where: gone) }
     }
 
     func newSession() {
-        let s = AgentSession(agent: agentPick, source: .app, title: "新会话")
-        sessions.append(s)
-        activeSessionID = s.id
+        let s = AgentSession(agent: agents.agentPick, source: .app, title: "新会话")
+        agents.sessions.append(s)
+        agents.activeSessionID = s.id
     }
 }

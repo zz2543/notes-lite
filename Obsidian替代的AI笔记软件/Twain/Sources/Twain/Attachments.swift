@@ -103,7 +103,7 @@ extension AppModel {
 
     /// The folder (vault-relative) a picture pasted into the open note goes to.
     var attachmentFolder: String {
-        let noteFolder = activeRel.map { ($0 as NSString).deletingLastPathComponent } ?? ""
+        let noteFolder = editor.activeRel.map { ($0 as NSString).deletingLastPathComponent } ?? ""
         let (place, name) = AttachmentPlace.parse(attachmentSetting)
         switch place {
         case .folder: return name
@@ -120,8 +120,8 @@ extension AppModel {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyyMMddHHmmss"
         let stamp = f.string(from: date)
-        let note = activeRel.map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension } ?? "未命名"
-        switch attachmentNaming {
+        let note = editor.activeRel.map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension } ?? "未命名"
+        switch prefs.attachmentNaming {
         case .pasted: return "Pasted image \(stamp).\(ext)"
         case .noteTime: return "\(note) \(stamp).\(ext)"
         case .noteNumber: return "\(note)-1.\(ext)"
@@ -132,7 +132,7 @@ extension AppModel {
         let t = target.trimmingCharacters(in: .whitespaces)
         if t.hasPrefix("http://") || t.hasPrefix("https://") { return URL(string: t) }
         if t.hasPrefix("file://") { return URL(string: t) }
-        guard let v = vault, let rel = v.attachment(t, from: activeRel) else { return nil }
+        guard let v = vault, let rel = v.attachment(t, from: editor.activeRel) else { return nil }
         return v.url(rel)
     }
 
@@ -149,7 +149,7 @@ extension AppModel {
         } else {
             ref = v.note(titled: name.hasSuffix(".md") ? String(name.dropLast(3)) : name)
         }
-        guard let ref, !ref.isHTML, ref.rel != activeRel, let text = v.diskContent(ref.rel) else { return nil }
+        guard let ref, !ref.isHTML, ref.rel != editor.activeRel, let text = v.diskContent(ref.rel) else { return nil }
         return (ref.rel, ref.title, text)
     }
 
@@ -192,7 +192,7 @@ extension AppModel {
     /// Saves pasted image data; returns the name to embed.
     func saveAttachment(_ data: Data, ext: String) -> String? {
         guard let v = vault else { return nil }
-        let rel = attachmentPath(pastedName(ext: ext), numbered: attachmentNaming == .noteNumber)
+        let rel = attachmentPath(pastedName(ext: ext), numbered: prefs.attachmentNaming == .noteNumber)
         do {
             try FileManager.default.createDirectory(at: v.url(rel).deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: v.url(rel))

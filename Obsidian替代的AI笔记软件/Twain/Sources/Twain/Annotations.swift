@@ -10,30 +10,30 @@ extension AppModel {
 
     /// Open annotations of the open note, in reading order.
     var visibleAnnotations: [Annotation] {
-        annotations.filter { $0.status == .open }
+        editor.annotations.filter { $0.status == .open }
     }
 
     func loadAnnotations() {
-        guard let rel = activeRel, let store = annotationStore else { annotations = []; return }
+        guard let rel = editor.activeRel, let store = annotationStore else { editor.annotations = []; return }
         let loaded = store.load(rel)
-        if loaded != annotations { annotations = loaded }
+        if loaded != editor.annotations { editor.annotations = loaded }
     }
 
     private func saveAnnotations() {
-        guard let rel = activeRel else { return }
-        annotationStore?.save(rel, annotations)
+        guard let rel = editor.activeRel else { return }
+        annotationStore?.save(rel, editor.annotations)
     }
 
     /// Starts an AI review of the open note with the agent picked in the panel.
     func startAIReview(model: String? = nil) {
-        guard let rel = activeRel, vault != nil else { return }
+        guard let rel = editor.activeRel, vault != nil else { return }
         flushSave()
-        let agent = agentPick
+        let agent = agents.agentPick
         let s = AgentSession(agent: agent, source: .app, title: "AI 审阅 · " + NoteRef(rel: rel).title)
         s.extraTools = ["annotate"]
         s.readOnly = true
-        sessions.append(s)
-        activeSessionID = s.id
+        agents.sessions.append(s)
+        agents.activeSessionID = s.id
         let prompt = """
         请审阅笔记 \(rel)。先用 read_note 读全文，再用 annotate 工具在具体位置留下 3 到 8 条批注，每条对准一句或半句原文：
         - question：指出含糊、跳跃、自相矛盾的地方，用提问的方式引导我想清楚；
@@ -50,40 +50,40 @@ extension AppModel {
 
     /// Puts the suggested wording in place of the quote (undoable in the editor) and closes the annotation.
     func acceptAnnotation(_ id: String) {
-        guard let i = annotations.firstIndex(where: { $0.id == id }) else { return }
-        let a = annotations[i]
+        guard let i = editor.annotations.firstIndex(where: { $0.id == id }) else { return }
+        let a = editor.annotations[i]
         if let replacement = a.replacement {
-            guard let r = Anchor.locate(a.quote, in: editorText, line: a.line) else {
+            guard let r = Anchor.locate(a.quote, in: editor.editorText, line: a.line) else {
                 showToast("原文已经改过，找不到“\(a.quote.prefix(12))…”")
                 return
             }
             applyEditorEdit?(r, replacement)
         }
-        annotations[i].status = .accepted
+        editor.annotations[i].status = .accepted
         saveAnnotations()
-        emit("annotation.resolved", source: "user", ["path": JSONValue(activeRel), "id": .string(id), "status": "accepted"])
+        emit("annotation.resolved", source: "user", ["path": JSONValue(editor.activeRel), "id": .string(id), "status": "accepted"])
     }
 
     func dismissAnnotation(_ id: String) {
-        guard let i = annotations.firstIndex(where: { $0.id == id }) else { return }
-        annotations[i].status = .dismissed
+        guard let i = editor.annotations.firstIndex(where: { $0.id == id }) else { return }
+        editor.annotations[i].status = .dismissed
         saveAnnotations()
-        emit("annotation.resolved", source: "user", ["path": JSONValue(activeRel), "id": .string(id), "status": "dismissed"])
+        emit("annotation.resolved", source: "user", ["path": JSONValue(editor.activeRel), "id": .string(id), "status": "dismissed"])
     }
 
     func dismissAllAnnotations() {
-        for i in annotations.indices where annotations[i].status == .open { annotations[i].status = .dismissed }
+        for i in editor.annotations.indices where editor.annotations[i].status == .open { editor.annotations[i].status = .dismissed }
         saveAnnotations()
     }
 
     /// The user answers an annotation; the agent that wrote it continues the same session to reply.
     func replyToAnnotation(_ id: String, _ text: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty, let i = annotations.firstIndex(where: { $0.id == id }), let rel = activeRel else { return }
-        annotations[i].replies.append(.init(from: "user", text: t))
+        guard !t.isEmpty, let i = editor.annotations.firstIndex(where: { $0.id == id }), let rel = editor.activeRel else { return }
+        editor.annotations[i].replies.append(.init(from: "user", text: t))
         saveAnnotations()
-        let a = annotations[i]
-        guard let sid = a.session, let s = sessions.first(where: { $0.id.uuidString == sid }) else {
+        let a = editor.annotations[i]
+        guard let sid = a.session, let s = agents.sessions.first(where: { $0.id.uuidString == sid }) else {
             showToast("写下这条批注的会话已经不在了，回复已保存")
             return
         }
@@ -97,7 +97,7 @@ extension AppModel {
     // MARK: agent commands
 
     func annotateCommand(_ call: CommandCall, index: VaultIndex, vault v: Vault) throws -> JSONValue {
-        let rel = try VaultQueries.note(call.params, index: index, current: activeRel)
+        let rel = try VaultQueries.note(call.params, index: index, current: editor.activeRel)
         let store = AnnotationStore(vault: v.root)
         let s = call.session
         if let target = call.params["reply_to"]?.string {
@@ -108,26 +108,26 @@ extension AppModel {
             if let r = call.params["replacement"]?.string { list[i].replacement = r }
             list[i].status = .open
             store.save(rel, list)
-            if rel == activeRel { annotations = list }
+            if rel == editor.activeRel { editor.annotations = list }
             return ["note": .string(rel), "replied": .string(target)]
         }
         guard let items = call.params["items"]?.array, !items.isEmpty else {
             throw RPCError(RPCError.invalidParams, "需要 items（新批注）或 reply_to + text（回复）")
         }
-        let text = rel == activeRel ? editorText : (v.diskContent(rel) ?? "")
+        let text = rel == editor.activeRel ? editor.editorText : (v.diskContent(rel) ?? "")
         let (added, missing) = try store.add(rel, text: text, items: items, agent: s?.agent.displayName, session: s?.id.uuidString)
-        if rel == activeRel { loadAnnotations() }
+        if rel == editor.activeRel { loadAnnotations() }
         if !added.isEmpty {
             s?.items.append(SessionItem(kind: .step(id: UUID().uuidString, text: "批注 \(added.count) 处 · \((rel as NSString).lastPathComponent)", running: false)))
             emit("annotation.created", source: s.map(eventSource) ?? "external", ["path": .string(rel), "count": JSONValue(added.count)])
-            if rel != activeRel { showToast("\(s?.agent.displayName ?? "Agent") 在 \((rel as NSString).lastPathComponent) 留下 \(added.count) 条批注") }
+            if rel != editor.activeRel { showToast("\(s?.agent.displayName ?? "Agent") 在 \((rel as NSString).lastPathComponent) 留下 \(added.count) 条批注") }
         }
         return ["note": .string(rel), "added": JSONValue(added.count), "ids": JSONValue(added.map(\.id)),
                 "missing": JSONValue(missing)]
     }
 
     func annotationsCommand(_ call: CommandCall, index: VaultIndex, vault v: Vault) throws -> JSONValue {
-        let rel = try VaultQueries.note(call.params, index: index, current: activeRel)
+        let rel = try VaultQueries.note(call.params, index: index, current: editor.activeRel)
         let all = call.params["all"]?.bool == true
         let list = AnnotationStore(vault: v.root).load(rel).filter { all || $0.status == .open }
         return ["note": .string(rel), "annotations": .array(list.map(\.json))]

@@ -5,7 +5,7 @@ struct SidebarView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        List(selection: $model.selection) {
+        List(selection: Bindable(model.chrome).selection) {
             if model.vault != nil {
                 Section("空间") {
                     ForEach(model.spaces, id: \.id) { p in
@@ -14,7 +14,7 @@ struct SidebarView: View {
                                 Button("停用", systemImage: "pause.circle") { model.setPluginEnabled(p, false) }
                             }
                     }
-                    Button { model.newSpaceSheet = true } label: {
+                    Button { model.chrome.newSpaceSheet = true } label: {
                         Label("新建空间…", systemImage: "plus.square.dashed").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -22,7 +22,7 @@ struct SidebarView: View {
             }
             if let v = model.vault {
                 Section {
-                    let q = model.sidebarFilter.trimmingCharacters(in: .whitespaces)
+                    let q = model.chrome.sidebarFilter.trimmingCharacters(in: .whitespaces)
                     if q.isEmpty {
                         FolderNodes(model: model, vault: v, folder: "")
                     } else {
@@ -74,12 +74,12 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         // Return renames the selected note, as in Finder.
         .onKeyPress(.return) {
-            guard model.renaming == nil, let rel = model.selection, model.vault?.note(rel) != nil else { return .ignored }
-            model.renaming = rel
+            guard model.chrome.renaming == nil, let rel = model.chrome.selection, model.vault?.note(rel) != nil else { return .ignored }
+            model.chrome.renaming = rel
             return .handled
         }
-        .searchable(text: $model.sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
-        .sheet(isPresented: $model.newSpaceSheet) { NewSpaceSheet(model: model) }
+        .searchable(text: Bindable(model.chrome).sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
+        .sheet(isPresented: Bindable(model.chrome).newSpaceSheet) { NewSpaceSheet(model: model) }
         .safeAreaBar(edge: .bottom) {
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
@@ -132,13 +132,13 @@ struct FolderRow: View {
     var body: some View {
         let note = vault.folderNote(folder)
         DisclosureGroup(isExpanded: Binding(
-            get: { model.openFolders.contains(folder) },
-            set: { if $0 { model.openFolders.insert(folder) } else { model.openFolders.remove(folder) } }
+            get: { model.chrome.openFolders.contains(folder) },
+            set: { if $0 { model.chrome.openFolders.insert(folder) } else { model.chrome.openFolders.remove(folder) } }
         )) {
             FolderNodes(model: model, vault: vault, folder: folder)
         } label: {
             Label {
-                if model.renaming == "dir:" + folder {
+                if model.chrome.renaming == "dir:" + folder {
                     RenameField(model: model, key: "dir:" + folder, name: (folder as NSString).lastPathComponent) { name in
                         model.renameFolder(folder, to: name)
                     }
@@ -172,7 +172,7 @@ struct FolderMenu: View {
                 model.openFolderNote(folder)
             }
             Divider()
-            Button("重命名…", systemImage: "pencil") { model.renaming = "dir:" + folder }
+            Button("重命名…", systemImage: "pencil") { model.chrome.renaming = "dir:" + folder }
         }
         Button("在 Finder 中显示", systemImage: "folder") {
             if let v = model.vault { NSWorkspace.shared.activateFileViewerSelecting([folder.isEmpty ? v.root : v.url(folder)]) }
@@ -193,7 +193,7 @@ struct NoteRow: View {
         Label {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
-                    if model.renaming == note.rel {
+                    if model.chrome.renaming == note.rel {
                         RenameField(model: model, key: note.rel, name: note.title) { model.renameNote(note.rel, to: $0) }
                     } else {
                         Text(note.displayName).lineLimit(1)
@@ -203,9 +203,9 @@ struct NoteRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if model.writing.contains(note.rel) {
+                if model.agents.writing.contains(note.rel) {
                     ProgressView().controlSize(.mini).help("Agent 正在写入")
-                } else if let p = model.pending[note.rel] {
+                } else if let p = model.agents.pending[note.rel] {
                     Image(systemName: "circle.fill")
                         .font(.system(size: 7))
                         .foregroundStyle(p.by.map(Theme.agentColor) ?? .secondary)
@@ -221,8 +221,8 @@ struct NoteRow: View {
             Button("在 Finder 中显示", systemImage: "folder") {
                 if let v = model.vault { NSWorkspace.shared.activateFileViewerSelecting([v.url(note.rel)]) }
             }
-            Button("重命名…", systemImage: "pencil") { model.renaming = note.rel }
-                .disabled(model.writing.contains(note.rel))
+            Button("重命名…", systemImage: "pencil") { model.chrome.renaming = note.rel }
+                .disabled(model.agents.writing.contains(note.rel))
             Menu("移动到", systemImage: "folder") {
                 Button(model.vault?.name ?? "库根目录") { model.moveNote(note.rel, to: "") }
                     .disabled(note.folder.isEmpty)
@@ -230,8 +230,8 @@ struct NoteRow: View {
                     Button(f) { model.moveNote(note.rel, to: f) }.disabled(f == note.folder)
                 }
             }
-            if model.pending[note.rel] != nil {
-                Button("审阅改动", systemImage: "checklist") { model.open(note.rel); model.showDiff = true }
+            if model.agents.pending[note.rel] != nil {
+                Button("审阅改动", systemImage: "checklist") { model.open(note.rel); model.editor.showDiff = true }
             }
             Divider()
             ForEach(model.userCommands.filter { $0.scope == .note }.prefix(4), id: \.key) { c in
@@ -250,7 +250,7 @@ struct NoteRow: View {
 /// An AppKit field: SwiftUI's never sees Escape, and can't take focus as its row appears.
 struct RenameField: NSViewRepresentable {
     @Bindable var model: AppModel
-    /// What `model.renaming` holds while this field is open.
+    /// What `model.chrome.renaming` holds while this field is open.
     let key: String
     let name: String
     /// Returns false to keep the field open (the reason has been shown).
@@ -286,7 +286,7 @@ struct RenameField: NSViewRepresentable {
                 return true
             case #selector(NSResponder.cancelOperation(_:)):
                 done = true
-                parent.model.renaming = nil
+                parent.model.chrome.renaming = nil
                 return true
             default:
                 return false
@@ -301,10 +301,10 @@ struct RenameField: NSViewRepresentable {
         /// A rejected name keeps the field open after Return; clicking away just drops it.
         private func finish(_ text: String, keepOpen: Bool) {
             let m = parent.model
-            guard !done, m.renaming == parent.key else { return }
+            guard !done, m.chrome.renaming == parent.key else { return }
             if text == parent.name || parent.commit(text) || !keepOpen {
                 done = true
-                m.renaming = nil
+                m.chrome.renaming = nil
             }
         }
     }
@@ -315,9 +315,9 @@ struct AgentStatusRow: View {
     let kind: AgentKind
 
     var body: some View {
-        let info = model.cli[kind]
-        let terminals = model.sessions.filter { $0.agent == kind && $0.source == .terminal && $0.alive }.count
-        let running = model.sessions.contains { $0.agent == kind && $0.source == .app && $0.running }
+        let info = model.agents.cli[kind]
+        let terminals = model.agents.sessions.filter { $0.agent == kind && $0.source == .terminal && $0.alive }.count
+        let running = model.agents.sessions.contains { $0.agent == kind && $0.source == .app && $0.running }
         let status: String = {
             guard let info else { return "检测中…" }
             if !info.found { return "未安装" }
@@ -326,8 +326,8 @@ struct AgentStatusRow: View {
             return terminals > 0 ? "终端 \(terminals)" : "就绪"
         }()
         Button {
-            model.agentPick = kind
-            if !model.agentPanel { model.toggleAgent() }
+            model.agents.agentPick = kind
+            if !model.chrome.agentPanel { model.toggleAgent() }
         } label: {
             LabeledContent {
                 HStack(spacing: 6) {

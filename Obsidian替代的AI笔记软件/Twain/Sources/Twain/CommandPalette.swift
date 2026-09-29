@@ -33,24 +33,24 @@ struct CommandPalette: View {
                 m.open(n.rel, focus: true)
             }
         }
-        let q = m.paletteQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let q = m.chrome.paletteQuery.trimmingCharacters(in: .whitespaces).lowercased()
         if q.isEmpty {
-            return Array(notes.filter { $0.id != "n:" + (m.activeRel ?? "") }.prefix(4)) + cmds
+            return Array(notes.filter { $0.id != "n:" + (m.editor.activeRel ?? "") }.prefix(4)) + cmds
         }
         return (notes + cmds).filter { $0.label.lowercased().contains(q) || $0.hint.lowercased().contains(q) }
     }
 
     var body: some View {
         let list = entries
-        let sel = min(model.paletteSel, max(0, list.count - 1))
+        let sel = min(model.chrome.paletteSel, max(0, list.count - 1))
         ZStack(alignment: .top) {
             Color.black.opacity(0.14)
                 .ignoresSafeArea()
                 .contentShape(.rect)
-                .onTapGesture { model.palette = false }
+                .onTapGesture { model.chrome.palette = false }
             VStack(spacing: 0) {
                 searchField(list: list, sel: sel)
-                if !list.isEmpty || !model.paletteQuery.isEmpty {
+                if !list.isEmpty || !model.chrome.paletteQuery.isEmpty {
                     Divider().padding(.horizontal, 14)
                     results(list: list, sel: sel)
                     footer
@@ -72,19 +72,19 @@ struct CommandPalette: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("搜索笔记，或输入命令", text: $model.paletteQuery)
+            TextField("搜索笔记，或输入命令", text: Bindable(model.chrome).paletteQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 22))
                 .focused($focused)
-                .onChange(of: model.paletteQuery) { _, _ in model.paletteSel = 0 }
+                .onChange(of: model.chrome.paletteQuery) { _, _ in model.chrome.paletteSel = 0 }
                 .onKeyPress(.downArrow) { if imeComposing() { return .ignored }; move(1, list.count); return .handled }
                 .onKeyPress(.upArrow) { if imeComposing() { return .ignored }; move(-1, list.count); return .handled }
-                .onKeyPress(.escape) { if imeComposing() { return .ignored }; model.palette = false; return .handled }
+                .onKeyPress(.escape) { if imeComposing() { return .ignored }; model.chrome.palette = false; return .handled }
                 .onKeyPress(.return) {
                     if imeComposing() { return .ignored }
-                    model.palette = false
+                    model.chrome.palette = false
                     if list.isEmpty {
-                        let q = model.paletteQuery.trimmingCharacters(in: .whitespaces)
+                        let q = model.chrome.paletteQuery.trimmingCharacters(in: .whitespaces)
                         if !q.isEmpty { model.openByTitle(q) }
                     } else {
                         list[sel].run()
@@ -109,11 +109,11 @@ struct CommandPalette: View {
                         }
                         row(e, on: i == sel)
                             .id(i)
-                            .onHover { if $0 { model.paletteSel = i } }
-                            .onTapGesture { model.palette = false; e.run() }
+                            .onHover { if $0 { model.chrome.paletteSel = i } }
+                            .onTapGesture { model.chrome.palette = false; e.run() }
                     }
                     if list.isEmpty {
-                        Label("没有匹配项 · 按 ↩ 新建「\(model.paletteQuery)」", systemImage: "plus.circle")
+                        Label("没有匹配项 · 按 ↩ 新建「\(model.chrome.paletteQuery)」", systemImage: "plus.circle")
                             .foregroundStyle(.secondary)
                             .padding(14)
                     }
@@ -122,7 +122,7 @@ struct CommandPalette: View {
             }
             .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
-            .onChange(of: model.paletteSel) { _, v in proxy.scrollTo(v) }
+            .onChange(of: model.chrome.paletteSel) { _, v in proxy.scrollTo(v) }
         }
     }
 
@@ -161,6 +161,6 @@ struct CommandPalette: View {
 
     private func move(_ d: Int, _ n: Int) {
         guard n > 0 else { return }
-        model.paletteSel = (min(model.paletteSel, n - 1) + d + n) % n
+        model.chrome.paletteSel = (min(model.chrome.paletteSel, n - 1) + d + n) % n
     }
 }

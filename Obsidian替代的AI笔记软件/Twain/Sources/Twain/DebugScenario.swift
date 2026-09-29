@@ -70,7 +70,7 @@ enum DebugScenario {
                     if let tv = textView(), let lm = tv.layoutManager, let tc = tv.textContainer {
                         lm.ensureLayout(forBoundingRect: tv.visibleRect, in: tc)
                     }
-                    log(String(format: "perf open %d chars %.1fms", (m.editorText as NSString).length, (CACurrentMediaTime() - t) * 1000))
+                    log(String(format: "perf open %d chars %.1fms", (m.editor.editorText as NSString).length, (CACurrentMediaTime() - t) * 1000))
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { openNext(i + 1) }
                 }
             }
@@ -106,8 +106,8 @@ enum DebugScenario {
         case "toggles":
             // Hides and shows the sidebar and the inspector at whatever width the window has.
             let steps: [(AppModel) -> Void] = [
-                { $0.agentPanel.toggle() }, { $0.agentPanel.toggle() },
-                { $0.columnVisibility = .detailOnly }, { $0.columnVisibility = .all },
+                { $0.chrome.agentPanel.toggle() }, { $0.chrome.agentPanel.toggle() },
+                { $0.chrome.columnVisibility = .detailOnly }, { $0.chrome.columnVisibility = .all },
                 { $0.toggleZen() }, { $0.toggleZen() },
             ]
             for (i, s) in steps.enumerated() {
@@ -149,8 +149,8 @@ enum DebugScenario {
             // its first screen is typeset (the second and third opens show the warm cost).
             let rels = (parts.count > 1 ? parts[1] : "").split(separator: ",").map(String.init)
             // openbench:<notes>:nosidebar / :noagent — the same opens with a column hidden.
-            if parts.contains("nosidebar") { m.columnVisibility = .detailOnly }
-            if parts.contains("noagent") { m.agentPanel = false }
+            if parts.contains("nosidebar") { m.chrome.columnVisibility = .detailOnly }
+            if parts.contains("noagent") { m.chrome.agentPanel = false }
             var queue = rels.flatMap { [$0, $0, $0] }
             func next() {
                 guard !queue.isEmpty else { FileHandle.standardError.write("openbench done\n".data(using: .utf8)!); return }
@@ -169,7 +169,7 @@ enum DebugScenario {
                             FileHandle.standardError.write(String(format: "openbench parts open %.1f turn %.1f layout %.1f draw %.1f\n", (t1 - t) * 1000, (t2 - t1) * 1000, (t3 - t2) * 1000, (CACurrentMediaTime() - t3) * 1000).data(using: .utf8)!)
                         }
                         FileHandle.standardError.write(String(format: "openbench %@ %d chars %.1fms\n", rel,
-                                                              (m.editorText as NSString).length, (CACurrentMediaTime() - t) * 1000).data(using: .utf8)!)
+                                                              (m.editor.editorText as NSString).length, (CACurrentMediaTime() - t) * 1000).data(using: .utf8)!)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { next() }
                     }
                 }
@@ -179,8 +179,8 @@ enum DebugScenario {
             // Sweeps the window width a few points at a time, the way a user dragging its edge
             // would, to catch layouts whose size depends on their own size.
             if parts.contains("reply") { apply("reply", to: m) }
-            if parts.contains("noagent") { m.agentPanel = false }
-            if parts.contains("nosidebar") { m.columnVisibility = .detailOnly }
+            if parts.contains("noagent") { m.chrome.agentPanel = false }
+            if parts.contains("nosidebar") { m.chrome.columnVisibility = .detailOnly }
             guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView?.frame.width ?? 0 > 600 }) else { return }
             var width = w.frame.width
             // Down to 900, then back and forth through 820–900 a point at a time.
@@ -199,8 +199,8 @@ enum DebugScenario {
             // pastetest:<note>:<attachmentFolderPath>:<naming> — pastes a picture twice (with its
             // address as text, like a browser's Copy Image) and reports the files and the note.
             if parts.count > 2 { m.attachmentSetting = parts[2] }
-            if parts.count > 3, let n = AttachmentNaming(rawValue: parts[3]) { m.attachmentNaming = n }
-            m.requestFocus(caret: (m.editorText as NSString).length)
+            if parts.count > 3, let n = AttachmentNaming(rawValue: parts[3]) { m.prefs.attachmentNaming = n }
+            m.requestFocus(caret: (m.editor.editorText as NSString).length)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 let img = NSImage(size: NSSize(width: 40, height: 30), flipped: false) { r in NSColor.systemTeal.setFill(); r.fill(); return true }
                 let pb = NSPasteboard(name: NSPasteboard.Name("twain.pastetest"))
@@ -217,7 +217,7 @@ enum DebugScenario {
                 text.setData(pb.data(forType: .png), forType: .png)
                 let ok3 = c.pasteMedia(from: text, at: nil)
                 let files = (FileManager.default.enumerator(atPath: m.vault!.rootPath)?.allObjects as? [String] ?? []).filter { $0.hasSuffix(".png") }.sorted()
-                let log = "pastetest ok=\(ok1),\(ok2) textWins=\(!ok3) setting=\(m.attachmentSetting) files=\(files) tail=\(m.editorText.suffix(80).replacingOccurrences(of: "\n", with: "⏎"))\n"
+                let log = "pastetest ok=\(ok1),\(ok2) textWins=\(!ok3) setting=\(m.attachmentSetting) files=\(files) tail=\(m.editor.editorText.suffix(80).replacingOccurrences(of: "\n", with: "⏎"))\n"
                 FileHandle.standardError.write(log.data(using: .utf8)!)
             }
         case "scroll":
@@ -244,12 +244,12 @@ enum DebugScenario {
                 tv.setSelectedRange(NSRange(location: min(from, len), length: min(n, len - min(from, len))))
             }
         case "slash":
-            m.requestFocus(caret: (m.editorText as NSString).length)
+            m.requestFocus(caret: (m.editor.editorText as NSString).length)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 textView()?.insertText("\n/", replacementRange: textView()!.selectedRange())
             }
         case "type":
-            m.requestFocus(caret: (m.editorText as NSString).length)
+            m.requestFocus(caret: (m.editor.editorText as NSString).length)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 let tv = textView()!
                 for s in ["\n- [ ] 第一件事", "\n", "第二件事", "\n", "\n", "正文 **粗**"] {
@@ -260,7 +260,7 @@ enum DebugScenario {
         case "space":
             if parts.count > 1 { m.openSpace(parts[1]) }
         case "desk":
-            if let d = m.desks.first(where: { !$0.cards.isEmpty }) { m.selection = "desk:" + d.id }
+            if let d = m.desks.first(where: { !$0.cards.isEmpty }) { m.chrome.selection = "desk:" + d.id }
         case "reply":
             let s = AgentSession(agent: .claude, source: .app, title: "续写")
             s.apply([.user("根据上下文续写这篇笔记"), .step(id: "1", text: "读取 AGENTS.md", write: nil), .stepDone(id: "1"),
@@ -278,12 +278,12 @@ enum DebugScenario {
                      1. 有序
                      > 你要是其实想在别的位置续写，告诉我在哪就行。
                      """)])
-            m.sessions.append(s)
-            m.activeSessionID = s.id
+            m.agents.sessions.append(s)
+            m.agents.activeSessionID = s.id
         case "bench":
             // Types into the middle of the note, one key per run-loop turn so the async work
             // (SwiftUI updates, height fitting, drawing) counts too, and reports per-key costs.
-            let mid = (m.editorText as NSString).length / 2
+            let mid = (m.editor.editorText as NSString).length / 2
             m.requestFocus(caret: mid)
             let keys = ProcessInfo.processInfo.environment["BENCH_KEYS"].flatMap(Int.init) ?? 60
             var times: [Double] = []
@@ -295,7 +295,7 @@ enum DebugScenario {
                     let sorted = times.sorted()
                     let line = String(format: "bench keys=%d median=%.2fms p95=%.2fms max=%.2fms length=%d\n",
                                       times.count, sorted[sorted.count / 2], sorted[Int(Double(sorted.count) * 0.95)], sorted.last!,
-                                      (m.editorText as NSString).length)
+                                      (m.editor.editorText as NSString).length)
                     FileHandle.standardError.write(line.data(using: .utf8)!)
                     return
                 }
@@ -307,52 +307,52 @@ enum DebugScenario {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { step(0) }
         case "diff", "banner":
-            let before = Markdown.lines(m.editorText)
+            let before = Markdown.lines(m.editor.editorText)
             var after = before
             after.insert("> **摘要**：本文围绕里程碑、风险、备注展开。", at: 1)
             after[after.count - 2] = "索引改为增量之后，冷启动预计降到 10 秒以内。"
             after += ["## 下一步", "- [ ] 确认结论与负责人"]
-            m.pending[m.activeRel!] = PendingReview(rel: m.activeRel!, by: .claude, source: .app, baseline: before, proposed: after,
+            m.agents.pending[m.editor.activeRel!] = PendingReview(rel: m.editor.activeRel!, by: .claude, source: .app, baseline: before, proposed: after,
                                                     hunks: LineDiff.hunks(from: before, to: after), snapshot: "a1b2c3d")
-            m.showDiff = parts.first == "diff"
+            m.editor.showDiff = parts.first == "diff"
             let s = AgentSession(agent: .claude, source: .app, title: "总结这篇笔记")
             s.apply([.user("总结这篇笔记，在开头加摘要"), .step(id: "1", text: "读取 AGENTS.md", write: nil), .stepDone(id: "1"),
                      .step(id: "2", text: "写入 项目/2.0 发布计划.md", write: nil), .stepDone(id: "2"),
                      .text("我在开头加了一段摘要，并在文末整理出“下一步”。")])
-            s.items.append(SessionItem(kind: .change(rel: m.activeRel!, plus: 4, minus: 1)))
-            m.sessions.append(s)
-            m.activeSessionID = s.id
+            s.items.append(SessionItem(kind: .change(rel: m.editor.activeRel!, plus: 4, minus: 1)))
+            m.agents.sessions.append(s)
+            m.agents.activeSessionID = s.id
         case "proposal":
             // A proposal with reasons, one hunk already rejected with the user's reason.
             let s = AgentSession(agent: .claude, source: .app, title: "精简措辞")
-            m.sessions.append(s)
-            m.activeSessionID = s.id
-            let lines = Markdown.lines(m.editorText)
+            m.agents.sessions.append(s)
+            m.agents.activeSessionID = s.id
+            let lines = Markdown.lines(m.editor.editorText)
             let edits: [JSONValue] = [
                 ["old": .string(lines[1]), "new": .string("> 摘要：2.0 在 10 月 20 日前完成内测。"), "reason": "开头先交代结论，读者不用读完全文"],
                 ["old": .string(lines[lines.count - 2]), "new": "冷启动目标：10 秒以内。", "reason": "把主观判断改成可验证的目标"],
             ]
-            m.propose(CommandCall(params: ["note": .string(m.activeRel!), "edits": .array(edits), "reason": "精简措辞，让每段先说结论"],
+            m.propose(CommandCall(params: ["note": .string(m.editor.activeRel!), "edits": .array(edits), "reason": "精简措辞，让每段先说结论"],
                                   session: s)) { _ in }
             // The proposal is made once the index has caught up (a moment later).
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             m.setHunk(1, .rejected)
             m.setFeedback(1, "这里需要保留原来的解释")
-            m.showDiff = parts.count < 3 || parts[2] != "panel"
-            if !m.showDiff {
+            m.editor.showDiff = parts.count < 3 || parts[2] != "panel"
+            if !m.editor.showDiff {
                 s.apply([.user("把这篇笔记精简一下"), .text("我提交了两处修改，等你审阅。")])
                 let q = AgentQuestion(id: UUID(), sessionID: s.id, agent: .claude, question: "摘要放在标题下面，还是单独一节？",
                                       options: ["标题下面", "单独一节"], allowText: true)
-                m.questions[q.id] = q
+                m.agents.questions[q.id] = q
                 s.items.append(SessionItem(kind: .question(q.id)))
-                s.items.append(SessionItem(kind: .feedback(rel: m.activeRel!, message: "我审阅了你的修改：接受 1 处，拒绝 1 处。", sent: false)))
-                m.agentPanel = true
+                s.items.append(SessionItem(kind: .feedback(rel: m.editor.activeRel!, message: "我审阅了你的修改：接受 1 处，拒绝 1 处。", sent: false)))
+                m.chrome.agentPanel = true
             }
             }
         case "ime":
             // Return while Pinyin is composing must commit the candidate, not send; plain Return must send.
-            m.agentPanel = true
-            m.claudeOn = false  // a send then only shows a toast instead of running the CLI
+            m.chrome.agentPanel = true
+            m.prefs.claudeOn = false  // a send then only shows a toast instead of running the CLI
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) else { return }
                 func views(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(views) }
@@ -366,43 +366,43 @@ enum DebugScenario {
                                              context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
                     w.sendEvent(e)
                 }
-                m.agentInput = "测试"
+                m.agents.agentInput = "测试"
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     field.setMarkedText("zhong", selectedRange: NSRange(location: 5, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
                     enter()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        print("IME composing: marked=\(field.hasMarkedText()) toast=\(m.toast ?? "nil")")
+                        print("IME composing: marked=\(field.hasMarkedText()) toast=\(m.chrome.toast ?? "nil")")
                         field.unmarkText()
-                        m.toast = nil
-                        m.agentInput = "测试"
+                        m.chrome.toast = nil
+                        m.agents.agentInput = "测试"
                         enter()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            print("IME plain: toast=\(m.toast ?? "nil")")
-                            m.claudeOn = true
+                            print("IME plain: toast=\(m.chrome.toast ?? "nil")")
+                            m.prefs.claudeOn = true
                             exit(0)
                         }
                     }
                 }
             }
         case "models":
-            m.agentPanel = true
-            if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agentPick = k }
-            m.modelPickerOpen = true
+            m.chrome.agentPanel = true
+            if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agents.agentPick = k }
+            m.chrome.modelPickerOpen = true
         case "agent":
-            m.agentPanel = true
-            if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agentPick = k }
-        case "palette": m.openPalette(); m.paletteQuery = parts.count > 2 ? parts[2] : ""
+            m.chrome.agentPanel = true
+            if parts.count > 2, let k = AgentKind(rawValue: parts[2]) { m.agents.agentPick = k }
+        case "palette": m.openPalette(); m.chrome.paletteQuery = parts.count > 2 ? parts[2] : ""
         case "settings": m.openSettings(parts.count > 2 ? SettingsTab(rawValue: parts[2]) ?? .agent : .agent)
-        case "onboarding": m.onboardingStep = Int(parts.count > 2 ? parts[2] : "0") ?? 0
+        case "onboarding": m.chrome.onboardingStep = Int(parts.count > 2 ? parts[2] : "0") ?? 0
         case "zen": m.toggleZen(); m.requestFocus(caret: 40)
         case "fakerun":
             if parts.count > 2 { m.requestFocus(caret: 5) }
             m.debugSimulateRun(rel: rel, append: "\n- [ ] 模拟 agent 追加\n")
         case "run":
-            m.agentPanel = true
+            m.chrome.agentPanel = true
             m.runAgent(prompt: parts.count > 2 ? parts[2] : "在这篇笔记末尾追加一行：测试完成。", agent: .claude)
         case "markdown":
-            m.agentPanel = true
+            m.chrome.agentPanel = true
             let s = AgentSession(agent: .claude, source: .app, title: "Markdown 预览")
             s.apply([.user("总结这篇笔记"), .text("""
             # 本周进展
@@ -420,8 +420,8 @@ enum DebugScenario {
             print(status)
             ```
             """)])
-            m.sessions.append(s)
-            m.activeSessionID = s.id
+            m.agents.sessions.append(s)
+            m.agents.activeSessionID = s.id
         default: break
         }
     }
