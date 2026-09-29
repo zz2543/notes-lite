@@ -273,6 +273,7 @@ struct EditorView: NSViewRepresentable {
             p.headIndent = MarkdownStyler.gutter
             p.tailIndent = -MarkdownStyler.gutter
             tv.typingAttributes = [.font: body, .foregroundColor: Theme.NS.ink, .paragraphStyle: p]
+            updateFocus()
             tv.updateCaret(animated: true)
             // A long note is styled in slices, nearest to the screen first; the rest follows
             // on later turns so typing and scrolling stay responsive.
@@ -286,6 +287,25 @@ struct EditorView: NSViewRepresentable {
         }
 
         private var continuing = false
+
+        /// Paragraph dimming: the caret's line at full strength, the rest faded, while the editor
+        /// has focus. Drawn by the layout manager; only the lines that change are redrawn.
+        private func updateFocus() {
+            guard let tv = textView, let lm = tv.layoutManager as? TwainLayoutManager, let style else { return }
+            let len = (tv.string as NSString).length
+            let new: NSRange? = {
+                guard style.dim, !style.plain, isFocused else { return nil }
+                return styler.lineRange(styler.lineIndex(at: min(tv.selectedRange().location, len)), length: len)
+            }()
+            guard new != lm.focus else { return }
+            let old = lm.focus
+            lm.focus = new
+            if let old, let new {
+                for r in [old, new] where NSMaxRange(r) <= len { lm.invalidateDisplay(forCharacterRange: r) }
+            } else {
+                tv.setNeedsDisplay(tv.visibleRect)
+            }
+        }
 
         /// The line at the top of the visible area, when layout already knows it.
         private func topVisibleLine() -> Int? {

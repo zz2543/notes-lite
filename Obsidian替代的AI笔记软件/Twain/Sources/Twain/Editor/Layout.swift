@@ -63,6 +63,37 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     /// Passages with an annotation: a soft marker under the text, stronger for the selected one.
     var highlights: [(range: NSRange, color: NSColor, selected: Bool)] = []
 
+    /// Paragraph focus: characters outside `focus` are drawn faded. Applied while drawing, so
+    /// moving the caret to another line or focusing the editor redraws the screen and nothing
+    /// else; the text's attributes never depend on it. Nil draws everything at full strength.
+    var focus: NSRange?
+    static let dimAlpha: CGFloat = 0.26
+
+    func alpha(forCharacters r: NSRange) -> CGFloat {
+        guard let f = focus else { return 1 }
+        let inside = r.length == 0 ? NSLocationInRange(r.location, f) || r.location == NSMaxRange(f) : NSIntersectionRange(f, r).length > 0
+        return inside ? 1 : Self.dimAlpha
+    }
+
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        guard let f = focus, glyphsToShow.length > 0 else { return super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin) }
+        let fg = glyphRange(forCharacterRange: f, actualCharacterRange: nil)
+        let start = glyphsToShow.location, end = NSMaxRange(glyphsToShow)
+        let a = max(start, min(end, fg.location)), b = max(a, min(end, NSMaxRange(fg)))
+        drawGlyphs(start, a, alpha: Self.dimAlpha, at: origin)
+        drawGlyphs(a, b, alpha: 1, at: origin)
+        drawGlyphs(b, end, alpha: Self.dimAlpha, at: origin)
+    }
+
+    private func drawGlyphs(_ lo: Int, _ hi: Int, alpha: CGFloat, at origin: NSPoint) {
+        guard hi > lo else { return }
+        let ctx = NSGraphicsContext.current?.cgContext
+        ctx?.saveGState()
+        if alpha < 1 { ctx?.setAlpha(alpha) }
+        super.drawGlyphs(forGlyphRange: NSRange(location: lo, length: hi - lo), at: origin)
+        ctx?.restoreGState()
+    }
+
     /// Inline code and highlights: a rounded box around the glyphs instead of the whole line height.
     /// The selection comes through here too, as one tall rect for all its middle lines; it is
     /// left to the default fill (it is not the run's own background color).
@@ -78,7 +109,7 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let gi = glyphIndexForCharacter(at: charRange.location)
         let baseline = location(forGlyphAt: gi).y
         let text = (font.ascender - font.descender)
-        color.setFill()
+        color.withAlphaComponent(color.alphaComponent * alpha(forCharacters: charRange)).setFill()
         for i in 0..<rectCount {
             let r = rectArray[i]
             // Each rect spans its line fragment (view coordinates): place the box on the baseline.
@@ -130,8 +161,7 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             let r = pic.rendered
             let rect = CGRect(x: origin.x + frag.minX + loc.x + 1, y: origin.y + frag.minY + loc.y - r.baseline, width: r.size.width, height: r.size.height)
             // Dimmed paragraphs dim their formulas too.
-            let fraction = (storage.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor)?.alphaComponent ?? 1
-            img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: min(1, fraction), respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+            img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: alpha(forCharacters: range), respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
         }
     }
 
@@ -142,7 +172,7 @@ final class TwainLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let y = b.revealed ? origin.y + last.used.maxY + 14 : origin.y + first.rect.minY + (para?.paragraphSpacingBefore ?? 0)
         let gutter = MarkdownStyler.gutter
         let frame = CGRect(x: origin.x + gutter, y: y, width: max(40, width - 2 * gutter), height: b.height)
-        let drawn = b.draw(in: frame)
+        let drawn = b.draw(in: frame, alpha: alpha(forCharacters: range))
         blockHitRects.append((drawn, b, range.location))
     }
 

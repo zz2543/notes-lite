@@ -109,3 +109,41 @@ caret end n=30 median=0.2ms p90=0.4ms max=1.0ms
 memory start=133MB end=174MB
 done
 ```
+
+## d1 detail split · f9df6dc · 2026-09-29 10:08
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=64.2ms p90=75.9ms max=99.0ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=162 dropped=0 longest=24.1ms
+agent show frames=157 dropped=3 longest=33.3ms
+idle space worst=1.3ms stalls>16ms=0
+idle note worst=1.3ms stalls>16ms=0
+type 80665 chars n=80 median=5.2ms p90=12.4ms max=60.5ms
+caret start n=30 median=0.2ms p90=0.3ms max=14.3ms
+caret end n=30 median=0.2ms p90=0.3ms max=1.0ms
+focus dim n=12 median=54.6ms p90=59.1ms max=60.7ms
+memory start=134MB end=216MB
+done
+```
+
+## d1 draw-time dim · f9df6dc · 2026-09-29 10:11
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=64.5ms p90=77.5ms max=100.7ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=0 longest=19.8ms
+agent show frames=159 dropped=1 longest=33.3ms
+idle space worst=1.2ms stalls>16ms=0
+idle note worst=1.3ms stalls>16ms=0
+type 80665 chars n=80 median=4.1ms p90=10.4ms max=60.0ms
+caret start n=30 median=0.2ms p90=0.3ms max=13.5ms
+caret end n=30 median=0.2ms p90=0.4ms max=1.1ms
+focus dim n=12 median=22.3ms p90=24.6ms max=25.5ms
+memory start=133MB end=183MB
+done
+```

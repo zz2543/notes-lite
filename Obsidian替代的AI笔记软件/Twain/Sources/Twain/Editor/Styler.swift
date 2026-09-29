@@ -102,7 +102,6 @@ final class MarkdownStyler {
         var lang = 0
         var active = false
         var reveal = false
-        var dim = false
         var first = false
         var embedStamp = 0
         var mode = Mode.normal
@@ -444,7 +443,6 @@ final class MarkdownStyler {
                 sig.active = true
                 sig.reveal = reveals(ns, r, caret: caret! - r.location, forced: sig.forced)
             }
-            sig.dim = style.dim && activeLine != nil && i != activeLine
             if let target = embedTarget(ns, i, r, forced: sig.forced) { sig.embedStamp = embedStamps[target, default: 0] }
             let textDirty = all || (i >= textA && i <= textB) || (b >= 0 && dirtyBlocks.contains(b))
             let old = i < textA ? i : i - lineDelta
@@ -559,7 +557,7 @@ final class MarkdownStyler {
     }
 
     /// The drawing for a rendered block, and whether it still waits for a picture.
-    private func blockDeco(_ b: Block, _ ns: NSString, revealed: Bool, alpha: CGFloat) -> (BlockDeco, Bool) {
+    private func blockDeco(_ b: Block, _ ns: NSString, revealed: Bool) -> (BlockDeco, Bool) {
         let len = ns.length
         let avail = max(120, containerWidth - 2 * Self.gutter)
         func text(_ i: Int) -> String { ns.substring(with: lineRange(i, length: len)) }
@@ -569,11 +567,11 @@ final class MarkdownStyler {
         func pictureDeco(_ kind: RenderKind, _ source: String, width: CGFloat = 0) -> (BlockDeco, Bool) {
             guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 let r = Rendered(image: nil, size: CGSize(width: avail, height: 36), baseline: 36, error: kind == .block ? "（空公式）" : "（空代码块）")
-                return (BlockDeco(.picture(r, kind: kind), height: 36, revealed: revealed, alpha: alpha), false)
+                return (BlockDeco(.picture(r, kind: kind), height: 36, revealed: revealed), false)
             }
             let r = picture(kind, source, size: typo.bodySize, width: width)
             let h = BlockDeco.pictureHeight(r, kind: kind, width: avail)
-            return (BlockDeco(.picture(r, kind: kind), height: h, revealed: revealed, alpha: alpha), r == nil)
+            return (BlockDeco(.picture(r, kind: kind), height: h, revealed: revealed), r == nil)
         }
         switch b.kind {
         case .table:
@@ -583,7 +581,7 @@ final class MarkdownStyler {
             let rows = [b.first] + (b.first + 2 > b.last ? [] : Array((b.first + 2)...b.last))
             let layout = TableLayout(t, rowOffsets: rows.map { lineStarts[$0] - base }, available: avail, typo: typo,
                                      fontSize: typo.bodySize - 1) { [weak self] src, size in self?.picture(.inline, src, size: size) }
-            return (BlockDeco(.table(layout), height: layout.height, revealed: revealed, alpha: alpha), layout.waiting)
+            return (BlockDeco(.table(layout), height: layout.height, revealed: revealed), layout.waiting)
         case .math:
             let source = b.first == b.last ? Markdown.displayMath(text(b.first)) ?? "" : inner()
             return pictureDeco(.block, source)
@@ -641,7 +639,7 @@ final class MarkdownStyler {
     /// The first line of a block drawn as a picture: as tall as the picture, its text hidden.
     private func styleHead(_ storage: NSTextStorage, _ ns: NSString, _ i: Int, _ r: NSRange, _ full: NSRange, _ sig: Sig) -> Bool {
         let b = blocks[Int(blockOf[i])]
-        let (deco, waiting) = blockDeco(b, ns, revealed: false, alpha: sig.dim ? 0.26 : 1)
+        let (deco, waiting) = blockDeco(b, ns, revealed: false)
         let p = NSMutableParagraphStyle()
         p.minimumLineHeight = deco.height
         p.maximumLineHeight = deco.height
@@ -680,8 +678,6 @@ final class MarkdownStyler {
         let ink = Theme.NS.ink, mark = Theme.NS.mark
         let body = typo.body
         let bodySize = typo.bodySize
-        let alpha: CGFloat = sig.dim ? 0.26 : 1
-        func dimmed(_ c: NSColor) -> NSColor { alpha < 1 ? c.withAlphaComponent(c.alphaComponent * alpha) : c }
 
         // Literal blocks: code, fences, front matter.
         if type.isLiteral {
@@ -696,18 +692,18 @@ final class MarkdownStyler {
             if sig.codeBottom || sig.mode == .tail { p.paragraphSpacing = 12 }
             var preview: (BlockDeco, Bool)?
             if sig.mode == .tail, blockOf[i] >= 0 {
-                preview = blockDeco(blocks[Int(blockOf[i])], ns, revealed: true, alpha: alpha)
+                preview = blockDeco(blocks[Int(blockOf[i])], ns, revealed: true)
                 p.paragraphSpacing += preview!.0.height + 20
             }
             let color = type == .code ? ink : mark
-            storage.setAttributes([.font: font, .foregroundColor: dimmed(type == .frontmatter ? Theme.NS.quote : color), .paragraphStyle: p], range: full)
+            storage.setAttributes([.font: font, .foregroundColor: type == .frontmatter ? Theme.NS.quote : color, .paragraphStyle: p], range: full)
             if type != .frontmatter {
                 let single = sig.mode == .tail && sig.forced == nil
                 storage.addAttribute(.twainDeco, value: Deco(.code(top: sig.codeTop || single, bottom: sig.codeBottom || single), contentX: p.headIndent), range: full)
             }
             if type == .code, sig.lang > 0, sig.lang < langs.count {
                 for t in CodeHighlight.tokens(text, language: langs[sig.lang]) {
-                    storage.addAttribute(.foregroundColor, value: dimmed(Theme.NS.code(t.token)),
+                    storage.addAttribute(.foregroundColor, value: Theme.NS.code(t.token),
                                          range: NSRange(location: r.location + t.range.location, length: t.range.length))
                 }
             }
@@ -830,36 +826,36 @@ final class MarkdownStyler {
                     storage.setAttributes([.font: body, .foregroundColor: NSColor.clear, .paragraphStyle: p], range: full)
                     if r.length > 0 { storage.addAttribute(.twainHidden, value: true, range: r) }
                 }
-                storage.addAttributes([.twainBlock: BlockDeco(.note(e), height: h, revealed: sig.active, alpha: alpha),
+                storage.addAttributes([.twainBlock: BlockDeco(.note(e), height: h, revealed: sig.active),
                                        .twainWikiLink: note.title], range: full)
                 return false
             }
         }
 
-        storage.setAttributes([.font: font, .foregroundColor: dimmed(color), .paragraphStyle: p], range: full)
+        storage.setAttributes([.font: font, .foregroundColor: color, .paragraphStyle: p], range: full)
         if level == 1 { storage.addAttribute(.kern, value: -0.012 * size, range: r) }
         if let deco { storage.addAttribute(.twainDeco, value: Deco(deco, contentX: contentX), range: full) }
         guard r.length > 0 else { return false }
         let abs = { (x: NSRange) in NSRange(location: r.location + x.location, length: x.length) }
 
         if type == .hr {
-            if sig.active { storage.addAttribute(.foregroundColor, value: dimmed(mark), range: r) }
+            if sig.active { storage.addAttribute(.foregroundColor, value: mark, range: r) }
             else { storage.addAttribute(.twainHidden, value: true, range: r) }
             return false
         }
         if type == .table {
             for (k, c) in text.utf16.enumerated() where c == 0x7C {   // |
-                storage.addAttribute(.foregroundColor, value: dimmed(mark), range: NSRange(location: r.location + k, length: 1))
+                storage.addAttribute(.foregroundColor, value: mark, range: NSRange(location: r.location + k, length: 1))
             }
         }
         if type == .task, Markdown.isTaskDone(text) {
             let bodyR = NSRange(location: r.location + m.prefix.length, length: r.length - m.prefix.length)
-            storage.addAttributes([.foregroundColor: dimmed(Theme.NS.doneText), .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+            storage.addAttributes([.foregroundColor: Theme.NS.doneText, .strikethroughStyle: NSUnderlineStyle.single.rawValue,
                                    .strikethroughColor: Theme.NS.strike], range: bodyR)
         }
         if let callout, r.length > m.prefix.length {
             let title = NSRange(location: r.location + m.prefix.length, length: r.length - m.prefix.length)
-            storage.addAttributes([.font: typo.font(size: size, weight: .semibold), .foregroundColor: dimmed(callout.tint)], range: title)
+            storage.addAttributes([.font: typo.font(size: size, weight: .semibold), .foregroundColor: callout.tint], range: title)
         }
         let accent = Theme.NS.accent
         var waiting = false
@@ -874,24 +870,24 @@ final class MarkdownStyler {
             case .code:
                 storage.addAttributes([.font: typo.mono(size: (size * 0.86).rounded()), .backgroundColor: Theme.NS.codeBg], range: x)
             case .strike:
-                storage.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: dimmed(Theme.NS.doneText)], range: x)
+                storage.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: Theme.NS.doneText], range: x)
             case .highlight:
-                storage.addAttribute(.backgroundColor, value: Theme.NS.highlight.withAlphaComponent(0.4 * alpha), range: x)
+                storage.addAttribute(.backgroundColor, value: Theme.NS.highlight.withAlphaComponent(0.4), range: x)
             case let .wikilink(title):
-                storage.addAttributes([.foregroundColor: dimmed(accent), .underlineStyle: NSUnderlineStyle.single.rawValue,
-                                       .underlineColor: accent.withAlphaComponent(0.3 * alpha), .twainWikiLink: title], range: x)
+                storage.addAttributes([.foregroundColor: accent, .underlineStyle: NSUnderlineStyle.single.rawValue,
+                                       .underlineColor: accent.withAlphaComponent(0.3), .twainWikiLink: title], range: x)
             case let .link(url):
-                storage.addAttributes([.foregroundColor: dimmed(accent), .underlineStyle: NSUnderlineStyle.single.rawValue,
-                                       .underlineColor: accent.withAlphaComponent(0.3 * alpha), .twainURL: url], range: x)
+                storage.addAttributes([.foregroundColor: accent, .underlineStyle: NSUnderlineStyle.single.rawValue,
+                                       .underlineColor: accent.withAlphaComponent(0.3), .twainURL: url], range: x)
             case let .embed(target), let .image(target):
-                storage.addAttributes([.foregroundColor: dimmed(accent)], range: x)
+                storage.addAttributes([.foregroundColor: accent], range: x)
                 if let u = resolveEmbed(target) { storage.addAttribute(.twainURL, value: u.absoluteString, range: x) }
                 else if case .embed = span.kind { storage.addAttribute(.twainWikiLink, value: target, range: x) }
             case let .tag(name):
-                storage.addAttributes([.foregroundColor: dimmed(Theme.NS.tag), .twainTag: name], range: x)
+                storage.addAttributes([.foregroundColor: Theme.NS.tag, .twainTag: name], range: x)
             case let .footnote(label):
                 storage.addAttributes([.font: typo.font(size: (size * 0.72).rounded()), .baselineOffset: (size * 0.36).rounded(),
-                                       .foregroundColor: dimmed(accent), .twainFootnote: label], range: x)
+                                       .foregroundColor: accent, .twainFootnote: label], range: x)
             case let .math(src):
                 let rendered = sig.active ? nil : picture(.inline, src, size: size)
                 if let rendered, rendered.image != nil {
@@ -899,7 +895,7 @@ final class MarkdownStyler {
                 } else {
                     if !sig.active, rendered == nil { waiting = true }
                     let tone: NSColor = rendered?.error != nil ? .systemRed : sig.active ? ink : Theme.NS.quote
-                    storage.addAttributes([.font: typo.mono(size: (size * 0.86).rounded()), .foregroundColor: dimmed(tone)], range: x)
+                    storage.addAttributes([.font: typo.mono(size: (size * 0.86).rounded()), .foregroundColor: tone], range: x)
                 }
             }
         }
@@ -907,7 +903,7 @@ final class MarkdownStyler {
         let indentRange = NSRange(location: r.location, length: type.isList ? ws : 0)
         if indentRange.length > 0 { storage.addAttribute(.twainHidden, value: true, range: indentRange) }
         if markerRange.length > 0 {
-            if revealPrefix { storage.addAttributes([.foregroundColor: dimmed(mark), .font: markFont], range: markerRange) }
+            if revealPrefix { storage.addAttributes([.foregroundColor: mark, .font: markFont], range: markerRange) }
             else { storage.addAttribute(.twainHidden, value: true, range: markerRange) }
         }
         for mk in m.spans.flatMap(\.marks) {
@@ -928,7 +924,7 @@ final class MarkdownStyler {
                 storage.addAttribute(.twainHidden, value: true, range: whole)
                 let anchor = NSRange(location: whole.location, length: 1)
                 storage.removeAttribute(.twainHidden, range: anchor)
-                storage.addAttributes([.twainInline: InlinePicture(pic), .foregroundColor: dimmed(ink)], range: anchor)
+                storage.addAttributes([.twainInline: InlinePicture(pic), .foregroundColor: ink], range: anchor)
                 ascent = max(ascent, pic.baseline)
                 descent = max(descent, pic.size.height - pic.baseline)
             }

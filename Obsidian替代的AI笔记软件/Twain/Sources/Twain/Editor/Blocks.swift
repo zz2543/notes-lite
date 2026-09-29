@@ -22,13 +22,11 @@ final class BlockDeco: NSObject {
     /// Height of the drawing, without the spacing around it.
     let height: CGFloat
     let revealed: Bool
-    let alpha: CGFloat
 
-    init(_ content: Content, height: CGFloat, revealed: Bool, alpha: CGFloat) {
+    init(_ content: Content, height: CGFloat, revealed: Bool) {
         self.content = content
         self.height = height
         self.revealed = revealed
-        self.alpha = alpha
     }
 
     static func pictureHeight(_ r: Rendered?, kind: RenderKind, width: CGFloat) -> CGFloat {
@@ -46,7 +44,7 @@ final class BlockDeco: NSObject {
 
     /// Draws the block into `frame` (the column, at the block's top), returning the rect it used.
     @discardableResult
-    func draw(in frame: CGRect) -> CGRect {
+    func draw(in frame: CGRect, alpha: CGFloat = 1) -> CGRect {
         let ctx = NSGraphicsContext.current?.cgContext
         if alpha < 1 { ctx?.setAlpha(alpha); ctx?.beginTransparencyLayer(auxiliaryInfo: nil) }
         defer { if alpha < 1 { ctx?.endTransparencyLayer(); ctx?.setAlpha(1) } }

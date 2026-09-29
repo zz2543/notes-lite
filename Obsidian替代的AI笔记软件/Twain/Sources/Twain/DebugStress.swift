@@ -218,12 +218,36 @@ enum DebugStress {
                         move(max(0, (tv.string as NSString).length - 10), 30, into: { far = $0 }) {
                             log("caret start " + stats(near))
                             log("caret end " + stats(far))
-                            tv.undoManager?.removeAllActions()
-                            m.dirty = false
-                            m.reloadActiveFromDisk()
-                            next()
+                            focus()
                         }
                     }
+                }
+                // Focus in and out with paragraph dimming on: every line's colour depends on it.
+                @MainActor func focus() {
+                    let wasDim = m.dim
+                    m.dim = true
+                    var xs: [Double] = []
+                    @MainActor func step(_ k: Int) {
+                        guard k < 12 else {
+                            log("focus dim " + stats(xs))
+                            m.dim = wasDim
+                            tv.window?.makeFirstResponder(tv)
+                            return finish()
+                        }
+                        let t = CACurrentMediaTime()
+                        tv.window?.makeFirstResponder(k % 2 == 0 ? nil : tv)
+                        DispatchQueue.main.async { DispatchQueue.main.async {
+                            xs.append((CACurrentMediaTime() - t) * 1000)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { step(k + 1) }
+                        } }
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { step(0) }
+                }
+                @MainActor func finish() {
+                    tv.undoManager?.removeAllActions()
+                    m.dirty = false
+                    m.reloadActiveFromDisk()
+                    next()
                 }
                 type(0)
             }
