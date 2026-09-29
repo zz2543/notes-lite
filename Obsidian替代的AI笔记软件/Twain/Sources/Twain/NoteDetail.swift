@@ -171,7 +171,11 @@ struct StatusPill: View {
                 if model.companionOn {
                     if model.companionThinking { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkle").foregroundStyle(.tint) }
                 }
-                Text(model.stats).monospacedDigit().foregroundStyle(.secondary)
+                // The pace covers the last minute: only this text redraws on a timer.
+                TimelineView(.periodic(from: .now, by: 5)) { _ in
+                    Text(model.stats).monospacedDigit().foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
             }
             .font(.caption)
             .lineLimit(1)

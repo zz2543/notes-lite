@@ -187,7 +187,6 @@ enum DebugScenario {
                 if width <= 820 { dir = 1; bounces += 1 } else if width >= 900, bounces > 0 { dir = -1; bounces += 1 }
                 if width < 900, dir == -3 { dir = -1 }
                 guard bounces < 8 else { FileHandle.standardError.write("resize done\n".data(using: .utf8)!); return }
-                if parts.contains("tick") { m.tick += 1 }
                 var f = w.frame; f.size.width = width; w.setFrame(f, display: true)
                 FileHandle.standardError.write("width \(Int(width))\n".data(using: .utf8)!)
                 DispatchQueue.main.async { step() }

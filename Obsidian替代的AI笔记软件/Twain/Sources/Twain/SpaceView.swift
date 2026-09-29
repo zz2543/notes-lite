@@ -218,8 +218,9 @@ private struct TodayModule: View {
         let vars = DateVars.vars()
         VStack(alignment: .leading, spacing: 8) {
             Text("\(vars["date"]!) \(vars["weekday"]!)").font(.title3.weight(.semibold))
-            if let rel, let text = model.vault?.diskContent(rel) {
-                let body = Markdown.lines(text).dropFirst().filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(4)
+            // The index holds the notes' text already: nothing is read from disk while drawing.
+            if let rel, let lines = model.index?.notes[rel]?.lines ?? (model.vault?.diskContent(rel)).map(Markdown.lines) {
+                let body = lines.dropFirst().filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(4)
                 Text(body.joined(separator: "\n")).font(.callout).foregroundStyle(.secondary).lineLimit(4)
                 Button("继续写", systemImage: "pencil") { model.open(rel, focus: true) }.buttonStyle(.glass)
             } else {
@@ -243,9 +244,10 @@ private struct CalendarModule: View {
         let weeks = max(1, (days + 6) / 7)
         let start = cal.date(byAdding: .day, value: -(weeks * 7 - 1), to: today)!
         let dates = (0..<(weeks * 7)).map { cal.date(byAdding: .day, value: $0, to: start)! }
+        let index = model.index
         let sizes: [Int] = dates.map { d in
-            guard let rel = model.entryRel(plugin, date: d), let t = model.vault?.diskContent(rel) else { return -1 }
-            return t.count
+            guard let rel = model.entryRel(plugin, date: d) else { return -1 }
+            return index?.notes[rel]?.lines.reduce(0) { $0 + $1.count } ?? 0
         }
         let written = sizes.filter { $0 >= 0 }.count
         VStack(alignment: .leading, spacing: 8) {
@@ -286,9 +288,10 @@ private struct QueryModule: View {
             switch module["sort"]?.string {
             case "name": return notes.sorted { $0.title > $1.title }
             default:
-                let v = model.vault
-                return notes.map { n in (n, v.flatMap { try? $0.url(n.rel).resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate } ?? .distantPast) }
-                    .sorted { $0.1 > $1.1 }.map(\.0)
+                // Dates from the last walk of the folder; the index changing means a note was saved.
+                _ = model.index?.generation
+                let stamps = model.vault?.stamps ?? [:]
+                return notes.sorted { (stamps[$0.rel] ?? .distantPast) > (stamps[$1.rel] ?? .distantPast) }
             }
         }()
         VStack(alignment: .leading, spacing: 2) {
@@ -383,8 +386,10 @@ private struct StatModule: View {
         let reduce = module["reduce"]?.string ?? "avg"
         let (_, unit) = plugin.label(collection: collection, field: field)
         // Each day reduced the same way first (an average of daily averages; sums of daily sums).
-        let series = model.dataSeries(collection, field: field, days: days, reduce: reduce == "count" ? "sum" : reduce)
-        let values = series.compactMap(\.value)
+        let key = DataKey(root: model.vault?.root, collection: collection, field: field, days: days,
+                          reduce: reduce == "count" ? "sum" : reduce, version: model.dataVersion)
+        Loaded(key: key, load: DataKey.series) { series in
+        let values = (series ?? []).compactMap(\.value)
         let value: Double? = values.isEmpty ? nil : reduce == "avg" ? values.reduce(0, +) / Double(values.count)
             : reduce == "last" ? values.last : reduce == "count" ? Double(values.count) : values.reduce(0, +)
         let goal = module["goal"]?.number
@@ -397,11 +402,12 @@ private struct StatModule: View {
                 ProgressView(value: min(value, goal), total: goal).tint(value >= goal ? .green : .accentColor)
                 Text(value >= goal ? "达到目标 \(formatted(goal))" : "目标 \(formatted(goal))，还差 \(formatted(goal - value))")
                     .font(.caption).foregroundStyle(.secondary)
-            } else if value == nil {
+            } else if value == nil, series != nil {
                 Text("还没有数据 · \(collection)").font(.caption).foregroundStyle(.secondary)
             }
         }
-        .id(model.dataVersion)
+        .contentTransition(.numericText())
+        }
     }
 }
 
@@ -414,9 +420,13 @@ private struct ChartModule: View {
         let collection = module["collection"]?.string ?? ""
         let field = module["field"]?.string ?? "value"
         let (label, unit) = plugin.label(collection: collection, field: field)
-        let series = model.dataSeries(collection, field: field, days: module["days"]?.int ?? 30, reduce: module["reduce"]?.string ?? "sum")
-        let points = series.compactMap { d in d.value.map { (DataStore.day.date(from: d.day) ?? Date(), $0) } }
-        if points.isEmpty {
+        let key = DataKey(root: model.vault?.root, collection: collection, field: field, days: module["days"]?.int ?? 30,
+                          reduce: module["reduce"]?.string ?? "sum", version: model.dataVersion)
+        Loaded(key: key, load: DataKey.series) { series in
+        let points = (series ?? []).compactMap { d in d.value.map { (DataStore.day.date(from: d.day) ?? Date(), $0) } }
+        if series == nil {
+            Color.clear.frame(maxWidth: .infinity, minHeight: 160)
+        } else if points.isEmpty {
             Text("还没有 \(collection) 数据。用「记一笔」、twain data add 或 HTTP 接口导入。").font(.callout).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
         } else {
@@ -437,7 +447,7 @@ private struct ChartModule: View {
             }
             .chartYAxisLabel(unit)
             .frame(height: 160)
-            .id(model.dataVersion)
+        }
         }
     }
 }
@@ -450,7 +460,9 @@ private struct HabitsModule: View {
         let collection = module["collection"]?.string ?? "habits"
         let items = (module["items"]?.array ?? []).compactMap(\.string)
         let days = module["days"]?.int ?? 7
-        let state = model.habitState(collection, days: days)
+        Loaded(key: DataKey(root: model.vault?.root, collection: collection, field: "", days: days, reduce: "", version: model.dataVersion),
+               load: DataKey.habits) { loaded in
+        let state = loaded ?? [:]
         let dates = (0..<days).map { DataStore.day.string(from: Calendar.current.date(byAdding: .day, value: $0 - days + 1, to: Date())!) }
         let today = dates.last!
         VStack(alignment: .leading, spacing: 8) {
@@ -473,7 +485,7 @@ private struct HabitsModule: View {
             }
         }
         .font(.callout)
-        .id(model.dataVersion)
+        }
     }
 }
 
@@ -541,8 +553,8 @@ private struct NoteModule: View {
         let path = module["path"]?.string ?? ""
         let rel = model.index?.resolve(path) ?? path
         VStack(alignment: .leading, spacing: 8) {
-            if let text = model.vault?.diskContent(rel) {
-                Text(.init(Markdown.lines(text).prefix(14).joined(separator: "\n"))).font(.callout).foregroundStyle(.secondary)
+            if let lines = model.index?.notes[rel]?.lines ?? (model.vault?.diskContent(rel)).map(Markdown.lines) {
+                Text(.init(lines.prefix(14).joined(separator: "\n"))).font(.callout).foregroundStyle(.secondary)
                     .lineLimit(14).textSelection(.enabled)
                 Button("打开", systemImage: "arrow.up.right") { model.open(rel) }.buttonStyle(.glass).controlSize(.small).buttonBorderShape(.capsule)
             } else {
@@ -559,12 +571,14 @@ private struct StatsModule: View {
         let notes = model.vault?.notes.count ?? 0
         let tasks = model.index?.tasks().count ?? 0
         let pending = model.pending.values.reduce(0) { $0 + $1.hunks.count }
-        let data = model.vault.map { DataStore(vault: $0.root).collections().count } ?? 0
-        Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
-            GridRow { stat("\(notes)", "篇笔记"); stat("\(tasks)", "条待办") }
-            GridRow { stat("\(pending)", "处改动待审"); stat("\(data)", "个数据集合") }
+        Loaded(key: DataKey(root: model.vault?.root, collection: "", field: "", days: 0, reduce: "", version: model.dataVersion),
+               load: DataKey.collectionCount) { data in
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
+                GridRow { stat("\(notes)", "篇笔记"); stat("\(tasks)", "条待办") }
+                GridRow { stat("\(pending)", "处改动待审"); stat(data.map(String.init) ?? "—", "个数据集合") }
+            }
+            .contentTransition(.numericText())
         }
-        .id(model.tick)
     }
 
     private func stat(_ n: String, _ label: String) -> some View {
@@ -577,23 +591,39 @@ private struct StatsModule: View {
 
 // MARK: - Data helpers
 
-extension AppModel {
-    func dataSeries(_ collection: String, field: String, days: Int, reduce: String) -> [(day: String, value: Double?)] {
-        guard let v = vault else { return [] }
-        return DataStore(vault: v.root).daily(collection, field: field, days: days, reduce: reduce)
+/// What a data card reads, and when to read it again: `version` changes whenever a collection does.
+struct DataKey: Equatable, Sendable {
+    var root: URL?
+    var collection: String
+    var field: String
+    var days: Int
+    var reduce: String
+    var version: Int
+
+    struct Day: Sendable { var day: String; var value: Double? }
+
+    @Sendable static func series(_ k: DataKey) -> [Day] {
+        guard let root = k.root else { return [] }
+        return DataStore(vault: root).daily(k.collection, field: k.field, days: k.days, reduce: k.reduce).map { Day(day: $0.day, value: $0.value) }
     }
 
     /// habit|day → done, the latest record for each winning.
-    func habitState(_ collection: String, days: Int) -> [String: Bool] {
-        guard let v = vault else { return [:] }
+    @Sendable static func habits(_ k: DataKey) -> [String: Bool] {
+        guard let root = k.root else { return [:] }
         var out: [String: Bool] = [:]
-        for r in DataStore(vault: v.root).query(collection, since: DataStore.parseSince("\(days)d")) {
+        for r in DataStore(vault: root).query(k.collection, since: DataStore.parseSince("\(k.days)d")) {
             guard let h = r["habit"]?.string, let t = DataStore.time(of: r) else { continue }
             out[h + "|" + DataStore.day.string(from: t)] = r["done"]?.bool ?? true
         }
         return out
     }
 
+    @Sendable static func collectionCount(_ k: DataKey) -> Int {
+        k.root.map { DataStore(vault: $0).collections().count } ?? 0
+    }
+}
+
+extension AppModel {
     func setHabit(_ collection: String, _ habit: String, _ done: Bool) {
         addData(collection, ["habit": .string(habit), "done": .bool(done), "date": .string(DataStore.day.string(from: Date()))])
     }

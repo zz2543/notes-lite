@@ -161,7 +161,11 @@ final class AppModel {
     var toast: String?
     var openFolders: Set<String> = []
     var showDiff = false
-    var tick = 0
+    /// Bumped when a daily counter or an approval stored in UserDefaults changes, so what shows
+    /// them redraws then (and only then).
+    var countersVersion = 0
+    /// The local HTTP API as last reported by its listener.
+    var httpStatus = HTTPStatus()
 
     // MARK: vault & editor
     var vault: Vault?
@@ -263,7 +267,11 @@ final class AppModel {
         refreshModels()
         // The CLIs rewrite their model lists as they update; pick that up whenever Twain comes back.
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshModels() }
+            MainActor.assumeIsolated {
+                self?.refreshModels()
+                // A new day resets the daily counters.
+                self?.countersVersion += 1
+            }
         }
         #if DEBUG
         // A scratch vault for snapshots and manual checks; never saved as the user's vault.
@@ -275,7 +283,6 @@ final class AppModel {
             openVault(URL(fileURLWithPath: path))
         }
         if !defaults.bool(forKey: "onboarded") || vault == nil { onboardingStep = 0 }
-        timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick += 1 } })
         timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollTerminal() } })
     }
 
@@ -684,8 +691,9 @@ final class AppModel {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + (now ? 0 : 0.4), execute: w)
     }
 
+    /// Words, reading time and typing pace. The pace looks at the last minute, so the status pill
+    /// redraws it on a timer of its own.
     var stats: String {
-        _ = tick
         let words = wordCount
         let now = Date()
         let pace = typed.filter { now.timeIntervalSince($0.0) < 60 }.reduce(0) { $0 + $1.1 }

@@ -14,6 +14,12 @@ import TwainCore
 ///     POST /v1/notes                        {title, content, folder?, source?, source_id?}
 ///     GET  /v1/notes?q=&folder=&tag=        note cards (skim)
 ///     GET  /v1/notes/<path>?level=1|2|3     one note, by level
+/// What Settings shows about the listener.
+struct HTTPStatus: Equatable {
+    var port: UInt16 = 0
+    var error: String?
+}
+
 final class HTTPGateway {
     static let defaultPort: UInt16 = 27182
     private var listener: NWListener?
@@ -63,7 +69,7 @@ final class HTTPGateway {
                     case let .failed(e): self?.error = "端口 \(port) 不可用：\(e.localizedDescription)"; self?.port = 0
                     default: break
                     }
-                    self?.model?.tick += 1
+                    if let self { self.model?.httpStatus = HTTPStatus(port: self.port, error: self.error) }
                 }
             }
             l.start(queue: queue)

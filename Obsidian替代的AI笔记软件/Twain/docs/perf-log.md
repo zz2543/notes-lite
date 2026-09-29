@@ -73,3 +73,21 @@ caret end n=30 median=0.1ms p90=0.3ms max=0.5ms
 memory start=136MB end=178MB
 done
 ```
+
+## d1 no tick · c5d093d · 2026-09-29 01:46
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=74.6ms p90=91.9ms max=116.0ms
+sidebar hide frames=168 dropped=3 longest=50.5ms
+sidebar show frames=170 dropped=1 longest=50.9ms
+agent hide frames=159 dropped=5 longest=40.4ms
+agent show frames=154 dropped=5 longest=55.7ms
+idle space worst=51.5ms stalls>16ms=4
+idle note worst=42.3ms stalls>16ms=3
+type 80665 chars n=80 median=12.4ms p90=25.1ms max=56.1ms
+caret start n=30 median=0.1ms p90=0.2ms max=4.6ms
+caret end n=30 median=0.1ms p90=0.1ms max=0.5ms
+memory start=136MB end=177MB
+done
+```

@@ -270,7 +270,6 @@ struct AgentSettings: View {
                 LabeledContent("每天最多") {
                     Stepper("\(model.automationDailyLimit) 次（今天已运行 \(model.automationRunsToday) 次）",
                             value: $model.automationDailyLimit, in: 1...200)
-                        .id(model.tick)
                 }
                 if model.automations.isEmpty {
                     Text("没有自动化。把 .twain/automations/ 里的示例文件去掉 .example 后缀即可试用。").foregroundStyle(.secondary)
@@ -281,7 +280,6 @@ struct AgentSettings: View {
                         Text("\(a.on.joined(separator: "、"))" + (a.match.map { " · \($0)" } ?? " · 所有笔记")
                              + " · 静默 \(a.debounce) 秒后由 \(a.agent.displayName) 运行")
                     }
-                    .id("\(a.id)-\(model.tick)")
                 }
                 HStack {
                     Spacer()
@@ -428,8 +426,8 @@ struct OpenSettings: View {
                 }
                 LabeledContent("地址") {
                     HStack {
-                        let p = model.http.port
-                        Text(p > 0 ? "http://127.0.0.1:" + String(p) + "/v1" : (model.http.error ?? "未运行")).foregroundStyle(p > 0 ? .primary : .secondary)
+                        let p = model.httpStatus.port
+                        Text(p > 0 ? "http://127.0.0.1:" + String(p) + "/v1" : (model.httpStatus.error ?? "未运行")).foregroundStyle(p > 0 ? .primary : .secondary)
                             .textSelection(.enabled).lineLimit(1)
                         TextField("端口", text: $port).frame(width: 70)
                             .onSubmit { if let n = UInt16(port) { model.httpPort = n; model.startHTTP() } }
@@ -446,7 +444,7 @@ struct OpenSettings: View {
                         Button("重置") { token = HTTPGateway.token(reset: true) }
                     }
                 }
-                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:" + String(model.http.port > 0 ? model.http.port : model.httpPort) + "/v1/data/sleep")
+                Text("curl -H \"Authorization: Bearer $(cat ~/Library/Application\\ Support/Twain/http-token)\" \\\n  -d '{\"hours\": 7.5}' http://127.0.0.1:" + String(model.httpStatus.port > 0 ? model.httpStatus.port : model.httpPort) + "/v1/data/sleep")
                     .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             } header: {
                 Text("开放接口")
@@ -456,8 +454,10 @@ struct OpenSettings: View {
             }
 
             Section("数据集合") {
-                let cs = model.vault.map { DataStore(vault: $0.root).collections() } ?? []
-                if cs.isEmpty {
+                Loaded(key: DataKey(root: model.vault?.root, collection: "", field: "", days: 0, reduce: "", version: model.dataVersion),
+                       load: { k in k.root.map { DataStore(vault: $0).collections() } ?? [] }) { loaded in
+                let cs = loaded ?? []
+                if loaded != nil, cs.isEmpty {
                     Text("还没有数据。twain data add、HTTP 接口，或把 JSON/CSV 丢进 .twain/inbox/<集合>/ 都会建立集合。")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -467,6 +467,7 @@ struct OpenSettings: View {
                             .foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
+                }
                 Button("在 Finder 中显示数据文件夹") {
                     if let v = model.vault {
                         let d = v.root.appendingPathComponent(".twain/data")
@@ -475,7 +476,6 @@ struct OpenSettings: View {
                     }
                 }
             }
-            .id(model.dataVersion)
 
             Section("插件与空间") {
                 let all = allPlugins()
@@ -532,6 +532,5 @@ struct OpenSettings: View {
         model.loadPlugins()
         model.loadPipelines()
         model.loadVaultConfig()
-        model.tick += 1
     }
 }

@@ -189,7 +189,8 @@ extension AppModel {
 
     /// Approval is tied to the file's content: an edited (or newly pulled) automation asks again.
     func isApproved(_ a: Automation) -> Bool {
-        (UserDefaults.standard.dictionary(forKey: approvalKey) as? [String: String])?[a.id] == a.fingerprint
+        _ = countersVersion
+        return (UserDefaults.standard.dictionary(forKey: approvalKey) as? [String: String])?[a.id] == a.fingerprint
     }
 
     func setApproved(_ a: Automation, _ on: Bool) {
@@ -197,7 +198,7 @@ extension AppModel {
         d[a.id] = on ? a.fingerprint : nil
         UserDefaults.standard.set(d, forKey: approvalKey)
         if !on { automationTimers.removeValue(forKey: a.id)?.cancel() }
-        tick += 1
+        countersVersion += 1
     }
 
     private var runsKey: String {
@@ -206,7 +207,10 @@ extension AppModel {
         return "automation.runs." + f.string(from: Date())
     }
 
-    var automationRunsToday: Int { UserDefaults.standard.integer(forKey: runsKey) }
+    var automationRunsToday: Int {
+        _ = countersVersion
+        return UserDefaults.standard.integer(forKey: runsKey)
+    }
 
     /// Starts (or restarts) the quiet-period countdown of every automation the event concerns.
     func automationEvent(_ type: String, source: String, path: String?) {
@@ -231,7 +235,7 @@ extension AppModel {
             return
         }
         UserDefaults.standard.set(automationRunsToday + 1, forKey: runsKey)
-        tick += 1
+        countersVersion += 1
         let rel = path ?? ""
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"

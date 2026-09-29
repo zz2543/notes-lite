@@ -10,7 +10,10 @@ extension AppModel {
         return "summaries.count." + f.string(from: Date())
     }
 
-    var summariesToday: Int { UserDefaults.standard.integer(forKey: summaryRunsKey) }
+    var summariesToday: Int {
+        _ = countersVersion
+        return UserDefaults.standard.integer(forKey: summaryRunsKey)
+    }
 
     /// Notes that would get a new AI summary now, counted off the main thread.
     func countNotesWantingSummary(_ done: @escaping (Int) -> Void) {
@@ -68,7 +71,7 @@ extension AppModel {
     private func finishSummaries() {
         let n = summarizing?.done ?? 0
         summarizing = nil
-        tick += 1
+        countersVersion += 1
         showToast(n > 0 ? "已为 \(n) 篇笔记生成摘要" : "生成摘要失败：没能从 claude 拿到可用的结果")
     }
 
@@ -99,6 +102,7 @@ extension AppModel {
                 }
             }
             UserDefaults.standard.set(self.summariesToday + wrote, forKey: self.summaryRunsKey)
+            self.countersVersion += 1
             self.summarizing?.done += wrote
             done(wrote > 0)
         }
@@ -115,7 +119,7 @@ extension AppModel {
     func saveSummary(_ text: String) {
         guard let v = vault, let rel = activeRel else { return }
         SummaryStore(vault: v.root).set(rel, text: text, source: "user", hash: Skim.hash(Markdown.lines(editorText)))
-        tick += 1
+        countersVersion += 1
         showToast(text.isEmpty ? "已清除摘要" : "已保存摘要")
     }
 }
@@ -178,7 +182,7 @@ struct NoteInfoPopover: View {
         .padding(16)
         .frame(width: 340)
         .onAppear(perform: refresh)
-        .onChange(of: model.tick) { _, _ in refresh() }
+        .onChange(of: model.countersVersion) { _, _ in refresh() }
     }
 
     private func refresh() {

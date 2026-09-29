@@ -168,6 +168,5 @@ extension AppModel {
         guard lines.indices.contains(line - 1) else { return }
         lines[line - 1] = Markdown.toggleTask(lines[line - 1])
         _ = v.write(rel, lines.joined(separator: "\n"))
-        tick += 1
     }
 }

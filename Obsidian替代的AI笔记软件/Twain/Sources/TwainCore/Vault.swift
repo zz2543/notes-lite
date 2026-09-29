@@ -40,6 +40,8 @@ public final class Vault {
 
     @ObservationIgnored private var listing = VaultListing()
     @ObservationIgnored private var byRel: [String: NoteRef] = [:]
+    /// When each note file was last modified, as of the last walk.
+    @ObservationIgnored public private(set) var stamps: [String: Date] = [:]
     @ObservationIgnored private var scanWork: DispatchWorkItem?
     /// Bumped by every change applied to the listing, so a walk that started before it is dropped.
     @ObservationIgnored private var generation = 0
@@ -78,6 +80,7 @@ public final class Vault {
         attachments = l.attachments
         let refs = l.notes.map { NoteRef(rel: $0.rel) }
         byRel = Dictionary(refs.map { ($0.rel, $0) }, uniquingKeysWith: { a, _ in a })
+        stamps = Dictionary(l.notes.compactMap { e in e.stamp.map { (e.rel, $0) } }, uniquingKeysWith: { a, _ in a })
         var t: [String: Node] = ["": Node()]
         for f in l.folders {
             if t[f] == nil { t[f] = Node() }
@@ -142,9 +145,6 @@ public final class Vault {
     }
 
     public func note(_ rel: String) -> NoteRef? { byRel[rel] }
-
-    /// When the note file was last modified, as of the last walk.
-    public func stamp(_ rel: String) -> Date? { listing.notes.first { $0.rel == rel }?.stamp }
 
     /// `name.png`, `folder/name.png` or `name.png|300` → the file's path in the vault.
     public func attachment(_ target: String, from noteRel: String?) -> String? {
