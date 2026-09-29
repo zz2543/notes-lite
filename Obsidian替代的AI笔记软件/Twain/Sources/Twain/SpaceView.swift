@@ -456,6 +456,8 @@ private struct ChartModule: View {
 private struct HabitsModule: View {
     @Bindable var model: AppModel
     let module: JSONValue
+    /// Bumped by a check-in, for the lively style's confetti.
+    @State private var cheer = 0
 
     var body: some View {
         let collection = module["collection"]?.string ?? "habits"
@@ -469,9 +471,16 @@ private struct HabitsModule: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(items, id: \.self) { h in
                 let done = state[h + "|" + today] == true
+                let streak = Self.streak(h, state: state, dates: dates)
                 HStack(spacing: 10) {
-                    Button { model.setHabit(collection, h, !done) } label: {
+                    Button {
+                        model.setHabit(collection, h, !done)
+                        guard !done else { return }
+                        if Motion.celebrates { cheer += 1; Motion.feedback(.celebrate) } else { Motion.feedback(.done) }
+                    } label: {
                         Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(done ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary))
+                            .contentTransition(Motion.style == .minimal ? .identity : .symbolEffect(.replace))
+                            .symbolEffect(.bounce, options: .nonRepeating, value: Motion.style == .lively && done)
                     }
                     .buttonStyle(.plain)
                     Text(h).frame(width: 64, alignment: .leading)
@@ -482,11 +491,29 @@ private struct HabitsModule: View {
                         }
                     }
                     Spacer(minLength: 0)
+                    if streak >= 2 {
+                        Label("连续 \(streak) 天", systemImage: "flame.fill")
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                            .contentTransition(Motion.style == .minimal ? .identity : .numericText(value: Double(streak)))
+                            .symbolEffect(.bounce, options: .nonRepeating, value: Motion.style == .lively ? streak : 0)
+                    }
                 }
             }
         }
         .font(.callout)
         }
+        .overlay { ConfettiBurst(trigger: cheer) }
+    }
+
+    /// Days in a row ending today (or yesterday, while today is still open).
+    static func streak(_ habit: String, state: [String: Bool], dates: [String]) -> Int {
+        var n = 0
+        for (i, d) in dates.reversed().enumerated() {
+            if state[habit + "|" + d] == true { n += 1 } else if i == 0 { continue } else { break }
+        }
+        return n
     }
 }
 

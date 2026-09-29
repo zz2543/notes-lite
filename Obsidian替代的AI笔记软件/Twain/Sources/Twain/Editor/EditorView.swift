@@ -96,17 +96,22 @@ struct EditorView: NSViewRepresentable {
         /// The note on the page, to tell a switch to another note from a reload of this one.
         private var shownRel: String?
 
-        /// Another note's text arrives: it fades in over the page's curve instead of cutting in.
-        /// Run by Core Animation on the render server; the main thread only adds the animation.
+        /// Another note's text arrives. 克制: it fades in instead of cutting in. 活泼: it also rises
+        /// a few points and settles with a spring. 简洁: it cuts in. Run by Core Animation on the
+        /// render server; the main thread only adds the animation.
         private func fadeIn() {
-            guard !Motion.reduce, let scroll = scrollView else { return }
+            guard Motion.style != .minimal, !Motion.reduce, let scroll = scrollView else { return }
             scroll.wantsLayer = true
-            let a = CABasicAnimation(keyPath: "opacity")
-            a.fromValue = 0.2
-            a.toValue = 1
-            a.duration = Motion.quickDuration + 0.04
-            a.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            scroll.layer?.add(a, forKey: "noteSwitch")
+            guard let layer = scroll.layer else { return }
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = Motion.style == .lively ? 0 : 0.2
+            fade.toValue = 1
+            fade.duration = Motion.style == .lively ? 0.2 : 0.24
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(fade, forKey: "noteSwitch")
+            if Motion.style == .lively, let rise = Motion.spring("transform.translation.y", from: layer.contentsAreFlipped() ? 10 : -10, to: 0) {
+                layer.add(rise, forKey: "noteSwitchRise")
+            }
         }
         private var styler = MarkdownStyler(style: EditorStyle(font: .serif, typewriter: true, dim: true, zen: false, width: 680))
 
