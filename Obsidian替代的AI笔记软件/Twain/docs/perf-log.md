@@ -319,3 +319,17 @@ after   heavy.md 有会话   hide dropped=2  show dropped=1  longest=33.3ms   11
 ```
 
 面板滑动时 AppKit 每帧改一次列宽，窗口的 SwiftUI 布局从头再跑：Agent 栏的两层 `ViewThatFits`、对话记录、输入框每帧都被重新量一遍（`NSHostingView.minSize()` 占面板耗时的大半），虽然面板自身宽度始终不变。`FixedHost` 把面板内容放进自己的 NSHostingView，外层布局不再穿透进去。剩下的每帧开销主要是正文随列宽变化重新居中后整屏重画（图片多的笔记更明显）。
+
+## agent transcript opens at its latest message · synthetic vault · 2026-09-29
+
+对话记录从 `onAppear` 里的 `scrollTo` 改为 `.defaultScrollAnchor(.bottom, for: .initialOffset)`：`onAppear` 执行时 LazyVStack 的行还没量出真实高度，长对话停在顶部（打开面板、切换会话都是如此，ce9d6ee 之前就有）。新写法只在滚动视图第一次布局时起作用，滑动时没有额外的每帧工作。合成库（402 篇），`TWAIN_STRESS_ONLY=agent TWAIN_STRESS_SESSION=1 TWAIN_STRESS_GAPS=1 TWAIN_STRESS_ROUNDS=16`，各跑两次：
+
+```
+                  hide                         show                         每帧主线程（≥5 ms）
+before  run 1     dropped=1 longest=28.5ms     dropped=0 longest=22.7ms     median 7 ms  p90 9
+before  run 2     dropped=3 longest=27.3ms     dropped=1 longest=26.2ms     median 7 ms  p90 9
+after   run 1     dropped=4 longest=28.5ms     dropped=1 longest=26.4ms     median 7 ms  p90 9
+after   run 2     dropped=3 longest=28.3ms     dropped=0 longest=23.8ms     median 7 ms  p90 9
+```
+
+实窗截图验证：`TWAIN_SCENARIO=longreply:<note>`、`longreply:<note>:reopen`（关面板再开）、`longreply:<note>:switch`（切到别的会话再切回），改前三种都停在第一条消息，改后都在最新一条。

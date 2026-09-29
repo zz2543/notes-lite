@@ -316,6 +316,19 @@ enum DebugScenario {
             }
             m.agents.sessions.append(s)
             m.agents.activeSessionID = s.id
+            // longreply:<note>:reopen closes the panel and opens it again; :switch goes to a
+            // short session and back. Either way the transcript should end at its latest message.
+            if parts.contains("reopen") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { m.chrome.agentPanel = false }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { m.chrome.agentPanel = true }
+            }
+            if parts.contains("switch") {
+                let other = AgentSession(agent: .codex, source: .app, title: "另一个")
+                other.apply([.user("你好")])
+                m.agents.sessions.append(other)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { m.agents.activeSessionID = other.id }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { m.agents.activeSessionID = s.id }
+            }
         case "bench":
             // Types into the middle of the note, one key per run-loop turn so the async work
             // (SwiftUI updates, height fitting, drawing) counts too, and reports per-key costs.

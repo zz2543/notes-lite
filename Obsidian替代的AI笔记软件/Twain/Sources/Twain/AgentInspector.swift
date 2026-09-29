@@ -128,6 +128,12 @@ struct AgentInspector: View {
                 .motion(Motion.standard, value: sess.items.count)
             }
             .scrollEdgeEffectStyle(.soft, for: .all)
+            // A session opens at its latest message. The scroll view places its first offset
+            // itself once the rows are laid out; a scrollTo from onAppear ran before the lazy
+            // rows had real heights and left a long conversation at the top. The transcript
+            // gets a fresh scroll view per session (`.id(sess.id)` above), so switching
+            // sessions lands at the bottom too.
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
             .contextMenu {
                 Button("拷贝整个会话（Markdown）", systemImage: "doc.on.doc") {
                     NSPasteboard.general.clearContents()
@@ -138,8 +144,6 @@ struct AgentInspector: View {
             .onChange(of: sess.items.count) { _, _ in
                 withMotion { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
             }
-            // A session switched to opens at its latest message.
-            .onAppear { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
         }
     }
 
