@@ -55,13 +55,9 @@ final class LiveModel {
     private func restart() {
         stop()
         guard let exe = CLIEnvironment.locate("claude") else { return }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: exe)
-        p.arguments = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-                       "--model", model, "--tools", "", "--strict-mcp-config", "--no-session-persistence",
-                       "--disable-slash-commands", "--append-system-prompt", system]
-        p.currentDirectoryURL = cwd
-        p.environment = CLIEnvironment.environment
+        let p = CLIRunner.process(exe, CLIRunner.quickArguments(model: model) + [
+            "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--append-system-prompt", system,
+        ], cwd: cwd)
         let inPipe = Pipe(), outPipe = Pipe()
         p.standardInput = inPipe
         p.standardOutput = outPipe
@@ -155,7 +151,7 @@ extension AppModel {
         companionModel?.ask(prompt) { [weak self] reply in
             guard let self else { return }
             self.editor.companionThinking = false
-            guard self.editor.activeRel == rel, let reply, let obj = ModelCall.jsonObject(reply),
+            guard self.editor.activeRel == rel, let reply, let obj = CLIRunner.jsonObject(reply),
                   obj["skip"] as? Bool != true, let text = obj["text"] as? String, !text.isEmpty else { return }
             let kind = CompanionTip.Kind(rawValue: obj["kind"] as? String ?? "") ?? .question
             self.editor.companionTip = CompanionTip(kind: kind, text: text, quote: (obj["quote"] as? String).flatMap { $0.isEmpty ? nil : $0 }, rel: rel)

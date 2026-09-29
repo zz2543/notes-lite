@@ -90,11 +90,11 @@ extension AppModel {
 
         \(body)
         """
-        ModelCall.ask(prompt, cwd: root, timeout: 150) { [weak self] reply in
+        CLIRunner.text(prompt, cwd: root, timeout: 150) { [weak self] reply in
             guard let self else { return }
             let store = SummaryStore(vault: root)
             var wrote = 0
-            if let obj = reply.flatMap(ModelCall.jsonObject) {
+            if let obj = reply.flatMap(CLIRunner.jsonObject) {
                 for rel in batch {
                     guard let s = obj[rel] as? String, let n = index.notes[rel] else { continue }
                     store.set(rel, text: s, source: "ai", hash: Skim.hash(n.lines))

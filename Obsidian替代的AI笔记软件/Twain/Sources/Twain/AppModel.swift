@@ -409,7 +409,7 @@ final class AppModel {
 
 
 
-    static func isEvicted(_ u: URL) -> Bool {
+    nonisolated static func isEvicted(_ u: URL) -> Bool {
         guard let s = try? u.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus else { return false }
         return s == .notDownloaded
     }
@@ -441,7 +441,7 @@ final class AppModel {
         }
     }
 
-    static func unreadableReason(_ u: URL) -> String? {
+    nonisolated static func unreadableReason(_ u: URL) -> String? {
         let size = (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         if size > 8 * 1024 * 1024 { return "这个文件有 \(size / 1024 / 1024) MB，超出了编辑器能流畅打开的大小。" }
         guard let h = try? FileHandle(forReadingFrom: u) else { return nil }
@@ -451,9 +451,9 @@ final class AppModel {
         return nil
     }
 
-    static let oversizedLine = 100_000
+    nonisolated static let oversizedLine = 100_000
 
-    static func hasOversizedLine(_ text: String) -> Bool {
+    nonisolated static func hasOversizedLine(_ text: String) -> Bool {
         guard text.utf8.count > oversizedLine else { return false }
         var run = 0
         for b in text.utf8 {

@@ -128,10 +128,11 @@ enum Git {
     }
 }
 
-/// One running `claude -p` / `codex exec` process, streaming JSON events.
-final class AgentProcess {
+/// One running `claude -p` / `codex exec` process, streaming JSON events. Started and stopped
+/// on the main thread; its buffers are only touched on its own queue.
+final class AgentProcess: @unchecked Sendable {
     let kind: AgentKind
-    private let process = Process()
+    private var process = Process()
     private var buffer = Data()
     private var stderrTail = Data()
     private var sawFinish = false
@@ -144,12 +145,7 @@ final class AgentProcess {
     func start(executable: String, arguments: [String], cwd: URL, env extra: [String: String] = [:],
                onEvents: @escaping ([AgentEvent]) -> Void,
                onExit: @escaping (_ status: Int32, _ stderr: String, _ sawFinish: Bool) -> Void) throws {
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.currentDirectoryURL = cwd
-        var env = CLIEnvironment.environment
-        for (k, v) in extra { env[k] = k == "PATH" ? v + ":" + (env["PATH"] ?? "") : v }
-        process.environment = env
+        process = CLIRunner.process(executable, arguments, cwd: cwd, env: extra)
         process.standardInput = FileHandle.nullDevice
         let out = Pipe(), err = Pipe()
         process.standardOutput = out
@@ -210,18 +206,17 @@ final class AgentProcess {
 
 /// Tab 续写: a short continuation from `claude -p` with a small model and no tools.
 final class GhostCompleter {
-    private var current: Process?
+    private var current: CLIRunner.Call?
     private var generation = 0
 
     func cancel() {
         generation += 1
-        current?.terminate()
+        current?.cancel()
         current = nil
     }
 
     func complete(paragraph: String, context: String, cwd: URL, done: @escaping (String) -> Void) {
         cancel()
-        guard let exe = CLIEnvironment.locate("claude") else { return }
         let gen = generation
         let prompt = """
         你是写作助手。下面是一篇 Markdown 笔记的上下文，以及光标所在段落。请续写这一段接下来的半句或一句（不超过 30 个字），\
@@ -235,30 +230,13 @@ final class GhostCompleter {
         \(paragraph)
         </当前段落>
         """
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: exe)
-        p.arguments = ["-p", prompt, "--model", "haiku", "--tools", "", "--no-session-persistence",
-                       "--disable-slash-commands", "--output-format", "text"]
-        p.currentDirectoryURL = cwd
-        p.environment = CLIEnvironment.environment
-        p.standardInput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        let out = Pipe()
-        p.standardOutput = out
-        p.terminationHandler = { [weak self] proc in
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            let text = (String(data: data, encoding: .utf8) ?? "")
-                .split(separator: "\n").first.map(String.init)?
+        current = CLIRunner.text(prompt, cwd: cwd, timeout: 30) { [weak self] reply in
+            guard let self, gen == self.generation else { return }
+            self.current = nil
+            let text = reply?.split(separator: "\n").first.map(String.init)?
                 .trimmingCharacters(in: CharacterSet(charactersIn: " \t\"“”「」"))
-            DispatchQueue.main.async {
-                guard let self, gen == self.generation, proc.terminationStatus == 0, let text, !text.isEmpty else { return }
-                self.current = nil
-                done(String(text.prefix(60)))
-            }
+            guard let text, !text.isEmpty else { return }
+            done(String(text.prefix(60)))
         }
-        do {
-            try p.run()
-            current = p
-        } catch {}
     }
 }
