@@ -93,7 +93,7 @@ struct MotionSettings: View {
 
     var body: some View {
         Section {
-            Picker("动效", selection: $prefs.motionStyle) {
+            Picker("风格", selection: $prefs.motionStyle) {
                 ForEach(MotionStyle.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)

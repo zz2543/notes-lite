@@ -490,14 +490,17 @@ struct ItemView: View {
             }
         case let .step(_, text, running):
             HStack(spacing: 8) {
-                Group {
+                ZStack {
                     if running {
                         ProgressView().controlSize(.mini)
+                            .transition(.opacity)
                     } else {
                         Image(systemName: Self.icon(text)).foregroundStyle(.tertiary)
+                            .transition(.scale(scale: 0.4).combined(with: .opacity))
                     }
                 }
                 .frame(width: 16)
+                .motion(Motion.pop, value: running)
                 Text(text).lineLimit(2).truncationMode(.middle)
             }
             .font(.caption.monospaced())

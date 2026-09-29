@@ -60,6 +60,7 @@ extension AppModel {
             applyEditorEdit?(r, replacement)
         }
         editor.annotations[i].status = .accepted
+        Motion.feedback(.done)
         saveAnnotations()
         emit("annotation.resolved", source: "user", ["path": JSONValue(editor.activeRel), "id": .string(id), "status": "accepted"])
     }
@@ -147,7 +148,10 @@ final class AnnotationRail {
     func layout(in tv: TwainTextView, model: AppModel, anchors: [String: NSRange], selected: String?) {
         let list = model.visibleAnnotations
         let ids = Set(list.map(\.id))
-        for (id, h) in hosts where !ids.contains(id) { h.removeFromSuperview(); hosts[id] = nil }
+        for (id, h) in hosts where !ids.contains(id) {
+            hosts[id] = nil
+            Self.leave(h)
+        }
         guard !list.isEmpty, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
         let x = tv.bounds.width - Self.width + 4
         let w = Self.width - 24
@@ -186,11 +190,13 @@ final class AnnotationRail {
                         host.animator().alphaValue = 1
                     }
                 }
-            } else if abs(host.frame.minY - frame.minY) > 0.5 || abs(host.frame.height - frame.height) > 0.5 {
-                // Text above it grew or shrank: the card glides along with its passage.
+            } else if Motion.style != .minimal, abs(host.frame.minY - frame.minY) > 0.5 || abs(host.frame.height - frame.height) > 0.5 {
+                // Text above it grew or shrank, or a card above left: this one glides along.
+                // 活泼 overshoots a little and settles; each card starts a beat after the one above.
+                let lively = Motion.style == .lively
                 NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = Motion.quickDuration
-                    ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    ctx.duration = lively ? 0.38 : Motion.quickDuration
+                    ctx.timingFunction = lively ? CAMediaTimingFunction(controlPoints: 0.34, 1.4, 0.64, 1) : CAMediaTimingFunction(name: .easeOut)
                     host.animator().frame = frame
                 }
             } else {
@@ -198,6 +204,36 @@ final class AnnotationRail {
             }
             nextY = y + h + 10
         }
+    }
+
+    /// A card that was dismissed or accepted. 克制: it slides right and fades. 活泼: it tips and
+    /// is flicked away. 简洁 and Reduce motion: it is simply gone.
+    static func leave(_ card: NSView) {
+        guard Motion.style != .minimal, !Motion.reduce, let layer = card.layer else { return card.removeFromSuperview() }
+        let lively = Motion.style == .lively
+        let flip: CGFloat = layer.contentsAreFlipped() ? 1 : -1
+        let move = CAKeyframeAnimation(keyPath: "transform")
+        if lively {
+            move.values = [CATransform3DIdentity,
+                           CATransform3DRotate(CATransform3DMakeTranslation(-8, 0, 0), -0.035 * flip, 0, 0, 1),
+                           CATransform3DRotate(CATransform3DMakeTranslation(170, 0, 0), 0.16 * flip, 0, 0, 1)].map { NSValue(caTransform3D: $0) }
+            move.keyTimes = [0, 0.25, 1]
+        } else {
+            move.values = [CATransform3DIdentity, CATransform3DMakeTranslation(28, 0, 0)].map { NSValue(caTransform3D: $0) }
+        }
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        let group = CAAnimationGroup()
+        group.animations = [move, fade]
+        group.duration = lively ? 0.3 : 0.2
+        group.timingFunction = CAMediaTimingFunction(controlPoints: 0.5, 0, 0.75, 0)
+        group.fillMode = .forwards
+        group.isRemovedOnCompletion = false
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { card.removeFromSuperview() }
+        layer.add(group, forKey: "leave")
+        CATransaction.commit()
     }
 
     func clear() {

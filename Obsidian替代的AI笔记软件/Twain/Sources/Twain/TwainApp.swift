@@ -162,7 +162,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let delay = Double(ProcessInfo.processInfo.environment["TWAIN_SNAPSHOT_DELAY"] ?? "") ?? 2.5
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 DebugScenario.textView()?.updateCaret(animated: false)
-                guard let w = NSApp.orderedWindows.first(where: { $0.isVisible }) ?? NSApp.windows.first(where: { $0.isVisible }), let v = w.contentView?.superview ?? w.contentView,
+                // TWAIN_SNAPSHOT_WINDOW=settings captures the Settings window instead of the main one.
+                let wantSettings = ProcessInfo.processInfo.environment["TWAIN_SNAPSHOT_WINDOW"] == "settings"
+                let settings = NSApp.windows.first { $0.identifier?.rawValue.contains("Settings") == true }
+                guard let w = wantSettings ? settings : NSApp.orderedWindows.first(where: { $0.isVisible }) ?? NSApp.windows.first(where: { $0.isVisible }), let v = w.contentView?.superview ?? w.contentView,
                       let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(2) }
                 v.cacheDisplay(in: v.bounds, to: rep)
                 // cacheDisplay skips CALayer sublayers; paint the caret so its placement shows.

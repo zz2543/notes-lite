@@ -32,8 +32,8 @@ struct MainWindow: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .motion(Motion.quick, value: model.chrome.palette)
-        .motion(Motion.standard, value: model.chrome.toast)
+        .motion(Motion.overlay, value: model.chrome.palette)
+        .motion(Motion.overlay, value: model.chrome.toast)
         .sheet(isPresented: Binding(get: { model.chrome.onboardingStep != nil }, set: { if !$0 { model.chrome.onboardingStep = nil } })) {
             OnboardingSheet(model: model)
         }

@@ -171,6 +171,8 @@ extension AppModel {
                 s.settleSteps()
                 s.running = false
                 s.process = nil
+                // A run the user started and waited for: a short sound when sounds are on.
+                if s.source == .app { Motion.feedback(.notice) }
                 self.finishRun(s)
                 self.emit("session.finished", source: self.eventSource(for: s),
                           ["session": .string(s.id.uuidString), "agent": .string(agent.rawValue), "status": JSONValue(Int(status))])

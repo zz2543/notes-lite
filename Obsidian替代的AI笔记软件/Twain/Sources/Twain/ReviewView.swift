@@ -119,6 +119,8 @@ private struct HunkCard: View {
     /// Proposals are rejected; changes already written are reverted.
     var proposal = false
     @State private var why = ""
+    /// Bumped when this change is accepted, for the lively style's pop.
+    @State private var accepted = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -157,6 +159,17 @@ private struct HunkCard: View {
         .contentCard(radius: Metrics.cardRadius)
         .opacity(hunk.state == .pending ? 1 : 0.85)
         .motion(Motion.quick, value: hunk.state)
+        // 活泼: the accepted card swells a little and springs back.
+        .keyframeAnimator(initialValue: 1.0, trigger: accepted) { content, scale in
+            content.scaleEffect(scale)
+        } keyframes: { _ in
+            if Motion.style == .lively && !Motion.reduce {
+                SpringKeyframe(1.018, duration: 0.12, spring: .snappy)
+                SpringKeyframe(1.0, duration: 0.45, spring: .bouncy(duration: 0.45, extraBounce: 0.2))
+            } else {
+                LinearKeyframe(1.0, duration: 0.01)
+            }
+        }
     }
 
     private var footer: some View {
@@ -166,18 +179,29 @@ private struct HunkCard: View {
             CountBadge(plus: counts.plus, minus: counts.minus)
             Spacer()
             if hunk.state == .pending {
-                Button(proposal ? "拒绝" : "还原", systemImage: "arrow.uturn.backward") { model.setHunk(index, .rejected) }
-                    .buttonStyle(.glass)
-                Button("接受", systemImage: "checkmark") { model.setHunk(index, .accepted) }
-                    .buttonStyle(.glassProminent)
+                Button(proposal ? "拒绝" : "还原", systemImage: "arrow.uturn.backward") {
+                    withMotion(Motion.quick) { model.setHunk(index, .rejected) }
+                }
+                .buttonStyle(.glass)
+                .transition(.opacity)
+                Button("接受", systemImage: "checkmark") {
+                    withMotion(Motion.pop) { model.setHunk(index, .accepted) }
+                    accepted += 1
+                    Motion.feedback(.done)
+                }
+                .buttonStyle(.glassProminent)
+                .transition(.opacity)
             } else {
                 Label(hunk.state == .accepted ? "已接受" : proposal ? "已拒绝" : "已还原",
                       systemImage: hunk.state == .accepted ? "checkmark.circle.fill" : "arrow.uturn.backward.circle")
                     .font(.caption)
                     .foregroundStyle(hunk.state == .accepted ? .green : .secondary)
-                Button("撤销") { model.setHunk(index, .pending) }
+                    .symbolEffect(.bounce, options: .nonRepeating, value: Motion.style == .lively ? accepted : 0)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                Button("撤销") { withMotion(Motion.quick) { model.setHunk(index, .pending) } }
                     .buttonStyle(.borderless)
                     .font(.caption)
+                    .transition(.opacity)
             }
         }
         .controlSize(.small)
