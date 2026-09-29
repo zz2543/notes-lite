@@ -164,9 +164,11 @@ final class AnnotationRail {
             // A fixed width lets the text wrap before the height is measured.
             let card = AnyView(AnnotationCard(model: model, annotation: a, orphan: anchors[a.id] == nil, selected: selected == a.id)
                 .frame(width: w))
+            let isNew = hosts[a.id] == nil
             let host = hosts[a.id] ?? {
                 let h = NSHostingView(rootView: card)
                 h.sizingOptions = [.intrinsicContentSize]
+                h.wantsLayer = true
                 tv.addSubview(h)
                 hosts[a.id] = h
                 return h
@@ -174,7 +176,26 @@ final class AnnotationRail {
             host.rootView = card
             host.layoutSubtreeIfNeeded()
             let h = ceil(max(host.intrinsicContentSize.height, host.fittingSize.height))
-            host.frame = CGRect(x: x, y: y, width: w, height: h)
+            let frame = CGRect(x: x, y: y, width: w, height: h)
+            if isNew || Motion.reduce {
+                host.frame = frame
+                if isNew, !Motion.reduce {
+                    host.alphaValue = 0
+                    NSAnimationContext.runAnimationGroup { ctx in
+                        ctx.duration = Motion.standardDuration
+                        host.animator().alphaValue = 1
+                    }
+                }
+            } else if abs(host.frame.minY - frame.minY) > 0.5 || abs(host.frame.height - frame.height) > 0.5 {
+                // Text above it grew or shrank: the card glides along with its passage.
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = Motion.quickDuration
+                    ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    host.animator().frame = frame
+                }
+            } else {
+                host.frame = frame
+            }
             nextY = y + h + 10
         }
     }

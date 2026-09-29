@@ -133,7 +133,7 @@ struct FolderRow: View {
         let note = vault.folderNote(folder)
         DisclosureGroup(isExpanded: Binding(
             get: { model.chrome.openFolders.contains(folder) },
-            set: { if $0 { model.chrome.openFolders.insert(folder) } else { model.chrome.openFolders.remove(folder) } }
+            set: { open in withMotion { if open { model.chrome.openFolders.insert(folder) } else { model.chrome.openFolders.remove(folder) } } }
         )) {
             FolderNodes(model: model, vault: vault, folder: folder)
         } label: {

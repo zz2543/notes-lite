@@ -265,7 +265,10 @@ enum DebugStress {
                 if ProcessInfo.processInfo.environment["TWAIN_EXIT"] != nil { exit(0) }
                 return
             }
-            steps[i]({ DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { runStep(i + 1) } })
+            steps[i]({
+                if ProcessInfo.processInfo.environment["TWAIN_STRESS_MEMORY"] != nil { log(String(format: "memory after step %d: %.0fMB", i, footprintMB())) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { runStep(i + 1) }
+            })
         }
         log("vault notes=\(v.notes.count) picks=\(picks.count) dim=\(m.prefs.dim)")
         runStep(0)

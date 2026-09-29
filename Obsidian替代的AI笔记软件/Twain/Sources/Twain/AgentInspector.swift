@@ -105,7 +105,10 @@ struct AgentInspector: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(sess.items) { ItemView(model: model, session: sess, item: $0).id($0.id) }
+                    ForEach(sess.items) {
+                        ItemView(model: model, session: sess, item: $0).id($0.id)
+                            .transition(.opacity.combined(with: .offset(y: 8)))
+                    }
                     if sess.running && sess.source == .app {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -115,6 +118,7 @@ struct AgentInspector: View {
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
+                .motion(Motion.standard, value: sess.items.count)
             }
             .scrollEdgeEffectStyle(.soft, for: .all)
             .contextMenu {
@@ -125,7 +129,7 @@ struct AgentInspector: View {
                 }
             }
             .onChange(of: sess.items.count) { _, _ in
-                withAnimation { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
+                withMotion { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
             }
         }
     }
@@ -257,7 +261,7 @@ struct AgentBar: View {
             ForEach(AgentKind.allCases, id: \.self) { k in
                 let on = model.agents.agentPick == k
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { model.agents.agentPick = k }
+                    withMotion(Motion.quick) { model.agents.agentPick = k }
                 } label: {
                     HStack(spacing: 5) {
                         if icons {
@@ -348,7 +352,7 @@ struct ModelPicker: View {
                     }
                     if !more.isEmpty {
                         Button {
-                            withAnimation(.snappy(duration: 0.2)) { showMore.toggle() }
+                            withMotion(Motion.quick) { showMore.toggle() }
                         } label: {
                             HStack(spacing: 4) {
                                 Text("更多模型")
@@ -634,7 +638,7 @@ private struct FeedbackCard: View {
                 Image(systemName: "text.bubble").foregroundStyle(.secondary)
                 Text("审阅意见 · \((rel as NSString).lastPathComponent)").fontWeight(.medium).lineLimit(1)
                 Spacer(minLength: 0)
-                Button(expanded ? "收起" : "查看") { withAnimation(.snappy(duration: 0.2)) { expanded.toggle() } }
+                Button(expanded ? "收起" : "查看") { withMotion(Motion.quick) { expanded.toggle() } }
                     .buttonStyle(.borderless).font(.caption)
             }
             if expanded {

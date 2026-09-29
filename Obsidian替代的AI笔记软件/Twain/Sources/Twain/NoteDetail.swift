@@ -27,7 +27,7 @@ struct NoteDetail: View {
                     .transition(.opacity)
             }
         }
-        .animation(Motion.standard, value: PageKind(space: model.chrome.activeSpace, desk: model.chrome.openDesk, reviewing: reviewing))
+        .motion(Motion.standard, value: PageKind(space: model.chrome.activeSpace, desk: model.chrome.openDesk, reviewing: reviewing))
         // The page takes whatever width the split view gives it. Letting its content report a
         // minimum width feeds back into the column sizes, and a width-dependent layout (the
         // dashboards) can then keep re-solving the window until AppKit aborts.
@@ -97,10 +97,13 @@ private struct SlashLayer: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if let s = model.editor.slash {
-            SlashMenu(model: model, state: s).offset(x: s.anchor.x, y: s.anchor.y)
-                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
+        ZStack(alignment: .topLeading) {
+            if let s = model.editor.slash {
+                SlashMenu(model: model, state: s).offset(x: s.anchor.x, y: s.anchor.y)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+            }
         }
+        .motion(Motion.quick, value: model.editor.slash != nil)
     }
 }
 
@@ -108,10 +111,13 @@ private struct StatusLayer: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if !model.chrome.zen {
-            StatusPill(model: model).padding(Metrics.floatInset)
-                .transition(.opacity)
+        ZStack(alignment: .bottomTrailing) {
+            if !model.chrome.zen {
+                StatusPill(model: model).padding(Metrics.floatInset)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
+        .motion(Motion.standard, value: model.chrome.zen)
     }
 }
 
@@ -126,7 +132,7 @@ private struct CompanionLayer: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.standard, value: model.editor.companionTip)
+        .motion(Motion.standard, value: model.editor.companionTip)
     }
 }
 
@@ -134,15 +140,18 @@ private struct ZenExit: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        if model.chrome.zen {
-            Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
-                .buttonStyle(.glass)
-                .buttonBorderShape(.capsule)
-                .keyboardShortcut(.cancelAction)
-                .padding(18)
-                .opacity(0.7)
-                .transition(.opacity)
+        ZStack(alignment: .topTrailing) {
+            if model.chrome.zen {
+                Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
+                    .keyboardShortcut(.cancelAction)
+                    .padding(18)
+                    .opacity(0.7)
+                    .transition(.opacity)
+            }
         }
+        .motion(Motion.standard, value: model.chrome.zen)
     }
 }
 
@@ -201,7 +210,7 @@ private struct Banners: View {
                 .transition(.opacity)
             }
         }
-        .animation(Motion.standard, value: BannerState(hunks: pending?.hunks.count, oversized: model.editor.oversized, writing: writingHere))
+        .motion(Motion.standard, value: BannerState(hunks: pending?.hunks.count, oversized: model.editor.oversized, writing: writingHere))
     }
 
     private struct BannerState: Equatable {
@@ -250,7 +259,6 @@ struct StatusPill: View {
                 // The pace covers the last minute: only this text redraws on a timer.
                 TimelineView(.periodic(from: .now, by: 5)) { _ in
                     Text(model.stats).monospacedDigit().foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
                 }
             }
             .font(.caption)

@@ -71,7 +71,7 @@ struct EditorView: NSViewRepresentable {
         let style = EditorStyle(font: model.prefs.font, typewriter: model.prefs.typewriter, dim: model.prefs.dim, zen: model.chrome.zen, width: model.prefs.editorWidth,
                                 plain: model.activeNote?.isHTML == true || model.editor.oversized,
                                 rail: model.visibleAnnotations.isEmpty || model.chrome.zen ? 0 : AnnotationRail.width)
-        c.sync(version: model.editor.editorVersion, text: model.editorDisplayText, style: style,
+        c.sync(version: model.editor.editorVersion, rel: model.editor.activeRel, text: model.editorDisplayText, style: style,
                ghost: model.editor.ghost, readOnly: model.editorReadOnly, focus: model.editor.focusRequest)
         // Annotations and the selected one change what the rail and highlights show.
         _ = (model.editor.annotations, model.editor.selectedAnnotation)
@@ -93,6 +93,21 @@ struct EditorView: NSViewRepresentable {
         private var swapping = false
         /// How the text's length changed since the model last heard of an edit.
         private var typedDelta = 0
+        /// The note on the page, to tell a switch to another note from a reload of this one.
+        private var shownRel: String?
+
+        /// Another note's text arrives: it fades in over the page's curve instead of cutting in.
+        /// Run by Core Animation on the render server; the main thread only adds the animation.
+        private func fadeIn() {
+            guard !Motion.reduce, let scroll = scrollView else { return }
+            scroll.wantsLayer = true
+            let a = CABasicAnimation(keyPath: "opacity")
+            a.fromValue = 0.2
+            a.toValue = 1
+            a.duration = Motion.quickDuration + 0.04
+            a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            scroll.layer?.add(a, forKey: "noteSwitch")
+        }
         private var styler = MarkdownStyler(style: EditorStyle(font: .serif, typewriter: true, dim: true, zen: false, width: 680))
 
         init(model: AppModel) {
@@ -129,7 +144,7 @@ struct EditorView: NSViewRepresentable {
 
         var storage: NSTextStorage? { textView?.textStorage }
 
-        func sync(version v: Int, text: String, style s: EditorStyle, ghost: String, readOnly: Bool, focus: (caret: Int, token: Int)?) {
+        func sync(version v: Int, rel: String?, text: String, style s: EditorStyle, ghost: String, readOnly: Bool, focus: (caret: Int, token: Int)?) {
             guard let tv = textView, let storage else { return }
             var needsRestyle = false
             if v != version {
@@ -155,7 +170,9 @@ struct EditorView: NSViewRepresentable {
                     swapping = false
                     tv.resetCaretTrailTracking()
                     if focus == nil || focus!.token == focusToken { tv.scroll(.zero) }
+                    if rel != shownRel, shownRel != nil { fadeIn() }
                 }
+                shownRel = rel
                 needsRestyle = true
             }
             if s != style {

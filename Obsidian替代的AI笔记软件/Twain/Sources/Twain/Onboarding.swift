@@ -28,13 +28,13 @@ struct OnboardingSheet: View {
                             .frame(width: i == step ? 18 : 6, height: 6)
                     }
                 }
-                .animation(.snappy, value: step)
+                .motion(Motion.standard, value: step)
                 Spacer()
                 Button("跳过") { model.finishOnboarding() }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                 if step > 0 {
-                    Button("上一步") { withAnimation(.snappy) { model.chrome.onboardingStep = step - 1 } }
+                    Button("上一步") { withMotion { model.chrome.onboardingStep = step - 1 } }
                         .buttonStyle(.glass)
                 }
                 Button(step == 2 ? "开始写作" : "继续") { next(step) }
@@ -51,7 +51,7 @@ struct OnboardingSheet: View {
     private func next(_ step: Int) {
         if step == 0, model.vault == nil { model.openVault(AppModel.defaultVaultURL) }
         if step == 1, model.prefs.syncContext { model.ensureContextFiles() }
-        if step == 2 { model.finishOnboarding() } else { withAnimation(.snappy) { model.chrome.onboardingStep = step + 1 } }
+        if step == 2 { model.finishOnboarding() } else { withMotion { model.chrome.onboardingStep = step + 1 } }
     }
 
     private func header(_ icon: String, _ kicker: String, _ title: String, _ body: String?) -> some View {

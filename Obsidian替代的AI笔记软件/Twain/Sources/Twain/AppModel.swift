@@ -605,7 +605,11 @@ final class AppModel {
             let text = self.editor.editorText
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 let n = Markdown.countWords(Markdown.lines(text))
-                DispatchQueue.main.async { if self?.editor.wordCount != n { self?.editor.wordCount = n } }
+                DispatchQueue.main.async {
+                    guard let self, self.editor.wordCount != n else { return }
+                    // Not animated: a number rolling in a glass capsule costs far more than it adds.
+                    self.editor.wordCount = n
+                }
             }
         }
         countWork = w
@@ -626,7 +630,12 @@ final class AppModel {
 
     // MARK: chrome actions
 
+    /// Panels close and open together, on the page's curve.
     func toggleZen() {
+        withMotion { toggleZenNow() }
+    }
+
+    private func toggleZenNow() {
         chrome.palette = false
         if chrome.zen {
             chrome.zen = false
@@ -641,8 +650,10 @@ final class AppModel {
     }
 
     func toggleAgent() {
-        if chrome.zen { toggleZen() }
-        chrome.agentPanel.toggle()
+        withMotion {
+            if chrome.zen { toggleZenNow() }
+            chrome.agentPanel.toggle()
+        }
     }
     func openPalette() { chrome.palette = true; chrome.paletteQuery = ""; chrome.paletteSel = 0 }
     func openSettings(_ tab: SettingsTab) {

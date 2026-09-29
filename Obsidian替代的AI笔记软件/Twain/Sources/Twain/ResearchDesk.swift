@@ -176,8 +176,11 @@ struct ResearchDeskView: View {
                         ForEach(tops) { c in
                             CardView(model: model, deskID: desk.id, card: c, replies: visible.filter { $0.parent == c.id },
                                      canFollowUp: session?.running == false)
+                                // Cards arrive one by one as the agent hands them in.
+                                .transition(.opacity.combined(with: .scale(scale: 0.96)))
                         }
                     }
+                    .motion(Motion.pop, value: visible.map(\.id))
                 }
             }
             .padding(.horizontal, 28).padding(.top, 70).padding(.bottom, 90)

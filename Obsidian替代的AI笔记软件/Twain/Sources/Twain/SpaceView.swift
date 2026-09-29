@@ -53,12 +53,13 @@ struct SpaceView: View {
                             ForEach(row, id: \.self) { i in
                                 ModuleCard(model: model, plugin: plugin, module: modules[i], editing: editing,
                                            move: { d in move(i, by: d, in: modules) }, remove: { remove(i, in: modules) })
+                                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
                             }
                             if row.count == 1, twoColumns, modules[row[0]]["span"]?.int != 2 { Color.clear.frame(maxWidth: .infinity) }
                         }
                     }
                 }
-                if editing { addMenu(modules) }
+                if editing { addMenu(modules).transition(.opacity.combined(with: .move(edge: .top))) }
             }
             .padding(.horizontal, 28).padding(.top, 64).padding(.bottom, 40)
             .frame(maxWidth: 1100)
@@ -89,7 +90,7 @@ struct SpaceView: View {
                         Button("新条目", systemImage: "square.and.pencil") { model.openEntry(plugin) }
                             .buttonStyle(.glassProminent)
                     }
-                    Button(editing ? "完成" : "编辑", systemImage: editing ? "checkmark" : "slider.horizontal.3") { editing.toggle() }
+                    Button(editing ? "完成" : "编辑", systemImage: editing ? "checkmark" : "slider.horizontal.3") { withMotion(Motion.quick) { editing.toggle() } }
                         .buttonStyle(.glass)
                     Menu {
                         Button("在 Finder 中显示插件", systemImage: "folder") {
@@ -113,13 +114,13 @@ struct SpaceView: View {
         guard modules.indices.contains(j) else { return }
         var m = modules
         m.swapAt(i, j)
-        model.saveModules(plugin, m)
+        withMotion { model.saveModules(plugin, m) }
     }
 
     private func remove(_ i: Int, in modules: [JSONValue]) {
         var m = modules
         m.remove(at: i)
-        model.saveModules(plugin, m)
+        withMotion { model.saveModules(plugin, m) }
     }
 
     private func addMenu(_ modules: [JSONValue]) -> some View {
@@ -141,7 +142,7 @@ struct SpaceView: View {
         ]
         return Menu {
             ForEach(presets, id: \.0) { name, icon, m in
-                Button(name, systemImage: icon) { model.saveModules(plugin, modules + [m]) }
+                Button(name, systemImage: icon) { withMotion { model.saveModules(plugin, modules + [m]) } }
             }
         } label: {
             Label("添加模块", systemImage: "plus")

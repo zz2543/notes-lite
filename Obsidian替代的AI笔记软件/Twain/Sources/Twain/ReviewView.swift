@@ -23,7 +23,7 @@ struct ReviewView: View {
                     case let .context(rows):
                         VStack(alignment: .leading, spacing: 0) {
                             DiffRows(rows: rows) { line in
-                                withAnimation(.snappy(duration: 0.2)) { _ = expanded.insert(line) }
+                                withMotion(Motion.quick) { _ = expanded.insert(line) }
                             }
                         }
                     case let .hunk(index, rows):
@@ -156,7 +156,7 @@ private struct HunkCard: View {
         }
         .contentCard(radius: Metrics.cardRadius)
         .opacity(hunk.state == .pending ? 1 : 0.85)
-        .animation(.snappy(duration: 0.2), value: hunk.state)
+        .motion(Motion.quick, value: hunk.state)
     }
 
     private var footer: some View {
