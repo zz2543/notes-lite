@@ -480,15 +480,27 @@ final class AppModel {
         return agents.writing.contains(rel)
     }
 
+    /// The model changes the open note's text as if it were typed (a task checked from a space).
     func editorDidChange(_ text: String) {
         // NSTextView can notify after a model-driven reload. It is not a user edit,
         // so it must not accept a pending agent review or schedule another save.
         guard text != editor.editorText else { return }
         let delta = (text as NSString).length - (editor.editorText as NSString).length
+        editor.editorText = text
+        textChanged(delta: delta)
+    }
+
+    /// The user typed in the editor, changing its length by `delta` (UTF-16). The text itself
+    /// stays in the editor until something reads `editor.editorText`.
+    func editorEdited(delta: Int) {
+        editor.textEdited()
+        textChanged(delta: delta)
+    }
+
+    private func textChanged(delta: Int) {
         if delta > 0 && delta < 20 { editor.typed.append((Date(), delta)) }
         editor.netTyped += delta
-        editor.editorText = text
-        editor.dirty = true
+        if !editor.dirty { editor.dirty = true }
         recountWords()
         companionTextChanged()
         if let rel = editor.activeRel, agents.pending[rel] != nil {
@@ -608,13 +620,17 @@ final class AppModel {
 
     func recountWords(now: Bool = false) {
         countWork?.cancel()
-        let text = editor.editorText
+        // The text is taken once typing pauses, not on every key.
         let w = DispatchWorkItem { [weak self] in
-            let n = Markdown.countWords(Markdown.lines(text))
-            DispatchQueue.main.async { if self?.editor.wordCount != n { self?.editor.wordCount = n } }
+            guard let self else { return }
+            let text = self.editor.editorText
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let n = Markdown.countWords(Markdown.lines(text))
+                DispatchQueue.main.async { if self?.editor.wordCount != n { self?.editor.wordCount = n } }
+            }
         }
         countWork = w
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + (now ? 0 : 0.4), execute: w)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (now ? 0 : 0.4), execute: w)
     }
 
     /// Words, reading time and typing pace. The pace looks at the last minute, so the status pill

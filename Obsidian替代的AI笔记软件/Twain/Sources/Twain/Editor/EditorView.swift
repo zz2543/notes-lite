@@ -9,6 +9,11 @@ struct EditorView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
+    /// The page gives way to a space or a desk: take the typed text out while the view still has it.
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        _ = coordinator.model.editor.editorText
+    }
+
     func makeNSView(context: Context) -> NSScrollView {
         let storage = NSTextStorage()
         storage.delegate = context.coordinator
@@ -86,6 +91,8 @@ struct EditorView: NSViewRepresentable {
         /// Set while the whole text is being replaced: the selection passes through the end of the
         /// new text on the way, and centering on it would lay out the entire note.
         private var swapping = false
+        /// How the text's length changed since the model last heard of an edit.
+        private var typedDelta = 0
         private var styler = MarkdownStyler(style: EditorStyle(font: .serif, typewriter: true, dim: true, zen: false, width: 680))
 
         init(model: AppModel) {
@@ -102,6 +109,11 @@ struct EditorView: NSViewRepresentable {
                 guard let tv = self?.textView, NSMaxRange(range) <= (tv.string as NSString).length else { return }
                 tv.window?.makeFirstResponder(tv)
                 tv.insertText(text, replacementRange: range)
+            }
+            // A native copy: comparing and slicing a bridged NSString is many times slower.
+            model.editor.live = { [weak self] in
+                guard let tv = self?.textView else { return nil }
+                return String(decoding: Array(tv.string.utf8), as: UTF8.self)
             }
             model.selectEditorRange = { [weak self] range in
                 guard let self, let tv = self.textView, NSMaxRange(range) <= (tv.string as NSString).length else { return }
@@ -223,7 +235,10 @@ struct EditorView: NSViewRepresentable {
         nonisolated func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
                                      range editedRange: NSRange, changeInLength delta: Int) {
             guard editedMask.contains(.editedCharacters) else { return }
-            MainActor.assumeIsolated { styler.noteEdit(editedRange, delta: delta) }
+            MainActor.assumeIsolated {
+                styler.noteEdit(editedRange, delta: delta)
+                if !swapping { typedDelta += delta }
+            }
         }
 
         func currentLine() -> Int? {
@@ -353,9 +368,11 @@ struct EditorView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             textView?.updateCaret(animated: true)
-            guard let tv = textView, !tv.hasMarkedText() else { return }
-            // A native copy: comparing and slicing a bridged NSString is many times slower.
-            model.editorDidChange(String(decoding: Array(tv.string.utf8), as: UTF8.self))
+            guard let tv = textView, !tv.hasMarkedText(), !swapping else { return }
+            // The model copies the text out of the editor only when it needs it.
+            let delta = typedDelta
+            typedDelta = 0
+            model.editorEdited(delta: delta)
             restyle()
             if !model.editor.annotations.isEmpty { scheduleRail() }
             updateSlash()

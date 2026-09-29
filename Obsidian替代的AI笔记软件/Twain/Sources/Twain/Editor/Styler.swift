@@ -134,7 +134,13 @@ final class MarkdownStyler {
         var folded = false
     }
 
-    private(set) var lineStarts: [Int] = [0]
+    /// Line starts and heads of the text as of the last restyle (TwainCore's LineTable).
+    private var lines = LineTable()
+    var lineStarts: [Int] { lines.starts }
+    /// The one edit since the last restyle, when there was exactly one: lines are then scanned
+    /// again only where it happened.
+    private var singleEdit: (range: NSRange, delta: Int)?
+    private var editCount = 0
     private var sigs: [Sig] = []
     private var blocks: [Block] = []
     private var blockOf: [Int32] = []
@@ -181,7 +187,7 @@ final class MarkdownStyler {
     }
 
     /// Everything changed (new note, new style).
-    func reset() { everything = true; dirtyChars = nil }
+    func reset() { everything = true; dirtyChars = nil; editCount = 0; singleEdit = nil }
 
     /// A new note: folds the user toggled belong to the old one.
     func newDocument() { reset(); foldOverrides = [:] }
@@ -194,6 +200,8 @@ final class MarkdownStyler {
 
     /// Records a text edit reported by the text storage (new coordinates).
     func noteEdit(_ range: NSRange, delta: Int) {
+        editCount += 1
+        singleEdit = editCount == 1 ? (range, delta) : nil
         guard var d = dirtyChars else { dirtyChars = range; return }
         if NSMaxRange(d) >= range.location - max(0, -delta) { d.length = max(0, d.length + delta) }
         dirtyChars = NSUnionRange(d, range)
@@ -209,14 +217,7 @@ final class MarkdownStyler {
 
     // MARK: lines
 
-    func lineIndex(at loc: Int) -> Int {
-        var lo = 0, hi = lineStarts.count - 1
-        while lo < hi {
-            let mid = (lo + hi + 1) / 2
-            if lineStarts[mid] <= loc { lo = mid } else { hi = mid - 1 }
-        }
-        return lo
-    }
+    func lineIndex(at loc: Int) -> Int { lines.line(at: loc) }
 
     /// Whether line `i` sits inside a fenced code or math block, as of the last restyle.
     func isCode(line i: Int) -> Bool { i < sigs.count && sigs[i].forced == .code }
@@ -228,48 +229,15 @@ final class MarkdownStyler {
         return NSRange(location: start, length: max(0, end - start))
     }
 
-    /// Each line's first four characters, packed 16 bits apiece (0 past the line's end): enough
-    /// to tell what a line can be without asking the string again.
-    private var heads: [UInt64] = [0]
-
+    /// Brings the line table up to date: the lines one edit touched, or the whole text.
     private func scanLines(_ ns: NSString) {
-        var starts = [0]
-        starts.reserveCapacity(lineStarts.count + 8)
-        var hs: [UInt64] = []
-        hs.reserveCapacity(lineStarts.count + 8)
-        let len = ns.length
-        var buf = [unichar](repeating: 0, count: 8192)
-        var pos = 0
-        var head: UInt64 = 0, col = 0
-        buf.withUnsafeMutableBufferPointer { b in
-            let p = b.baseAddress!
-            while pos < len {
-                let n = min(8192, len - pos)
-                ns.getCharacters(p, range: NSRange(location: pos, length: n))
-                var k = 0
-                while k < n {
-                    let c = p[k]
-                    if c == 0x0A {
-                        starts.append(pos + k + 1)
-                        hs.append(head)
-                        head = 0
-                        col = 0
-                    } else if col < 4 {
-                        head |= UInt64(c) << UInt64(16 * col)
-                        col += 1
-                    }
-                    k += 1
-                }
-                pos += n
-            }
-        }
-        hs.append(head)
-        lineStarts = starts
-        heads = hs
+        if let e = singleEdit, !everything { lines.update(ns, edited: e.range, delta: e.delta) } else { lines.scan(ns) }
+        singleEdit = nil
+        editCount = 0
     }
 
     /// Character `k` (0–3) of line `i`, 0 past its end.
-    @inline(__always) private func char(_ i: Int, _ k: Int) -> unichar { unichar(truncatingIfNeeded: heads[i] >> UInt64(16 * k)) }
+    @inline(__always) private func char(_ i: Int, _ k: Int) -> unichar { lines.unit(i, k) }
 
     /// The first non-space among a line's first four characters.
     private func firstChar(_ i: Int) -> unichar? {

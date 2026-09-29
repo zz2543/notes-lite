@@ -111,7 +111,31 @@ final class ChromeState {
 @MainActor @Observable
 final class EditorState {
     var activeRel: String?
-    var editorText = ""
+    /// The open note's text. While the user types, the editor owns it: a keystroke only marks
+    /// this stale, and the text is copied out of the editor when someone reads it (a save, an
+    /// agent's `context`, the word count after a pause), never once per key. Not observed: the
+    /// editor redraws on `editorVersion`, which changes whenever the model replaces the text.
+    var editorText: String {
+        get {
+            if stale, let text = live?() {
+                stored = text
+                stale = false
+            }
+            return stored
+        }
+        set {
+            stored = newValue
+            stale = false
+        }
+    }
+    @ObservationIgnored private var stored = ""
+    @ObservationIgnored private var stale = false
+    /// Reads the editor's current text; set by the editor.
+    @ObservationIgnored var live: (() -> String?)?
+
+    /// The user changed the text in the editor; it is read from there when next needed.
+    func textEdited() { stale = true }
+
     /// Bumped whenever the model replaces the editor's text (note switch, disk reload).
     var editorVersion = 0 { didSet { versionChanged?() } }
     @ObservationIgnored var versionChanged: (() -> Void)?
