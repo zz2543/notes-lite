@@ -14,7 +14,7 @@ struct MainWindow: View {
         } detail: {
             NoteDetail(model: model)
                 .inspector(isPresented: Bindable(model.chrome).agentPanel) {
-                    AgentInspector(model: model)
+                    FixedHost(content: AgentInspector(model: model))
                         .inspectorColumnWidth(min: 300, ideal: 360, max: 520)
                 }
         }
@@ -38,6 +38,32 @@ struct MainWindow: View {
             OnboardingSheet(model: model)
         }
         .onAppear { model.openSettingsAction = { openSettings() } }
+    }
+}
+
+/// Hosts `content` in an NSHostingView of its own that takes whatever size it is given.
+///
+/// While the inspector slides in or out, AppKit resizes the column on every frame and the
+/// window's SwiftUI layout runs again from the top: the Agent bar's `ViewThatFits`, the
+/// transcript and the composer were all measured afresh each frame (10–15 ms of a 16.7 ms
+/// frame with a conversation open), although the panel's own width never changes. Behind this
+/// boundary the content is laid out only when its size or its own state changes.
+struct FixedHost<Content: View>: NSViewRepresentable {
+    let content: Content
+
+    func makeNSView(context: Context) -> NSHostingView<Content> {
+        let host = NSHostingView(rootView: content)
+        // No min/ideal size constraints: working those out is the measuring this avoids.
+        host.sizingOptions = []
+        return host
+    }
+
+    func updateNSView(_ host: NSHostingView<Content>, context: Context) {
+        host.rootView = content
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSHostingView<Content>, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
     }
 }
 

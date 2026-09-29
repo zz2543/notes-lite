@@ -165,6 +165,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // TWAIN_SNAPSHOT_WINDOW=settings captures the Settings window instead of the main one.
                 let wantSettings = ProcessInfo.processInfo.environment["TWAIN_SNAPSHOT_WINDOW"] == "settings"
                 let settings = NSApp.windows.first { $0.identifier?.rawValue.contains("Settings") == true }
+                // TWAIN_SNAPSHOT_SCREEN=1: the real window as the window server shows it (glass
+                // included, which cacheDisplay leaves out), taken by `screencapture -l`.
+                if ProcessInfo.processInfo.environment["TWAIN_SNAPSHOT_SCREEN"] != nil,
+                   let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView?.frame.width ?? 0 > 600 }) {
+                    // Shown for the capture only; it may sit behind other windows, -l still gets it.
+                    w.alphaValue = 1
+                    CATransaction.flush()
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+                    let task = Process()
+                    task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                    task.arguments = ["-x", "-o", "-l\(w.windowNumber)", path]
+                    try? task.run()
+                    task.waitUntilExit()
+                    exit(0)
+                }
                 guard let w = wantSettings ? settings : NSApp.orderedWindows.first(where: { $0.isVisible }) ?? NSApp.windows.first(where: { $0.isVisible }), let v = w.contentView?.superview ?? w.contentView,
                       let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(2) }
                 v.cacheDisplay(in: v.bounds, to: rep)

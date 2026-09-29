@@ -13,7 +13,10 @@ import TwainCore
 /// - typing into and moving the caret at the end of the longest note
 /// - memory at the start and the end
 ///
-/// Every line starts with `stress `; `TWAIN_EXIT=1` quits when done.
+/// Every line starts with `stress `; `TWAIN_EXIT=1` quits when done. For looking closer at the
+/// panels: `TWAIN_STRESS_ONLY=agent` runs just the Agent panel toggles, `TWAIN_STRESS_ROUNDS`
+/// sets how many, `TWAIN_STRESS_SESSION=1` puts a conversation in the panel first, and
+/// `TWAIN_STRESS_GAPS=1` prints every frame interval and main-thread busy stretch.
 @MainActor
 enum DebugStress {
     static func log(_ s: String) { FileHandle.standardError.write(("stress " + s + "\n").data(using: .utf8)!) }
@@ -39,8 +42,25 @@ enum DebugStress {
         private var stamps: [CFTimeInterval] = []
         private var frame: CFTimeInterval = 1.0 / 60
 
+        private var observer: CFRunLoopObserver?
+        private var woke: CFTimeInterval = 0
+        private var busy: [CFTimeInterval] = []
+
         func start(on view: NSView) {
             stamps = []
+            busy = []
+            if ProcessInfo.processInfo.environment["TWAIN_STRESS_GAPS"] != nil {
+                // How long the main thread worked between two waits, to tell our own time from the render server's.
+                let o = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue, true, 0) { [weak self] _, act in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        let now = CACurrentMediaTime()
+                        if act == .afterWaiting { self.woke = now } else if self.woke > 0 { self.busy.append(now - self.woke); self.woke = 0 }
+                    }
+                }
+                CFRunLoopAddObserver(CFRunLoopGetMain(), o, .commonModes)
+                observer = o
+            }
             let l = view.displayLink(target: self, selector: #selector(tick(_:)))
             l.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
             l.add(to: .main, forMode: .common)
@@ -57,6 +77,11 @@ enum DebugStress {
             link?.invalidate()
             link = nil
             let gaps = zip(stamps.dropFirst(), stamps).map { $0 - $1 }
+            if ProcessInfo.processInfo.environment["TWAIN_STRESS_GAPS"] != nil {
+                DebugStress.log("gaps " + gaps.map { String(format: "%.0f", $0 * 1000) }.joined(separator: " "))
+                DebugStress.log("busy " + busy.filter { $0 > 0.003 }.map { String(format: "%.0f", $0 * 1000) }.joined(separator: " "))
+                if let observer { CFRunLoopObserverInvalidate(observer); self.observer = nil }
+            }
             return (gaps.count, gaps.filter { $0 > frame * 1.5 }.count, (gaps.max() ?? 0) * 1000)
         }
     }
@@ -129,9 +154,10 @@ enum DebugStress {
         func panel(_ name: String, _ toggle: @escaping () -> Void) -> (@escaping () -> Void) -> Void {
             { next in
                 var round = 0
+                let rounds = Int(ProcessInfo.processInfo.environment["TWAIN_STRESS_ROUNDS"] ?? "") ?? 8
                 var hide: [(Int, Int, Double)] = [], show: [(Int, Int, Double)] = []
                 @MainActor func once() {
-                    guard round < 8 else {
+                    guard round < rounds else {
                         @MainActor func sum(_ xs: [(Int, Int, Double)]) -> String {
                             String(format: "frames=%d dropped=%d longest=%.1fms", xs.map(\.0).reduce(0, +), xs.map(\.1).reduce(0, +), xs.map(\.2).max() ?? 0)
                         }
@@ -257,6 +283,44 @@ enum DebugStress {
         steps.append { next in
             log(String(format: "memory start=%.0fMB end=%.0fMB", startMB, footprintMB()))
             next()
+        }
+
+        // TWAIN_STRESS_SESSION=1: the Agent panel shows a conversation instead of the empty state.
+        if ProcessInfo.processInfo.environment["TWAIN_STRESS_SESSION"] != nil {
+            let s = AgentSession(agent: .claude, source: .app, title: "整理笔记")
+            for i in 1...4 {
+                s.apply([.user("第 \(i) 轮：整理这篇笔记的结构，合并重复的待办"),
+                         .step(id: "\(i)a", text: "读取 AGENTS.md", write: nil), .stepDone(id: "\(i)a"),
+                         .step(id: "\(i)b", text: "写入 folder0/note0.md", write: nil), .stepDone(id: "\(i)b"),
+                         .text("""
+                         我把这篇笔记分成了三节，**还没写进文件**，改动已提交到审阅：
+
+                         ```
+                         ## 目标
+                         ## 进展
+                         ## 下一步
+                         ```
+
+                         - 合并了两条重复的待办，带 `代码` 和 [链接](https://example.com)
+                         - 把零散的备注移到了「进展」下面
+                         1. 有序的一条
+                         > 你要是想换个分法，告诉我就行。
+                         """)])
+            }
+            m.agents.sessions.append(s)
+            m.agents.activeSessionID = s.id
+        }
+
+        // TWAIN_STRESS_ONLY=agent: just the Agent panel toggles, e.g. while sampling.
+        // TWAIN_STRESS_NOTE=<path>: the note on the page while the panels move.
+        if ProcessInfo.processInfo.environment["TWAIN_STRESS_ONLY"] == "agent" {
+            steps = [steps[0], panel("agent") { m.toggleAgent() }]
+        }
+        if let rel = ProcessInfo.processInfo.environment["TWAIN_STRESS_NOTE"], v.note(rel) != nil {
+            steps.insert({ next in
+                m.open(rel)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { next() }
+            }, at: 1)
         }
 
         func runStep(_ i: Int) {

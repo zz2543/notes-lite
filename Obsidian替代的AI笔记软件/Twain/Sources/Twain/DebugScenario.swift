@@ -294,8 +294,10 @@ enum DebugScenario {
             if parts.count > 1 { m.openSpace(parts[1]) }
         case "desk":
             if let d = m.desks.first(where: { !$0.cards.isEmpty }) { m.chrome.selection = "desk:" + d.id }
-        case "reply":
+        case "reply", "longreply":
             let s = AgentSession(agent: .claude, source: .app, title: "续写")
+            // longreply: the same turn four times, so the transcript scrolls under the bars.
+            for _ in 0..<(parts.first == "longreply" ? 4 : 1) {
             s.apply([.user("根据上下文续写这篇笔记"), .step(id: "1", text: "读取 AGENTS.md", write: nil), .stepDone(id: "1"),
                      .text("""
                      我在「找回生活的掌控感」末尾续写了几条，已经提交到共笔等你审阅，**还没写进文件**。写法跟前两条一样：
@@ -311,6 +313,7 @@ enum DebugScenario {
                      1. 有序
                      > 你要是其实想在别的位置续写，告诉我在哪就行。
                      """)])
+            }
             m.agents.sessions.append(s)
             m.agents.activeSessionID = s.id
         case "bench":

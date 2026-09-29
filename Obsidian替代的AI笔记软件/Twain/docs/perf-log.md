@@ -301,3 +301,21 @@ focus dim n=12 median=20.3ms p90=24.6ms max=25.0ms
 memory start=131MB end=148MB
 done
 ```
+
+## agent panel in its own host · synthetic vault · 2026-09-29
+
+合成库（403 篇，含一篇带 4 张图、公式、表格、callout 的 `heavy.md`），`TWAIN_STRESS_ONLY=agent TWAIN_STRESS_ROUNDS=16 TWAIN_STRESS_GAPS=1`，60 Hz 屏幕。每帧主线程耗时取动画期间（≥5 ms）的中位数。
+
+```
+                         开合 16 次（8 开 8 合）                      每帧主线程
+before  普通笔记 无会话   hide dropped=1  show dropped=1  longest=33.3ms   10 ms (p90 13)
+before  普通笔记 有会话   hide dropped=4  show dropped=3  longest=29.1ms   10 ms (p90 13)
+after   普通笔记 无会话   hide dropped=0  show dropped=5  longest=27.3ms   7.5 ms (p90 10)
+after   普通笔记 有会话   hide dropped=3  show dropped=0  longest=27.1ms   8 ms (p90 10)
+before  heavy.md 无会话   hide dropped=6  show dropped=16 longest=33.3ms   13 ms (p90 16)
+before  heavy.md 有会话   hide dropped=9  show dropped=19 longest=33.3ms   14 ms (p90 16)
+after   heavy.md 无会话   hide dropped=2  show dropped=1  longest=27.7ms   10 ms (p90 12)
+after   heavy.md 有会话   hide dropped=2  show dropped=1  longest=33.3ms   11 ms (p90 12)
+```
+
+面板滑动时 AppKit 每帧改一次列宽，窗口的 SwiftUI 布局从头再跑：Agent 栏的两层 `ViewThatFits`、对话记录、输入框每帧都被重新量一遍（`NSHostingView.minSize()` 占面板耗时的大半），虽然面板自身宽度始终不变。`FixedHost` 把面板内容放进自己的 NSHostingView，外层布局不再穿透进去。剩下的每帧开销主要是正文随列宽变化重新居中后整屏重画（图片多的笔记更明显）。
