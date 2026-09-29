@@ -19,7 +19,7 @@ extension AppModel {
         guard let v = vault else { return }
         do {
             let rel = try v.createFolder(in: parent, name: "未命名文件夹")
-            if !parent.isEmpty { openFolders.insert(parent) }
+            if !parent.isEmpty, !openFolders.contains(parent) { openFolders.insert(parent) }
             if columnVisibility == .detailOnly { columnVisibility = .all }
             renaming = "dir:" + rel
         } catch {
@@ -30,7 +30,7 @@ extension AppModel {
     /// Opens (creating when needed) the folder's own note.
     func openFolderNote(_ folder: String) {
         guard let v = vault, !folder.isEmpty else { return }
-        openFolders.insert(folder)
+        if !openFolders.contains(folder) { openFolders.insert(folder) }
         if let n = v.folderNote(folder) { open(n.rel); return }
         flushSave()
         let name = (folder as NSString).lastPathComponent

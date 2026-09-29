@@ -160,7 +160,7 @@ extension AppModel {
                 guard let self, let s else { return }
                 for w in s.apply(events) {
                     let rel = v.relative(w)
-                    self.writing.insert(rel)
+                    if !self.writing.contains(rel) { self.writing.insert(rel) }
                 }
             }, onExit: { [weak self, weak s] status, stderr, sawFinish in
                 guard let self, let s else { return }
@@ -262,7 +262,7 @@ extension AppModel {
             emit("note.changed", source: eventSource(for: s), ["path": .string(c.rel)])
         }
         for rel in writing where !changed.contains(rel) { v.acknowledge(rel, content: v.diskContent(rel)) }
-        writing.removeAll()
+        if !writing.isEmpty { writing.removeAll() }
         if let rel = activeRel, changed.contains(rel) || dirty == false {
             reloadActiveFromDisk()
         }
@@ -327,7 +327,7 @@ extension AppModel {
                 continue
             }
             if appRunning {
-                writing.insert(rel)
+                if !writing.contains(rel) { writing.insert(rel) }
                 continue
             }
             outside.append(rel)
@@ -478,7 +478,9 @@ extension AppModel {
             }
         }
         // Forget terminal sessions that ended and never touched the vault.
-        sessions.removeAll { $0.source == .terminal && !$0.alive && $0.changeItems.isEmpty && $0.id != activeSessionID }
+        // Only when there is one: an in-place change of an observed array notifies even when it removes nothing.
+        let gone: (AgentSession) -> Bool = { $0.source == .terminal && !$0.alive && $0.changeItems.isEmpty && $0.id != self.activeSessionID }
+        if sessions.contains(where: gone) { sessions.removeAll(where: gone) }
     }
 
     func newSession() {

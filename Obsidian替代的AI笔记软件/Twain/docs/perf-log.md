@@ -91,3 +91,21 @@ caret end n=30 median=0.1ms p90=0.1ms max=0.5ms
 memory start=136MB end=177MB
 done
 ```
+
+## d1 guarded mutations · 67cd501 · 2026-09-29 09:54
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=63.9ms p90=74.2ms max=100.4ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=0 longest=17.4ms
+agent show frames=161 dropped=1 longest=27.9ms
+idle space worst=0.7ms stalls>16ms=0
+idle note worst=0.7ms stalls>16ms=0
+type 80665 chars n=80 median=5.7ms p90=10.2ms max=49.8ms
+caret start n=30 median=0.2ms p90=0.4ms max=2.3ms
+caret end n=30 median=0.2ms p90=0.4ms max=1.0ms
+memory start=133MB end=174MB
+done
+```

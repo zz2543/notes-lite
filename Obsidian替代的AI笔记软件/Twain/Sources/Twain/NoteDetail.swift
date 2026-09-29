@@ -35,7 +35,11 @@ struct NoteDetail: View {
 
     @ViewBuilder
     private func page(pending: PendingReview?) -> some View {
-        if let why = model.unreadable {
+        if model.downloading != nil {
+            ProgressView("正在从 iCloud 下载这篇笔记…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
+        } else if let why = model.unreadable {
             ContentUnavailableView {
                 Label("无法作为笔记打开", systemImage: "doc.questionmark")
             } description: {

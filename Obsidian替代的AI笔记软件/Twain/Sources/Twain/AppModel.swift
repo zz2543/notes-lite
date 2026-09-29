@@ -355,7 +355,7 @@ final class AppModel {
         pending = [:]
         writing = []
         loadProposals()
-        sessions.removeAll { $0.source == .terminal }
+        if sessions.contains(where: { $0.source == .terminal }) { sessions.removeAll { $0.source == .terminal } }
         if syncContext { ensureContextFiles() } else { refreshContextSync() }
         if v.notes.filter({ !$0.isAgentFile }).isEmpty {
             _ = v.create(title: "欢迎使用共笔", content: Self.welcomeNote)
@@ -466,8 +466,14 @@ final class AppModel {
         activeRel = rel
         openDesk = nil
         activeSpace = nil
-        unreadable = Self.unreadableReason(v.url(rel))
-        editorText = unreadable == nil ? v.read(rel) : ""
+        // A note iCloud has moved off this Mac is downloaded in the background: reading it here
+        // would block until the download finishes. Local notes are read right away, so
+        // switching between them never shows an empty page first.
+        let evicted = Self.isEvicted(v.url(rel))
+        downloading = evicted ? rel : nil
+        unreadable = evicted ? nil : Self.unreadableReason(v.url(rel))
+        editorText = unreadable == nil && !evicted ? v.read(rel) : ""
+        if evicted { fetchEvicted(rel) }
         oversizedDisplay = nil
         oversized = Self.hasOversizedLine(editorText)
         if unreadable != nil { v.acknowledge(rel, content: nil) }
@@ -488,10 +494,14 @@ final class AppModel {
 
     func revealInSidebar(_ rel: String) {
         var folder = (rel as NSString).deletingLastPathComponent
+        var missing: [String] = []
         while !folder.isEmpty {
-            openFolders.insert(folder)
+            if !openFolders.contains(folder) { missing.append(folder) }
             folder = (folder as NSString).deletingLastPathComponent
         }
+        // Inserting into an observed set notifies even when the folder is already open, and
+        // the whole sidebar tree depends on it: change it only when something opens.
+        if !missing.isEmpty { openFolders.formUnion(missing) }
     }
 
     func requestFocus(caret: Int) {
@@ -506,6 +516,40 @@ final class AppModel {
 
     /// Why the open file can't be shown as text (binary, far too large); nil when it can.
     var unreadable: String?
+    /// The open note while iCloud downloads it.
+    var downloading: String?
+
+    static func isEvicted(_ u: URL) -> Bool {
+        guard let s = try? u.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus else { return false }
+        return s == .notDownloaded
+    }
+
+    /// Downloads the note and shows it, unless another note was opened meanwhile.
+    private func fetchEvicted(_ rel: String) {
+        guard let v = vault else { return }
+        let u = v.url(rel)
+        try? FileManager.default.startDownloadingUbiquitousItem(at: u)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let deadline = Date().addingTimeInterval(60)
+            while Self.isEvicted(u), Date() < deadline { Thread.sleep(forTimeInterval: 0.2) }
+            let why = Self.unreadableReason(u)
+            let text = why == nil ? try? String(contentsOf: u, encoding: .utf8) : nil
+            DispatchQueue.main.async {
+                guard let self, self.activeRel == rel, self.downloading == rel else { return }
+                self.downloading = nil
+                guard let text else {
+                    self.unreadable = why ?? "没能从 iCloud 下载这篇笔记。"
+                    return
+                }
+                v.acknowledge(rel, content: text)
+                self.editorText = text
+                self.oversizedDisplay = nil
+                self.oversized = Self.hasOversizedLine(text)
+                self.editorVersion += 1
+                self.loadAnnotations()
+            }
+        }
+    }
 
     static func unreadableReason(_ u: URL) -> String? {
         let size = (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
@@ -548,7 +592,7 @@ final class AppModel {
     }
 
     var editorReadOnly: Bool {
-        guard let rel = activeRel, unreadable == nil, !oversized else { return true }
+        guard let rel = activeRel, unreadable == nil, downloading == nil, !oversized else { return true }
         return writing.contains(rel)
     }
 
