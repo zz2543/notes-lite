@@ -123,3 +123,33 @@ extension View {
     /// Not for rows of a lazy list: those appear again on every scroll.
     func arrive(_ index: Int) -> some View { modifier(Arrive(index: index)) }
 }
+
+/// A button that answers in place: after it is pressed its label turns into "已…" with a
+/// check for a moment and then back, so the result shows where the eye already is.
+struct ConfirmButton: View {
+    let title: String
+    let done: String
+    let action: () -> Void
+    @State private var confirmed = false
+    @State private var reset: DispatchWorkItem?
+
+    var body: some View {
+        Button {
+            action()
+            Motion.feedback(.done)
+            withMotion(Motion.morph) { confirmed = true }
+            reset?.cancel()
+            let w = DispatchWorkItem { withMotion(Motion.morph) { confirmed = false } }
+            reset = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: w)
+        } label: {
+            ZStack {
+                if confirmed {
+                    Label(done, systemImage: "checkmark").transition(.blurReplace)
+                } else {
+                    Text(title).transition(.blurReplace)
+                }
+            }
+        }
+    }
+}

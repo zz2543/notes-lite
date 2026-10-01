@@ -447,3 +447,60 @@ focus dim n=12 median=28.2ms p90=30.7ms max=32.7ms
 memory start=132MB end=152MB
 done
 ```
+
+## motion inspora 3a · lively · agent 岛 + 拷贝确认 · bad5377 · 2026-10-01 23:59
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=59.0ms p90=71.8ms max=96.6ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=171 dropped=1 longest=33.3ms
+agent hide frames=163 dropped=0 longest=24.6ms
+agent show frames=159 dropped=1 longest=33.3ms
+idle space worst=4.4ms stalls>16ms=0
+idle note worst=4.4ms stalls>16ms=0
+type 80665 chars n=80 median=1.0ms p90=11.4ms max=56.9ms
+caret start n=30 median=0.1ms p90=0.3ms max=6.1ms
+caret end n=30 median=0.1ms p90=0.2ms max=0.6ms
+focus dim n=12 median=26.4ms p90=31.2ms max=31.4ms
+memory start=133MB end=148MB
+done
+```
+
+## motion inspora 3a · 重复1 · bad5377 · 2026-10-02 00:00
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=57.2ms p90=67.3ms max=96.8ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=164 dropped=0 longest=22.6ms
+agent show frames=157 dropped=1 longest=33.3ms
+idle space worst=5.5ms stalls>16ms=0
+idle note worst=4.8ms stalls>16ms=0
+type 80665 chars n=80 median=1.0ms p90=9.8ms max=57.2ms
+caret start n=30 median=0.2ms p90=0.2ms max=12.3ms
+caret end n=30 median=0.2ms p90=0.4ms max=4.6ms
+focus dim n=12 median=28.2ms p90=30.7ms max=31.9ms
+memory start=133MB end=153MB
+done
+```
+
+## motion inspora 3a · 重复2 · bad5377 · 2026-10-02 00:01
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=57.6ms p90=70.4ms max=96.1ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=163 dropped=0 longest=16.7ms
+agent show frames=158 dropped=3 longest=33.3ms
+idle space worst=4.6ms stalls>16ms=0
+idle note worst=4.0ms stalls>16ms=0
+type 80665 chars n=80 median=0.9ms p90=9.4ms max=57.0ms
+caret start n=30 median=0.2ms p90=0.4ms max=6.9ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.6ms
+focus dim n=12 median=26.5ms p90=31.3ms max=33.4ms
+memory start=133MB end=148MB
+done
+```

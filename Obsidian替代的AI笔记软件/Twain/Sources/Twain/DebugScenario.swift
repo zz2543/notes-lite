@@ -472,6 +472,16 @@ enum DebugScenario {
             m.showToast("流水线「研究并写成文章」完成")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { m.showToast("Claude 已写入 周会记录.md") }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { m.showToast("没能导入：旧笔记.enex") }
+        case "island":
+            // island[:done] — an agent working with the panel closed; with :done it has just finished.
+            m.chrome.agentPanel = false
+            let s = AgentSession(agent: .claude, source: .app, title: "整理周会记录")
+            s.items = [SessionItem(kind: .step(id: "1", text: "写入 \(rel)", running: true))]
+            s.running = true
+            m.agents.sessions.append(s)
+            if parts.count > 2 && parts[2] == "done" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { s.running = false }
+            }
         case "outline":
             // outline:<note>[:n] — the Agent panel closed so the margin is wide, scrolled to heading n.
             m.chrome.agentPanel = false

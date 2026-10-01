@@ -466,7 +466,7 @@ struct OpenSettings: View {
                     HStack {
                         Text(reveal ? token : String(repeating: "•", count: 20)).font(.callout.monospaced()).textSelection(.enabled).lineLimit(1)
                         Button(reveal ? "隐藏" : "显示") { reveal.toggle() }
-                        Button("拷贝") {
+                        ConfirmButton(title: "拷贝", done: "已拷贝") {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(token, forType: .string)
                         }

@@ -114,8 +114,12 @@ private struct StatusLayer: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             if !model.chrome.zen {
-                StatusPill(model: model).padding(Metrics.floatInset)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                VStack(alignment: .trailing, spacing: 0) {
+                    AgentIsland(model: model)
+                    StatusPill(model: model)
+                }
+                .padding(Metrics.floatInset)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .motion(Motion.standard, value: model.chrome.zen)
