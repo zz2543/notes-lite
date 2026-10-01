@@ -711,14 +711,26 @@ final class AppModel {
 
     func trash(_ rel: String) {
         guard let v = vault else { return }
-        // The page goes first, crumpled, while the file goes to the Trash.
-        if rel == editor.activeRel { crumpleEditor?() }
-        NSWorkspace.shared.recycle([v.url(rel)]) { _, _ in
+        if rel == editor.activeRel {
+            // Saved first, so what is on screen goes to the Trash with the file and no pending
+            // save is left to write the file back once it's gone.
+            flushSave()
+            // The page goes first, crumpled, while the file goes to the Trash.
+            crumpleEditor?()
+        }
+        NSWorkspace.shared.recycle([v.url(rel)]) { _, error in
             DispatchQueue.main.async {
+                // A file that couldn't be moved stays a note: say why instead of hiding it.
+                if let error { self.showToast("没能移到废纸篓：" + error.localizedDescription); return }
                 withMotion { v.noteRemoved(rel) }
                 self.agents.pending[rel] = nil
                 self.emit("note.deleted", source: "user", ["path": .string(rel)])
-                if rel == self.editor.activeRel, let next = v.notes.first { self.open(next.rel) }
+                if rel == self.editor.activeRel, let next = v.notes.first {
+                    // Anything typed since belongs to the trashed note; opening the next one
+                    // must not save it back into the vault.
+                    self.editor.dirty = false
+                    self.open(next.rel)
+                }
             }
         }
     }
