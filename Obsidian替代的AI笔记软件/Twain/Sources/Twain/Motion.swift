@@ -63,12 +63,22 @@ enum Motion {
 
     private static func pick(_ minimal: Animation?, _ calm: Animation?, _ lively: Animation?) -> Animation? {
         if reduce { return style == .minimal && minimal == nil ? nil : reduced }
-        switch style {
-        case .minimal: return minimal
-        case .calm: return calm
-        case .lively: return lively
+        let a: Animation? = switch style {
+        case .minimal: minimal
+        case .calm: calm
+        case .lively: lively
         }
+        #if DEBUG
+        // TWAIN_SLOWMO=10 plays every SwiftUI transition ten times slower, so a timed snapshot
+        // can catch one halfway through.
+        if let a, let f = slowmo { return a.speed(1 / f) }
+        #endif
+        return a
     }
+
+    #if DEBUG
+    private static let slowmo = ProcessInfo.processInfo.environment["TWAIN_SLOWMO"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil }
+    #endif
 
     // MARK: AppKit
 

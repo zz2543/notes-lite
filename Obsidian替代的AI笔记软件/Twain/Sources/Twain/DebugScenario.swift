@@ -490,6 +490,19 @@ enum DebugScenario {
                     if n < m.editor.outline.count { m.scrollEditorTo?(m.editor.outline[n].offset) }
                 }
             }
+        case "noteinfo":
+            // noteinfo:<note>[:late] — with :late it opens 2.4 s in, for a frame mid-growth.
+            m.chrome.panelOrigin = nil
+            // :click — as if the toolbar's info button (second from the left of its group) was clicked.
+            if parts.count > 2, parts[2] == "click", let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) {
+                let size = w.contentView!.bounds.size
+                m.chrome.panelOrigin = CGPoint(x: size.width - 144, y: size.height - 26)
+            }
+            if parts.count > 2, parts[2] == "late" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { withMotion(Motion.morph) { m.chrome.noteInfoOpen = true } }
+            } else {
+                m.chrome.noteInfoOpen = true
+            }
         case "newmenu":
             m.chrome.newMenuOpen = true
         case "markdown":

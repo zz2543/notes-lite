@@ -561,3 +561,22 @@ focus dim n=12 median=20.1ms p90=24.7ms max=27.2ms
 memory start=141MB end=136MB
 done
 ```
+
+## motion inspora 4c · 弹出框改为从触发点长出的面板 · b3c1c68 · 2026-10-02 00:51
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=57.6ms p90=78.7ms max=81.6ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=171 dropped=1 longest=33.3ms
+agent hide frames=162 dropped=2 longest=27.6ms
+agent show frames=158 dropped=0 longest=17.7ms
+idle space worst=3.2ms stalls>16ms=0
+idle note worst=4.3ms stalls>16ms=0
+type 22785 chars n=80 median=0.5ms p90=1.9ms max=40.1ms
+caret start n=30 median=0.7ms p90=6.5ms max=10.8ms
+caret end n=30 median=0.4ms p90=0.9ms max=20.0ms
+focus dim n=12 median=25.9ms p90=27.1ms max=28.4ms
+memory start=138MB end=140MB
+done
+```

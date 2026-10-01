@@ -1,0 +1,150 @@
+import AppKit
+import SwiftUI
+
+/// Where the pointer was when something was clicked, in window coordinates — the place a
+/// panel opened by that click grows out of. Nil when it was opened from the keyboard.
+@MainActor func clickPoint() -> CGPoint? {
+    guard let e = NSApp.currentEvent,
+          [.leftMouseUp, .leftMouseDown, .rightMouseUp, .otherMouseUp].contains(e.type) else { return nil }
+    return e.locationInWindow
+}
+
+/// A panel that grows out of the control that opened it and shrinks back into it, instead of
+/// a popover with an arrow: the same object getting bigger, so the eye never loses where it
+/// came from. A solid surface lifted a level above the page. A click outside or ⎋ closes it.
+///
+/// Put it on the view the panel may cover (`.growPanel(...)`); `origin` is the click point in
+/// window coordinates, `fallback` where it grows from when there was no click (unit point of
+/// the host), `width` the panel's width.
+struct GrowPanelHost<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let origin: CGPoint?
+    var fallback: UnitPoint = .topTrailing
+    var width: CGFloat = 320
+    @ViewBuilder let panel: () -> Panel
+
+    /// The host's AppKit view, asked for its place in the window only when the panel opens —
+    /// never tracked, so resizing the host (the Agent panel sliding) costs nothing extra.
+    @State private var probe = ProbeBox()
+    @State private var panelSize: CGSize = .zero
+    @State private var escape: Any?
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowProbe(box: probe))
+            .overlay {
+                GeometryReader { geo in
+                    let size = geo.size
+                    // Never wider than the area it floats over (a narrow Agent panel).
+                    let w = min(width, max(160, size.width - 24))
+                    let at = localOrigin(in: size)
+                    let place = placement(of: panelSize == .zero ? CGSize(width: w, height: 200) : panelSize, at: at, in: size)
+                    ZStack(alignment: .topLeading) {
+                        if isPresented {
+                            Color.clear
+                                .contentShape(.rect)
+                                .onTapGesture { close() }
+                            panel()
+                                .frame(width: w)
+                                .background { SurfaceFill(shape: RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous), shadow: false) }
+                                .clipShape(.rect(cornerRadius: Metrics.cardRadius, style: .continuous))
+                                .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
+                                .onGeometryChange(for: CGSize.self, of: \.size) { panelSize = $0 }
+                                .offset(x: place.origin.x, y: place.origin.y)
+                                .transition(.grow(from: place.anchor))
+                        }
+                    }
+                    .frame(width: size.width, height: size.height, alignment: .topLeading)
+                }
+            }
+            .motion(Motion.morph ?? Motion.overlay, value: isPresented)
+            .onChange(of: isPresented) { _, open in open ? watchEscape() : stopWatching() }
+            .onDisappear { stopWatching() }
+    }
+
+    private func close() { isPresented = false }
+
+    private func localOrigin(in size: CGSize) -> CGPoint {
+        if let origin, let view = probe.view {
+            // A click outside the host (a toolbar button above it) is moved onto its edge, so the
+            // panel still grows from right under the button.
+            let host = view.convert(view.bounds, to: nil)
+            return CGPoint(x: min(max(origin.x - host.minX, 0), host.width), y: min(max(host.maxY - origin.y, 0), host.height))
+        }
+        return CGPoint(x: fallback.x * size.width, y: fallback.y * size.height)
+    }
+
+    /// Below the click when it fits, else above; centred on it, kept 12 pt inside the host.
+    private func placement(of p: CGSize, at o: CGPoint, in host: CGSize) -> (origin: CGPoint, anchor: UnitPoint) {
+        // Right under the top edge when the click was above the host: nothing peeks out above it.
+        let gap: CGFloat = o.y <= 0 ? 6 : 14
+        let below = o.y + gap + p.height <= host.height - 12 || o.y < host.height / 2
+        let y = below ? o.y + gap : o.y - gap - p.height
+        let x = min(max(12, o.x - p.width / 2), max(12, host.width - 12 - p.width))
+        let anchor = UnitPoint(x: min(max((o.x - x) / max(p.width, 1), 0), 1), y: below ? 0 : 1)
+        return (CGPoint(x: x, y: max(o.y <= 0 ? 6 : 12, y)), anchor)
+    }
+
+    private func watchEscape() {
+        stopWatching()
+        escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+            // ⎋ closes the panel unless an input method is composing (it cancels the composition).
+            guard e.keyCode == 53, !imeComposing() else { return e }
+            MainActor.assumeIsolated { isPresented = false }
+            return nil
+        }
+    }
+
+    private func stopWatching() {
+        if let escape { NSEvent.removeMonitor(escape) }
+        escape = nil
+    }
+}
+
+extension View {
+    func growPanel<P: View>(isPresented: Binding<Bool>, origin: CGPoint?, fallback: UnitPoint = .topTrailing,
+                            width: CGFloat = 320, @ViewBuilder panel: @escaping () -> P) -> some View {
+        modifier(GrowPanelHost(isPresented: isPresented, origin: origin, fallback: fallback, width: width, panel: panel))
+    }
+}
+
+/// Grows from `anchor`: small, blurred and see-through at first, then itself.
+private struct GrowEffect: ViewModifier {
+    let progress: CGFloat
+    let anchor: UnitPoint
+
+    func body(content: Content) -> some View {
+        let minimal = Motion.style == .minimal || Motion.reduce
+        content
+            .scaleEffect(minimal ? 1 : 0.35 + 0.65 * progress, anchor: anchor)
+            .blur(radius: minimal ? 0 : (1 - progress) * 6)
+            .opacity(progress)
+    }
+}
+
+extension AnyTransition {
+    static func grow(from anchor: UnitPoint) -> AnyTransition {
+        .modifier(active: GrowEffect(progress: 0, anchor: anchor), identity: GrowEffect(progress: 1, anchor: anchor))
+    }
+}
+
+final class ProbeBox {
+    weak var view: NSView?
+}
+
+/// An empty AppKit view behind the host, so the host's place in the window can be asked for.
+private struct WindowProbe: NSViewRepresentable {
+    let box: ProbeBox
+
+    func makeNSView(context: Context) -> Probe {
+        let v = Probe()
+        box.view = v
+        return v
+    }
+
+    func updateNSView(_ view: Probe, context: Context) { box.view = view }
+
+    final class Probe: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}

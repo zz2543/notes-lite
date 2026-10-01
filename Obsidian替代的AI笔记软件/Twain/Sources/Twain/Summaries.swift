@@ -180,7 +180,7 @@ struct NoteInfoPopover: View {
             }
         }
         .padding(16)
-        .frame(width: 340)
+        .frame(maxWidth: .infinity)
         .onAppear(perform: refresh)
         .onChange(of: model.countersVersion) { _, _ in refresh() }
     }

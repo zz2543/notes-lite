@@ -35,6 +35,11 @@ struct AgentInspector: View {
             .padding(.horizontal, Metrics.floatInset).padding(.top, 8)
         }
         .safeAreaBar(edge: .bottom) { composer }
+        // The model list grows out of the model chip.
+        .growPanel(isPresented: Bindable(model.chrome).modelPickerOpen, origin: model.chrome.panelOrigin,
+                   fallback: UnitPoint(x: 0.8, y: 0.06), width: 320) {
+            ModelPicker(model: model, kind: model.agents.agentPick)
+        }
     }
 
     // MARK: session bar
@@ -347,6 +352,7 @@ struct AgentBar: View {
         let kind = model.agents.agentPick
         return Button {
             model.refreshModels()
+            model.chrome.panelOrigin = clickPoint()
             model.chrome.modelPickerOpen.toggle()
         } label: {
             HStack(spacing: 4) {
@@ -372,9 +378,6 @@ struct AgentBar: View {
         }
         .buttonStyle(.plain)
         .help("\(kind.displayName) 使用的模型与思考强度")
-        .popover(isPresented: Bindable(model.chrome).modelPickerOpen, arrowEdge: .bottom) {
-            ModelPicker(model: model, kind: kind)
-        }
     }
 
     /// "" (CLI default), the known models, and the current choice if it's a custom id.
@@ -456,7 +459,7 @@ struct ModelPicker: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16).padding(.vertical, 10)
         }
-        .frame(width: 320)
+        .frame(maxWidth: .infinity)
     }
 
     private func sectionHeader(_ t: String) -> some View {

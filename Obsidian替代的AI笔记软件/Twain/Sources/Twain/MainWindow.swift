@@ -29,6 +29,10 @@ struct MainWindow: View {
             ToastStack(model: model)
                 .padding(.bottom, 56)
         }
+        // The note's card grows out of the toolbar button that opened it.
+        .growPanel(isPresented: Bindable(model.chrome).noteInfoOpen, origin: model.chrome.panelOrigin, width: 340) {
+            NoteInfoPopover(model: model)
+        }
         .motion(Motion.overlay, value: model.chrome.palette)
         .sheet(isPresented: Binding(get: { model.chrome.onboardingStep != nil }, set: { if !$0 { model.chrome.onboardingStep = nil } })) {
             OnboardingSheet(model: model)

@@ -344,10 +344,12 @@ private struct NoteToolbar: ToolbarContent {
                 Button("AI 审阅", systemImage: "text.bubble") { model.startAIReview() }
                     .help("让 \(model.agents.agentPick.displayName) 通读这篇笔记，在正文旁留下批注，不改动笔记")
                     .disabled(model.editor.activeRel == nil || model.activeNote?.isHTML == true)
-                Button("笔记信息", systemImage: "info.circle") { model.chrome.noteInfoOpen.toggle() }
+                Button("笔记信息", systemImage: "info.circle") {
+                    model.chrome.panelOrigin = clickPoint()
+                    model.chrome.noteInfoOpen.toggle()
+                }
                     .help("笔记的名片：摘要、标签、反链")
                     .disabled(model.editor.activeRel == nil || model.activeNote?.isHTML == true)
-                    .popover(isPresented: Bindable(model.chrome).noteInfoOpen, arrowEdge: .bottom) { NoteInfoPopover(model: model) }
                 Button("专注模式", systemImage: "arrow.up.left.and.arrow.down.right", action: model.toggleZen)
                     .help("专注模式 ⌘.")
                 Button("命令面板", systemImage: "magnifyingglass", action: model.openPalette)

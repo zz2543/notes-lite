@@ -113,6 +113,8 @@ final class ChromeState {
     var toastHeld = false
     var openFolders: Set<String> = []
     var noteInfoOpen = false
+    /// Where the click that opened a grow panel landed (window coordinates); nil from the keyboard.
+    var panelOrigin: CGPoint?
     var newSpaceSheet = false
     /// The sidebar's 「+」 has grown into its panel.
     var newMenuOpen = false
