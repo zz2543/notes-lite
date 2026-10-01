@@ -44,6 +44,11 @@ final class MarkdownTests: XCTestCase {
         let ns = text as NSString
         XCTAssertEqual(ns.substring(with: NSRange(location: o[1].offset, length: 2)), "##")
         XCTAssertEqual(ns.substring(with: NSRange(location: o[2].offset, length: 3)), "###")
+
+        let crlf = "## 甲\r\n正文\r\n## 乙 ##\r\n"
+        let c = Markdown.outline(crlf)
+        XCTAssertEqual(c.map(\.title), ["甲", "乙"])
+        XCTAssertEqual((crlf as NSString).substring(with: NSRange(location: c[1].offset, length: 2)), "##")
     }
 
     func testContinuation() {

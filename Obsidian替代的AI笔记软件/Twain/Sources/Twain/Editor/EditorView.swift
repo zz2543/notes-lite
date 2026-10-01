@@ -215,12 +215,16 @@ struct EditorView: NSViewRepresentable {
         private var laidOutHeight: CGFloat = -1
 
         private var outlineWork: DispatchWorkItem?
+        /// Until then the page is sliding to a heading picked in the outline: that heading stays
+        /// current even if it cannot reach the top (the last ones of a note), instead of the
+        /// hook jumping back to whichever heading the slide happens to end on.
+        private var outlineJumpUntil = Date.distantPast
 
         /// The page scrolled: once it settles, find which heading's section is at the top (only
         /// for notes long enough to show an outline). Waiting for the scroll to settle keeps the
         /// typewriter's scroll on every key free of it; the hook then slides over in one go.
         func scrolled() {
-            guard model.editor.outline.count >= OutlineRail.minimumEntries else { return }
+            guard model.editor.outline.count >= OutlineRail.minimumEntries, Date() > outlineJumpUntil else { return }
             outlineWork?.cancel()
             let w = DispatchWorkItem { [weak self] in self?.updateOutlineCurrent() }
             outlineWork = w
@@ -245,6 +249,8 @@ struct EditorView: NSViewRepresentable {
             guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer, let scroll = scrollView,
                   offset <= (tv.string as NSString).length else { return }
             let range = NSRange(location: offset, length: 0)
+            outlineWork?.cancel()
+            outlineJumpUntil = Date() + Motion.standardDuration + 0.4
             // Typewriter mode keeps the caret's line in the middle: moving the caret is the jump.
             if model.prefs.typewriter {
                 tv.setSelectedRange(range)

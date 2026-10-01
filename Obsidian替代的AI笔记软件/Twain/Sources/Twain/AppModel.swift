@@ -360,6 +360,8 @@ final class AppModel {
         if rel != editor.activeRel {
             flushSave()
             adoptHeadingTitle(leaving: true)
+            // A new page starts at its top, so the outline points at the first heading.
+            editor.outlineCurrent = 0
         }
         editor.activeRel = rel
         chrome.openDesk = nil
@@ -620,6 +622,8 @@ final class AppModel {
     // MARK: stats
 
     @ObservationIgnored private var countWork: DispatchWorkItem?
+    /// Bumped by each count: a slow count of the note you just left must not land on the new one.
+    @ObservationIgnored private var countGeneration = 0
 
     func recountWords(now: Bool = false) {
         countWork?.cancel()
@@ -627,11 +631,13 @@ final class AppModel {
         let w = DispatchWorkItem { [weak self] in
             guard let self else { return }
             let text = self.editor.editorText
+            self.countGeneration += 1
+            let generation = self.countGeneration
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 let n = Markdown.countWords(Markdown.lines(text))
                 let outline = Markdown.outline(text)
                 DispatchQueue.main.async {
-                    guard let self else { return }
+                    guard let self, generation == self.countGeneration else { return }
                     // Assigned only when different: an equal assignment still costs a redraw check.
                     if self.editor.outline != outline { self.editor.outline = outline }
                     guard self.editor.wordCount != n else { return }

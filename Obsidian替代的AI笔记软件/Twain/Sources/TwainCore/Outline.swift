@@ -37,7 +37,8 @@ extension Markdown {
                 continue
             }
             guard fence == nil, let level = blockType(line).headingLevel else { continue }
-            var title = line.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)
+            // Notes written on Windows end lines in "\r\n"; the "\r" is not part of the title.
+            var title = line.drop { $0 == "#" }.trimmingCharacters(in: .whitespacesAndNewlines)
             // A closing run of #s is decoration (`## Title ##`).
             if let r = title.range(of: #"\s+#+$"#, options: .regularExpression) { title.removeSubrange(r) }
             if !title.isEmpty { out.append(OutlineEntry(level: level, title: title, offset: offset)) }
