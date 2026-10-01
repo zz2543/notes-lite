@@ -98,6 +98,8 @@ struct MotionSettings: View {
             }
             .pickerStyle(.segmented)
             Text(prefs.motionStyle.detail).font(.callout).foregroundStyle(.secondary)
+            // The chosen style, played: a button growing into a panel and a card folding to a line.
+            MotionPreview(style: prefs.motionStyle)
             Toggle(isOn: $prefs.motionSound) {
                 Text("完成时播放音效")
                 Text("勾选待办、打卡、接受改动、agent 完成时播放一声短促的系统音效")
@@ -561,5 +563,86 @@ struct OpenSettings: View {
         model.loadPlugins()
         model.loadPipelines()
         model.loadVaultConfig()
+    }
+}
+
+/// Two of the app's own moves on a loop, in the style picked above, so the choice can be
+/// seen rather than read: 「+」 growing into its panel, and a handled card folding to a line.
+private struct MotionPreview: View {
+    let style: MotionStyle
+    @State private var phase = false
+
+    var body: some View {
+        HStack(spacing: 28) {
+            grow
+            fold
+        }
+        .frame(maxWidth: .infinity, minHeight: 96)
+        .padding(.vertical, 6)
+        .background(.fill.quinary, in: .rect(cornerRadius: Metrics.rowRadius, style: .continuous))
+        .accessibilityHidden(true)
+        .task(id: style) {
+            phase = false
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.6))
+                withMotion(Motion.morph) { phase.toggle() }
+            }
+        }
+    }
+
+    /// 「+」 and the panel it grows into: one surface changing size.
+    private var grow: some View {
+        ZStack(alignment: .bottomLeading) {
+            SurfaceFill(shape: RoundedRectangle(cornerRadius: phase ? 14 : 17, style: .continuous))
+                .frame(width: phase ? 150 : 34, height: phase ? 76 : 34)
+            if phase {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Capsule().fill(.quaternary).frame(width: [90, 70, 100][i], height: 6)
+                    }
+                }
+                .padding(12)
+                .padding(.bottom, 4)
+                .transition(.opacity)
+            } else {
+                Image(systemName: "plus").font(.body.weight(.medium))
+                    .frame(width: 34, height: 34)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: 150, height: 76, alignment: .bottomLeading)
+    }
+
+    /// A card that folds down to one line and opens again.
+    private var fold: some View {
+        VStack(alignment: .leading, spacing: phase ? 0 : 8) {
+            HStack(spacing: 6) {
+                Image(systemName: phase ? "checkmark.circle.fill" : "doc.badge.clock")
+                    .foregroundStyle(phase ? AnyShapeStyle(.green) : AnyShapeStyle(.tint))
+                    .contentTransition(.symbolEffect(.replace))
+                Capsule().fill(.tertiary).frame(width: 70, height: 6)
+                Spacer(minLength: 0)
+            }
+            if !phase {
+                VStack(alignment: .leading, spacing: 6) {
+                    Capsule().fill(.quaternary).frame(width: 120, height: 6)
+                    Capsule().fill(.quaternary).frame(width: 96, height: 6)
+                }
+                .transition(.opacity)
+            }
+        }
+        .font(.caption)
+        .padding(.horizontal, 10).padding(.vertical, phase ? 7 : 10)
+        .frame(width: 160, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: Metrics.rowRadius + 2, style: .continuous)
+                .fill(phase ? AnyShapeStyle(.clear) : AnyShapeStyle(.background))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: Metrics.rowRadius + 2, style: .continuous)
+                .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5)
+        }
+        .clipShape(.rect(cornerRadius: Metrics.rowRadius + 2, style: .continuous))
+        .frame(height: 76)
     }
 }
