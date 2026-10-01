@@ -21,7 +21,7 @@ struct AgentIsland: View {
             if !hidden, let kind {
                 Button { open(live.first) } label: { label(live, kind) }
                     .buttonStyle(.plain)
-                    .glassCapsule(tint: Theme.agentColor(kind).opacity(0.1), interactive: true)
+                    .hoverGlassCapsule(tint: Theme.agentColor(kind).opacity(0.1), interactive: true)
                     .padding(.bottom, 8)
                     .transition(.scale(scale: 0.6, anchor: .bottomTrailing).combined(with: .opacity))
             }

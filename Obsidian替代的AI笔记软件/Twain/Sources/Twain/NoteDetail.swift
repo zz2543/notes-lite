@@ -148,7 +148,7 @@ private struct ZenExit: View {
         ZStack(alignment: .topTrailing) {
             if model.chrome.zen {
                 Button("退出专注", systemImage: "arrow.down.right.and.arrow.up.left", action: model.toggleZen)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.soft)
                     .buttonBorderShape(.capsule)
                     .keyboardShortcut(.cancelAction)
                     .padding(18)
@@ -169,7 +169,7 @@ private struct Banners: View {
         let writingHere = model.editor.activeRel.map { model.agents.writing.contains($0) } ?? false
         ZStack(alignment: .top) {
             if !model.chrome.zen {
-                GlassEffectContainer(spacing: 8) {
+                Group {
                     VStack(spacing: 8) {
                         if let pending {
                             Banner(tint: pending.by.map(Theme.agentColor) ?? .secondary) {
@@ -180,7 +180,7 @@ private struct Banners: View {
                                 Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
                             } action: {
                                 Button("审阅") { model.editor.showDiff = true }
-                                    .buttonStyle(.glassProminent)
+                                    .buttonStyle(.solid)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
@@ -193,7 +193,7 @@ private struct Banners: View {
                                 Button("在 Finder 中显示") {
                                     if let v = model.vault, let rel = model.editor.activeRel { NSWorkspace.shared.activateFileViewerSelecting([v.url(rel)]) }
                                 }
-                                .buttonStyle(.glass)
+                                .buttonStyle(.soft)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
@@ -241,7 +241,7 @@ struct Banner<Icon: View, Message: View, Action: View>: View {
         .font(.callout)
         .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
         .frame(minHeight: 40)
-        .glassCapsule(tint: tint.opacity(0.12))
+        .capsuleSurface(tint: tint.opacity(0.12))
     }
 }
 
@@ -280,7 +280,7 @@ struct StatusPill: View {
             .padding(.horizontal, 12).padding(.vertical, 6)
         }
         .buttonStyle(.plain)
-        .glassCapsule(interactive: true)
+        .hoverGlassCapsule(interactive: true)
         .help((model.editor.activeRel ?? "") + " · 在 Finder 中显示")
         .disabled(model.editor.activeRel == nil)
     }
@@ -398,7 +398,7 @@ struct SlashMenu: View {
         .padding(6)
         .frame(width: 260)
         .motion(Motion.quick, value: state.selection)
-        .floatingGlass(radius: Metrics.cardRadius)
+        .surface(radius: Metrics.cardRadius)
     }
 }
 

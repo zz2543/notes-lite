@@ -314,13 +314,13 @@ struct PipelineCard: View {
                         feedback = ""
                         model.advancePipeline(runID)
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.solid)
                     Button("按意见重做", systemImage: "arrow.counterclockwise") {
                         model.redoPipelineStep(runID, feedback: feedback)
                         feedback = ""
                     }
-                    .buttonStyle(.glass).disabled(feedback.trimmingCharacters(in: .whitespaces).isEmpty)
-                    Button("停止") { model.stopPipeline(runID) }.buttonStyle(.glass)
+                    .buttonStyle(.soft).disabled(feedback.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("停止") { model.stopPipeline(runID) }.buttonStyle(.soft)
                 }
             }
         case .waitingReview:
@@ -328,15 +328,15 @@ struct PipelineCard: View {
             HStack {
                 Text("等你审阅第 \(run.step + 1) 步的 \(n) 处改动，审阅完自动进入下一步").font(.caption).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                Button("审阅") { model.reviewNext() }.buttonStyle(.glassProminent)
-                Button("停止") { model.stopPipeline(runID) }.buttonStyle(.glass)
+                Button("审阅") { model.reviewNext() }.buttonStyle(.solid)
+                Button("停止") { model.stopPipeline(runID) }.buttonStyle(.soft)
             }
         case let .stopped(why):
             Text(why).font(.caption).foregroundStyle(.secondary)
         case .done:
             Label("全部完成", systemImage: "checkmark.seal").font(.caption).foregroundStyle(.green)
         case .running:
-            Button("停止") { model.stopPipeline(runID) }.buttonStyle(.glass)
+            Button("停止") { model.stopPipeline(runID) }.buttonStyle(.soft)
         }
     }
 

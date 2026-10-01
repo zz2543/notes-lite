@@ -62,7 +62,7 @@ struct CommandPalette: View {
             // window color so the page behind cannot compete with the results.
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.55),
                         in: .rect(cornerRadius: Metrics.panelRadius, style: .continuous))
-            .floatingGlass(radius: Metrics.panelRadius)
+            .hoverGlass(radius: Metrics.panelRadius)
             .padding(.top, 96)
         }
         .onAppear { focused = true }

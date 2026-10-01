@@ -21,12 +21,15 @@ extension NSColor {
     }
 }
 
-/// Liquid Glass layout rules used across the app.
+/// Layout rules used across the app.
 ///
-/// Glass is reserved for the layer that floats above content — toolbars, banners, the
-/// composer, menus, the palette. Content itself (the page, diff lines, replies) stays on
-/// plain surfaces so text keeps full contrast. Radii shrink as elements nest, so inner
-/// shapes stay concentric with the glass that holds them.
+/// The system's own bars (window toolbar, sidebar) keep their material. Most of what Twain
+/// draws itself — banners, the composer, menus, cards, buttons, toasts — is a quiet solid
+/// surface: paper-coloured, a hairline edge, a soft shadow. These shapes are what moves (a
+/// button grows into a menu, a card folds to a line), so they should read as objects, not as a
+/// lens over what is behind them. Glass is kept for the thin layer that hovers over the page
+/// while you keep writing — the status pill, the agent island, the palette — where seeing the
+/// text through it is the point. Radii shrink as elements nest.
 enum Metrics {
     /// Palette, onboarding artwork: the outermost floating surfaces.
     static let panelRadius: CGFloat = 26
@@ -100,13 +103,23 @@ enum Theme {
 }
 
 extension View {
-    /// A floating glass surface with continuous corners.
-    func floatingGlass(radius: CGFloat = Metrics.cardRadius, tint: Color? = nil, interactive: Bool = false) -> some View {
+    /// A solid surface floating above the page: window-coloured, hairline edge, soft shadow.
+    func surface(radius: CGFloat = Metrics.cardRadius, tint: Color? = nil, shadow: Bool = true) -> some View {
+        modifier(SurfaceStyle(shape: RoundedRectangle(cornerRadius: radius, style: .continuous), tint: tint, shadow: shadow))
+    }
+
+    /// `surface` as a capsule — banners, toasts, status.
+    func capsuleSurface(tint: Color? = nil, shadow: Bool = true) -> some View {
+        modifier(SurfaceStyle(shape: Capsule(), tint: tint, shadow: shadow))
+    }
+
+    /// Glass, for the few shapes that hover over the page while you write (see `Metrics`).
+    func hoverGlass(radius: CGFloat = Metrics.cardRadius, tint: Color? = nil, interactive: Bool = false) -> some View {
         glassEffect(.regular.tint(tint).interactive(interactive), in: .rect(cornerRadius: radius, style: .continuous))
     }
 
-    /// A floating glass capsule — banners, toasts, status.
-    func glassCapsule(tint: Color? = nil, interactive: Bool = false) -> some View {
+    /// `hoverGlass` as a capsule.
+    func hoverGlassCapsule(tint: Color? = nil, interactive: Bool = false) -> some View {
         glassEffect(.regular.tint(tint).interactive(interactive), in: .capsule)
     }
 
@@ -217,4 +230,65 @@ struct AgentLogo: View {
             Image(systemName: Theme.agentSymbol(agent)).foregroundStyle(Theme.agentColor(agent))
         }
     }
+}
+
+/// The drawn part of a surface, separate so two views can share it as a matched shape.
+struct SurfaceFill<S: InsettableShape>: View {
+    let shape: S
+    var tint: Color?
+    var shadow = true
+
+    var body: some View {
+        shape.fill(Color(nsColor: .windowBackgroundColor))
+            .overlay { if let tint { shape.fill(tint) } }
+            .overlay { shape.strokeBorder(.separator.opacity(0.7), lineWidth: 0.5) }
+            .shadow(color: .black.opacity(shadow ? 0.10 : 0), radius: 10, y: 3)
+    }
+}
+
+private struct SurfaceStyle<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    let shadow: Bool
+
+    func body(content: Content) -> some View {
+        content.background { SurfaceFill(shape: shape, tint: tint, shadow: shadow) }
+    }
+}
+
+/// A quiet capsule button: a faint fill that deepens on hover and presses in a little.
+struct SoftButtonStyle: ButtonStyle {
+    var prominent = false
+    @Environment(\.controlSize) private var size
+    @Environment(\.isEnabled) private var enabled
+    @State private var hover = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pad: (CGFloat, CGFloat) = switch size {
+        case .mini, .small: (10, 4)
+        case .large, .extraLarge: (18, 9)
+        default: (13, 6)
+        }
+        configuration.label
+            .font(size == .small || size == .mini ? .caption : .body)
+            .foregroundStyle(prominent ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, pad.0).padding(.vertical, pad.1)
+            .background(
+                prominent ? AnyShapeStyle(Color.accentColor.opacity(hover ? 0.88 : 1))
+                          : AnyShapeStyle(.fill.opacity(hover ? 0.9 : 0.6)),
+                in: .capsule)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(enabled ? 1 : 0.4)
+            .animation(Motion.quick, value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: hover)
+            .onHover { hover = $0 }
+            .contentShape(.capsule)
+    }
+}
+
+extension ButtonStyle where Self == SoftButtonStyle {
+    /// The app's secondary button.
+    static var soft: SoftButtonStyle { SoftButtonStyle() }
+    /// The app's primary button: accent-filled.
+    static var solid: SoftButtonStyle { SoftButtonStyle(prominent: true) }
 }

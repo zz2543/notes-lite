@@ -53,7 +53,7 @@ struct ReviewView: View {
                 .font(.title2)
                 .foregroundStyle(tint)
                 .frame(width: 44, height: 44)
-                .glassEffect(.regular.tint(tint.opacity(0.15)), in: .circle)
+                .background(tint.opacity(0.14), in: .circle)
             VStack(alignment: .leading, spacing: 5) {
                 Text(title(name))
                     .font(.title3.weight(.semibold))
@@ -198,14 +198,14 @@ private struct HunkCard: View {
                 Button(proposal ? "拒绝" : "还原", systemImage: "arrow.uturn.backward") {
                     withMotion(Motion.quick) { model.setHunk(index, .rejected) }
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.soft)
                 .transition(.opacity)
                 Button("接受", systemImage: "checkmark") {
                     withMotion(Motion.pop) { model.setHunk(index, .accepted) }
                     accepted += 1
                     Motion.feedback(.done)
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.solid)
                 .transition(.opacity)
             } else {
                 Label(hunk.state == .accepted ? "已接受" : proposal ? "已拒绝" : "已还原",

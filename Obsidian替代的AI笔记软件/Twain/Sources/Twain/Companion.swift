@@ -212,10 +212,10 @@ struct CompanionBubble: View {
                     model.editor.companionTip = nil
                 }
             }
-            .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
+            .buttonStyle(.soft).buttonBorderShape(.capsule).controlSize(.small)
         }
         .padding(12)
         .frame(width: 280)
-        .floatingGlass(radius: Metrics.cardRadius)
+        .surface(radius: Metrics.cardRadius)
     }
 }

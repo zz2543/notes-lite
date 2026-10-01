@@ -85,61 +85,48 @@ struct SidebarView: View {
 }
 
 /// The sidebar's bottom bar. 新建笔记 stays one click away; the other ways to start something
-/// live behind 「+」, whose glass grows in place into a small panel and shrinks back into
+/// live behind 「+」, whose surface grows in place into a small panel and shrinks back into
 /// the button when you pick one — the panel opens where you clicked and goes back there.
 private struct NewBar: View {
     @Bindable var model: AppModel
-    @Namespace private var glass
+    @Namespace private var morph
     private var open: Bool {
         get { model.chrome.newMenuOpen }
         nonmutating set { model.chrome.newMenuOpen = newValue }
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: 8) {
-            VStack(alignment: .trailing, spacing: 8) {
-                if open {
-                    panel
-                        .glassEffect(.regular, in: .rect(cornerRadius: Metrics.cardRadius, style: .continuous))
-                        .glassEffectID("new", in: glass)
-                }
-                HStack(spacing: 8) {
-                    Button(action: model.newNote) {
-                        Label("新建笔记", systemImage: "square.and.pencil")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glass)
-                    .help("新建笔记 ⌘N")
-                    if !open {
-                        Button { withMotion(Motion.morph) { open = true } } label: {
-                            Image(systemName: "plus").font(.body.weight(.medium))
-                                .frame(width: 34, height: 34)
-                                .contentShape(.circle)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .glassEffectID("new", in: glass)
-                        .help("新建文件夹、空间或问题")
-                    } else {
-                        Button { withMotion(Motion.morph) { open = false } } label: {
-                            Image(systemName: "xmark").font(.body.weight(.medium))
-                                .frame(width: 34, height: 34)
-                                .contentShape(.circle)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .glassEffectID("close", in: glass)
-                        .help("收起")
-                    }
-                    Button { model.openSettings(.agent) } label: {
-                        Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
-                    }
-                    .buttonStyle(.glass)
-                    .help("设置 ⌘,")
-                }
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
+        VStack(alignment: .trailing, spacing: 8) {
+            if open {
+                panel
+                    .background { SurfaceFill(shape: RoundedRectangle(cornerRadius: 17, style: .continuous)).matchedGeometryEffect(id: "new", in: morph) }
             }
+            HStack(spacing: 8) {
+                Button(action: model.newNote) {
+                    Label("新建笔记", systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.soft)
+                .help("新建笔记 ⌘N")
+                Button { withMotion(Motion.morph) { open.toggle() } } label: {
+                    Image(systemName: open ? "xmark" : "plus").font(.body.weight(.medium))
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 34, height: 34)
+                        .background {
+                            if !open { SurfaceFill(shape: RoundedRectangle(cornerRadius: 17, style: .continuous)).matchedGeometryEffect(id: "new", in: morph) }
+                            else { SurfaceFill(shape: Circle()) }
+                        }
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .help(open ? "收起" : "新建文件夹、空间或问题")
+                Button { model.openSettings(.agent) } label: {
+                    Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
+                }
+                .buttonStyle(.soft)
+                .help("设置 ⌘,")
+            }
+            .controlSize(.large)
         }
         .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
         .onExitCommand { if open { withMotion(Motion.morph) { open = false } } }

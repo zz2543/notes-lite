@@ -29,7 +29,7 @@ struct OutlineRail: View {
                     .padding(.horizontal, expanded && !wide ? 6 : 0)
                     .background {
                         if expanded && !wide {
-                            Color.clear.floatingGlass(radius: Metrics.cardRadius)
+                            Color.clear.surface(radius: Metrics.cardRadius)
                                 .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
                         }
                     }

@@ -504,3 +504,41 @@ focus dim n=12 median=26.5ms p90=31.3ms max=33.4ms
 memory start=133MB end=148MB
 done
 ```
+
+## motion inspora 3c · 面板匹配高亮 + 发送键变停止 · eb5d810 · 2026-10-02 00:09
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=60.9ms p90=74.9ms max=98.1ms
+sidebar hide frames=171 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=159 dropped=1 longest=33.3ms
+agent show frames=159 dropped=1 longest=39.8ms
+idle space worst=3.5ms stalls>16ms=0
+idle note worst=5.4ms stalls>16ms=0
+type 80665 chars n=80 median=0.9ms p90=9.7ms max=60.0ms
+caret start n=30 median=0.2ms p90=0.3ms max=8.0ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.6ms
+focus dim n=12 median=25.8ms p90=32.2ms max=32.7ms
+memory start=132MB end=152MB
+done
+```
+
+## motion inspora 4 · 实色表面，玻璃只留悬浮层 · 442c8ba · 2026-10-02 00:25
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=56.1ms p90=76.8ms max=79.7ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=1 longest=26.0ms
+agent show frames=159 dropped=2 longest=33.3ms
+idle space worst=5.2ms stalls>16ms=0
+idle note worst=3.6ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=1.5ms max=45.1ms
+caret start n=30 median=0.6ms p90=4.7ms max=9.0ms
+caret end n=30 median=0.5ms p90=1.6ms max=16.5ms
+focus dim n=12 median=23.1ms p90=26.5ms max=32.0ms
+memory start=147MB end=142MB
+done
+```

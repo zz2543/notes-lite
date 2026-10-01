@@ -173,7 +173,7 @@ struct NoteInfoPopover: View {
                     .disabled(model.summarizing != nil || card.source == "frontmatter")
                     Spacer()
                     Button("保存") { model.saveSummary(draft); refresh() }
-                        .buttonStyle(.glassProminent)
+                        .buttonStyle(.solid)
                         .disabled(draft == card.summary || card.source == "frontmatter")
                 }
                 .controlSize(.small)

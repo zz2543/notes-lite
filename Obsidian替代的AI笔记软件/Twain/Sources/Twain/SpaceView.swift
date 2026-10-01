@@ -77,7 +77,7 @@ struct SpaceView: View {
                 .font(.system(size: 26, weight: .medium))
                 .foregroundStyle(.tint)
                 .frame(width: 52, height: 52)
-                .glassEffect(.regular.tint(.accentColor.opacity(0.15)), in: .rect(cornerRadius: 14, style: .continuous))
+                .background(Color.accentColor.opacity(0.12), in: .rect(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text(plugin.name).font(.system(size: 26, weight: .bold))
                 if !plugin.summary.isEmpty { Text(plugin.summary).font(.callout).foregroundStyle(.secondary) }
@@ -86,14 +86,14 @@ struct SpaceView: View {
                 }
             }
             Spacer()
-            GlassEffectContainer(spacing: 8) {
+            Group {
                 HStack(spacing: 8) {
                     if plugin.space?.entryTitle != nil {
                         Button("新条目", systemImage: "square.and.pencil") { model.openEntry(plugin) }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.solid)
                     }
                     Button(editing ? "完成" : "编辑", systemImage: editing ? "checkmark" : "slider.horizontal.3") { withMotion(Motion.quick) { editing.toggle() } }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.soft)
                     Menu {
                         Button("在 Finder 中显示插件", systemImage: "folder") {
                             if let v = model.vault { NSWorkspace.shared.activateFileViewerSelecting([v.root.appendingPathComponent(plugin.dir)]) }
@@ -104,7 +104,7 @@ struct SpaceView: View {
                         Divider()
                         Button("停用这个空间", systemImage: "pause.circle") { model.setPluginEnabled(plugin, false) }
                     } label: { Image(systemName: "ellipsis") }
-                        .menuStyle(.button).buttonStyle(.glass).menuIndicator(.hidden).fixedSize()
+                        .menuStyle(.button).buttonStyle(.soft).menuIndicator(.hidden).fixedSize()
                 }
                 .buttonBorderShape(.capsule)
             }
@@ -149,7 +149,7 @@ struct SpaceView: View {
         } label: {
             Label("添加模块", systemImage: "plus")
         }
-        .menuStyle(.button).buttonStyle(.glass).buttonBorderShape(.capsule).fixedSize()
+        .menuStyle(.button).buttonStyle(.soft).buttonBorderShape(.capsule).fixedSize()
     }
 }
 
@@ -225,10 +225,10 @@ private struct TodayModule: View {
             if let rel, let lines = model.index?.notes[rel]?.lines ?? (model.vault?.diskContent(rel)).map(Markdown.lines) {
                 let body = lines.dropFirst().filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(4)
                 Text(body.joined(separator: "\n")).font(.callout).foregroundStyle(.secondary).lineLimit(4)
-                Button("继续写", systemImage: "pencil") { model.open(rel, focus: true) }.buttonStyle(.glass)
+                Button("继续写", systemImage: "pencil") { model.open(rel, focus: true) }.buttonStyle(.soft)
             } else {
                 Text("今天还没有写。").font(.callout).foregroundStyle(.secondary)
-                Button("开始写今天的", systemImage: "square.and.pencil") { model.openEntry(plugin) }.buttonStyle(.glassProminent)
+                Button("开始写今天的", systemImage: "square.and.pencil") { model.openEntry(plugin) }.buttonStyle(.solid)
             }
         }
         .controlSize(.small).buttonBorderShape(.capsule)
@@ -365,7 +365,7 @@ private struct AskModule: View {
             TextField(module["placeholder"]?.string ?? "问个问题…", text: $q)
                 .textFieldStyle(.plain).font(.body).onSubmit(ask)
             Button("提问", systemImage: "arrow.up", action: ask)
-                .labelStyle(.iconOnly).buttonStyle(.glassProminent).buttonBorderShape(.circle)
+                .labelStyle(.iconOnly).buttonStyle(.solid).buttonBorderShape(.circle)
                 .disabled(q.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(10)
@@ -542,7 +542,7 @@ private struct LogModule: View {
                     TextField("数值", text: Binding(get: { values[key] ?? "" }, set: { values[key] = $0 }))
                         .textFieldStyle(.roundedBorder).frame(width: 80).multilineTextAlignment(.trailing)
                         .onSubmit { save(f, key) }
-                    Button("记录") { save(f, key) }.buttonStyle(.glass).disabled((values[key] ?? "").isEmpty)
+                    Button("记录") { save(f, key) }.buttonStyle(.soft).disabled((values[key] ?? "").isEmpty)
                 }
             }
         }
@@ -577,7 +577,7 @@ private struct PipelinesModule: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass).buttonBorderShape(.capsule)
+                .buttonStyle(.soft).buttonBorderShape(.capsule)
             }
         }
     }
@@ -594,7 +594,7 @@ private struct NoteModule: View {
             if let lines = model.index?.notes[rel]?.lines ?? (model.vault?.diskContent(rel)).map(Markdown.lines) {
                 Text(.init(lines.prefix(14).joined(separator: "\n"))).font(.callout).foregroundStyle(.secondary)
                     .lineLimit(14).textSelection(.enabled)
-                Button("打开", systemImage: "arrow.up.right") { model.open(rel) }.buttonStyle(.glass).controlSize(.small).buttonBorderShape(.capsule)
+                Button("打开", systemImage: "arrow.up.right") { model.open(rel) }.buttonStyle(.soft).controlSize(.small).buttonBorderShape(.capsule)
             } else {
                 Text("找不到笔记：\(path)").font(.callout).foregroundStyle(.secondary)
             }
@@ -727,7 +727,7 @@ struct NewSpaceSheet: View {
                     catch { model.showToast(error.localizedDescription) }
                     dismiss()
                 }
-                .buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
+                .buttonStyle(.solid).keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)

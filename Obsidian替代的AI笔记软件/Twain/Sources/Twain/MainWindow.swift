@@ -106,7 +106,7 @@ struct Toast: View {
             .font(.callout)
             .lineLimit(1)
             .padding(.horizontal, 16).padding(.vertical, 10)
-            .glassCapsule(tint: item.kind == .problem ? Color.red.opacity(0.14) : nil)
+            .capsuleSurface(tint: item.kind == .problem ? Color.red.opacity(0.14) : nil)
             .shadow(color: item.kind == .problem && Motion.style != .minimal ? .red.opacity(0.18) : .clear, radius: 12)
             .keyframeAnimator(initialValue: 0.0, trigger: shake) { content, x in
                 content.offset(x: x)

@@ -210,7 +210,7 @@ struct ResearchDeskView: View {
                     .onSubmit(send)
                 scopeMenu
                 Button(desk.cards.isEmpty ? "提问" : "重新提问", systemImage: "arrow.up") { send() }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.solid)
                     .disabled(question.trimmingCharacters(in: .whitespaces).isEmpty || session?.running == true)
             }
             HStack(spacing: 8) {
@@ -245,7 +245,7 @@ struct ResearchDeskView: View {
                   systemImage: "scope")
         }
         .menuStyle(.button)
-        .buttonStyle(.glass)
+        .buttonStyle(.soft)
         .fixedSize()
     }
 
@@ -274,7 +274,7 @@ struct ResearchDeskView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("试试这样问").font(.callout.weight(.medium)).foregroundStyle(.secondary)
             ForEach(["我对这个主题的看法前后有过哪些变化？", "这些笔记里有哪些互相矛盾的地方？", "关于这件事，我还缺哪些资料？"], id: \.self) { s in
-                Button(s) { question = s }.buttonStyle(.glass).buttonBorderShape(.capsule)
+                Button(s) { question = s }.buttonStyle(.soft).buttonBorderShape(.capsule)
             }
         }
         .padding(.top, 20)
@@ -287,7 +287,7 @@ struct ResearchDeskView: View {
                 let n = desk.cards.filter { $0.state == .drafted }.count
                 Text("草稿：\(NoteRef(rel: rel).title) · 已收进 \(n) 张卡片").lineLimit(1)
                 Spacer()
-                Button("打开草稿") { model.open(rel) }.buttonStyle(.glassProminent)
+                Button("打开草稿") { model.open(rel) }.buttonStyle(.solid)
             } else {
                 Text("收进草稿的卡片会按顺序写进一篇新笔记（研究台/）").foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
@@ -296,7 +296,7 @@ struct ResearchDeskView: View {
         .font(.callout)
         .controlSize(.small)
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .glassCapsule()
+        .capsuleSurface()
         .padding(Metrics.floatInset)
     }
 
@@ -328,7 +328,7 @@ private struct CardView: View {
                     TextField("追问这张卡片…", text: $draft, axis: .vertical)
                         .textFieldStyle(.plain).font(.callout).lineLimit(1...3).onSubmit(send)
                     Button("追问", systemImage: "arrow.up", action: send)
-                        .labelStyle(.iconOnly).buttonStyle(.glassProminent).buttonBorderShape(.circle)
+                        .labelStyle(.iconOnly).buttonStyle(.solid).buttonBorderShape(.circle)
                         .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 .padding(6)

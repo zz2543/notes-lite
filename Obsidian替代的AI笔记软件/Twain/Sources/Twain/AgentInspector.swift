@@ -66,10 +66,10 @@ struct AgentInspector: View {
             .menuIndicator(.visible)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .frame(maxWidth: .infinity)
-            .glassCapsule(interactive: true)
+            .capsuleSurface()
             .help("工作目录：" + (model.vault?.rootPath ?? ""))
 
-            GlassEffectContainer(spacing: 6) {
+            Group {
                 HStack(spacing: 6) {
                     if let sess, sess.source == .app, sess.running {
                         Button("停止", systemImage: "stop.fill") { model.stopAgent(sess) }
@@ -80,7 +80,7 @@ struct AgentInspector: View {
                         .help("新会话")
                 }
                 .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
+                .buttonStyle(.soft)
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
             }
@@ -172,7 +172,7 @@ struct AgentInspector: View {
                     .multilineTextAlignment(.center)
             }
             if model.editor.activeRel != nil {
-                GlassEffectContainer(spacing: 8) {
+                Group {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(suggestions.enumerated()), id: \.element.1) { i, s in
                             let (icon, prompt, run) = s
@@ -182,7 +182,7 @@ struct AgentInspector: View {
                                     .lineLimit(1)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(.glass)
+                            .buttonStyle(.soft)
                             .buttonBorderShape(.capsule)
                             .controlSize(.large)
                             .arrive(i + 1)
@@ -259,7 +259,7 @@ struct AgentInspector: View {
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(stops ? "停止" : "发送")
                 }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.solid)
                     .buttonBorderShape(.circle)
                     .disabled(empty && !running)
                     .motion(Motion.quick, value: stops)
@@ -267,7 +267,7 @@ struct AgentInspector: View {
             }
         }
         .padding(14)
-        .floatingGlass(radius: Metrics.cardRadius + 4)
+        .surface(radius: Metrics.cardRadius + 4)
         .contentShape(.rect)
         .onTapGesture { inputFocused = true }
         .padding(Metrics.floatInset)
@@ -300,7 +300,7 @@ struct AgentBar: View {
         }
         .padding(4)
         .frame(height: 40)
-        .glassCapsule(interactive: true)
+        .capsuleSurface()
     }
 
     private func row(icons: Bool, fit: Bool) -> some View {
@@ -625,7 +625,7 @@ private struct QuestionCard: View {
                             Button { model.answer(question.id, o) } label: {
                                 Text(o).frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(.glass)
+                            .buttonStyle(.soft)
                         }
                     }
                 }
@@ -638,7 +638,7 @@ private struct QuestionCard: View {
                             .onSubmit { model.answer(question.id, text) }
                         Button("回答", systemImage: "arrow.up") { model.answer(question.id, text) }
                             .labelStyle(.iconOnly)
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.solid)
                             .buttonBorderShape(.circle)
                             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
@@ -689,7 +689,7 @@ private struct FeedbackCard: View {
                 Button("把意见发回给 \(session.agent.displayName)", systemImage: "arrowshape.turn.up.left") {
                     model.sendFeedback(itemID, in: session)
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.solid)
                 .disabled(session.running)
                 .help("在这个会话里继续，让 \(session.agent.displayName) 根据你的审阅意见重新修改")
                 .transition(.opacity)
@@ -734,7 +734,7 @@ private struct ChangeItem: View {
                         model.open(rel)
                         model.editor.showDiff = true
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.solid)
                 }
                 .controlSize(.small)
                 .buttonBorderShape(.capsule)

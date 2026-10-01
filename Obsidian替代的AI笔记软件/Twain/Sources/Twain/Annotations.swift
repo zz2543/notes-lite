@@ -284,7 +284,7 @@ struct AnnotationCard: View {
                         .textFieldStyle(.plain).font(.callout).lineLimit(1...4)
                         .onSubmit(send)
                     Button("发送", systemImage: "arrow.up", action: send)
-                        .labelStyle(.iconOnly).buttonStyle(.glassProminent).buttonBorderShape(.circle)
+                        .labelStyle(.iconOnly).buttonStyle(.solid).buttonBorderShape(.circle)
                         .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 .padding(6)
@@ -293,11 +293,11 @@ struct AnnotationCard: View {
             HStack(spacing: 6) {
                 if a.replacement != nil {
                     Button("采纳", systemImage: "checkmark") { model.acceptAnnotation(a.id) }
-                        .buttonStyle(.glassProminent).disabled(orphan)
+                        .buttonStyle(.solid).disabled(orphan)
                 } else {
-                    Button("知道了", systemImage: "checkmark") { model.acceptAnnotation(a.id) }.buttonStyle(.glass)
+                    Button("知道了", systemImage: "checkmark") { model.acceptAnnotation(a.id) }.buttonStyle(.soft)
                 }
-                Button("回复", systemImage: "arrowshape.turn.up.left") { replying.toggle() }.buttonStyle(.glass)
+                Button("回复", systemImage: "arrowshape.turn.up.left") { replying.toggle() }.buttonStyle(.soft)
                 Spacer(minLength: 0)
             }
             .controlSize(.small)

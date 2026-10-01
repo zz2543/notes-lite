@@ -35,10 +35,10 @@ struct OnboardingSheet: View {
                     .foregroundStyle(.secondary)
                 if step > 0 {
                     Button("上一步") { withMotion { model.chrome.onboardingStep = step - 1 } }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.soft)
                 }
                 Button(step == 2 ? "开始写作" : "继续") { next(step) }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.solid)
                     .keyboardShortcut(.defaultAction)
             }
             .controlSize(.large)
@@ -60,7 +60,7 @@ struct OnboardingSheet: View {
                 .font(.system(size: 26, weight: .medium))
                 .foregroundStyle(.tint)
                 .frame(width: 60, height: 60)
-                .glassEffect(.regular.tint(.accentColor.opacity(0.14)), in: .rect(cornerRadius: 18, style: .continuous))
+                .background(Color.accentColor.opacity(0.12), in: .rect(cornerRadius: 18, style: .continuous))
                 .padding(.bottom, 6)
             Text(kicker).font(.subheadline).foregroundStyle(.secondary)
             Text(title).font(.largeTitle.weight(.semibold))
@@ -87,7 +87,7 @@ struct OnboardingSheet: View {
                 }
                 Spacer()
                 Button("更换…", action: model.chooseVault)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.soft)
                     .buttonBorderShape(.capsule)
             }
             .padding(14)
