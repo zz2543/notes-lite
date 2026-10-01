@@ -220,21 +220,27 @@ struct AgentInspector: View {
     // MARK: composer
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                if let n = model.activeNote {
-                    Label((n.rel as NSString).lastPathComponent, systemImage: "doc.text")
-                        .lineLimit(1).truncationMode(.middle)
-                        .id(n.rel)
-                        .transition(.blurReplace)
-                }
-                Label("AGENTS.md", systemImage: "doc.badge.gearshape").lineLimit(1)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .labelStyle(TagLabelStyle())
-            .motion(Motion.quick, value: model.activeNote?.rel)
+        // What the agent will have in front of it peeks out from behind the composer as a tab.
+        VStack(spacing: -10) {
+            ContextTab(text: contextLine)
+                .padding(.horizontal, 22)
+                .zIndex(0)
+            composerCard.zIndex(1)
+        }
+        .padding(Metrics.floatInset)
+    }
 
+    /// The note the next run works on, and the selected lines when there are some — the agent
+    /// can ask for the selection (`twain context`).
+    private var contextLine: String {
+        guard let n = model.activeNote else { return "整个库" }
+        let name = (n.rel as NSString).lastPathComponent
+        let lines = model.editor.selectedLines
+        return lines > 0 ? "\(name) · 选中 \(lines) 行" : name
+    }
+
+    private var composerCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .bottom, spacing: 8) {
                 // The orb says what this conversation's agent is doing without words.
                 let session = model.agents.sessions.first { $0.id == model.agents.activeSessionID }
@@ -287,7 +293,6 @@ struct AgentInspector: View {
         .surface(radius: Metrics.cardRadius + 4)
         .contentShape(.rect)
         .onTapGesture { inputFocused = true }
-        .padding(Metrics.floatInset)
     }
 
     private var placeholderPrompts: [String] {
@@ -777,5 +782,45 @@ private struct ChangeItem: View {
                 .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5)
         }
         .motion(Motion.morph, value: pending)
+    }
+}
+
+/// A tab tucked behind the composer's top edge saying what the agent will see. When that
+/// changes the tab ducks behind the composer and comes back up with the new line.
+private struct ContextTab: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "doc.text").imageScale(.small)
+            RollingText(text: text, animation: Motion.content)
+            Spacer(minLength: 8)
+            Label("AGENTS.md", systemImage: "doc.badge.gearshape").labelStyle(.titleAndIcon).imageScale(.small)
+                .foregroundStyle(.tertiary)
+                .help("每次运行都带上库里的 AGENTS.md")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 16)
+        .background {
+            UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12, style: .continuous)
+                .fill(.fill.secondary)
+                .overlay {
+                    UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12, style: .continuous)
+                        .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5)
+                }
+        }
+        .keyframeAnimator(initialValue: 0.0, trigger: text) { content, dip in
+            content.offset(y: dip)
+        } keyframes: { _ in
+            if Motion.style == .minimal || Motion.reduce {
+                LinearKeyframe(0, duration: 0.01)
+            } else {
+                CubicKeyframe(18, duration: 0.14 * Motion.slowFactor)
+                SpringKeyframe(0, duration: 0.42 * Motion.slowFactor,
+                               spring: Motion.style == .lively ? .bouncy : .smooth)
+            }
+        }
     }
 }

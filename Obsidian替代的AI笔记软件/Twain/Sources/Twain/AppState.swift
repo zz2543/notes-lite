@@ -196,6 +196,9 @@ final class EditorState {
     var outline: [OutlineEntry] = []
     /// The heading whose section is at the top of the page.
     var outlineCurrent = 0
+    /// How many lines the selection covers (0 for a bare caret), for the Agent composer's tab.
+    /// Assigned only when it changes, so moving the caret costs nothing here.
+    var selectedLines = 0
     @ObservationIgnored var typed: [(Date, Int)] = []
     @ObservationIgnored var netTyped = 0
     var companionTip: CompanionTip?

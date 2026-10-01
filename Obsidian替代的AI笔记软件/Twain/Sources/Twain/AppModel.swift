@@ -364,6 +364,7 @@ final class AppModel {
             adoptHeadingTitle(leaving: true)
             // A new page starts at its top, so the outline points at the first heading.
             editor.outlineCurrent = 0
+            if editor.selectedLines != 0 { editor.selectedLines = 0 }
         }
         editor.activeRel = rel
         chrome.openDesk = nil

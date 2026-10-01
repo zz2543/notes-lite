@@ -480,6 +480,9 @@ struct EditorView: NSViewRepresentable {
             textView?.updateCaret(animated: true)
             guard let tv = textView, !tv.hasMarkedText(), !restyling, !swapping else { return }
             model.editor.editorSelection = tv.selectedRange()
+            let sel = tv.selectedRange()
+            let lines = sel.length == 0 ? 0 : styler.lineIndex(at: NSMaxRange(sel) - 1) - styler.lineIndex(at: sel.location) + 1
+            if model.editor.selectedLines != lines { model.editor.selectedLines = lines }
             restyle()
             updateSlash()
             if tv.selectedRange().length == 0, !swapping { center(smooth: true) }
