@@ -2,7 +2,7 @@ import TwainCore
 import SwiftUI
 
 struct PaletteEntry: Identifiable {
-    enum Section: String { case notes = "笔记", commands = "命令" }
+    enum Section: String { case notes = "笔记", commands = "命令", capture = "新建" }
     let id: String
     let section: Section
     let label: String
@@ -13,6 +13,8 @@ struct PaletteEntry: Identifiable {
 }
 
 /// ⌘K: one field that finds notes and runs commands, floating above the window like Spotlight.
+/// Starting the line with 「+」 turns it into a quick capture: the line is read as a task as you
+/// type and ↩ adds it to the inbox.
 struct CommandPalette: View {
     @Bindable var model: AppModel
     @Namespace private var highlight
@@ -38,11 +40,30 @@ struct CommandPalette: View {
         if q.isEmpty {
             return Array(notes.filter { $0.id != "n:" + (m.editor.activeRel ?? "") }.prefix(4)) + cmds
         }
-        return (notes + cmds).filter { $0.label.lowercased().contains(q) || $0.hint.lowercased().contains(q) }
+        let found = (notes + cmds).filter { $0.label.lowercased().contains(q) || $0.hint.lowercased().contains(q) }
+        // Whatever was typed can also be kept as a task; listed last, so finding stays first.
+        let text = m.chrome.paletteQuery.trimmingCharacters(in: .whitespaces)
+        let keep = PaletteEntry(id: "capture", section: .capture, label: "记到收件箱：" + text, hint: "+ 开头直接记",
+                                icon: "tray.and.arrow.down") {
+            m.capture(QuickCapture.parse(text))
+        }
+        // With nothing found, ↩ still makes a note of that name, as before.
+        let make = PaletteEntry(id: "make", section: .capture, label: "新建笔记「\(text)」", hint: "", icon: "square.and.pencil") {
+            m.openByTitle(text)
+        }
+        return found + (found.isEmpty ? [make, keep] : [keep])
+    }
+
+    /// The query after a leading 「+」, when the palette is in capture mode.
+    private var captureText: String? {
+        let q = model.chrome.paletteQuery.drop { $0 == " " }
+        guard let f = q.first, f == "+" || f == "＋" else { return nil }
+        return q.dropFirst().trimmingCharacters(in: .whitespaces)
     }
 
     var body: some View {
-        let list = entries
+        let capturing = captureText
+        let list = capturing == nil ? entries : []
         let sel = min(model.chrome.paletteSel, max(0, list.count - 1))
         ZStack(alignment: .top) {
             Color.black.opacity(0.14)
@@ -51,13 +72,19 @@ struct CommandPalette: View {
                 .onTapGesture { model.chrome.palette = false }
             VStack(spacing: 0) {
                 searchField(list: list, sel: sel)
-                if !list.isEmpty || !model.chrome.paletteQuery.isEmpty {
+                if let capturing {
+                    Divider().padding(.horizontal, 14)
+                    CapturePreview(capture: QuickCapture.parse(capturing),
+                                   destination: model.inboxRel.map { NoteRef(rel: $0).title } ?? "收件箱")
+                        .transition(.opacity)
+                } else if !list.isEmpty || !model.chrome.paletteQuery.isEmpty {
                     Divider().padding(.horizontal, 14)
                     results(list: list, sel: sel)
                     footer
                 }
             }
             .frame(width: 640)
+            .motion(Motion.morph, value: capturing == nil)
             // A dense list needs a steadier backdrop than bare glass: tint the glass with the
             // window color so the page behind cannot compete with the results.
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.55),
@@ -70,10 +97,13 @@ struct CommandPalette: View {
 
     private func searchField(list: [PaletteEntry], sel: Int) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
+            // The lens turns into a tray while the line is being kept as a task.
+            Image(systemName: captureText == nil ? "magnifyingglass" : "tray.and.arrow.down")
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.secondary)
-            TextField("搜索笔记，或输入命令", text: Bindable(model.chrome).paletteQuery)
+                .foregroundStyle(captureText == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 24)
+            TextField("搜索笔记，或输入命令 · + 开头记一条待办", text: Bindable(model.chrome).paletteQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 22))
                 .focused($focused)
@@ -84,7 +114,9 @@ struct CommandPalette: View {
                 .onKeyPress(.return) {
                     if imeComposing() { return .ignored }
                     model.chrome.palette = false
-                    if list.isEmpty {
+                    if let text = captureText {
+                        if !text.isEmpty { model.capture(QuickCapture.parse(text)) }
+                    } else if list.isEmpty {
                         let q = model.chrome.paletteQuery.trimmingCharacters(in: .whitespaces)
                         if !q.isEmpty { model.openByTitle(q) }
                     } else {
