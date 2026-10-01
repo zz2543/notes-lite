@@ -59,8 +59,9 @@ struct AgentInspector: View {
                     if let sess {
                         Image(systemName: Theme.agentSymbol(sess.agent)).foregroundStyle(Theme.agentColor(sess.agent))
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(sess.title).font(.callout.weight(.medium)).lineLimit(1)
-                            Text(meta(sess)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            // A renamed session or a run starting/ending rolls the line rather than blinking it.
+                            RollingText(text: sess.title).font(.callout.weight(.medium))
+                            RollingText(text: meta(sess)).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                     Spacer(minLength: 0)

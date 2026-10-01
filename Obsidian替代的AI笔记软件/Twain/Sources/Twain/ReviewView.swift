@@ -67,6 +67,8 @@ struct ReviewView: View {
                         ? "还没有写入文件，只有接受的部分会写入"
                         : "文件已在磁盘上改动，还原会恢复到写入前的版本"))
                         .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                        .motion(Motion.quick, value: review.hunks.count)
                     if let s = review.snapshot {
                         Label("快照 " + s.prefix(7), systemImage: "clock.arrow.circlepath")
                             .foregroundStyle(.secondary)

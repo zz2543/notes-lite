@@ -580,3 +580,60 @@ focus dim n=12 median=25.9ms p90=27.1ms max=28.4ms
 memory start=138MB end=140MB
 done
 ```
+
+## motion inspora 4f · 页面转场 + 数字滚动 · 6a81b14 · 2026-10-02 01:15
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=57.5ms p90=78.6ms max=80.1ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=171 dropped=1 longest=33.3ms
+agent hide frames=160 dropped=0 longest=23.9ms
+agent show frames=160 dropped=1 longest=25.5ms
+idle space worst=4.5ms stalls>16ms=0
+idle note worst=4.8ms stalls>16ms=0
+type 22785 chars n=80 median=0.5ms p90=1.6ms max=41.2ms
+caret start n=30 median=0.6ms p90=2.9ms max=11.8ms
+caret end n=30 median=0.4ms p90=0.9ms max=18.6ms
+focus dim n=12 median=24.8ms p90=27.3ms max=27.8ms
+memory start=141MB end=139MB
+done
+```
+
+## recheck sidebar 1 · 6a81b14 · 2026-10-02 01:17
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=58.1ms p90=80.3ms max=83.9ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=162 dropped=2 longest=28.9ms
+agent show frames=158 dropped=0 longest=17.6ms
+idle space worst=6.0ms stalls>16ms=0
+idle note worst=4.3ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=1.5ms max=40.0ms
+caret start n=30 median=0.6ms p90=8.4ms max=12.5ms
+caret end n=30 median=0.4ms p90=0.5ms max=19.7ms
+focus dim n=12 median=20.7ms p90=26.9ms max=27.5ms
+memory start=141MB end=142MB
+done
+```
+
+## recheck sidebar 2 · 6a81b14 · 2026-10-02 01:18
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=61.3ms p90=79.0ms max=82.3ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=161 dropped=0 longest=23.5ms
+agent show frames=159 dropped=2 longest=33.3ms
+idle space worst=3.9ms stalls>16ms=0
+idle note worst=5.9ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=1.7ms max=32.8ms
+caret start n=30 median=0.6ms p90=8.5ms max=12.7ms
+caret end n=30 median=0.5ms p90=1.0ms max=17.8ms
+focus dim n=12 median=25.2ms p90=27.2ms max=28.2ms
+memory start=140MB end=139MB
+done
+```

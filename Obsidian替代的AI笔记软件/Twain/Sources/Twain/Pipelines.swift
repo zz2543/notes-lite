@@ -327,6 +327,7 @@ struct PipelineCard: View {
             let n = model.agents.pending.values.filter { $0.sessionID == run.sessionID }.reduce(0) { $0 + $1.hunks.count }
             HStack {
                 Text("等你审阅第 \(run.step + 1) 步的 \(n) 处改动，审阅完自动进入下一步").font(.caption).foregroundStyle(.secondary)
+                    .contentTransition(.numericText()).motion(Motion.quick, value: n)
                 Spacer(minLength: 0)
                 Button("审阅") { model.reviewNext() }.buttonStyle(.solid)
                 Button("停止") { model.stopPipeline(runID) }.buttonStyle(.soft)

@@ -51,7 +51,9 @@ struct SidebarView: View {
                         HStack {
                             Text(d.question).lineLimit(1)
                             Spacer(minLength: 0)
-                            Text("\(d.cards.filter { $0.state != .discarded }.count)").font(.caption).foregroundStyle(.secondary)
+                            let kept = d.cards.filter { $0.state != .discarded }.count
+                            Text("\(kept)").font(.caption).foregroundStyle(.secondary)
+                                .contentTransition(.numericText()).motion(Motion.quick, value: kept)
                         }
                     } icon: { Image(systemName: "rectangle.stack") }
                     .tag("desk:" + d.id)

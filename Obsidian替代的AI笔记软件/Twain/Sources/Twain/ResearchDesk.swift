@@ -217,8 +217,10 @@ struct ResearchDeskView: View {
                 if session?.running == true {
                     GlyphSpinner(activity: .search, tint: Theme.agentColor(model.agents.agentPick))
                     Text("\(model.agents.agentPick.displayName) 正在找资料 · 已有 \(desk.cards.count) 张卡片").foregroundStyle(.secondary)
+                        .contentTransition(.numericText()).motion(Motion.quick, value: desk.cards.count)
                 } else if !desk.cards.isEmpty {
                     Text("\(desk.scopeLabel) · \(desk.cards.count) 张卡片 · 钉住有用的，划掉没用的，收进草稿").foregroundStyle(.secondary)
+                        .contentTransition(.numericText()).motion(Motion.quick, value: desk.cards.count)
                 } else {
                     Text("答案会是一组带出处的卡片：结论、证据、分歧、待解问题").foregroundStyle(.secondary)
                 }

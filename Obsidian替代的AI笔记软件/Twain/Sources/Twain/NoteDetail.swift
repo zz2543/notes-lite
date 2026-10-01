@@ -178,7 +178,10 @@ private struct Banners: View {
                             } text: {
                                 let where_ = pending.source == .terminal ? "在终端中" : pending.source == .automation ? "在自动化中" : "在共笔中"
                                 let what = pending.isProposal ? (pending.isNew ? "提议新建此文件" : "提议修改此文件") : "\(where_)修改了此文件"
+                                // Counts roll to their new value rather than blinking.
                                 Text("\(agentLabel(pending.by)) \(what) \(Text("· \(pending.hunks.count) 处改动待审阅").foregroundStyle(.secondary))")
+                                    .contentTransition(.numericText())
+                                    .motion(Motion.quick, value: pending.hunks.count)
                             } action: {
                                 Button("审阅") { model.editor.showDiff = true }
                                     .buttonStyle(.solid)
@@ -323,8 +326,11 @@ private struct NoteToolbar: ToolbarContent {
             if !model.agents.pending.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: model.reviewNext) {
-                        Label("审阅 \(model.agents.pending.values.reduce(0) { $0 + $1.hunks.count }) 处改动", systemImage: "checklist")
+                        let n = model.agents.pending.values.reduce(0) { $0 + $1.hunks.count }
+                        Label("审阅 \(n) 处改动", systemImage: "checklist")
                             .labelStyle(.titleAndIcon)
+                            .contentTransition(.numericText())
+                            .motion(Motion.quick, value: n)
                     }
                     .buttonStyle(.glassProminent)
                     .help("审阅 agent 的改动 ⇧⌘R")
