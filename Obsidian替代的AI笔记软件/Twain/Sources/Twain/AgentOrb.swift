@@ -124,13 +124,18 @@ final class OrbView: NSView {
         }
         // The first frame now, the loop as soon as it is drawn.
         layer.removeAnimation(forKey: "loop")
-        layer.contents = spec.frame(0)
-        guard spec.frameCount > 1 else { Self.cache[spec.key] = [layer.contents as! CGImage]; return }
+        let first = spec.frame(0)
+        layer.contents = first
+        guard spec.frameCount > 1 else {
+            if let first { Self.cache[spec.key] = [first] }
+            return
+        }
         Self.queue.async {
             let frames = (0..<spec.frameCount).compactMap { spec.frame($0) }
             DispatchQueue.main.async { [weak self] in
                 MainActor.assumeIsolated {
-                    if Self.cache.count > 12 { Self.cache.removeAll() }
+                    // A strip is up to ~3 MB (the slow waiting loop); a handful covers the states in use.
+                    if Self.cache.count >= 6 { Self.cache.removeAll() }
                     Self.cache[spec.key] = frames
                     guard let self, self.generation == gen else { return }
                     self.play(frames, spec)
