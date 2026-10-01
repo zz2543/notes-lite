@@ -136,7 +136,7 @@ struct CommandPalette: View {
                 .frame(width: 28, height: 28)
                 .background(on ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(.fill.tertiary),
                             in: .rect(cornerRadius: 7, style: .continuous))
-            Text(e.label).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            Text(matched(e.label, on: on)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             Text(e.hint)
                 .font(e.hint.hasPrefix("⌘") || e.hint.hasPrefix("⇧") ? .callout.monospaced() : .caption)
                 .foregroundStyle(on ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(.tertiary))
@@ -146,6 +146,16 @@ struct CommandPalette: View {
         .padding(.horizontal, 8).frame(height: 42)
         .slidingHighlight(on, in: highlight)
         .contentShape(.rect)
+    }
+
+    /// The label with the part the query matched picked out, so a result says why it is there.
+    private func matched(_ label: String, on: Bool) -> AttributedString {
+        var s = AttributedString(label)
+        let q = model.chrome.paletteQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty, let r = s.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) else { return s }
+        s[r].font = .body.weight(.semibold)
+        if on { s[r].underlineStyle = .single } else { s[r].foregroundColor = .accentColor }
+        return s
     }
 
     private var footer: some View {

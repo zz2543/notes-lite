@@ -248,12 +248,22 @@ struct AgentInspector: View {
                         send()
                         return .handled
                     }
-                Button("发送", systemImage: "arrow.up", action: send)
-                    .labelStyle(.iconOnly)
+                // While a run is going and nothing is typed, the same button becomes stop.
+                let running = model.agents.sessions.first { $0.id == model.agents.activeSessionID }.map { $0.running && $0.source == .app } ?? false
+                let empty = model.agents.agentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let stops = running && empty
+                Button {
+                    if stops, let s = model.agents.sessions.first(where: { $0.id == model.agents.activeSessionID }) { model.stopAgent(s) } else { send() }
+                } label: {
+                    Image(systemName: stops ? "stop.fill" : "arrow.up")
+                        .contentTransition(.symbolEffect(.replace))
+                        .accessibilityLabel(stops ? "停止" : "发送")
+                }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
-                    .disabled(model.agents.agentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("发送 ↩ · 换行 ⇧↩")
+                    .disabled(empty && !running)
+                    .motion(Motion.quick, value: stops)
+                    .help(stops ? "停止" : "发送 ↩ · 换行 ⇧↩")
             }
         }
         .padding(14)
