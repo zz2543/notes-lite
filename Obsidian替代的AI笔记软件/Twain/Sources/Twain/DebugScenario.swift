@@ -83,6 +83,17 @@ enum DebugScenario {
     }
 
     static func apply(_ name: String, to m: AppModel) {
+        // later:<seconds>:<scenario> — opens the note first, runs the scenario after a pause,
+        // so a timed snapshot (with TWAIN_SLOWMO) catches its transition halfway.
+        if name.hasPrefix("later:") {
+            let rest = name.dropFirst("later:".count)
+            guard let colon = rest.firstIndex(of: ":"), let delay = Double(rest[..<colon]) else { return }
+            let inner = String(rest[rest.index(after: colon)...])
+            let innerParts = inner.split(separator: ":").map(String.init)
+            if innerParts.count > 1, m.vault?.note(innerParts[1]) != nil { m.open(innerParts[1]) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { withMotion(Motion.morph) { apply(inner, to: m) } }
+            return
+        }
         let parts = name.split(separator: ":").map(String.init)
         let rel = parts.count > 1 ? parts[1] : "项目/2.0 发布计划.md"
         if parts.first == "space" { apply2(parts, m); return }

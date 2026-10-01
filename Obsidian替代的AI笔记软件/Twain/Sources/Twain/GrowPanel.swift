@@ -128,6 +128,30 @@ extension AnyTransition {
     }
 }
 
+/// A page arriving from where it lives: spaces and questions from the sidebar side, the review
+/// from the banner above the note. It comes forward out of a slight blur; leaving, it goes back
+/// the same way.
+private struct PageEffect: ViewModifier {
+    let edge: Edge
+    let progress: CGFloat
+
+    func body(content: Content) -> some View {
+        let minimal = Motion.style == .minimal || Motion.reduce
+        let away = 1 - progress
+        content
+            .scaleEffect(minimal ? 1 : 0.97 + 0.03 * progress, anchor: edge == .top ? .top : .leading)
+            .offset(x: minimal || edge != .leading ? 0 : -20 * away, y: minimal || edge != .top ? 0 : -12 * away)
+            .blur(radius: minimal ? 0 : 4 * away)
+            .opacity(progress)
+    }
+}
+
+extension AnyTransition {
+    static func page(from edge: Edge) -> AnyTransition {
+        .modifier(active: PageEffect(edge: edge, progress: 0), identity: PageEffect(edge: edge, progress: 1))
+    }
+}
+
 final class ProbeBox {
     weak var view: NSView?
 }

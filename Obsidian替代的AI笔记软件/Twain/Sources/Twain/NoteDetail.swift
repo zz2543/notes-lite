@@ -15,19 +15,20 @@ struct NoteDetail: View {
         Group {
             if let space = model.currentSpace {
                 SpaceView(model: model, plugin: space)
-                    .transition(.opacity)
+                    .transition(.page(from: .leading))
             } else if let desk = model.currentDesk {
                 ResearchDeskView(model: model, desk: desk)
-                    .transition(.opacity)
+                    .transition(.page(from: .leading))
             } else if reviewing, let pend {
                 ReviewView(model: model, review: pend)
-                    .transition(.opacity)
+                    .transition(.page(from: .top))
             } else {
+                // The text view only fades: scaling or blurring it would rasterize the whole note.
                 NotePage(model: model)
                     .transition(.opacity)
             }
         }
-        .motion(Motion.standard, value: PageKind(space: model.chrome.activeSpace, desk: model.chrome.openDesk, reviewing: reviewing))
+        .motion(Motion.morph ?? Motion.standard, value: PageKind(space: model.chrome.activeSpace, desk: model.chrome.openDesk, reviewing: reviewing))
         // The page takes whatever width the split view gives it. Letting its content report a
         // minimum width feeds back into the column sizes, and a width-dependent layout (the
         // dashboards) can then keep re-solving the window until AppKit aborts.
