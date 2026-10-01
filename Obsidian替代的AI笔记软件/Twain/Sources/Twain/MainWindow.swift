@@ -29,6 +29,11 @@ struct MainWindow: View {
             ToastStack(model: model)
                 .padding(.bottom, 56)
         }
+        // Picking a template for a new space grows out of the 「新建空间」 that was clicked.
+        .growPanel(isPresented: Bindable(model.chrome).newSpaceSheet, origin: model.chrome.panelOrigin,
+                   fallback: UnitPoint(x: 0.5, y: 0.12), width: 660, dims: true) {
+            NewSpaceSheet(model: model)
+        }
         // The note's card grows out of the toolbar button that opened it.
         .growPanel(isPresented: Bindable(model.chrome).noteInfoOpen, origin: model.chrome.panelOrigin, width: 340) {
             NoteInfoPopover(model: model)

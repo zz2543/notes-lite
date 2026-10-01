@@ -683,14 +683,14 @@ struct NewSpaceSheet: View {
     @State private var pick = SpaceTemplate.journal.id
     @State private var name = SpaceTemplate.journal.name
     @State private var folder = SpaceTemplate.journal.folder
-    @Environment(\.dismiss) private var dismiss
+    private func dismiss() { model.chrome.newSpaceSheet = false }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("新建空间").font(.title2.weight(.bold))
             Text("空间是你自己的模式：一个文件夹、一块仪表盘、给 agent 的约定和几条流水线。从模板开始，之后随意改。")
                 .font(.callout).foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
                 ForEach(SpaceTemplate.all.filter { $0.id != "workbench" }) { t in
                     let on = pick == t.id
                     Button {
@@ -713,11 +713,13 @@ struct NewSpaceSheet: View {
                     .buttonStyle(.plain)
                 }
             }
-            Form {
-                TextField("名字", text: $name)
-                TextField("文件夹", text: $folder, prompt: Text("笔记放在库里的哪个文件夹"))
+            // Two plain rows rather than a grouped Form, which would take all the height it is offered.
+            VStack(spacing: 0) {
+                field("名字", TextField("", text: $name, prompt: Text("空间的名字")))
+                Divider().padding(.leading, 12)
+                field("文件夹", TextField("", text: $folder, prompt: Text("笔记放在库里的哪个文件夹")))
             }
-            .formStyle(.grouped)
+            .background(.fill.quinary, in: .rect(cornerRadius: Metrics.rowRadius, style: .continuous))
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -731,7 +733,17 @@ struct NewSpaceSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 660)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private extension NewSpaceSheet {
+    func field(_ label: String, _ input: TextField<Text>) -> some View {
+        HStack {
+            Text(label)
+            input.textFieldStyle(.plain).multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 12).frame(height: 36)
     }
 }
 

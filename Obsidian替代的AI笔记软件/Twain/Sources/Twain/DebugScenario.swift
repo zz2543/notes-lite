@@ -501,6 +501,9 @@ enum DebugScenario {
                     if n < m.editor.outline.count { m.scrollEditorTo?(m.editor.outline[n].offset) }
                 }
             }
+        case "newspace":
+            m.chrome.panelOrigin = nil
+            m.chrome.newSpaceSheet = true
         case "tree":
             // tree:<note> — only the note's folders open, the note selected: the sidebar's guides.
             var open: Set<String> = []
@@ -514,7 +517,7 @@ enum DebugScenario {
             // :click — as if the toolbar's info button (second from the left of its group) was clicked.
             if parts.count > 2, parts[2] == "click", let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) {
                 let size = w.contentView!.bounds.size
-                m.chrome.panelOrigin = CGPoint(x: size.width - 144, y: size.height - 26)
+                m.chrome.panelOrigin = WindowPoint(point: CGPoint(x: size.width - 144, y: size.height - 26), window: w.windowNumber)
             }
             if parts.count > 2, parts[2] == "late" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { withMotion(Motion.morph) { m.chrome.noteInfoOpen = true } }

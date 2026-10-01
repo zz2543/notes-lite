@@ -514,7 +514,7 @@ struct OpenSettings: View {
                         Text(".twain/plugins/" + dir).font(.caption)
                     }
                 }
-                Button("新建空间…") { model.chrome.newSpaceSheet = true }
+                Button("新建空间…") { model.chrome.panelOrigin = nil; model.chrome.newSpaceSheet = true }
             }
 
             Section {

@@ -14,7 +14,10 @@ struct SidebarView: View {
                                 Button("停用", systemImage: "pause.circle") { model.setPluginEnabled(p, false) }
                             }
                     }
-                    Button { model.chrome.newSpaceSheet = true } label: {
+                    Button {
+                        model.chrome.panelOrigin = clickPoint()
+                        model.chrome.newSpaceSheet = true
+                    } label: {
                         Label("新建空间…", systemImage: "plus.square.dashed").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -81,7 +84,6 @@ struct SidebarView: View {
             return .handled
         }
         .searchable(text: Bindable(model.chrome).sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
-        .sheet(isPresented: Bindable(model.chrome).newSpaceSheet) { NewSpaceSheet(model: model) }
         .safeAreaBar(edge: .bottom) { NewBar(model: model) }
     }
 }
@@ -140,7 +142,7 @@ private struct NewBar: View {
     private var panel: some View {
         let items: [(String, String, String, () -> Void)] = [
             ("folder.badge.plus", "新建文件夹", "⇧⌘N", { model.newFolder(in: "") }),
-            ("plus.square.dashed", "新建空间…", "", { model.chrome.newSpaceSheet = true }),
+            ("plus.square.dashed", "新建空间…", "", { model.chrome.panelOrigin = clickPoint(); model.chrome.newSpaceSheet = true }),
             ("rectangle.stack.badge.person.crop", "向笔记库提问…", "", model.newDesk),
         ]
         return VStack(alignment: .leading, spacing: 2) {
