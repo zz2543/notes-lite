@@ -56,6 +56,8 @@ struct GrowPanelHost<Panel: View>: ViewModifier {
                     let w = min(width, max(160, size.width - 24))
                     let at = localOrigin(in: size)
                     let place = placement(of: panelSize == .zero ? CGSize(width: w, height: 200) : panelSize, at: at, in: size)
+                    // Remembered (not state) for the click monitor below.
+                    let _ = probe.panel = CGRect(origin: place.origin, size: panelSize)
                     ZStack(alignment: .topLeading) {
                         if isPresented {
                             Color.black.opacity(dims ? 0.12 : 0)
@@ -116,15 +118,18 @@ struct GrowPanelHost<Panel: View>: ViewModifier {
             MainActor.assumeIsolated { isPresented = false }
             return nil
         }
-        // A click anywhere outside the host (elsewhere in the window, or another window) closes
-        // it too, as a popover would; clicks inside the host are handled by its dimmer. The click
-        // still goes where it was aimed.
+        // A click anywhere outside the panel closes it, as a popover would — also over AppKit
+        // views (the Agent panel) that take the click before the dimmer could. The click still
+        // goes where it was aimed.
         let box = probe
         outside = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { e in
             MainActor.assumeIsolated {
                 guard let view = box.view else { return }
-                let inHost = e.window === view.window && view.convert(view.bounds, to: nil).contains(e.locationInWindow)
-                if !inHost, isPresented {
+                let host = view.convert(view.bounds, to: nil)
+                let p = box.panel
+                let panel = CGRect(x: host.minX + p.minX, y: host.maxY - p.maxY, width: p.width, height: p.height)
+                let inPanel = e.window === view.window && panel.contains(e.locationInWindow)
+                if !inPanel, isPresented {
                     isPresented = false
                     GrowPanelClock.closedByClick = Date()
                 }
@@ -203,6 +208,8 @@ extension AnyTransition {
 
 final class ProbeBox {
     weak var view: NSView?
+    /// The open panel's frame in the host (top-left origin).
+    var panel: CGRect = .zero
 }
 
 /// An empty AppKit view behind the host, so the host's place in the window can be asked for.

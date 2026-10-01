@@ -528,6 +528,8 @@ enum DebugScenario {
                 ("click info again", { click(info) }),
                 ("open models", { m.chrome.panelOrigin = nil; m.chrome.modelPickerOpen = true }),
                 ("click page", { click(page) }),
+                ("click info", { click(info) }),
+                ("click agent panel", { click(CGPoint(x: size.width - 180, y: size.height * 0.45)) }),
             ]
             func run(_ i: Int) {
                 guard i < steps.count else { print("clicktest done"); fflush(stdout); return }
