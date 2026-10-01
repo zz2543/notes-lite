@@ -501,6 +501,37 @@ enum DebugScenario {
                     if n < m.editor.outline.count { m.scrollEditorTo?(m.editor.outline[n].offset) }
                 }
             }
+        case "clicktest":
+            // Real clicks through the event queue: the info button opens the note card and closes
+            // it again; a click in the page closes the model list. Prints each state.
+            guard let w = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) }), let cv = w.contentView else { return }
+            func click(_ p: CGPoint) {
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    if let e = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                  windowNumber: w.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                        NSApp.postEvent(e, atStart: false)
+                    }
+                }
+            }
+            let size = cv.bounds.size
+            let info = CGPoint(x: size.width - 144, y: size.height - 26)
+            let page = CGPoint(x: size.width * 0.35, y: size.height * 0.5)
+            let steps: [(String, () -> Void)] = [
+                ("click info", { click(info) }),
+                ("click info again", { click(info) }),
+                ("open models", { m.chrome.panelOrigin = nil; m.chrome.modelPickerOpen = true }),
+                ("click page", { click(page) }),
+            ]
+            func run(_ i: Int) {
+                guard i < steps.count else { print("clicktest done"); fflush(stdout); return }
+                steps[i].1()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    print("clicktest \(steps[i].0): noteInfo=\(m.chrome.noteInfoOpen) models=\(m.chrome.modelPickerOpen)")
+                    fflush(stdout)
+                    run(i + 1)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { run(0) }
         case "newspace":
             m.chrome.panelOrigin = nil
             m.chrome.newSpaceSheet = true

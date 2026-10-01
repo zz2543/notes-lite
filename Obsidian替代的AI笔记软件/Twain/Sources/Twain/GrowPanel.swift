@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// When a grow panel last closed because of a click outside it. The button that opened it sits
+/// outside it too: the same click must not reopen what it just closed.
+@MainActor enum GrowPanelClock {
+    static var closedByClick = Date.distantPast
+    static var justClosed: Bool { Date().timeIntervalSince(closedByClick) < 0.4 }
+}
+
 /// A click: where it landed, in the coordinates of the window it landed in.
 struct WindowPoint: Equatable {
     let point: CGPoint
@@ -10,7 +17,8 @@ struct WindowPoint: Equatable {
 /// Where the pointer was when something was clicked — the place a panel opened by that click
 /// grows out of. Nil when it was opened from the keyboard.
 @MainActor func clickPoint() -> WindowPoint? {
-    guard let e = NSApp.currentEvent, let w = e.window,
+    // Only clicks in a document window: a menu bar item's window is not where anything grows from.
+    guard let e = NSApp.currentEvent, let w = e.window, w.styleMask.contains(.titled),
           [.leftMouseUp, .leftMouseDown, .rightMouseUp, .otherMouseUp].contains(e.type) else { return nil }
     return WindowPoint(point: e.locationInWindow, window: w.windowNumber)
 }
@@ -36,6 +44,7 @@ struct GrowPanelHost<Panel: View>: ViewModifier {
     @State private var probe = ProbeBox()
     @State private var panelSize: CGSize = .zero
     @State private var escape: Any?
+    @State private var outside: Any?
 
     func body(content: Content) -> some View {
         content
@@ -107,11 +116,28 @@ struct GrowPanelHost<Panel: View>: ViewModifier {
             MainActor.assumeIsolated { isPresented = false }
             return nil
         }
+        // A click anywhere outside the host (elsewhere in the window, or another window) closes
+        // it too, as a popover would; clicks inside the host are handled by its dimmer. The click
+        // still goes where it was aimed.
+        let box = probe
+        outside = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { e in
+            MainActor.assumeIsolated {
+                guard let view = box.view else { return }
+                let inHost = e.window === view.window && view.convert(view.bounds, to: nil).contains(e.locationInWindow)
+                if !inHost, isPresented {
+                    isPresented = false
+                    GrowPanelClock.closedByClick = Date()
+                }
+            }
+            return e
+        }
     }
 
     private func stopWatching() {
         if let escape { NSEvent.removeMonitor(escape) }
+        if let outside { NSEvent.removeMonitor(outside) }
         escape = nil
+        outside = nil
     }
 }
 

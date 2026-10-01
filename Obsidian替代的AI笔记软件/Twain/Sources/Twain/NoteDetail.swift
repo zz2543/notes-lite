@@ -352,6 +352,7 @@ private struct NoteToolbar: ToolbarContent {
                     .help("让 \(model.agents.agentPick.displayName) 通读这篇笔记，在正文旁留下批注，不改动笔记")
                     .disabled(model.editor.activeRel == nil || model.activeNote?.isHTML == true)
                 Button("笔记信息", systemImage: "info.circle") {
+                    if GrowPanelClock.justClosed { return }
                     model.chrome.panelOrigin = clickPoint()
                     model.chrome.noteInfoOpen.toggle()
                 }
