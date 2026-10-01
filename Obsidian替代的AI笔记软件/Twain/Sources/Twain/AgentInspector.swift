@@ -232,6 +232,14 @@ struct AgentInspector: View {
             .motion(Motion.quick, value: model.activeNote?.rel)
 
             HStack(alignment: .bottom, spacing: 8) {
+                // The orb says what this conversation's agent is doing without words.
+                let session = model.agents.sessions.first { $0.id == model.agents.activeSessionID }
+                let orb = OrbState.of(session, in: model)
+                AgentOrb(state: orb, tint: NSColor(Theme.agentColor(session?.agent ?? model.agents.agentPick)))
+                    .frame(width: 26, height: 26)
+                    .help("\(session?.agent.displayName ?? model.agents.agentPick.displayName) · \(orb.label)")
+                    .accessibilityElement()
+                    .accessibilityLabel(orb.label)
                 TextField("", text: Bindable(model.agents).agentInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
