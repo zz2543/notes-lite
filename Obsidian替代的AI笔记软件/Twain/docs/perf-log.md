@@ -542,3 +542,22 @@ focus dim n=12 median=23.1ms p90=26.5ms max=32.0ms
 memory start=147MB end=142MB
 done
 ```
+
+## motion inspora 4b · 常驻动画改走 Core Animation · dd03428 · 2026-10-02 00:39
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=55.2ms p90=77.1ms max=79.6ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=162 dropped=1 longest=26.0ms
+agent show frames=161 dropped=0 longest=24.0ms
+idle space worst=5.2ms stalls>16ms=0
+idle note worst=3.5ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=1.3ms max=39.9ms
+caret start n=30 median=0.7ms p90=2.9ms max=16.0ms
+caret end n=30 median=0.5ms p90=0.8ms max=12.8ms
+focus dim n=12 median=20.1ms p90=24.7ms max=27.2ms
+memory start=141MB end=136MB
+done
+```

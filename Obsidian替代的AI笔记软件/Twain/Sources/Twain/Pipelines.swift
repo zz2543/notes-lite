@@ -398,9 +398,7 @@ private struct PipelineTrack: View {
                     if Motion.style == .lively && !Motion.reduce {
                         Ripple().transition(.opacity)
                     } else {
-                        Capsule().fill(.orange.opacity(0.85))
-                            .phaseAnimator(Motion.ambient ? [1.0, 0.45] : [1.0]) { c, o in c.opacity(o) }
-                                animation: { _ in .easeInOut(duration: 0.9) }
+                        LayerCapsule(color: .systemOrange.withAlphaComponent(0.85), motion: Motion.ambient ? .pulse : .none)
                             .transition(.opacity)
                     }
                 case .stopped:
@@ -415,16 +413,21 @@ private struct PipelineTrack: View {
     /// The running step fills and drains slowly; nothing tells how long it will take.
     private struct RunningFill: View {
         var body: some View {
-            Capsule().fill(.tint)
-                .phaseAnimator(Motion.ambient ? [0.25, 0.9] : [0.5]) { c, f in c.scaleEffect(x: f, anchor: .leading) }
-                    animation: { _ in .easeInOut(duration: 1.1) }
+            if Motion.ambient {
+                LayerCapsule(color: .controlAccentColor, motion: .breathe)
+            } else {
+                Capsule().fill(.tint).scaleEffect(x: 0.5, anchor: .leading)
+            }
         }
     }
 
-    /// The waiting step's line drawn as a slow sine wave.
+    /// The waiting step's line drawn as a slow sine wave. It ripples for a few seconds and then
+    /// holds still: a run can wait for you for hours, and a 30 fps redraw that long costs battery.
     private struct Ripple: View {
+        @State private var settled = false
+
         var body: some View {
-            TimelineView(.animation(minimumInterval: 1 / 30)) { ctx in
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: settled)) { ctx in
                 let t = ctx.date.timeIntervalSinceReferenceDate
                 Canvas { g, size in
                     var p = Path()
@@ -438,6 +441,10 @@ private struct PipelineTrack: View {
                 }
             }
             .frame(height: 10)
+            .task {
+                try? await Task.sleep(for: .seconds(8))
+                settled = true
+            }
         }
     }
 }
