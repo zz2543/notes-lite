@@ -75,6 +75,7 @@ struct OnboardingSheet: View {
         VStack(alignment: .leading, spacing: 22) {
             header("folder", "欢迎使用共笔", "你的笔记，就是一个文件夹。",
                    "共笔直接编辑磁盘上的 Markdown 文件——没有数据库，没有私有格式。Claude Code 和 Codex 也在同一个文件夹里工作，你们看到的永远是同一份文字。")
+                .arrive(0)
             HStack(spacing: 12) {
                 Image(systemName: "folder.fill").font(.title2).foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 2) {
@@ -91,6 +92,7 @@ struct OnboardingSheet: View {
             }
             .padding(14)
             .contentCard(radius: Metrics.cardRadius)
+            .arrive(1)
         }
     }
 
@@ -98,6 +100,7 @@ struct OnboardingSheet: View {
         VStack(alignment: .leading, spacing: 22) {
             header("person.2", "2 / 3", "让两个 agent 读同一份规则。",
                    "共笔在库根目录写入 AGENTS.md，CLAUDE.md 只引用它。无论你在共笔里还是终端里启动 agent，上下文都一致。")
+                .arrive(0)
             VStack(spacing: 0) {
                 ForEach(Array(AgentKind.allCases.enumerated()), id: \.element) { i, k in
                     if i > 0 { Divider().padding(.leading, 44) }
@@ -121,15 +124,19 @@ struct OnboardingSheet: View {
                 }
             }
             .contentCard(radius: Metrics.cardRadius)
+            .arrive(1)
             Label("终端里在库内运行的会话会自动出现在 Agent 面板。", systemImage: "apple.terminal")
                 .font(.caption).foregroundStyle(.secondary)
+                .arrive(2)
         }
     }
 
     @ViewBuilder private var stepFeel: some View {
         VStack(alignment: .leading, spacing: 22) {
             header("textformat", "3 / 3", "选一种写字的感觉。", nil)
+                .arrive(0)
             FontCards(model: model)
+                .arrive(1)
             VStack(spacing: 0) {
                 Toggle(isOn: Bindable(model.prefs).typewriter) {
                     Text("打字机滚动")
@@ -145,6 +152,7 @@ struct OnboardingSheet: View {
             }
             .toggleStyle(.switch)
             .contentCard(radius: Metrics.cardRadius)
+            .arrive(2)
         }
     }
 }

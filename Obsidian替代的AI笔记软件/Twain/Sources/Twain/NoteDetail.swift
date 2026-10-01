@@ -134,7 +134,7 @@ private struct CompanionLayer: View {
             if let tip = model.editor.companionTip, tip.rel == model.editor.activeRel {
                 CompanionBubble(model: model, tip: tip)
                     .padding(.top, 64).padding(.trailing, Metrics.floatInset)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(.scale(scale: 0.85, anchor: .topTrailing).combined(with: .opacity).combined(with: .offset(x: 24)))
             }
         }
         .motion(Motion.standard, value: model.editor.companionTip)
