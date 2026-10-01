@@ -588,9 +588,30 @@ final class AppModel {
     func showToast(_ m: String) {
         toastWork?.cancel()
         chrome.toast = m
-        let w = DispatchWorkItem { [weak self] in self?.chrome.toast = nil }
+        withMotion(Motion.overlay) {
+            self.chrome.toasts.insert(ToastItem(m), at: 0)
+            if self.chrome.toasts.count > 4 { self.chrome.toasts.removeLast() }
+        }
+        scheduleToastClear(after: 2.6)
+    }
+
+    /// The stack leaves together, a while after its newest message; not while the pointer is on it.
+    private func scheduleToastClear(after delay: Double) {
+        toastWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if chrome.toastHeld { scheduleToastClear(after: 1.2); return }
+            chrome.toast = nil
+            withMotion(Motion.overlay) { self.chrome.toasts.removeAll() }
+        }
         toastWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6, execute: w)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: w)
+    }
+
+    /// The pointer left the stack: let it go shortly.
+    func releaseToasts() {
+        chrome.toastHeld = false
+        if !chrome.toasts.isEmpty { scheduleToastClear(after: 1.2) }
     }
 
 

@@ -450,6 +450,28 @@ enum DebugScenario {
         case "run":
             m.chrome.agentPanel = true
             m.runAgent(prompt: parts.count > 2 ? parts[2] : "在这篇笔记末尾追加一行：测试完成。", agent: .claude)
+        case "motion":
+            // A session mid-run with a pipeline waiting and a pile of messages: the motion pieces at rest.
+            m.chrome.agentPanel = true
+            let s = AgentSession(agent: .claude, source: .app, title: "整理周会记录")
+            s.items = [SessionItem(kind: .user("把这周的会议记录整理成摘要，待办单独列出来")),
+                       SessionItem(kind: .step(id: "1", text: "读取 \(rel)", running: false)),
+                       SessionItem(kind: .step(id: "2", text: "搜索 回归测试", running: false)),
+                       SessionItem(kind: .change(rel: rel, plus: 6, minus: 2)),
+                       SessionItem(kind: .step(id: "3", text: "写入 \(rel)", running: true))]
+            if let p = m.agents.pipelines.first ?? Pipeline.parse(file: "write.md", text: AppModel.defaultPipelines[0].1) {
+                var run = PipelineRun(pipeline: p, sessionID: s.id, vars: [:])
+                run.step = min(1, p.steps.count - 1)
+                run.status = parts.count > 2 && parts[2] == "running" ? .running : .waitingUser
+                m.agents.pipelineRuns[run.id] = run
+                s.items.insert(SessionItem(kind: .pipeline(run.id)), at: 3)
+            }
+            s.running = true
+            m.agents.sessions.append(s)
+            m.agents.activeSessionID = s.id
+            m.showToast("流水线「研究并写成文章」完成")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { m.showToast("Claude 已写入 周会记录.md") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { m.showToast("没能导入：旧笔记.enex") }
         case "markdown":
             m.chrome.agentPanel = true
             let s = AgentSession(agent: .claude, source: .app, title: "Markdown 预览")

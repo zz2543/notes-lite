@@ -251,14 +251,17 @@ struct PipelineCard: View {
         if let run = model.agents.pipelineRuns[runID] {
             VStack(alignment: .leading, spacing: 10) {
                 Label(run.pipeline.title, systemImage: run.pipeline.icon).font(.callout.weight(.semibold))
+                PipelineTrack(run: run)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(run.pipeline.steps.enumerated()), id: \.offset) { i, step in
                         HStack(spacing: 8) {
                             stateIcon(i, run).frame(width: 16)
                                 .transition(.scale(scale: 0.5).combined(with: .opacity))
                                 .id("\(i)-\(Self.iconKey(i, run))")
+                            // Finished steps recede; the current one stays in front.
                             Text("\(i + 1). \(step.title)").font(.callout)
-                                .foregroundStyle(i == run.step ? .primary : .secondary)
+                                .foregroundStyle(i == run.step && run.status != .done ? AnyShapeStyle(.primary)
+                                                 : i < run.step || run.status == .done ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
                             Spacer(minLength: 0)
                             Text(Self.gateLabel(step.gate)).font(.caption2).foregroundStyle(.tertiary)
                         }
@@ -282,7 +285,7 @@ struct PipelineCard: View {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
         } else if i == run.step {
             switch run.status {
-            case .running: ProgressView().controlSize(.mini)
+            case .running: GlyphSpinner(activity: .think)
             case .waitingReview, .waitingUser: Image(systemName: "pause.circle.fill").foregroundStyle(.orange)
             case .stopped: Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
             case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -357,6 +360,84 @@ struct PipelineCard: View {
         case .review: "审阅后继续"
         case .ask: "你决定后继续"
         case .none: "自动继续"
+        }
+    }
+}
+
+/// One segment per step: finished ones filled, the current one filling while it runs, and
+/// held still in orange while it waits for you. Under 活泼 the waiting segment's line ripples
+/// like a held breath, so the card says "paused" without reading a word.
+private struct PipelineTrack: View {
+    let run: PipelineRun
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(run.pipeline.steps.indices, id: \.self) { i in
+                segment(i)
+                    .frame(height: 4)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(height: 10)
+        .motion(Motion.content, value: "\(run.step)-\(PipelineCard.gateKey(run.status))")
+        .accessibilityLabel("第 \(min(run.step + 1, run.pipeline.steps.count)) 步，共 \(run.pipeline.steps.count) 步")
+    }
+
+    @ViewBuilder private func segment(_ i: Int) -> some View {
+        let done = i < run.step || run.status == .done
+        let current = i == run.step && run.status != .done
+        ZStack(alignment: .leading) {
+            Capsule().fill(.quaternary)
+            if done {
+                Capsule().fill(.green.opacity(0.8)).transition(.opacity)
+            } else if current {
+                switch run.status {
+                case .running:
+                    RunningFill()
+                case .waitingUser, .waitingReview:
+                    if Motion.style == .lively && !Motion.reduce {
+                        Ripple().transition(.opacity)
+                    } else {
+                        Capsule().fill(.orange.opacity(0.85))
+                            .phaseAnimator(Motion.ambient ? [1.0, 0.45] : [1.0]) { c, o in c.opacity(o) }
+                                animation: { _ in .easeInOut(duration: 0.9) }
+                            .transition(.opacity)
+                    }
+                case .stopped:
+                    Capsule().fill(.secondary.opacity(0.5))
+                case .done:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    /// The running step fills and drains slowly; nothing tells how long it will take.
+    private struct RunningFill: View {
+        var body: some View {
+            Capsule().fill(.tint)
+                .phaseAnimator(Motion.ambient ? [0.25, 0.9] : [0.5]) { c, f in c.scaleEffect(x: f, anchor: .leading) }
+                    animation: { _ in .easeInOut(duration: 1.1) }
+        }
+    }
+
+    /// The waiting step's line drawn as a slow sine wave.
+    private struct Ripple: View {
+        var body: some View {
+            TimelineView(.animation(minimumInterval: 1 / 30)) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                Canvas { g, size in
+                    var p = Path()
+                    let mid = size.height / 2
+                    for x in stride(from: 0.0, through: size.width, by: 1.5) {
+                        let env = sin(.pi * x / max(size.width, 1))
+                        let y = mid + sin(x * 0.45 + t * 5) * 2.2 * env
+                        if x == 0 { p.move(to: CGPoint(x: x, y: y)) } else { p.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                    g.stroke(p, with: .color(.orange), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                }
+            }
+            .frame(height: 10)
         }
     }
 }

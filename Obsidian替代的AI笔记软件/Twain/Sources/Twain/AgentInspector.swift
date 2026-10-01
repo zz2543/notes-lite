@@ -117,11 +117,14 @@ struct AgentInspector: View {
                             .transition(.opacity.combined(with: .offset(y: 8)))
                     }
                     if sess.running && sess.source == .app {
+                        let now = Self.activity(sess)
                         HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text("\(sess.agent.displayName) 正在工作…").font(.caption).foregroundStyle(.secondary)
+                            GlyphSpinner(activity: now, tint: Theme.agentColor(sess.agent))
+                            RollingText(text: "\(sess.agent.displayName) \(now.verb)…")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         .id("running")
+                        .transition(.opacity)
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
@@ -145,6 +148,14 @@ struct AgentInspector: View {
                 withMotion { proxy.scrollTo(sess.running ? AnyHashable("running") : AnyHashable(sess.items.last?.id), anchor: .bottom) }
             }
         }
+    }
+
+    /// What the agent is doing right now, from its latest step that is still running.
+    static func activity(_ sess: AgentSession) -> GlyphSpinner.Activity {
+        for item in sess.items.reversed() {
+            if case let .step(_, text, running) = item.kind { return running ? GlyphSpinner.Activity(step: text) : .think }
+        }
+        return .think
     }
 
     private var emptyState: some View {
@@ -203,19 +214,32 @@ struct AgentInspector: View {
                 if let n = model.activeNote {
                     Label((n.rel as NSString).lastPathComponent, systemImage: "doc.text")
                         .lineLimit(1).truncationMode(.middle)
+                        .id(n.rel)
+                        .transition(.blurReplace)
                 }
                 Label("AGENTS.md", systemImage: "doc.badge.gearshape").lineLimit(1)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .labelStyle(TagLabelStyle())
+            .motion(Motion.quick, value: model.activeNote?.rel)
 
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("让 \(model.agents.agentPick.displayName) 修改当前笔记…", text: Bindable(model.agents).agentInput, axis: .vertical)
+                TextField("", text: Bindable(model.agents).agentInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
                     .lineLimit(2...8)
                     .focused($inputFocused)
+                    .accessibilityLabel("让 \(model.agents.agentPick.displayName) 修改当前笔记")
+                    // Example requests take turns as the placeholder while the field is empty.
+                    .overlay(alignment: .topLeading) {
+                        if model.agents.agentInput.isEmpty {
+                            RotatingPrompt(prompts: placeholderPrompts)
+                                .font(.body)
+                                .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .onKeyPress(.return, phases: .down) { press in
                         // Return while an input method is composing picks the candidate; let it through.
                         if press.modifiers.contains(.shift) || imeComposing() { return .ignored }
@@ -235,6 +259,13 @@ struct AgentInspector: View {
         .contentShape(.rect)
         .onTapGesture { inputFocused = true }
         .padding(Metrics.floatInset)
+    }
+
+    private var placeholderPrompts: [String] {
+        let who = model.agents.agentPick.displayName
+        guard model.editor.activeRel != nil else { return ["让 \(who) 在库里做点什么…"] }
+        return ["让 \(who) 修改当前笔记…", "总结这篇笔记，在开头加一段摘要…", "整理待办，合并重复项…",
+                "找出库里和这篇相关的笔记…", "把这一段改写得更清楚…"]
     }
 
     private func send() {
@@ -505,11 +536,11 @@ struct ItemView: View {
             HStack(spacing: 8) {
                 ZStack {
                     if running {
-                        ProgressView().controlSize(.mini)
-                            .transition(.opacity)
+                        GlyphSpinner(activity: GlyphSpinner.Activity(step: text), tint: Theme.agentColor(session.agent))
+                            .transition(.blurReplace)
                     } else {
                         Image(systemName: Self.icon(text)).foregroundStyle(.tertiary)
-                            .transition(.scale(scale: 0.4).combined(with: .opacity))
+                            .transition(.blurReplace)
                     }
                 }
                 .frame(width: 16)
@@ -538,35 +569,7 @@ struct ItemView: View {
         case let .pipeline(id):
             PipelineCard(model: model, runID: id)
         case let .change(rel, plus, minus):
-            let pendingNow = model.agents.pending[rel] != nil
-            HStack(spacing: 10) {
-                Image(systemName: pendingNow ? "doc.badge.clock" : "doc.text")
-                    .font(.title3)
-                    .foregroundStyle(pendingNow ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text((rel as NSString).lastPathComponent).fontWeight(.medium).lineLimit(1)
-                    HStack(spacing: 6) {
-                        CountBadge(plus: plus, minus: minus)
-                        Text(pendingNow ? "待审阅" : "已处理").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if pendingNow {
-                    Button("审阅") {
-                        model.open(rel)
-                        model.editor.showDiff = true
-                    }
-                    .buttonStyle(.glassProminent)
-                } else if model.vault?.note(rel) != nil {
-                    Button("打开") { model.open(rel) }
-                        .buttonStyle(.glass)
-                }
-            }
-            .controlSize(.small)
-            .buttonBorderShape(.capsule)
-            .padding(10)
-            .contentCard()
+            ChangeItem(model: model, rel: rel, plus: plus, minus: minus)
         }
     }
 
@@ -685,5 +688,67 @@ private struct FeedbackCard: View {
         .padding(12)
         .contentCard()
         .motion(Motion.standard, value: sent)
+    }
+}
+
+/// A file the agent changed. While it waits for review it is a card with the review button;
+/// once handled it folds down to one quiet line, so a long session doesn't fill up with
+/// finished business.
+private struct ChangeItem: View {
+    @Bindable var model: AppModel
+    let rel: String
+    let plus: Int
+    let minus: Int
+
+    var body: some View {
+        let pendingNow = model.agents.pending[rel] != nil
+        let name = (rel as NSString).lastPathComponent
+        Group {
+            if pendingNow {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.badge.clock")
+                        .font(.title3)
+                        .foregroundStyle(.tint)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(name).fontWeight(.medium).lineLimit(1)
+                        HStack(spacing: 6) {
+                            CountBadge(plus: plus, minus: minus)
+                            Text("待审阅").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("审阅") {
+                        model.open(rel)
+                        model.editor.showDiff = true
+                    }
+                    .buttonStyle(.glassProminent)
+                }
+                .controlSize(.small)
+                .buttonBorderShape(.capsule)
+                .padding(10)
+                .contentCard()
+                .transition(.blurReplace)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green.opacity(0.85))
+                    Text(name).lineLimit(1).truncationMode(.middle)
+                    CountBadge(plus: plus, minus: minus)
+                    Spacer(minLength: 0)
+                    if model.vault?.note(rel) != nil {
+                        Button("打开") { model.open(rel) }
+                            .buttonStyle(.borderless)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .overlay(RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
+                    .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
+                .transition(.blurReplace)
+            }
+        }
+        .motion(Motion.morph, value: pendingNow)
     }
 }

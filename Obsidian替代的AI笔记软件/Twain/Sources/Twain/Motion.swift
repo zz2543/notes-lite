@@ -45,6 +45,19 @@ enum Motion {
     /// Toasts and the command palette, which moved even before there was a setting.
     static var overlay: Animation? { pick(.snappy(duration: 0.22), .snappy(duration: 0.25), .spring(response: 0.4, dampingFraction: 0.55)) }
 
+    /// A shape changing size or form in place: a capsule widening into a message, a card
+    /// folding down to one line. The same object stays on screen, so the eye can follow it.
+    static var morph: Animation? { pick(nil, .smooth(duration: 0.36), .spring(response: 0.44, dampingFraction: 0.7)) }
+
+    /// The `i`th of several things arriving together, a beat after the one before it.
+    static func stagger(_ i: Int, _ base: Animation?) -> Animation? {
+        guard let base, style != .minimal, !reduce else { return base }
+        return base.delay(Double(min(i, 8)) * 0.04)
+    }
+
+    /// Whether ambient motion (spinners, rotating hints) runs at all.
+    static var ambient: Bool { style != .minimal && !reduce }
+
     /// Whether finishing something (a task, a check-in, an accepted change) gets confetti.
     static var celebrates: Bool { style == .lively && !reduce }
 

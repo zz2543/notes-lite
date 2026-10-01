@@ -105,7 +105,12 @@ final class ChromeState {
     var selection: String? { didSet { if let s = selection, s != oldValue { selected?(s) } } }
     @ObservationIgnored var selected: ((String) -> Void)?
     var onboardingStep: Int?
+    /// The newest message, kept for the RPC replies that report it.
     var toast: String?
+    /// Messages still on screen, newest first; several arriving together stack up.
+    var toasts: [ToastItem] = []
+    /// The pointer is over the stack: keep it until the pointer leaves.
+    var toastHeld = false
     var openFolders: Set<String> = []
     var noteInfoOpen = false
     var newSpaceSheet = false
@@ -203,4 +208,20 @@ final class AgentState {
     var pipelineRuns: [UUID: PipelineRun] = [:]
     /// Notes an agent is writing right now.
     var writing: Set<String> = []
+}
+
+/// One message in the toast stack.
+struct ToastItem: Identifiable, Equatable {
+    enum Kind { case done, problem, info }
+    let id = UUID()
+    let text: String
+    let kind: Kind
+
+    init(_ text: String) {
+        self.text = text
+        let problem = ["没能", "没有找到", "找不到", "失败", "作废", "停用", "上限", "不认识", "没有命令", "还在运行", "还在找", "已经结束", "请选择", "稍后再"]
+        if problem.contains(where: text.contains) { kind = .problem }
+        else if text.hasPrefix("已") || text.contains("完成") || text.contains(" 已") { kind = .done }
+        else { kind = .info }
+    }
 }

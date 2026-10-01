@@ -333,3 +333,22 @@ after   run 2     dropped=3 longest=28.3ms     dropped=0 longest=23.8ms     medi
 ```
 
 实窗截图验证：`TWAIN_SCENARIO=longreply:<note>`、`longreply:<note>:reopen`（关面板再开）、`longreply:<note>:switch`（切到别的会话再切回），改前三种都停在第一条消息，改后都在最新一条。
+
+## motion inspora 1 · lively (用户设置) · 2282765 · 2026-10-01 23:35
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=55.9ms p90=70.2ms max=93.1ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=1 longest=26.2ms
+agent show frames=159 dropped=4 longest=33.3ms
+idle space worst=3.6ms stalls>16ms=0
+idle note worst=5.3ms stalls>16ms=0
+type 80665 chars n=80 median=0.9ms p90=9.6ms max=64.2ms
+caret start n=30 median=0.2ms p90=0.3ms max=1.5ms
+caret end n=30 median=0.2ms p90=0.4ms max=1.0ms
+focus dim n=12 median=22.2ms p90=23.5ms max=24.6ms
+memory start=132MB end=147MB
+done
+```

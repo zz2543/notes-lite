@@ -121,24 +121,16 @@ private struct HunkCard: View {
     @State private var why = ""
     /// Bumped when this change is accepted, for the lively style's pop.
     @State private var accepted = 0
+    /// A handled change folds down to its footer; this shows its lines again.
+    @State private var peek = false
 
     var body: some View {
+        let folded = hunk.state != .pending && !peek
         VStack(alignment: .leading, spacing: 0) {
-            if let note {
-                Label {
-                    Text(note).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "lightbulb").foregroundStyle(.secondary)
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 2)
+            if !folded {
+                lines
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
-            VStack(alignment: .leading, spacing: 0) {
-                DiffRows(rows: rows)
-            }
-            .padding(6)
-            Divider().opacity(0.6)
             footer
                 .padding(.horizontal, 12).padding(.vertical, 8)
             if hunk.state == .rejected, asksWhy {
@@ -159,7 +151,9 @@ private struct HunkCard: View {
         }
         .contentCard(radius: Metrics.cardRadius)
         .opacity(hunk.state == .pending ? 1 : 0.85)
+        .motion(Motion.morph, value: folded)
         .motion(Motion.quick, value: hunk.state)
+        .onChange(of: hunk.state) { _, s in if s == .pending { peek = false } }
         // 活泼: the accepted card swells a little and springs back.
         .keyframeAnimator(initialValue: 1.0, trigger: accepted) { content, scale in
             content.scaleEffect(scale)
@@ -170,6 +164,27 @@ private struct HunkCard: View {
             } else {
                 LinearKeyframe(1.0, duration: 0.01)
             }
+        }
+    }
+
+    /// Why the agent made the change, and the lines themselves.
+    private var lines: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let note {
+                Label {
+                    Text(note).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "lightbulb").foregroundStyle(.secondary)
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 2)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                DiffRows(rows: rows)
+            }
+            .padding(6)
+            Divider().opacity(0.6)
         }
     }
 
@@ -199,6 +214,10 @@ private struct HunkCard: View {
                     .foregroundStyle(hunk.state == .accepted ? .green : .secondary)
                     .symbolEffect(.bounce, options: .nonRepeating, value: Motion.style == .lively ? accepted : 0)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
+                Button(peek ? "收起" : "查看") { withMotion(Motion.morph) { peek.toggle() } }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .transition(.opacity)
                 Button("撤销") { withMotion(Motion.quick) { model.setHunk(index, .pending) } }
                     .buttonStyle(.borderless)
                     .font(.caption)

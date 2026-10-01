@@ -26,14 +26,10 @@ struct MainWindow: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let t = model.chrome.toast {
-                Toast(text: t)
-                    .padding(.bottom, 56)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            ToastStack(model: model)
+                .padding(.bottom, 56)
         }
         .motion(Motion.overlay, value: model.chrome.palette)
-        .motion(Motion.overlay, value: model.chrome.toast)
         .sheet(isPresented: Binding(get: { model.chrome.onboardingStep != nil }, set: { if !$0 { model.chrome.onboardingStep = nil } })) {
             OnboardingSheet(model: model)
         }
@@ -67,22 +63,87 @@ struct FixedHost<Content: View>: NSViewRepresentable {
     }
 }
 
-struct Toast: View {
-    let text: String
+/// Messages float up from the bottom edge. A new one pushes in from below and the earlier
+/// ones step back behind it, so a burst of results reads as one pile rather than a flicker;
+/// hovering the pile fans it out into a list and keeps it there.
+struct ToastStack: View {
+    @Bindable var model: AppModel
+    @State private var fanned = false
 
     var body: some View {
-        Label(text, systemImage: "checkmark.circle.fill")
-            .labelStyle(ToastLabelStyle())
+        let items = Array(model.chrome.toasts.prefix(4))
+        ZStack(alignment: .bottom) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { i, t in
+                let d = CGFloat(i)
+                Toast(item: t)
+                    .scaleEffect(fanned ? 1 : 1 - d * 0.06, anchor: .bottom)
+                    .offset(y: fanned ? -d * 48 : -d * 11)
+                    .opacity(fanned || i == 0 ? 1 : i < 3 ? 0.95 - Double(i) * 0.2 : 0)
+                    .zIndex(-Double(i))
+                    .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                                            removal: .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))))
+            }
+        }
+        // A single message lets clicks through to the page; a pile can be hovered open.
+        .allowsHitTesting(items.count > 1)
+        .onHover { inside in
+            withMotion(Motion.morph) { fanned = inside && items.count > 1 }
+            if inside { model.chrome.toastHeld = true } else { model.releaseToasts() }
+        }
+        .onChange(of: items.isEmpty) { _, empty in if empty { fanned = false; model.chrome.toastHeld = false } }
+        .help(items.count > 1 ? "\(items.count) 条消息" : "")
+    }
+}
+
+struct Toast: View {
+    let item: ToastItem
+    /// Bumped on appear, for the lively style's shake on a problem.
+    @State private var shake = 0
+
+    var body: some View {
+        Label(item.text, systemImage: icon)
+            .labelStyle(ToastLabelStyle(tint: tint))
             .font(.callout)
+            .lineLimit(1)
             .padding(.horizontal, 16).padding(.vertical, 10)
-            .glassCapsule()
-            .allowsHitTesting(false)
+            .glassCapsule(tint: item.kind == .problem ? Color.red.opacity(0.14) : nil)
+            .shadow(color: item.kind == .problem && Motion.style != .minimal ? .red.opacity(0.18) : .clear, radius: 12)
+            .keyframeAnimator(initialValue: 0.0, trigger: shake) { content, x in
+                content.offset(x: x)
+            } keyframes: { _ in
+                if item.kind == .problem, Motion.style == .lively, !Motion.reduce {
+                    LinearKeyframe(-6, duration: 0.06)
+                    LinearKeyframe(5, duration: 0.08)
+                    LinearKeyframe(-3, duration: 0.08)
+                    SpringKeyframe(0, duration: 0.2, spring: .bouncy)
+                } else {
+                    LinearKeyframe(0, duration: 0.01)
+                }
+            }
+            .onAppear { shake += 1 }
+    }
+
+    private var icon: String {
+        switch item.kind {
+        case .done: "checkmark.circle.fill"
+        case .problem: "exclamationmark.circle.fill"
+        case .info: "info.circle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch item.kind {
+        case .done: .accentColor
+        case .problem: .red
+        case .info: .secondary
+        }
     }
 
     private struct ToastLabelStyle: LabelStyle {
+        let tint: Color
         func makeBody(configuration: Configuration) -> some View {
             HStack(spacing: 8) {
-                configuration.icon.foregroundStyle(.tint)
+                configuration.icon.foregroundStyle(tint)
                 configuration.title
             }
         }
