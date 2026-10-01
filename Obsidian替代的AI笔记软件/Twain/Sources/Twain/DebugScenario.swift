@@ -473,7 +473,9 @@ enum DebugScenario {
             if let p = m.agents.pipelines.first ?? Pipeline.parse(file: "write.md", text: AppModel.defaultPipelines[0].1) {
                 var run = PipelineRun(pipeline: p, sessionID: s.id, vars: [:])
                 run.step = min(1, p.steps.count - 1)
-                run.status = parts.count > 2 && parts[2] == "running" ? .running : .waitingUser
+                run.status = parts.count > 2 && parts[2] == "running" ? .running
+                    : parts.count > 2 && parts[2] == "done" ? .done
+                    : parts.count > 2 && parts[2] == "stopped" ? .stopped("Claude Code 退出了：网络连接中断") : .waitingUser
                 m.agents.pipelineRuns[run.id] = run
                 s.items.insert(SessionItem(kind: .pipeline(run.id)), at: 3)
             }

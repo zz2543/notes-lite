@@ -4,7 +4,16 @@ import TwainCore
 
 /// One run of a pipeline: which step it is on and what it is waiting for.
 struct PipelineRun: Identifiable, Equatable {
-    enum Status: Equatable { case running, waitingReview, waitingUser, done, stopped(String) }
+    enum Status: Equatable {
+        case running, waitingReview, waitingUser, done, stopped(String)
+        /// Done or stopped: nothing more will happen in this run.
+        var isFinished: Bool {
+            switch self {
+            case .done, .stopped: true
+            default: false
+            }
+        }
+    }
     let id = UUID()
     let pipeline: Pipeline
     let sessionID: UUID
@@ -246,11 +255,56 @@ struct PipelineCard: View {
     @Bindable var model: AppModel
     let runID: UUID
     @State private var feedback = ""
+    /// A finished run folds down to one line; this shows its steps again.
+    @State private var peek = false
 
     var body: some View {
         if let run = model.agents.pipelineRuns[runID] {
-            VStack(alignment: .leading, spacing: 10) {
-                Label(run.pipeline.title, systemImage: run.pipeline.icon).font(.callout.weight(.semibold))
+            let finished = run.status.isFinished
+            Group {
+                if finished && !peek {
+                    foldedLine(run).transition(.blurReplace)
+                } else {
+                    card(run).transition(.blurReplace)
+                }
+            }
+            .motion(Motion.morph, value: finished && !peek)
+        }
+    }
+
+    /// The finished run as one quiet line, like a handled change.
+    private func foldedLine(_ run: PipelineRun) -> some View {
+        let done = run.status == .done
+        return HStack(spacing: 8) {
+            Image(systemName: done ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(done ? AnyShapeStyle(.green.opacity(0.85)) : AnyShapeStyle(.secondary))
+            Text(run.pipeline.title).lineLimit(1)
+            // A stop says why on the line itself: the reason is often the one thing to read.
+            let why: String = if case let .stopped(w) = run.status { w } else { "" }
+            Text(done ? "\(run.pipeline.steps.count) 步完成" : "停在第 \(run.step + 1) 步" + (why.isEmpty ? "" : "：" + why))
+                .foregroundStyle(.tertiary).lineLimit(1).truncationMode(.tail)
+                .help(why)
+            Spacer(minLength: 0)
+            Button("查看") { withMotion(Motion.morph) { peek = true } }.buttonStyle(.borderless)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .overlay(RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
+            .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
+    }
+
+    private func card(_ run: PipelineRun) -> some View {
+        let finished = run.status.isFinished
+        return VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label(run.pipeline.title, systemImage: run.pipeline.icon).font(.callout.weight(.semibold))
+                    Spacer(minLength: 0)
+                    if finished {
+                        Button("收起") { withMotion(Motion.morph) { peek = false } }.buttonStyle(.borderless).font(.caption)
+                    }
+                }
                 PipelineTrack(run: run)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(run.pipeline.steps.enumerated()), id: \.offset) { i, step in
@@ -276,7 +330,6 @@ struct PipelineCard: View {
             .padding(12)
             .contentCard()
             .motion(Motion.pop, value: "\(run.step)-\(Self.gateKey(run.status))")
-        }
     }
 
     @ViewBuilder
