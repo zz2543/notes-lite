@@ -110,6 +110,15 @@
 | 侧栏树线：每个展开的文件夹下一条细竖线 | 侧栏 | `TreeGuides`（行不读选中状态，切换笔记不重画整棵树） |
 | 目录、字数统计的修复：Windows 换行的标题、切换笔记时旧统计覆盖新笔记、点击后钩子弹回 | 正文 | `Markdown.outline`、`recountWords`、`scrollToLine` |
 
+| 跑完的流水线、审阅过的改动：同一张卡片像抽屉一样合成一行，下面的对话跟着收拢 | Agent 面板 | `PipelineCard`、`ChangeItem`（状态变化放在动画事务里） |
+| 深色模式下高度用亮度表达：表面比页面亮一点，长出的面板更亮 | 全局 | `SurfaceFill(raised:)` |
+| 活泼：删除正在看的笔记，页面揉成纸团甩向角落 | 正文 | `EditorEffects.crumple` |
+| 活泼：打开空间，封面以侧栏为书脊翻开 | 页面 | `SpaceCover`、`chrome.spaceCover` |
+| 输入框背后探出一条标签：Agent 会看到哪篇笔记、选中了几行；变化时缩回再滑出 | Agent 面板 | `ContextTab`、`editor.selectedLines` |
+| 设置里的动效风格自己演示：「+」长成面板、卡片折成一行 | 设置 | `MotionPreview` |
+
+这一轮顺带修掉的问题：`Group` 上的修饰符会复制到每个分支（页面容器、折叠卡片改用 `ZStack`）；长出的面板、命令面板、「+」菜单点外面（包括 Agent 面板上）都会关；收起 Agent 面板会关掉模型列表；切换笔记会关掉笔记名片（否则「保存」会把上一篇的摘要写到这一篇）；删除未保存的当前笔记不会再被写回；移到废纸篓失败会提示。场景 `clicktest` 用真实点击事件走一遍这些交互。
+
 调试：`TWAIN_SLOWMO=10` 把所有 SwiftUI 过渡放慢十倍，截图能拍到动画中途；场景 `later:<秒>:<场景>`、`noteinfo`、`newspace`、`tree:<笔记>`。显示器睡眠时帧数为 0、截不到图，先 `caffeinate -u`。
 
 性能（`scripts/perf.sh`）：打开笔记中位数 52–57 ms（3c 时 61 ms），打字 p90 1.3–1.9 ms，压测后内存 139–143 MB（3c 时 152 MB），侧栏和 Agent 面板开关偶有 1 帧掉帧，与之前相同。
