@@ -52,6 +52,9 @@ struct MainWindow: View {
             OnboardingSheet(model: model)
         }
         .onAppear { model.openSettingsAction = { openSettings() } }
+        // The Agent panel hides rather than going away: a model list left open in it would stay
+        // open, unseen, and keep catching ⎋ and clicks. It closes with the panel.
+        .onChange(of: model.chrome.agentPanel) { _, shown in if !shown { model.chrome.modelPickerOpen = false } }
     }
 }
 

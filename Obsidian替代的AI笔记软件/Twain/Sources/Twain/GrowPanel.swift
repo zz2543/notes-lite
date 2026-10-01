@@ -81,7 +81,12 @@ struct GrowPanelHost<Panel: View>: ViewModifier {
             }
             .motion(Motion.morph ?? Motion.overlay, value: isPresented)
             .onChange(of: isPresented) { _, open in open ? watchEscape() : stopWatching() }
-            .onDisappear { stopWatching() }
+            .onDisappear {
+                stopWatching()
+                // Its host went away (the Agent panel closed with the model list open): the
+                // panel goes too, or it would come back open with nothing watching it.
+                if isPresented { isPresented = false }
+            }
     }
 
     private func close() { isPresented = false }

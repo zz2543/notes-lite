@@ -532,6 +532,8 @@ enum DebugScenario {
                 ("click agent panel", { click(CGPoint(x: size.width - 180, y: size.height * 0.45)) }),
                 ("open palette", { m.openPalette() }),
                 ("click agent panel", { click(CGPoint(x: size.width - 180, y: size.height * 0.45)) }),
+                ("open models, close agent panel", { m.chrome.modelPickerOpen = true; DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { m.toggleAgent() } }),
+                ("reopen agent panel", { m.toggleAgent() }),
                 ("open new menu", { m.chrome.newMenuOpen = true }),
                 ("click page", { click(page) }),
             ]
