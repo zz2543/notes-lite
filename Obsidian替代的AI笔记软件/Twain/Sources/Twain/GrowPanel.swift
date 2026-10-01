@@ -66,7 +66,7 @@ struct GrowPanelHost<Panel: View>: ViewModifier {
                                 .frame(width: w)
                                 // Its own height: a flexible frame here would stretch to the window.
                                 .fixedSize(horizontal: false, vertical: true)
-                                .background { SurfaceFill(shape: RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous), shadow: false) }
+                                .background { SurfaceFill(shape: RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous), shadow: false, raised: true) }
                                 .clipShape(.rect(cornerRadius: Metrics.cardRadius, style: .continuous))
                                 .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
                                 .onGeometryChange(for: CGSize.self, of: \.size) { panelSize = $0 }

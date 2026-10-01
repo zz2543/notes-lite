@@ -239,9 +239,15 @@ struct SurfaceFill<S: InsettableShape>: View {
     var shadow = true
     /// 0 at rest, 1 lifted under the pointer: the shadow grows as if the surface rose towards you.
     var lift: CGFloat = 0
+    /// A panel floating over everything (a grow panel) rather than a shape on the page.
+    var raised = false
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         shape.fill(Color(nsColor: .windowBackgroundColor))
+            // In the dark a shadow barely shows: height reads as lightness instead, as on paper
+            // under a lamp — a surface a little lighter than the page, a raised panel more so.
+            .overlay { if scheme == .dark { shape.fill(.white.opacity(raised ? 0.09 : 0.045)) } }
             .overlay { if let tint { shape.fill(tint) } }
             .overlay { shape.strokeBorder(.separator.opacity(0.7), lineWidth: 0.5) }
             .shadow(color: .black.opacity(shadow ? 0.10 + 0.06 * lift : 0), radius: 10 + 6 * lift, y: 3 + 3 * lift)
