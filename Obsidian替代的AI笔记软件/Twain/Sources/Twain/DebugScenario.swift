@@ -501,6 +501,13 @@ enum DebugScenario {
                     if n < m.editor.outline.count { m.scrollEditorTo?(m.editor.outline[n].offset) }
                 }
             }
+        case "tree":
+            // tree:<note> — only the note's folders open, the note selected: the sidebar's guides.
+            var open: Set<String> = []
+            var f = (rel as NSString).deletingLastPathComponent
+            while !f.isEmpty { open.insert(f); f = (f as NSString).deletingLastPathComponent }
+            m.chrome.openFolders = open
+            m.chrome.selection = rel
         case "noteinfo":
             // noteinfo:<note>[:late] — with :late it opens 2.4 s in, for a frame mid-growth.
             m.chrome.panelOrigin = nil

@@ -637,3 +637,41 @@ focus dim n=12 median=25.2ms p90=27.2ms max=28.2ms
 memory start=140MB end=139MB
 done
 ```
+
+## motion inspora 4g · 侧栏树线 · e48adf9 · 2026-10-02 01:23
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=52.6ms p90=74.7ms max=78.6ms
+sidebar hide frames=0 dropped=0 longest=0.0ms
+sidebar show frames=0 dropped=0 longest=0.0ms
+agent hide frames=0 dropped=0 longest=0.0ms
+agent show frames=0 dropped=0 longest=0.0ms
+idle space worst=1.2ms stalls>16ms=0
+idle note worst=1.3ms stalls>16ms=0
+type 22785 chars n=80 median=0.5ms p90=1.4ms max=36.6ms
+caret start n=30 median=0.7ms p90=2.1ms max=12.7ms
+caret end n=30 median=0.7ms p90=9.6ms max=16.5ms
+focus dim n=12 median=18.7ms p90=24.5ms max=27.1ms
+memory start=141MB end=152MB
+done
+```
+
+## motion inspora 4g · 侧栏树线（显示器唤醒后重测） · e48adf9 · 2026-10-02 01:24
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=56.2ms p90=78.3ms max=80.2ms
+sidebar hide frames=170 dropped=0 longest=16.7ms
+sidebar show frames=171 dropped=1 longest=33.3ms
+agent hide frames=159 dropped=2 longest=27.1ms
+agent show frames=137 dropped=1 longest=25.7ms
+idle space worst=4.4ms stalls>16ms=0
+idle note worst=5.3ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=1.6ms max=23.9ms
+caret start n=30 median=0.7ms p90=4.5ms max=23.0ms
+caret end n=30 median=0.7ms p90=3.0ms max=13.6ms
+focus dim n=12 median=9.2ms p90=21.9ms max=23.4ms
+memory start=141MB end=143MB
+done
+```

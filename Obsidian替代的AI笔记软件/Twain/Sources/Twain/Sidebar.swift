@@ -218,6 +218,7 @@ struct FolderRow: View {
                     .help(note != nil ? "点击打开文件夹笔记" : "")
             }
             .tag(note?.rel ?? "dir:" + folder)
+            .background(alignment: .leading) { TreeGuides(depth: folder.split(separator: "/").count - 1) }
             .background(targeted ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18)) : nil)
             .contextMenu { FolderMenu(model: model, folder: folder) }
             .dropDestination(for: String.self) { rels, _ in
@@ -287,6 +288,9 @@ struct NoteRow: View {
             }
         } icon: {
             Image(systemName: note.isAgentFile ? "doc.badge.gearshape" : note.isHTML ? "globe" : "doc.text")
+        }
+        .background(alignment: .leading) {
+            if !showFolder { TreeGuides(depth: note.folder.isEmpty ? 0 : note.folder.split(separator: "/").count) }
         }
         .tag(note.rel)
         .draggable(note.rel)
@@ -417,5 +421,34 @@ struct AgentStatusRow: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Thin vertical lines in a nested row's indent, one per enclosing folder, so a deep tree shows
+/// what belongs to what. Each row draws its own stretch and the stretches meet into lines.
+/// Rows don't read the selection for this: every row would then redraw on every note switch.
+struct TreeGuides: View {
+    /// Indentation the sidebar adds per level, and where the parent's chevron sits relative to
+    /// a row's label (measured on macOS 26's source list).
+    static let indent: CGFloat = 12
+
+    let depth: Int
+    /// From the label's leading edge back to the innermost line, which runs under the parent
+    /// folder's chevron (measured on macOS 26's source list; notes and folders start alike).
+    let lead: CGFloat = 19
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            ForEach(0..<max(depth, 0), id: \.self) { k in
+                Rectangle()
+                    .fill(.separator)
+                    .frame(width: 1)
+                    .offset(x: -(lead + CGFloat(depth - 1 - k) * Self.indent))
+            }
+        }
+        // Past the label's own height, so the stretches of neighbouring rows meet.
+        .padding(.vertical, -12)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
