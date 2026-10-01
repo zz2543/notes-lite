@@ -106,6 +106,7 @@ private struct NewBar: View {
             if open {
                 panel
                     .background { SurfaceFill(shape: RoundedRectangle(cornerRadius: 17, style: .continuous)).matchedGeometryEffect(id: "new", in: morph) }
+                    .closesOnOutsideClick(Binding(get: { open }, set: { v in withMotion(Motion.morph) { open = v } }))
             }
             HStack(spacing: 8) {
                 Button(action: model.newNote) {
@@ -114,7 +115,11 @@ private struct NewBar: View {
                 }
                 .buttonStyle(.soft)
                 .help("新建笔记 ⌘N")
-                Button { withMotion(Motion.morph) { open.toggle() } } label: {
+                Button {
+                    // The click that just closed the panel from outside must not reopen it.
+                    if GrowPanelClock.justClosed { return }
+                    withMotion(Motion.morph) { open.toggle() }
+                } label: {
                     Image(systemName: open ? "xmark" : "plus").font(.body.weight(.medium))
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: 34, height: 34)

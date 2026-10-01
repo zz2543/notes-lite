@@ -363,7 +363,11 @@ private struct NoteToolbar: ToolbarContent {
                     .disabled(model.editor.activeRel == nil || model.activeNote?.isHTML == true)
                 Button("专注模式", systemImage: "arrow.up.left.and.arrow.down.right", action: model.toggleZen)
                     .help("专注模式 ⌘.")
-                Button("命令面板", systemImage: "magnifyingglass", action: model.openPalette)
+                Button("命令面板", systemImage: "magnifyingglass") {
+                    // Clicked while open: the click outside already closed it; leave it closed.
+                    if GrowPanelClock.justClosed { return }
+                    model.openPalette()
+                }
                     .help("搜索笔记与命令 ⌘K")
             }
         }

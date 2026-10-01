@@ -223,7 +223,10 @@ private struct OutsideClickCloser: ViewModifier {
                     MainActor.assumeIsolated {
                         guard let view = box.view else { return }
                         let inside = e.window === view.window && view.convert(view.bounds, to: nil).contains(e.locationInWindow)
-                        if !inside, isPresented { isPresented = false }
+                        if !inside, isPresented {
+                            isPresented = false
+                            GrowPanelClock.closedByClick = Date()
+                        }
                     }
                     return e
                 }
