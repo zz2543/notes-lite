@@ -118,7 +118,7 @@
 
 | 想要 | 做法 |
 |---|---|
-| 去掉第四轮（实色表面、长出的面板、状态球…） | `git reset --hard motion-inspora-3c`，或切到某个 `motion-inspora-4x` tag |
+| 去掉第四轮（实色表面、长出的面板、状态球…） | `git switch -c 某个新分支名 motion-inspora-3c`（原分支保留），或从某个 `motion-inspora-4x` tag 开分支 |
 | 去掉这一轮盘点补的动效 | `git switch ui/motion-modes`（或删除分支 `ui/motion-more`） |
 | 去掉整个动效设置 | `git switch perf/refactor` |
 | 回到重构之前 | 主分支 `feat/ai-native` 从未改动；或 tag `refactor-baseline` |
