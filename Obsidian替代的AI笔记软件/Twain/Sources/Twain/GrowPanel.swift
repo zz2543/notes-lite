@@ -126,12 +126,14 @@ extension View {
 private struct GrowEffect: ViewModifier {
     let progress: CGFloat
     let anchor: UnitPoint
+    var from: CGFloat = 0.35
+    var blurs = true
 
     func body(content: Content) -> some View {
         let minimal = Motion.style == .minimal || Motion.reduce
         content
-            .scaleEffect(minimal ? 1 : 0.35 + 0.65 * progress, anchor: anchor)
-            .blur(radius: minimal ? 0 : (1 - progress) * 6)
+            .scaleEffect(minimal ? 1 : from + (1 - from) * progress, anchor: anchor)
+            .blur(radius: minimal || !blurs ? 0 : (1 - progress) * 6)
             .opacity(progress)
     }
 }
@@ -139,6 +141,13 @@ private struct GrowEffect: ViewModifier {
 extension AnyTransition {
     static func grow(from anchor: UnitPoint) -> AnyTransition {
         .modifier(active: GrowEffect(progress: 0, anchor: anchor), identity: GrowEffect(progress: 1, anchor: anchor))
+    }
+
+    /// `grow` for a glass panel: no blur (blurring glass would flatten it into a bitmap), and
+    /// from a larger start, since a wide panel shrunk far reads as a different object.
+    static func growGlass(from anchor: UnitPoint) -> AnyTransition {
+        .modifier(active: GrowEffect(progress: 0, anchor: anchor, from: 0.6, blurs: false),
+                  identity: GrowEffect(progress: 1, anchor: anchor, from: 0.6, blurs: false))
     }
 }
 

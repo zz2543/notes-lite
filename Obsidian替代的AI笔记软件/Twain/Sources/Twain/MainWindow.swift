@@ -21,8 +21,17 @@ struct MainWindow: View {
         .toolbar(model.chrome.zen ? .hidden : .automatic, for: .windowToolbar)
         .overlay {
             if model.chrome.palette {
+                Color.black.opacity(0.14)
+                    .ignoresSafeArea()
+                    .contentShape(.rect)
+                    .onTapGesture { model.chrome.palette = false }
+                    .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .top) {
+            if model.chrome.palette {
                 CommandPalette(model: model)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                    .transition(.growGlass(from: model.chrome.paletteAnchor))
             }
         }
         .overlay(alignment: .bottom) {

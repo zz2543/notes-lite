@@ -44,11 +44,8 @@ struct CommandPalette: View {
     var body: some View {
         let list = entries
         let sel = min(model.chrome.paletteSel, max(0, list.count - 1))
-        ZStack(alignment: .top) {
-            Color.black.opacity(0.14)
-                .ignoresSafeArea()
-                .contentShape(.rect)
-                .onTapGesture { model.chrome.palette = false }
+        // The dimmed window behind is drawn by MainWindow, so only the panel grows and shrinks.
+        Group {
             VStack(spacing: 0) {
                 searchField(list: list, sel: sel)
                 if !list.isEmpty || !model.chrome.paletteQuery.isEmpty {

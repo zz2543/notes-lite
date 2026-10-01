@@ -97,6 +97,8 @@ final class ChromeState {
     var palette = false
     var paletteQuery = ""
     var paletteSel = 0
+    /// Where the palette grows from: under the toolbar's search button when that was clicked.
+    var paletteAnchor: UnitPoint = .top
     var settingsTab: SettingsTab = .editor
     var sidebarFilter = ""
     /// The sidebar row whose name is being edited in place.

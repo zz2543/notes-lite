@@ -689,7 +689,11 @@ final class AppModel {
             chrome.agentPanel.toggle()
         }
     }
-    func openPalette() { chrome.palette = true; chrome.paletteQuery = ""; chrome.paletteSel = 0 }
+    func openPalette() {
+        // Clicked in the toolbar (top right): grow from that corner; from the keyboard, from the top.
+        chrome.paletteAnchor = clickPoint() == nil ? .top : .topTrailing
+        chrome.palette = true; chrome.paletteQuery = ""; chrome.paletteSel = 0
+    }
     func openSettings(_ tab: SettingsTab) {
         chrome.settingsTab = tab
         openSettingsAction?()
