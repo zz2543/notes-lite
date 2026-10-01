@@ -135,6 +135,9 @@ struct AgentInspector: View {
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .motion(Motion.standard, value: sess.items.count)
+                // A change reviewed or a pipeline finished folds its card to a line somewhere in
+                // here: the rows below close up in the same motion instead of jumping.
+                .motion(Motion.morph, value: model.agents.pending.count)
             }
             .scrollEdgeEffectStyle(.soft, for: .all)
             // A session opens at its latest message. The scroll view places its first offset
@@ -716,8 +719,8 @@ private struct FeedbackCard: View {
 }
 
 /// A file the agent changed. While it waits for review it is a card with the review button;
-/// once handled it folds down to one quiet line, so a long session doesn't fill up with
-/// finished business.
+/// once handled the same card folds down to one quiet line, so a long session doesn't fill up
+/// with finished business.
 private struct ChangeItem: View {
     @Bindable var model: AppModel
     let rel: String
@@ -725,54 +728,54 @@ private struct ChangeItem: View {
     let minus: Int
 
     var body: some View {
-        let pendingNow = model.agents.pending[rel] != nil
+        let pending = model.agents.pending[rel] != nil
         let name = (rel as NSString).lastPathComponent
-        Group {
-            if pendingNow {
-                HStack(spacing: 10) {
-                    Image(systemName: "doc.badge.clock")
-                        .font(.title3)
-                        .foregroundStyle(.tint)
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(name).fontWeight(.medium).lineLimit(1)
-                        HStack(spacing: 6) {
-                            CountBadge(plus: plus, minus: minus)
-                            Text("待审阅").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: pending ? 10 : 8) {
+            ZStack {
+                if pending {
+                    Image(systemName: "doc.badge.clock").font(.title3).foregroundStyle(.tint).transition(.blurReplace)
+                } else {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green.opacity(0.85)).transition(.blurReplace)
+                }
+            }
+            .frame(width: pending ? 24 : 16)
+            Text(name)
+                .fontWeight(pending ? .medium : .regular)
+                .foregroundStyle(pending ? .primary : .secondary)
+                .lineLimit(1).truncationMode(.middle)
+            CountBadge(plus: plus, minus: minus)
+            if pending {
+                Text("待审阅").font(.caption).foregroundStyle(.secondary).transition(.opacity)
+            }
+            Spacer(minLength: 0)
+            ZStack(alignment: .trailing) {
+                if pending {
                     Button("审阅") {
                         model.open(rel)
                         model.editor.showDiff = true
                     }
                     .buttonStyle(.solid)
+                    .transition(.blurReplace)
+                } else if model.vault?.note(rel) != nil {
+                    Button("打开") { model.open(rel) }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .transition(.blurReplace)
                 }
-                .controlSize(.small)
-                .buttonBorderShape(.capsule)
-                .padding(10)
-                .contentCard()
-                .transition(.blurReplace)
-            } else {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green.opacity(0.85))
-                    Text(name).lineLimit(1).truncationMode(.middle)
-                    CountBadge(plus: plus, minus: minus)
-                    Spacer(minLength: 0)
-                    if model.vault?.note(rel) != nil {
-                        Button("打开") { model.open(rel) }
-                            .buttonStyle(.borderless)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .overlay(RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
-                .transition(.blurReplace)
             }
         }
-        .motion(Motion.morph, value: pendingNow)
+        .font(pending ? .callout : .caption)
+        .controlSize(.small)
+        .buttonBorderShape(.capsule)
+        .padding(.horizontal, 10).padding(.vertical, pending ? 10 : 6)
+        .background {
+            RoundedRectangle(cornerRadius: Metrics.rowRadius + 4, style: .continuous)
+                .fill(pending ? AnyShapeStyle(.fill.quinary) : AnyShapeStyle(.clear))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: Metrics.rowRadius + 4, style: .continuous)
+                .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5)
+        }
+        .motion(Motion.morph, value: pending)
     }
 }

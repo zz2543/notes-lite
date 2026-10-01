@@ -177,7 +177,8 @@ extension AppModel {
         let failed = s.items.dropFirst(r.itemMark).contains { if case .error = $0.kind { return true }; return false }
         if failed && said.isEmpty {
             r.status = .stopped("第 \(r.step + 1) 步出错，流水线已停下")
-            agents.pipelineRuns[id] = r
+            // In a transaction: the card folds to a line and the conversation closes up under it.
+            withMotion(Motion.morph) { agents.pipelineRuns[id] = r }
             return
         }
         r.outputs.append(said.last ?? "")
@@ -208,7 +209,7 @@ extension AppModel {
         run.step += 1
         if run.step >= run.pipeline.steps.count {
             run.status = .done
-            agents.pipelineRuns[id] = run
+            withMotion(Motion.morph) { agents.pipelineRuns[id] = run }
             showToast("流水线「\(run.pipeline.title)」完成")
             return
         }
@@ -232,7 +233,7 @@ extension AppModel {
         guard var run = agents.pipelineRuns[id] else { return }
         if let s = agents.sessions.first(where: { $0.id == run.sessionID }), s.running { stopAgent(s) }
         run.status = .stopped("已停止")
-        agents.pipelineRuns[id] = run
+        withMotion(Motion.morph) { agents.pipelineRuns[id] = run }
     }
 
     static func promptForInput(title: String, message: String) -> String? {
@@ -260,76 +261,93 @@ struct PipelineCard: View {
 
     var body: some View {
         if let run = model.agents.pipelineRuns[runID] {
-            let finished = run.status.isFinished
-            Group {
-                if finished && !peek {
-                    foldedLine(run).transition(.blurReplace)
-                } else {
-                    card(run).transition(.blurReplace)
+            let folded = run.status.isFinished && !peek
+            // One card that folds: the header stays and becomes the line, the rest closes up
+            // under it while the card's own height shrinks — the same object, not a swap.
+            VStack(alignment: .leading, spacing: folded ? 0 : 10) {
+                header(run, folded: folded)
+                if !folded {
+                    // Stays put and fades while the card closes over it from below, like a drawer;
+                    // sliding up, it would run over the header.
+                    details(run)
+                        .transition(.opacity)
                 }
-            }
-            .motion(Motion.morph, value: finished && !peek)
-        }
-    }
-
-    /// The finished run as one quiet line, like a handled change.
-    private func foldedLine(_ run: PipelineRun) -> some View {
-        let done = run.status == .done
-        return HStack(spacing: 8) {
-            Image(systemName: done ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(done ? AnyShapeStyle(.green.opacity(0.85)) : AnyShapeStyle(.secondary))
-            Text(run.pipeline.title).lineLimit(1)
-            // A stop says why on the line itself: the reason is often the one thing to read.
-            let why: String = if case let .stopped(w) = run.status { w } else { "" }
-            Text(done ? "\(run.pipeline.steps.count) 步完成" : "停在第 \(run.step + 1) 步" + (why.isEmpty ? "" : "：" + why))
-                .foregroundStyle(.tertiary).lineLimit(1).truncationMode(.tail)
-                .help(why)
-            Spacer(minLength: 0)
-            Button("查看") { withMotion(Motion.morph) { peek = true } }.buttonStyle(.borderless)
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .overlay(RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
-            .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
-    }
-
-    private func card(_ run: PipelineRun) -> some View {
-        let finished = run.status.isFinished
-        return VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label(run.pipeline.title, systemImage: run.pipeline.icon).font(.callout.weight(.semibold))
-                    Spacer(minLength: 0)
-                    if finished {
-                        Button("收起") { withMotion(Motion.morph) { peek = false } }.buttonStyle(.borderless).font(.caption)
-                    }
-                }
-                PipelineTrack(run: run)
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(run.pipeline.steps.enumerated()), id: \.offset) { i, step in
-                        HStack(spacing: 8) {
-                            stateIcon(i, run).frame(width: 16)
-                                .transition(.scale(scale: 0.5).combined(with: .opacity))
-                                .id("\(i)-\(Self.iconKey(i, run))")
-                            // Finished steps recede; the current one stays in front.
-                            Text("\(i + 1). \(step.title)").font(.callout)
-                                .foregroundStyle(i == run.step && run.status != .done ? AnyShapeStyle(.primary)
-                                                 : i < run.step || run.status == .done ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
-                            Spacer(minLength: 0)
-                            Text(Self.gateLabel(step.gate)).font(.caption2).foregroundStyle(.tertiary)
-                        }
-                    }
-                }
-                gate(run)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                    .id(Self.gateKey(run.status))
             }
             .controlSize(.small)
             .buttonBorderShape(.capsule)
-            .padding(12)
-            .contentCard()
+            .padding(.horizontal, folded ? 10 : 12).padding(.vertical, folded ? 7 : 12)
+            .background {
+                RoundedRectangle(cornerRadius: Metrics.rowRadius + 4, style: .continuous)
+                    .fill(folded ? AnyShapeStyle(.clear) : AnyShapeStyle(.fill.quinary))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: Metrics.rowRadius + 4, style: .continuous)
+                    .strokeBorder(.separator.opacity(folded ? 0.6 : 0.5), lineWidth: 0.5)
+            }
+            .clipShape(.rect(cornerRadius: Metrics.rowRadius + 4, style: .continuous))
+            .motion(Motion.morph, value: folded)
             .motion(Motion.pop, value: "\(run.step)-\(Self.gateKey(run.status))")
+        }
+    }
+
+    /// The title, and once the run has finished, how it ended and a way to open or fold it.
+    private func header(_ run: PipelineRun, folded: Bool) -> some View {
+        let finished = run.status.isFinished
+        let done = run.status == .done
+        // A stop says why on the line itself: the reason is often the one thing to read.
+        let why: String = if case let .stopped(w) = run.status { w } else { "" }
+        return HStack(spacing: 8) {
+            ZStack {
+                if folded {
+                    Image(systemName: done ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(done ? AnyShapeStyle(.green.opacity(0.85)) : AnyShapeStyle(.secondary))
+                        .transition(.blurReplace)
+                } else {
+                    Image(systemName: run.pipeline.icon).transition(.blurReplace)
+                }
+            }
+            Text(run.pipeline.title)
+                .fontWeight(folded ? .regular : .semibold)
+                .foregroundStyle(folded ? .secondary : .primary)
+                .lineLimit(1)
+            if folded {
+                Text(done ? "\(run.pipeline.steps.count) 步完成" : "停在第 \(run.step + 1) 步" + (why.isEmpty ? "" : "：" + why))
+                    .foregroundStyle(.tertiary).lineLimit(1).truncationMode(.tail)
+                    .help(why)
+                    .transition(.opacity)
+            }
+            Spacer(minLength: 0)
+            if finished {
+                Button(folded ? "查看" : "收起") { withMotion(Motion.morph) { peek = folded } }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        }
+        .font(folded ? .caption : .callout)
+    }
+
+    private func details(_ run: PipelineRun) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PipelineTrack(run: run)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(run.pipeline.steps.enumerated()), id: \.offset) { i, step in
+                    HStack(spacing: 8) {
+                        stateIcon(i, run).frame(width: 16)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            .id("\(i)-\(Self.iconKey(i, run))")
+                        // Finished steps recede; the current one stays in front.
+                        Text("\(i + 1). \(step.title)").font(.callout)
+                            .foregroundStyle(i == run.step && run.status != .done ? AnyShapeStyle(.primary)
+                                             : i < run.step || run.status == .done ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                        Spacer(minLength: 0)
+                        Text(Self.gateLabel(step.gate)).font(.caption2).foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            gate(run)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .id(Self.gateKey(run.status))
+        }
     }
 
     @ViewBuilder

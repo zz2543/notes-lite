@@ -477,6 +477,11 @@ enum DebugScenario {
                     : parts.count > 2 && parts[2] == "done" ? .done
                     : parts.count > 2 && parts[2] == "stopped" ? .stopped("Claude Code 退出了：网络连接中断") : .waitingUser
                 m.agents.pipelineRuns[run.id] = run
+                // motion:<note>:finish — the waiting run finishes 2 s in, to watch it fold.
+                if parts.count > 2, parts[2] == "finish" {
+                    let id = run.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withMotion(Motion.morph) { m.agents.pipelineRuns[id]?.status = .done } }
+                }
                 s.items.insert(SessionItem(kind: .pipeline(run.id)), at: 3)
             }
             s.running = true

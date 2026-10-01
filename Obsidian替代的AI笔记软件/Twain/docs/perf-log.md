@@ -722,3 +722,22 @@ done
 ```
 
 压测后内存同一版本两次之间能差 20 MB 以上，单次的内存数字不能当作回归依据；帧数为 0 的记录是显示器睡着时测的，作废。
+
+## motion inspora 4q · 流水线卡/改动卡原地折叠 · f2ede70 · 2026-10-02 04:01
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=55.7ms p90=77.0ms max=79.0ms
+sidebar hide frames=171 dropped=0 longest=17.0ms
+sidebar show frames=171 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=1 longest=26.9ms
+agent show frames=157 dropped=1 longest=26.0ms
+idle space worst=5.7ms stalls>16ms=0
+idle note worst=3.7ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=1.7ms max=24.6ms
+caret start n=30 median=0.6ms p90=2.1ms max=9.2ms
+caret end n=30 median=0.5ms p90=1.6ms max=13.9ms
+focus dim n=12 median=24.2ms p90=26.8ms max=26.9ms
+memory start=141MB end=141MB
+done
+```
