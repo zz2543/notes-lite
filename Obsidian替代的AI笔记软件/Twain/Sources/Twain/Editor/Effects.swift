@@ -123,6 +123,99 @@ enum EditorEffects {
         CATransaction.commit()
     }
 
+    /// The page you are throwing away, crumpled: a picture of what's on screen shrinks into a
+    /// ball, spinning, and is tossed towards the window's bottom-left corner. Lively style only;
+    /// drawn on the window's own layer so it outlives the page it shows.
+    static func crumple(_ view: NSView) {
+        guard Motion.style == .lively, !Motion.reduce, let window = view.window, let root = window.contentView,
+              let host = root.layer else { return }
+        let rect = view.visibleRect
+        guard rect.width > 1, rect.height > 1, let rep = view.bitmapImageRepForCachingDisplay(in: rect) else { return }
+        view.cacheDisplay(in: rect, to: rep)
+        let frame = root.convert(view.convert(rect, to: nil), from: nil)
+        let target = CGPoint(x: 44, y: root.isFlipped ? root.bounds.height - 40 : 40)
+        let ball = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ball.contents = rep.cgImage
+        ball.contentsGravity = .resizeAspectFill
+        ball.frame = frame
+        ball.masksToBounds = true
+        ball.zPosition = 1000
+        ball.shadowOpacity = 0
+        // Creases: light where the ball bulges towards you, dark in its folds, deepening as it's squeezed.
+        let creases = CAGradientLayer()
+        creases.type = .radial
+        creases.colors = [NSColor.white.withAlphaComponent(0.45).cgColor, NSColor.black.withAlphaComponent(0.05).cgColor,
+                          NSColor.black.withAlphaComponent(0.45).cgColor]
+        creases.locations = [0, 0.45, 1]
+        creases.startPoint = CGPoint(x: 0.36, y: 0.32)
+        creases.endPoint = CGPoint(x: 1.1, y: 1.1)
+        creases.frame = ball.bounds
+        creases.opacity = 0
+        ball.addSublayer(creases)
+        host.addSublayer(ball)
+        CATransaction.commit()
+
+        let d = 0.62 * Motion.slowFactor
+        let curve = CAMediaTimingFunction(controlPoints: 0.5, 0, 0.75, 0.4)   // slow crush, fast throw
+        func anim(_ key: String, _ values: [Any], _ times: [NSNumber]) -> CAKeyframeAnimation {
+            let a = CAKeyframeAnimation(keyPath: key)
+            a.values = values
+            a.keyTimes = times
+            a.duration = d
+            a.timingFunction = curve
+            return a
+        }
+        let side = min(frame.width, frame.height)
+        let square = NSValue(rect: CGRect(x: 0, y: 0, width: side, height: side))
+        let squeeze = CAKeyframeAnimation(keyPath: "opacity")
+        squeeze.values = [0, 0.9, 0.9]
+        squeeze.keyTimes = [0, 0.45, 1]
+        squeeze.duration = d
+        squeeze.fillMode = .forwards
+        squeeze.isRemovedOnCompletion = false
+        let creaseBounds = CAKeyframeAnimation(keyPath: "bounds")
+        creaseBounds.values = [NSValue(rect: CGRect(origin: .zero, size: frame.size)), square, square]
+        creaseBounds.keyTimes = [0, 0.45, 1]
+        creaseBounds.duration = d
+        creaseBounds.timingFunction = curve
+        creaseBounds.fillMode = .forwards
+        creaseBounds.isRemovedOnCompletion = false
+        let creaseGroup = CAAnimationGroup()
+        let creaseCenter = CAKeyframeAnimation(keyPath: "position")
+        creaseCenter.values = [NSValue(point: CGPoint(x: frame.width / 2, y: frame.height / 2)),
+                               NSValue(point: CGPoint(x: side / 2, y: side / 2)), NSValue(point: CGPoint(x: side / 2, y: side / 2))]
+        creaseCenter.keyTimes = [0, 0.45, 1]
+        creaseCenter.duration = d
+        creaseCenter.timingFunction = curve
+        creaseGroup.animations = [squeeze, creaseBounds, creaseCenter]
+        creaseGroup.duration = d
+        creaseGroup.fillMode = .forwards
+        creaseGroup.isRemovedOnCompletion = false
+        creases.add(creaseGroup, forKey: "crease")
+        let group = CAAnimationGroup()
+        group.animations = [
+            // The page gathers into a square, then a ball.
+            anim("bounds", [NSValue(rect: CGRect(origin: .zero, size: frame.size)), square, square], [0, 0.45, 1]),
+            // Squeezed into a ball first, then thrown.
+            anim("transform.scale", [1, 0.16, 0.05], [0, 0.45, 1]),
+            anim("transform.rotation.z", [0, -1.2, -5.5], [0, 0.45, 1]),
+            anim("cornerRadius", [8, side / 2, side / 2], [0, 0.45, 1]),
+            anim("position", [NSValue(point: CGPoint(x: frame.midX, y: frame.midY)),
+                              NSValue(point: CGPoint(x: frame.midX, y: frame.midY)),
+                              NSValue(point: target)], [0, 0.45, 1]),
+            anim("opacity", [1, 1, 0], [0, 0.8, 1]),
+        ]
+        group.duration = d
+        group.fillMode = .forwards
+        group.isRemovedOnCompletion = false
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { ball.removeFromSuperlayer() }
+        ball.add(group, forKey: "crumple")
+        CATransaction.commit()
+    }
+
     /// Dots flying out of `center` and falling away. Returns how long they take.
     @discardableResult
     static func burst(in host: CALayer, at center: CGPoint, flipped: Bool, count: Int, speed: CGFloat = 1) -> TimeInterval {

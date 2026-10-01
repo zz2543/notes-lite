@@ -81,6 +81,10 @@ final class Preferences {
         motionStyle = MotionStyle(rawValue: store.string(forKey: "pref.motion") ?? "") ?? .calm
         motionSound = b("motionSound", false)
         Motion.style = motionStyle
+        #if DEBUG
+        // TWAIN_MOTION=lively|calm|minimal: a run in that style without touching the saved setting.
+        if let raw = ProcessInfo.processInfo.environment["TWAIN_MOTION"], let st = MotionStyle(rawValue: raw) { Motion.style = st }
+        #endif
         Motion.sound = motionSound
     }
 

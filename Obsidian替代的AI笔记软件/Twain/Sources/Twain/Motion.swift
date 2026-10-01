@@ -76,6 +76,15 @@ enum Motion {
         return a
     }
 
+    /// How many times slower layer animations run (TWAIN_SLOWMO in debug builds, else 1).
+    static var slowFactor: Double {
+        #if DEBUG
+        slowmo ?? 1
+        #else
+        1
+        #endif
+    }
+
     #if DEBUG
     private static let slowmo = ProcessInfo.processInfo.environment["TWAIN_SLOWMO"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil }
     #endif

@@ -534,6 +534,10 @@ enum DebugScenario {
                 }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { run(0) }
+        case "trash":
+            // trash:<note> — plays the lively delete of the open note a moment after opening it.
+            // Only the animation: a real trash would drop the copy into your Trash.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { m.crumpleEditor?() }
         case "newspace":
             m.chrome.panelOrigin = nil
             m.chrome.newSpaceSheet = true

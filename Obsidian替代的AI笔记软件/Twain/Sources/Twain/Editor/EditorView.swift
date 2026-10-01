@@ -149,6 +149,7 @@ struct EditorView: NSViewRepresentable {
                 self?.restyle()
             }
             model.scrollEditorTo = { [weak self] offset in self?.scrollToLine(at: offset) }
+            model.crumpleEditor = { [weak self] in if let sv = self?.scrollView { EditorEffects.crumple(sv) } }
             NotificationCenter.default.addObserver(forName: .twainApplySlash, object: nil, queue: .main) { [weak self] n in
                 let item = n.object as? SlashItem
                 MainActor.assumeIsolated { if let item { self?.applySlash(item) } }

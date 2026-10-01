@@ -105,6 +105,8 @@ final class AppModel {
     @ObservationIgnored var selectEditorRange: ((NSRange) -> Void)?
     /// Scrolls the page so the line at this UTF-16 offset is near the top (the outline's jumps).
     @ObservationIgnored var scrollEditorTo: ((Int) -> Void)?
+    /// Throws the visible page away (the lively style's delete).
+    @ObservationIgnored var crumpleEditor: (() -> Void)?
 
     /// Links, headings and tasks of the open vault, as of the last walk of the folder. Replaced
     /// (never changed in place) by each walk that found something new; commands that must see
@@ -708,6 +710,8 @@ final class AppModel {
 
     func trash(_ rel: String) {
         guard let v = vault else { return }
+        // The page goes first, crumpled, while the file goes to the Trash.
+        if rel == editor.activeRel { crumpleEditor?() }
         NSWorkspace.shared.recycle([v.url(rel)]) { _, _ in
             DispatchQueue.main.async {
                 withMotion { v.noteRemoved(rel) }
