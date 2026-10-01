@@ -12,7 +12,9 @@ struct NoteDetail: View {
     var body: some View {
         let pend = model.activePending
         let reviewing = model.editor.showDiff && pend != nil
-        Group {
+        // A ZStack, not a Group: modifiers on a Group are copied onto each page, so the title,
+        // toolbar and background below were set up again every time the kind of page changed.
+        ZStack {
             if let space = model.currentSpace {
                 SpaceView(model: model, plugin: space)
                     .transition(.page(from: .leading))
@@ -33,8 +35,6 @@ struct NoteDetail: View {
         // minimum width feeds back into the column sizes, and a width-dependent layout (the
         // dashboards) can then keep re-solving the window until AppKit aborts.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-        // Outside the Group above: a modifier on a Group lands on each page, and the cover must
-        // outlive the page that is leaving.
         .overlay { SpaceCover(model: model) }
         // One continuous sheet of paper from the window's top edge down; the toolbar
         // floats on it as glass instead of sitting on its own band.
@@ -426,9 +426,8 @@ private struct SpaceCover: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        // Kept on the model, not in @State: the split view rebuilds the detail column when the
-        // selection moves to a space, and a cover held here would vanish with it. For the same
-        // reason the model takes it away on a timer (`openSpace`), not a completion handler here.
+        // Set by `openSpace` at the moment the space opens, and taken away there on a timer once
+        // it has swung: the page under it changes in the same instant, so nothing here waits on it.
         ZStack {
             if let id = model.chrome.spaceCover, let p = model.plugins.first(where: { $0.id == id }) {
                 CoverSwing(plugin: p)

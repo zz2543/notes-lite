@@ -675,3 +675,50 @@ focus dim n=12 median=9.2ms p90=21.9ms max=23.4ms
 memory start=141MB end=143MB
 done
 ```
+
+## motion inspora 4p · 页面容器改 ZStack，标题/工具栏只挂一次 · c004c2a · 2026-10-02 03:48
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=54.4ms p90=77.4ms max=79.5ms
+sidebar hide frames=0 dropped=0 longest=0.0ms
+sidebar show frames=0 dropped=0 longest=0.0ms
+agent hide frames=0 dropped=0 longest=0.0ms
+agent show frames=0 dropped=0 longest=0.0ms
+idle space worst=6.0ms stalls>16ms=0
+idle note worst=4.2ms stalls>16ms=0
+type 22785 chars n=80 median=0.6ms p90=2.5ms max=25.5ms
+caret start n=30 median=0.8ms p90=4.4ms max=24.9ms
+caret end n=30 median=0.7ms p90=3.3ms max=20.9ms
+focus dim n=12 median=17.3ms p90=22.9ms max=25.2ms
+memory start=140MB end=159MB
+done
+```
+
+## motion inspora 4p · 重测（显示器唤醒） · c004c2a · 2026-10-02 03:49
+
+```
+vault notes=403 picks=44 dim=false
+open n=44 median=56.3ms p90=77.8ms max=80.7ms
+sidebar hide frames=171 dropped=0 longest=16.7ms
+sidebar show frames=173 dropped=0 longest=16.7ms
+agent hide frames=78 dropped=2 longest=33.3ms
+agent show frames=81 dropped=0 longest=19.1ms
+idle space worst=3.2ms stalls>16ms=0
+idle note worst=3.9ms stalls>16ms=0
+type 22785 chars n=80 median=0.5ms p90=1.6ms max=40.0ms
+caret start n=30 median=0.8ms p90=4.9ms max=12.0ms
+caret end n=30 median=0.6ms p90=3.3ms max=14.4ms
+focus dim n=12 median=19.0ms p90=22.4ms max=23.5ms
+memory start=142MB end=163MB
+done
+```
+
+## 对照 · 4o 与 4p 同一时段各跑一次（显示器保持唤醒）· 2026-10-02
+
+```
+4o  open median=53.3ms p90=76.8ms  sidebar 0/0 dropped  agent 2/2 dropped  memory 142→165MB
+4p  open median=55.2ms p90=77.3ms  sidebar 0/1 dropped  agent 2/1 dropped  memory 140→138MB
+```
+
+压测后内存同一版本两次之间能差 20 MB 以上，单次的内存数字不能当作回归依据；帧数为 0 的记录是显示器睡着时测的，作废。
