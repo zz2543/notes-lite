@@ -55,6 +55,9 @@ struct MainWindow: View {
         // The Agent panel hides rather than going away: a model list left open in it would stay
         // open, unseen, and keep catching ⎋ and clicks. It closes with the panel.
         .onChange(of: model.chrome.agentPanel) { _, shown in if !shown { model.chrome.modelPickerOpen = false } }
+        // The note card belongs to one note: switching notes (from the keyboard, say) closes it
+        // rather than leaving the last note's card — and its unsaved summary — over the new one.
+        .onChange(of: model.editor.activeRel) { _, _ in if model.chrome.noteInfoOpen { model.chrome.noteInfoOpen = false } }
     }
 }
 
