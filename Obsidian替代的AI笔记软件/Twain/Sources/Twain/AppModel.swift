@@ -103,6 +103,8 @@ final class AppModel {
     /// Set by the editor: replace a range as an undoable edit, or select one.
     @ObservationIgnored var applyEditorEdit: ((NSRange, String) -> Void)?
     @ObservationIgnored var selectEditorRange: ((NSRange) -> Void)?
+    /// Scrolls the page so the line at this UTF-16 offset is near the top (the outline's jumps).
+    @ObservationIgnored var scrollEditorTo: ((Int) -> Void)?
 
     /// Links, headings and tasks of the open vault, as of the last walk of the folder. Replaced
     /// (never changed in place) by each walk that found something new; commands that must see
@@ -627,8 +629,12 @@ final class AppModel {
             let text = self.editor.editorText
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 let n = Markdown.countWords(Markdown.lines(text))
+                let outline = Markdown.outline(text)
                 DispatchQueue.main.async {
-                    guard let self, self.editor.wordCount != n else { return }
+                    guard let self else { return }
+                    // Assigned only when different: an equal assignment still costs a redraw check.
+                    if self.editor.outline != outline { self.editor.outline = outline }
+                    guard self.editor.wordCount != n else { return }
                     // Not animated: a number rolling in a glass capsule costs far more than it adds.
                     self.editor.wordCount = n
                 }

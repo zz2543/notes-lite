@@ -472,6 +472,16 @@ enum DebugScenario {
             m.showToast("流水线「研究并写成文章」完成")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { m.showToast("Claude 已写入 周会记录.md") }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { m.showToast("没能导入：旧笔记.enex") }
+        case "outline":
+            // outline:<note>[:n] — the Agent panel closed so the margin is wide, scrolled to heading n.
+            m.chrome.agentPanel = false
+            if parts.count > 2, let n = Int(parts[2]) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    if n < m.editor.outline.count { m.scrollEditorTo?(m.editor.outline[n].offset) }
+                }
+            }
+        case "newmenu":
+            m.chrome.newMenuOpen = true
         case "markdown":
             m.chrome.agentPanel = true
             let s = AgentSession(agent: .claude, source: .app, title: "Markdown 预览")

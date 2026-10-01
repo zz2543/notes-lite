@@ -25,6 +25,27 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(Markdown.blockType("正文"), .p)
     }
 
+    func testOutline() {
+        let text = """
+        ---
+        title: # not a heading
+        ---
+        # 周会记录
+        正文
+        ## 决定 ##
+        ```
+        # 代码里的井号
+        ```
+        ### 待办
+        """
+        let o = Markdown.outline(text)
+        XCTAssertEqual(o.map(\.title), ["周会记录", "决定", "待办"])
+        XCTAssertEqual(o.map(\.level), [1, 2, 3])
+        let ns = text as NSString
+        XCTAssertEqual(ns.substring(with: NSRange(location: o[1].offset, length: 2)), "##")
+        XCTAssertEqual(ns.substring(with: NSRange(location: o[2].offset, length: 3)), "###")
+    }
+
     func testContinuation() {
         XCTAssertEqual(Markdown.continuation(for: "- a")?.prefix, "- ")
         XCTAssertEqual(Markdown.continuation(for: "- [x] done")?.prefix, "- [ ] ")

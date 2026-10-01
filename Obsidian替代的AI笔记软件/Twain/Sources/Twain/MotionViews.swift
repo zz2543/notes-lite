@@ -95,3 +95,31 @@ struct RotatingPrompt: View {
         }
     }
 }
+
+/// Things that appear together arrive one after another, each rising a few points into place.
+/// The first frame already shows them at rest under 简洁 and Reduce motion.
+private struct Arrive: ViewModifier {
+    let index: Int
+    @State private var shown: Bool
+
+    init(index: Int) {
+        self.index = index
+        _shown = State(initialValue: !Motion.ambient)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 10)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(Motion.stagger(index, Motion.content)) { shown = true }
+            }
+    }
+}
+
+extension View {
+    /// Arrive as the `index`th of a group that appears together (see `Arrive`).
+    /// Not for rows of a lazy list: those appear again on every scroll.
+    func arrive(_ index: Int) -> some View { modifier(Arrive(index: index)) }
+}

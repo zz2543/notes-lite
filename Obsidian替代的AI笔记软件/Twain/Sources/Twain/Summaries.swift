@@ -146,7 +146,7 @@ struct NoteInfoPopover: View {
                             .padding(.horizontal, 6).padding(.vertical, 1)
                             .background(.fill.tertiary, in: .capsule)
                         Spacer()
-                        if model.summarizing != nil { ProgressView().controlSize(.mini) }
+                        if model.summarizing != nil { GlyphSpinner(activity: .write) }
                     }
                     TextField("一句话说明这篇笔记讲什么", text: $draft, axis: .vertical)
                         .textFieldStyle(.plain)

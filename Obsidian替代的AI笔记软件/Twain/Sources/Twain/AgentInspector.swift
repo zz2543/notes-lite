@@ -174,7 +174,8 @@ struct AgentInspector: View {
             if model.editor.activeRel != nil {
                 GlassEffectContainer(spacing: 8) {
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(suggestions, id: \.1) { icon, prompt, run in
+                        ForEach(Array(suggestions.enumerated()), id: \.element.1) { i, s in
+                            let (icon, prompt, run) = s
                             Button(action: run) {
                                 Label(prompt, systemImage: icon)
                                     .font(.callout)
@@ -184,6 +185,7 @@ struct AgentInspector: View {
                             .buttonStyle(.glass)
                             .buttonBorderShape(.capsule)
                             .controlSize(.large)
+                            .arrive(i + 1)
                         }
                     }
                 }

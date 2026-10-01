@@ -215,7 +215,7 @@ struct ResearchDeskView: View {
             }
             HStack(spacing: 8) {
                 if session?.running == true {
-                    ProgressView().controlSize(.small)
+                    GlyphSpinner(activity: .search, tint: Theme.agentColor(model.agents.agentPick))
                     Text("\(model.agents.agentPick.displayName) 正在找资料 · 已有 \(desk.cards.count) 张卡片").foregroundStyle(.secondary)
                 } else if !desk.cards.isEmpty {
                     Text("\(desk.scopeLabel) · \(desk.cards.count) 张卡片 · 钉住有用的，划掉没用的，收进草稿").foregroundStyle(.secondary)

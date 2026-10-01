@@ -63,6 +63,9 @@ struct EditorView: NSViewRepresentable {
         context.coordinator.textView = tv
         context.coordinator.scrollView = scroll
         scroll.onTile = { [weak coordinator = context.coordinator] in coordinator?.visibleSizeChanged() }
+        NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main) {
+            [weak coordinator = context.coordinator] _ in MainActor.assumeIsolated { coordinator?.scrolled() }
+        }
         return scroll
     }
 
@@ -145,6 +148,7 @@ struct EditorView: NSViewRepresentable {
                 if let tv = self?.textView { EditorEffects.fadeNextDraw(of: tv) }
                 self?.restyle()
             }
+            model.scrollEditorTo = { [weak self] offset in self?.scrollToLine(at: offset) }
             NotificationCenter.default.addObserver(forName: .twainApplySlash, object: nil, queue: .main) { [weak self] n in
                 let item = n.object as? SlashItem
                 MainActor.assumeIsolated { if let item { self?.applySlash(item) } }
@@ -209,6 +213,65 @@ struct EditorView: NSViewRepresentable {
         }
 
         private var laidOutHeight: CGFloat = -1
+
+        private var outlineWork: DispatchWorkItem?
+
+        /// The page scrolled: once it settles, find which heading's section is at the top (only
+        /// for notes long enough to show an outline). Waiting for the scroll to settle keeps the
+        /// typewriter's scroll on every key free of it; the hook then slides over in one go.
+        func scrolled() {
+            guard model.editor.outline.count >= OutlineRail.minimumEntries else { return }
+            outlineWork?.cancel()
+            let w = DispatchWorkItem { [weak self] in self?.updateOutlineCurrent() }
+            outlineWork = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: w)
+        }
+
+        private func updateOutlineCurrent() {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
+            let outline = model.editor.outline
+            // A point a little below the top edge, so a heading counts once it's in view; in
+            // typewriter mode the line being read sits in the middle of the page.
+            let y = model.prefs.typewriter ? tv.visibleRect.midY : tv.visibleRect.minY + 60
+            let probe = CGPoint(x: 1, y: y - tv.textContainerOrigin.y)
+            let glyph = lm.glyphIndex(for: probe, in: tc)
+            let char = lm.characterIndexForGlyph(at: glyph)
+            let current = outline.lastIndex { $0.offset <= char } ?? 0
+            if model.editor.outlineCurrent != current { model.editor.outlineCurrent = current }
+        }
+
+        /// Puts the line at `offset` near the top of the page; slides there unless the style says not to move.
+        func scrollToLine(at offset: Int) {
+            guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer, let scroll = scrollView,
+                  offset <= (tv.string as NSString).length else { return }
+            let range = NSRange(location: offset, length: 0)
+            // Typewriter mode keeps the caret's line in the middle: moving the caret is the jump.
+            if model.prefs.typewriter {
+                tv.setSelectedRange(range)
+                return
+            }
+            lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(offset + 1, (tv.string as NSString).length)))
+            let glyphs = lm.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let rect = lm.boundingRect(forGlyphRange: NSRange(location: glyphs.location, length: max(glyphs.length, 1)), in: tc)
+            let maxY = max(0, tv.frame.height - scroll.contentView.bounds.height)
+            let y = min(max(0, rect.minY + tv.textContainerOrigin.y - 72), maxY)
+            let target = NSPoint(x: scroll.contentView.bounds.minX, y: y)
+            let duration = Motion.standardDuration
+            if duration > 0 {
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = duration + 0.1
+                    ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
+                    scroll.contentView.animator().setBoundsOrigin(target)
+                } completionHandler: {
+                    MainActor.assumeIsolated { scroll.reflectScrolledClipView(scroll.contentView) }
+                }
+            } else {
+                scroll.contentView.setBoundsOrigin(target)
+                scroll.reflectScrolledClipView(scroll.contentView)
+            }
+            // The caret stays where it was: moving it would make the editor scroll it into view
+            // and fight the slide. The outline is for reading; a click in the text moves the caret.
+        }
 
         func visibleSizeChanged() {
             guard let scroll = scrollView, style != nil else { return }

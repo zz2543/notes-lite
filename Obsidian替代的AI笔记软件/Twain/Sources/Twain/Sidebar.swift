@@ -80,28 +80,107 @@ struct SidebarView: View {
         }
         .searchable(text: Bindable(model.chrome).sidebarFilter, placement: .sidebar, prompt: "搜索笔记")
         .sheet(isPresented: Bindable(model.chrome).newSpaceSheet) { NewSpaceSheet(model: model) }
-        .safeAreaBar(edge: .bottom) {
-            GlassEffectContainer(spacing: 8) {
+        .safeAreaBar(edge: .bottom) { NewBar(model: model) }
+    }
+}
+
+/// The sidebar's bottom bar. 新建笔记 stays one click away; the other ways to start something
+/// live behind 「+」, whose glass grows in place into a small panel and shrinks back into
+/// the button when you pick one — the panel opens where you clicked and goes back there.
+private struct NewBar: View {
+    @Bindable var model: AppModel
+    @Namespace private var glass
+    private var open: Bool {
+        get { model.chrome.newMenuOpen }
+        nonmutating set { model.chrome.newMenuOpen = newValue }
+    }
+
+    var body: some View {
+        GlassEffectContainer(spacing: 8) {
+            VStack(alignment: .trailing, spacing: 8) {
+                if open {
+                    panel
+                        .glassEffect(.regular, in: .rect(cornerRadius: Metrics.cardRadius, style: .continuous))
+                        .glassEffectID("new", in: glass)
+                }
                 HStack(spacing: 8) {
                     Button(action: model.newNote) {
                         Label("新建笔记", systemImage: "square.and.pencil")
                             .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.glass)
                     .help("新建笔记 ⌘N")
-                    Button { model.newFolder(in: "") } label: {
-                        Label("新建文件夹", systemImage: "folder.badge.plus").labelStyle(.iconOnly)
+                    if !open {
+                        Button { withMotion(Motion.morph) { open = true } } label: {
+                            Image(systemName: "plus").font(.body.weight(.medium))
+                                .frame(width: 34, height: 34)
+                                .contentShape(.circle)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .glassEffectID("new", in: glass)
+                        .help("新建文件夹、空间或问题")
+                    } else {
+                        Button { withMotion(Motion.morph) { open = false } } label: {
+                            Image(systemName: "xmark").font(.body.weight(.medium))
+                                .frame(width: 34, height: 34)
+                                .contentShape(.circle)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .glassEffectID("close", in: glass)
+                        .help("收起")
                     }
-                    .help("新建文件夹 ⇧⌘N")
                     Button { model.openSettings(.agent) } label: {
                         Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
                     }
+                    .buttonStyle(.glass)
                     .help("设置 ⌘,")
                 }
-                .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
                 .controlSize(.large)
             }
-            .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
+        }
+        .padding(.horizontal, Metrics.floatInset).padding(.bottom, Metrics.floatInset)
+        .onExitCommand { if open { withMotion(Motion.morph) { open = false } } }
+    }
+
+    private var panel: some View {
+        let items: [(String, String, String, () -> Void)] = [
+            ("folder.badge.plus", "新建文件夹", "⇧⌘N", { model.newFolder(in: "") }),
+            ("plus.square.dashed", "新建空间…", "", { model.chrome.newSpaceSheet = true }),
+            ("rectangle.stack.badge.person.crop", "向笔记库提问…", "", model.newDesk),
+        ]
+        return VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                Button {
+                    withMotion(Motion.morph) { open = false }
+                    item.3()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: item.0).frame(width: 20).foregroundStyle(.secondary)
+                        Text(item.1)
+                        Spacer(minLength: 0)
+                        Text(item.2).font(.caption).foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 10).frame(height: 32)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(NewItemStyle())
+                .transition(.opacity.combined(with: .offset(y: 6)))
+                .animation(Motion.stagger(i, Motion.quick), value: open)
+            }
+        }
+        .padding(6)
+    }
+
+    private struct NewItemStyle: ButtonStyle {
+        @State private var hover = false
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .background(hover || configuration.isPressed ? AnyShapeStyle(.fill.tertiary) : AnyShapeStyle(.clear),
+                            in: .rect(cornerRadius: Metrics.rowRadius, style: .continuous))
+                .onHover { hover = $0 }
         }
     }
 }
@@ -205,7 +284,7 @@ struct NoteRow: View {
                 Spacer(minLength: 0)
                 ZStack {
                     if model.agents.writing.contains(note.rel) {
-                        ProgressView().controlSize(.mini).help("Agent 正在写入")
+                        GlyphSpinner(activity: .write).help("Agent 正在写入")
                             .transition(.opacity)
                     } else if let p = model.agents.pending[note.rel] {
                         Image(systemName: "circle.fill")
@@ -336,8 +415,8 @@ struct AgentStatusRow: View {
         } label: {
             LabeledContent {
                 HStack(spacing: 6) {
-                    if running { ProgressView().controlSize(.mini) }
-                    Text(status)
+                    if running { GlyphSpinner(activity: .think, tint: Theme.agentColor(kind)).transition(.blurReplace) }
+                    RollingText(text: status)
                 }
             } label: {
                 Label {

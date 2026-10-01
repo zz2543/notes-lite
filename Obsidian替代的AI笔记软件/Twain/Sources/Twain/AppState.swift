@@ -114,6 +114,8 @@ final class ChromeState {
     var openFolders: Set<String> = []
     var noteInfoOpen = false
     var newSpaceSheet = false
+    /// The sidebar's 「+」 has grown into its panel.
+    var newMenuOpen = false
     /// The space shown in place of a note (`Spaces.swift`).
     var activeSpace: String?
     /// The 问库 desk shown in place of a note (`ResearchDesk.swift`).
@@ -180,6 +182,10 @@ final class EditorState {
     @ObservationIgnored var oversizedDisplay: String?
     /// Words in the open note, recounted a moment after typing stops rather than on every key.
     var wordCount = 0
+    /// The open note's headings, refreshed with the word count once typing pauses.
+    var outline: [OutlineEntry] = []
+    /// The heading whose section is at the top of the page.
+    var outlineCurrent = 0
     @ObservationIgnored var typed: [(Date, Int)] = []
     @ObservationIgnored var netTyped = 0
     var companionTip: CompanionTip?

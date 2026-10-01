@@ -352,3 +352,98 @@ focus dim n=12 median=22.2ms p90=23.5ms max=24.6ms
 memory start=132MB end=147MB
 done
 ```
+
+## motion inspora 2 · lively (用户设置) · 9df3e67 · 2026-10-01 23:45
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=54.8ms p90=65.5ms max=91.5ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=171 dropped=1 longest=33.3ms
+agent hide frames=160 dropped=0 longest=23.4ms
+agent show frames=161 dropped=2 longest=33.3ms
+idle space worst=5.1ms stalls>16ms=0
+idle note worst=4.6ms stalls>16ms=0
+type 80665 chars n=80 median=1.0ms p90=12.9ms max=58.7ms
+caret start n=30 median=0.2ms p90=0.3ms max=2.4ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.7ms
+focus dim n=12 median=24.3ms p90=28.6ms max=30.6ms
+memory start=134MB end=148MB
+done
+```
+
+## motion inspora 2 · lively · 复测 · 9df3e67 · 2026-10-01 23:46
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=54.8ms p90=66.7ms max=85.4ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=161 dropped=0 longest=23.4ms
+agent show frames=159 dropped=2 longest=33.3ms
+idle space worst=4.2ms stalls>16ms=0
+idle note worst=4.2ms stalls>16ms=0
+type 80665 chars n=80 median=1.0ms p90=12.9ms max=52.8ms
+caret start n=30 median=0.2ms p90=0.2ms max=0.8ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.8ms
+focus dim n=12 median=25.7ms p90=28.3ms max=29.5ms
+memory start=133MB end=148MB
+done
+```
+
+## 实验：状态胶囊不滚动 · 9df3e67 · 2026-10-01 23:48
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=56.3ms p90=69.8ms max=92.7ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=162 dropped=2 longest=28.8ms
+agent show frames=158 dropped=2 longest=33.3ms
+idle space worst=4.6ms stalls>16ms=0
+idle note worst=3.7ms stalls>16ms=0
+type 80665 chars n=80 median=1.0ms p90=11.5ms max=58.7ms
+caret start n=30 median=0.2ms p90=0.3ms max=2.9ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.6ms
+focus dim n=12 median=26.6ms p90=32.0ms max=32.2ms
+memory start=134MB end=147MB
+done
+```
+
+## 实验：再关掉目录跟随 · 9df3e67 · 2026-10-01 23:49
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=54.8ms p90=66.3ms max=95.8ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=161 dropped=2 longest=43.2ms
+agent show frames=159 dropped=1 longest=33.3ms
+idle space worst=3.9ms stalls>16ms=0
+idle note worst=4.0ms stalls>16ms=0
+type 80665 chars n=80 median=1.0ms p90=10.5ms max=59.7ms
+caret start n=30 median=0.2ms p90=0.3ms max=1.1ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.9ms
+focus dim n=12 median=26.6ms p90=28.8ms max=29.8ms
+memory start=133MB end=147MB
+done
+```
+
+## motion inspora 2 · lively · 目录跟随停稳后计算 · 9df3e67 · 2026-10-01 23:54
+
+```
+vault notes=397 picks=44 dim=false
+open n=44 median=60.1ms p90=73.2ms max=102.7ms
+sidebar hide frames=172 dropped=0 longest=16.7ms
+sidebar show frames=172 dropped=0 longest=16.7ms
+agent hide frames=160 dropped=3 longest=43.8ms
+agent show frames=156 dropped=1 longest=33.3ms
+idle space worst=6.6ms stalls>16ms=0
+idle note worst=5.3ms stalls>16ms=0
+type 80665 chars n=80 median=1.1ms p90=9.9ms max=48.4ms
+caret start n=30 median=0.1ms p90=0.2ms max=16.5ms
+caret end n=30 median=0.2ms p90=0.2ms max=0.6ms
+focus dim n=12 median=28.2ms p90=30.7ms max=32.7ms
+memory start=132MB end=152MB
+done
+```

@@ -84,6 +84,7 @@ private struct NotePage: View {
         } else {
             EditorView(model: model)
                 // The page runs under the toolbar; the text view keeps its own top margin.
+                .overlay(alignment: .topLeading) { OutlineRail(model: model) }
                 .overlay(alignment: .topLeading) { SlashLayer(model: model) }
                 .overlay(alignment: .top) { Banners(model: model) }
                 .overlay(alignment: .bottomTrailing) { StatusLayer(model: model) }
@@ -195,7 +196,7 @@ private struct Banners: View {
                         if writingHere {
                             let agent = model.agents.sessions.first { $0.running && $0.source == .app }?.agent
                             Banner(tint: agent.map(Theme.agentColor) ?? Theme.claude) {
-                                ProgressView().controlSize(.small)
+                                GlyphSpinner(activity: .write, tint: agent.map(Theme.agentColor) ?? Theme.claude)
                             } text: {
                                 Text("\(agent?.displayName ?? "Agent") 正在写入此文件，完成后可以继续编辑")
                             } action: {
@@ -253,9 +254,17 @@ struct StatusPill: View {
                     .fill(model.editor.dirty ? AnyShapeStyle(.orange) : AnyShapeStyle(.green.opacity(0.8)))
                     .frame(width: 6, height: 6)
                     .motion(Motion.quick, value: model.editor.dirty)
+                // Not rolled: a transition in the glass capsule costs ~1 ms on keys that flip it.
                 Text(model.editor.dirty ? "编辑中" : "已保存")
                 if model.prefs.companionOn {
-                    if model.editor.companionThinking { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkle").foregroundStyle(.tint) }
+                    ZStack {
+                        if model.editor.companionThinking {
+                            GlyphSpinner(activity: .think).transition(.blurReplace)
+                        } else {
+                            Image(systemName: "sparkle").foregroundStyle(.tint).transition(.blurReplace)
+                        }
+                    }
+                    .motion(Motion.quick, value: model.editor.companionThinking)
                 }
                 // The pace covers the last minute: only this text redraws on a timer.
                 TimelineView(.periodic(from: .now, by: 5)) { _ in

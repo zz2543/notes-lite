@@ -53,6 +53,8 @@ struct SpaceView: View {
                             ForEach(row, id: \.self) { i in
                                 ModuleCard(model: model, plugin: plugin, module: modules[i], editing: editing,
                                            move: { d in move(i, by: d, in: modules) }, remove: { remove(i, in: modules) })
+                                    // Opening a space, its modules settle in one after another.
+                                    .arrive(i)
                                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
                             }
                             if row.count == 1, twoColumns, modules[row[0]]["span"]?.int != 2 { Color.clear.frame(maxWidth: .infinity) }
