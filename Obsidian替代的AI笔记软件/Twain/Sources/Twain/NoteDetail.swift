@@ -33,6 +33,9 @@ struct NoteDetail: View {
         // minimum width feeds back into the column sizes, and a width-dependent layout (the
         // dashboards) can then keep re-solving the window until AppKit aborts.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        // Outside the Group above: a modifier on a Group lands on each page, and the cover must
+        // outlive the page that is leaving.
+        .overlay { SpaceCover(model: model) }
         // One continuous sheet of paper from the window's top edge down; the toolbar
         // floats on it as glass instead of sitting on its own band.
         .background(Color(nsColor: .textBackgroundColor).ignoresSafeArea())
@@ -414,4 +417,75 @@ struct SlashMenu: View {
 
 extension Notification.Name {
     static let twainApplySlash = Notification.Name("twainApplySlash")
+}
+
+/// 活泼: opening a space, its cover — the space's icon and name on a sheet of its own — swings
+/// open from the left edge like a book, and the space is underneath. Only the cover moves; the
+/// page has already arrived behind it.
+private struct SpaceCover: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        // Kept on the model, not in @State: the split view rebuilds the detail column when the
+        // selection moves to a space, and a cover held here would vanish with it. For the same
+        // reason the model takes it away on a timer (`openSpace`), not a completion handler here.
+        ZStack {
+            if let id = model.chrome.spaceCover, let p = model.plugins.first(where: { $0.id == id }) {
+                CoverSwing(plugin: p)
+                    .id(id)
+                    .transition(.identity)
+            }
+        }
+    }
+}
+
+/// The cover itself: shut when it appears, then swung open on its hinge.
+private struct CoverSwing: View {
+    static let response = 0.62
+    let plugin: Plugin
+    @State private var open = false
+
+    var body: some View {
+        SpaceCoverFace(plugin: plugin)
+            // To edge-on and no further: past 90° its back would show, mirrored.
+            .rotation3DEffect(.degrees(open ? -92 : 0), axis: (x: 0, y: 1, z: 0), anchor: .leading, perspective: 0.55)
+            .allowsHitTesting(false)
+            // A frame shut on screen first: changed in onAppear itself, it would jump straight open.
+            .task {
+                try? await Task.sleep(for: .milliseconds(30))
+                withAnimation(.spring(response: Self.response * Motion.slowFactor, dampingFraction: 0.82)) { open = true }
+            }
+    }
+}
+
+private struct SpaceCoverFace: View {
+    let plugin: Plugin
+
+    var body: some View { cover(plugin) }
+
+    private func cover(_ p: Plugin) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Spacer()
+            Image(systemName: p.icon)
+                .font(.system(size: 46, weight: .medium))
+                .foregroundStyle(.white)
+            Text(p.name)
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(.white)
+            Text(p.summary.isEmpty ? "空间" : p.summary)
+                .font(.callout)
+                .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(2)
+            Spacer()
+        }
+        .padding(48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background {
+            // Opaque: nothing of the page shows through a closed cover.
+            Color.accentColor
+                .overlay { LinearGradient(colors: [.clear, .black.opacity(0.22)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+                // The spine: a darker strip down the hinge, against the sidebar.
+                .overlay(alignment: .leading) { Color.black.opacity(0.14).frame(width: 10) }
+        }
+    }
 }

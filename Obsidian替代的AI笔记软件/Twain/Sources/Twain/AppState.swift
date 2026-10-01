@@ -124,6 +124,8 @@ final class ChromeState {
     var newSpaceSheet = false
     /// The sidebar's 「+」 has grown into its panel.
     var newMenuOpen = false
+    /// 活泼: the space whose cover is swinging open over its page (`SpaceCover`).
+    var spaceCover: String?
     /// The space shown in place of a note (`Spaces.swift`).
     var activeSpace: String?
     /// The 问库 desk shown in place of a note (`ResearchDesk.swift`).

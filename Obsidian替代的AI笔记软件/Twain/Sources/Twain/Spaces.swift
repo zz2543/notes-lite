@@ -1,3 +1,4 @@
+import SwiftUI
 import AppKit
 import TwainCore
 
@@ -91,6 +92,15 @@ extension AppModel {
     func openSpace(_ id: String) {
         flushSave()
         chrome.openDesk = nil
+        if Motion.style == .lively, !Motion.reduce, chrome.activeSpace != id {
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) { chrome.spaceCover = id }
+            // Gone once it has swung open (a spring of response r settles in about 1.4 r).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.62 * 1.4 * Motion.slowFactor) { [weak self] in
+                if self?.chrome.spaceCover == id { self?.chrome.spaceCover = nil }
+            }
+        }
         chrome.activeSpace = id
         if chrome.selection != "space:" + id { chrome.selection = "space:" + id }
     }
