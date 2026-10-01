@@ -92,10 +92,33 @@
 
 性能（`scripts/perf.sh`，活泼档）：打字 p90 约 9.5–10 ms（基线 9.6），压测后内存 148–152 MB（基线 147–148），侧栏开关不掉帧。回退：`git switch ui/motion-more`，或回到某个 tag。
 
+## 第四轮：外观与动效的整体语言（2026-10-02，tag `motion-inspora-4a` … `-4j`）
+
+这一轮不加功能，只统一“东西长什么样、怎么动”。
+
+**表面。** 共笔自己画的东西一律是实色纸面：窗口底色、0.5pt 细边、柔和阴影（`SurfaceFill`、`.surface`、`.capsuleSurface`，按钮 `.soft` / `.solid`）。玻璃只留给浮在正文上、你一边写一边看的那一层：状态胶囊、Agent 小岛、命令面板（`.hoverGlass`），系统工具栏和侧栏保留系统材质。可点击的表面在指针下浮起一点（`hoverLift`）。
+
+**从哪来，回哪去。** 弹出的东西从点它的地方长出来，关掉时缩回去（`GrowPanel`）：笔记名片、模型列表、新建空间；命令面板点放大镜时从右上角长出，⌘K 时从顶部。页面从它“住”的地方进来：空间和问库从侧栏一侧，审阅从笔记上方的横幅（`.page(from:)`）；正文页只淡入（缩放或模糊会把整篇栅格化）。
+
+**变的是字，不是整块。** 数量和状态行滚动到新值（`numericText`、`RollingText`）：横幅、工具栏和审阅页的改动数、问库卡片数、流水线关口、会话栏。
+
+**一直在动的东西交给 Core Animation。** 字形加载符、流水线分段、Agent 状态球都是图层动画或预先画好的循环帧，主线程每帧不做事。教训：SwiftUI 里每帧变化的视图（`TimelineView` 换字、永远循环的 `phaseAnimator`）会让整个窗口每帧重新布局，Agent 面板开着时 CPU 28–38%；改成图层动画后 3–4%，和空闲一样。状态球同理，逐帧绘制约 5%，预渲染循环约 0.6%。
+
+| 新东西 | 在哪 | 实现 |
+|---|---|---|
+| Agent 状态球：待命是实心点，思考/搜索/读取/写入/运行各有点阵流动，等你时外圈呼吸，出错变红 | Agent 输入框左侧 | `AgentOrb.swift` |
+| 侧栏树线：每个展开的文件夹下一条细竖线 | 侧栏 | `TreeGuides`（行不读选中状态，切换笔记不重画整棵树） |
+| 目录、字数统计的修复：Windows 换行的标题、切换笔记时旧统计覆盖新笔记、点击后钩子弹回 | 正文 | `Markdown.outline`、`recountWords`、`scrollToLine` |
+
+调试：`TWAIN_SLOWMO=10` 把所有 SwiftUI 过渡放慢十倍，截图能拍到动画中途；场景 `later:<秒>:<场景>`、`noteinfo`、`newspace`、`tree:<笔记>`。显示器睡眠时帧数为 0、截不到图，先 `caffeinate -u`。
+
+性能（`scripts/perf.sh`）：打开笔记中位数 52–57 ms（3c 时 61 ms），打字 p90 1.3–1.9 ms，压测后内存 139–143 MB（3c 时 152 MB），侧栏和 Agent 面板开关偶有 1 帧掉帧，与之前相同。
+
 ## 回退
 
 | 想要 | 做法 |
 |---|---|
+| 去掉第四轮（实色表面、长出的面板、状态球…） | `git reset --hard motion-inspora-3c`，或切到某个 `motion-inspora-4x` tag |
 | 去掉这一轮盘点补的动效 | `git switch ui/motion-modes`（或删除分支 `ui/motion-more`） |
 | 去掉整个动效设置 | `git switch perf/refactor` |
 | 回到重构之前 | 主分支 `feat/ai-native` 从未改动；或 tag `refactor-baseline` |
