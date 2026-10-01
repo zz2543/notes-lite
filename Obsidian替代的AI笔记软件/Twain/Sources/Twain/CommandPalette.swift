@@ -60,6 +60,7 @@ struct CommandPalette: View {
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.55),
                         in: .rect(cornerRadius: Metrics.panelRadius, style: .continuous))
             .hoverGlass(radius: Metrics.panelRadius)
+            .closesOnOutsideClick(Bindable(model.chrome).palette)
             .padding(.top, 96)
         }
         .onAppear { focused = true }

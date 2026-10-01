@@ -206,6 +206,41 @@ extension AnyTransition {
     }
 }
 
+/// Closes something floating (the palette) on a mouse-down anywhere outside the view it is put
+/// on — in the window, over AppKit views that would take the click first, or in another window.
+/// The click still goes where it was aimed.
+private struct OutsideClickCloser: ViewModifier {
+    @Binding var isPresented: Bool
+    @State private var probe = ProbeBox()
+    @State private var monitor: Any?
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowProbe(box: probe))
+            .onAppear {
+                let box = probe
+                monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { e in
+                    MainActor.assumeIsolated {
+                        guard let view = box.view else { return }
+                        let inside = e.window === view.window && view.convert(view.bounds, to: nil).contains(e.locationInWindow)
+                        if !inside, isPresented { isPresented = false }
+                    }
+                    return e
+                }
+            }
+            .onDisappear {
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+            }
+    }
+}
+
+extension View {
+    func closesOnOutsideClick(_ isPresented: Binding<Bool>) -> some View {
+        modifier(OutsideClickCloser(isPresented: isPresented))
+    }
+}
+
 final class ProbeBox {
     weak var view: NSView?
     /// The open panel's frame in the host (top-left origin).

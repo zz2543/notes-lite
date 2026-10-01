@@ -530,12 +530,14 @@ enum DebugScenario {
                 ("click page", { click(page) }),
                 ("click info", { click(info) }),
                 ("click agent panel", { click(CGPoint(x: size.width - 180, y: size.height * 0.45)) }),
+                ("open palette", { m.openPalette() }),
+                ("click agent panel", { click(CGPoint(x: size.width - 180, y: size.height * 0.45)) }),
             ]
             func run(_ i: Int) {
                 guard i < steps.count else { print("clicktest done"); fflush(stdout); return }
                 steps[i].1()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    print("clicktest \(steps[i].0): noteInfo=\(m.chrome.noteInfoOpen) models=\(m.chrome.modelPickerOpen)")
+                    print("clicktest \(steps[i].0): noteInfo=\(m.chrome.noteInfoOpen) models=\(m.chrome.modelPickerOpen) palette=\(m.chrome.palette)")
                     fflush(stdout)
                     run(i + 1)
                 }
