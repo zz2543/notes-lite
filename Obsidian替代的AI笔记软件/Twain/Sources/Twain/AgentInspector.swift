@@ -72,7 +72,7 @@ struct AgentInspector: View {
             .menuIndicator(.visible)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .frame(maxWidth: .infinity)
-            .capsuleSurface()
+            .capsuleSurface(hoverLift: true)
             .help("工作目录：" + (model.vault?.rootPath ?? ""))
 
             Group {

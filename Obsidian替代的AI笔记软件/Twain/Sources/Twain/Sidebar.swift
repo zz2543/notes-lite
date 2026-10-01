@@ -92,6 +92,8 @@ struct SidebarView: View {
 private struct NewBar: View {
     @Bindable var model: AppModel
     @Namespace private var morph
+    /// The pointer is on 「+」: its surface rises a little.
+    @State private var plusHover = false
     private var open: Bool {
         get { model.chrome.newMenuOpen }
         nonmutating set { model.chrome.newMenuOpen = newValue }
@@ -115,12 +117,13 @@ private struct NewBar: View {
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: 34, height: 34)
                         .background {
-                            if !open { SurfaceFill(shape: RoundedRectangle(cornerRadius: 17, style: .continuous)).matchedGeometryEffect(id: "new", in: morph) }
+                            if !open { SurfaceFill(shape: RoundedRectangle(cornerRadius: 17, style: .continuous), lift: plusHover ? 1 : 0).matchedGeometryEffect(id: "new", in: morph) }
                             else { SurfaceFill(shape: Circle()) }
                         }
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
+                .onHover { h in withMotion(Motion.quick) { plusHover = h } }
                 .help(open ? "收起" : "新建文件夹、空间或问题")
                 Button { model.openSettings(.agent) } label: {
                     Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)

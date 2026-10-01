@@ -288,6 +288,7 @@ struct ResearchDeskView: View {
             if let rel = desk.draft {
                 let n = desk.cards.filter { $0.state == .drafted }.count
                 Text("草稿：\(NoteRef(rel: rel).title) · 已收进 \(n) 张卡片").lineLimit(1)
+                    .contentTransition(.numericText()).motion(Motion.quick, value: n)
                 Spacer()
                 Button("打开草稿") { model.open(rel) }.buttonStyle(.solid)
             } else {

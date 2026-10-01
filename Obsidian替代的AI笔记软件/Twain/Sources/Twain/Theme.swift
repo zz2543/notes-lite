@@ -109,8 +109,8 @@ extension View {
     }
 
     /// `surface` as a capsule — banners, toasts, status.
-    func capsuleSurface(tint: Color? = nil, shadow: Bool = true) -> some View {
-        modifier(SurfaceStyle(shape: Capsule(), tint: tint, shadow: shadow))
+    func capsuleSurface(tint: Color? = nil, shadow: Bool = true, hoverLift: Bool = false) -> some View {
+        modifier(SurfaceStyle(shape: Capsule(), tint: tint, shadow: shadow, hoverLift: hoverLift))
     }
 
     /// Glass, for the few shapes that hover over the page while you write (see `Metrics`).
@@ -237,12 +237,14 @@ struct SurfaceFill<S: InsettableShape>: View {
     let shape: S
     var tint: Color?
     var shadow = true
+    /// 0 at rest, 1 lifted under the pointer: the shadow grows as if the surface rose towards you.
+    var lift: CGFloat = 0
 
     var body: some View {
         shape.fill(Color(nsColor: .windowBackgroundColor))
             .overlay { if let tint { shape.fill(tint) } }
             .overlay { shape.strokeBorder(.separator.opacity(0.7), lineWidth: 0.5) }
-            .shadow(color: .black.opacity(shadow ? 0.10 : 0), radius: 10, y: 3)
+            .shadow(color: .black.opacity(shadow ? 0.10 + 0.06 * lift : 0), radius: 10 + 6 * lift, y: 3 + 3 * lift)
     }
 }
 
@@ -250,9 +252,17 @@ private struct SurfaceStyle<S: InsettableShape>: ViewModifier {
     let shape: S
     let tint: Color?
     let shadow: Bool
+    /// A surface you can click rises a little under the pointer.
+    var hoverLift = false
+    @State private var hover = false
 
     func body(content: Content) -> some View {
-        content.background { SurfaceFill(shape: shape, tint: tint, shadow: shadow) }
+        let up = hoverLift && hover && Motion.style != .minimal
+        content
+            .background { SurfaceFill(shape: shape, tint: tint, shadow: shadow, lift: up ? 1 : 0) }
+            .scaleEffect(up && !Motion.reduce ? 1.015 : 1)
+            .onHover { if hoverLift { hover = $0 } }
+            .animation(Motion.quick, value: up)
     }
 }
 
