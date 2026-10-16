@@ -1,0 +1,7 @@
+{
+  "initialCharacters" : 98898,
+  "lines" : 5003,
+  "note" : "First layout includes a 60ms runloop observation; this is not a frame-rate benchmark",
+  "openThroughFirstRunloopMs" : 164.75903987884521,
+  "synchronousNativeInsertMs" : 34.763932228088379
+}
