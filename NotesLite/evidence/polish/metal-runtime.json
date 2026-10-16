@@ -1,0 +1,11 @@
+{
+  "active" : false,
+  "backdropReady" : true,
+  "device" : "Apple M4",
+  "failure" : "",
+  "frames" : 79,
+  "maxIntervalMs" : 45.826166664483026,
+  "medianIntervalMs" : 16.662250003719237,
+  "note" : "CPU callback intervals, not GPU frame time",
+  "pipelineReady" : true
+}

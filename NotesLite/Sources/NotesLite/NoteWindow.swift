@@ -6,9 +6,14 @@ private enum PromptKind: String {
     case folder = "新建文件夹", rename = "重命名笔记", move = "移动笔记", copy = "保存副本"
 }
 
+private enum LibraryLocation: Equatable {
+    case all, recent, folder(String)
+}
+
 struct NoteWindow: View {
     @Bindable var workspace: Workspace
     @State private var searchOpen = false
+    @State private var searchResponder: NSResponder?
     @State private var prompt: PromptKind?
     @State private var promptValue = ""
     @State private var promptError: String?
@@ -26,7 +31,10 @@ struct NoteWindow: View {
     @Namespace private var navigationSelection
     @Namespace private var noteSelection
     private var listTitle: String { workspace.recentsOnly ? "最近打开" : workspace.selectedFolder?.components(separatedBy: "/").last ?? "全部笔记" }
-    private var navigationID: String { workspace.recentsOnly ? "recent" : workspace.selectedFolder ?? "all" }
+    private var navigationID: LibraryLocation {
+        if workspace.recentsOnly { return .recent }
+        return workspace.selectedFolder.map(LibraryLocation.folder) ?? .all
+    }
     var body: some View {
         GeometryReader { geometry in
             let widths = ColumnWidths.fitting(total: geometry.size.width, sidebar: sidebarWidth, list: listWidth)
@@ -93,6 +101,17 @@ struct NoteWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             performNoteAction(workspace) { try workspace.checkExternalChanges() }
         }
+        .onChange(of: searchOpen) { _, open in
+            if !open {
+                workspace.query = ""
+                let responder = searchResponder
+                searchResponder = nil
+                Task { @MainActor in
+                    await Task.yield()
+                    if !searchOpen, let view = responder as? NSView { view.window?.makeFirstResponder(view) }
+                }
+            }
+        }
         .onChange(of: workspace.selectedFolder) { _, folder in
             if let folder { expandedFolders.formUnion(FolderEntry.ancestors(of: folder)) }
         }
@@ -133,10 +152,10 @@ struct NoteWindow: View {
             Text("资料库").font(.system(size: 10, weight: .medium)).foregroundStyle(.tertiary)
                 .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 10)
             VStack(spacing: 3) {
-                NavigationRow(title: "全部笔记", icon: "square.stack", selected: navigationID == "all", namespace: navigationSelection, count: workspace.notes.count) {
+                NavigationRow(title: "全部笔记", icon: "square.stack", selected: navigationID == .all, namespace: navigationSelection, count: workspace.notes.count) {
                     withAnimation(Motion.selection) { workspace.selectedFolder = nil; workspace.recentsOnly = false }
                 }
-                NavigationRow(title: "最近打开", icon: "clock", selected: navigationID == "recent", namespace: navigationSelection) {
+                NavigationRow(title: "最近打开", icon: "clock", selected: navigationID == .recent, namespace: navigationSelection) {
                     withAnimation(Motion.selection) { workspace.recentsOnly = true; workspace.selectedFolder = nil }
                 }
                 HStack {
@@ -248,10 +267,10 @@ struct NoteWindow: View {
                         ForEach(workspace.visibleNotes) { note in
                             Button { performNoteAction(workspace) { try workspace.select(note.path); searchOpen = false } } label: {
                                 HStack(spacing: 12) { Image(systemName: "doc.text").foregroundStyle(.secondary); VStack(alignment: .leading, spacing: 5) { Text(note.title).font(.system(size: 13)); Text(note.folder.isEmpty ? "笔记库" : note.folder).font(.system(size: 10)).foregroundStyle(.secondary) }; Spacer() }.padding(13).contentShape(Rectangle())
-                            }.buttonStyle(SoftButton())
+                            }.buttonStyle(SoftButton()).transition(Motion.row)
                         }
                         if workspace.visibleNotes.isEmpty { Text("没有找到笔记，换个词试试。").font(.caption).foregroundStyle(.secondary).padding(35) }
-                    }.padding(8)
+                    }.padding(8).animation(Motion.selection, value: workspace.query)
                 }.frame(maxHeight: 300)
                 Divider().opacity(0.4)
                 Text("本地搜索 · 标题与正文").font(.system(size: 10)).foregroundStyle(.tertiary).frame(maxWidth: .infinity, alignment: .leading).padding(14)
@@ -293,6 +312,9 @@ struct NoteWindow: View {
         }
     }
     private func showSearch() {
+        if searchOpen { return }
+        let window = NSApp.keyWindow ?? NSApp.windows.first { $0.isVisible && $0.canBecomeKey }
+        searchResponder = window?.firstResponder
         backdrop = GlassBackdrop.capture()
         glassImpulse.sequence += 1
         workspace.query = ""; workspace.selectedFolder = nil; workspace.recentsOnly = false

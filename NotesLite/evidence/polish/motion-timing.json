@@ -1,0 +1,57 @@
+[
+  {
+    "file": "/tmp/noteslite-polish-motion/000.jpg",
+    "timeMs": 766,
+    "phase": "enter-focus"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/001.jpg",
+    "timeMs": 833,
+    "phase": "enter-focus"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/002.jpg",
+    "timeMs": 880,
+    "phase": "enter-focus"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/003.jpg",
+    "timeMs": 1496,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/004.jpg",
+    "timeMs": 1560,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/005.jpg",
+    "timeMs": 1617,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/006.jpg",
+    "timeMs": 1683,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/007.jpg",
+    "timeMs": 1730,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/008.jpg",
+    "timeMs": 1776,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/009.jpg",
+    "timeMs": 1848,
+    "phase": "return-library"
+  },
+  {
+    "file": "/tmp/noteslite-polish-motion/010.jpg",
+    "timeMs": 1913,
+    "phase": "return-library"
+  }
+]
