@@ -90,4 +90,3 @@ enum EditorFont: String, CaseIterable, Identifiable {
 
     func swiftUIFont(size: CGFloat) -> Font { Font(nsFont(size: size)) }
 }
-

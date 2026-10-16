@@ -1,0 +1,11 @@
+{
+  "active" : false,
+  "backdropReady" : false,
+  "device" : "unavailable",
+  "failure" : "Metal unavailable",
+  "frames" : 0,
+  "maxIntervalMs" : 0,
+  "medianIntervalMs" : 0,
+  "note" : "CPU callback intervals, not GPU frame time",
+  "pipelineReady" : false
+}

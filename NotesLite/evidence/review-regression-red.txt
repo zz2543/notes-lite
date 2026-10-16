@@ -1,0 +1,30 @@
+Building for debugging...
+[1 / 18]
+[3 / 9] NotesCoreTests-product
+[5 / 11] NotesCoreTests-product
+[9 / 13] NotesCoreTests-product
+[11 / 13] NotesCoreTests-product
+Build complete! (1.57秒)
+Test Suite 'Selected tests' started at 2026-10-16 晚上7:18:47.372.
+Test Suite 'NotesLiteUITests.xctest' started at 2026-10-16 晚上7:18:47.374.
+Test Suite 'NotesLiteUITests.xctest' passed at 2026-10-16 晚上7:18:47.374.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-16 晚上7:18:47.374.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+Test Suite 'Selected tests' started at 2026-10-16 晚上7:18:47.433.
+Test Suite 'NotesCoreTests.xctest' started at 2026-10-16 晚上7:18:47.434.
+Test Suite 'WorkspaceTests' started at 2026-10-16 晚上7:18:47.434.
+Test Case '-[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation]' started.
+/Users/zhangzuhao/code-project/markdown 笔记/NotesLite/Tests/NotesCoreTests/WorkspaceTests.swift:168: error: -[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation] : XCTAssertTrue failed
+/Users/zhangzuhao/code-project/markdown 笔记/NotesLite/Tests/NotesCoreTests/WorkspaceTests.swift:171: error: -[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation] : XCTAssertEqual failed: ("[[阅读/v1.0]]") is not equal to ("[[阅读/v2.0]]")
+/Users/zhangzuhao/code-project/markdown 笔记/NotesLite/Tests/NotesCoreTests/WorkspaceTests.swift:175: error: -[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation] : XCTAssertFalse failed
+/Users/zhangzuhao/code-project/markdown 笔记/NotesLite/Tests/NotesCoreTests/WorkspaceTests.swift:179: error: -[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation] : XCTAssertTrue failed
+Test Case '-[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation]' failed (0.094 seconds).
+Test Suite 'WorkspaceTests' failed at 2026-10-16 晚上7:18:47.528.
+	 Executed 1 test, with 4 failures (0 unexpected) in 0.094 (0.094) seconds
+Test Suite 'NotesCoreTests.xctest' failed at 2026-10-16 晚上7:18:47.528.
+	 Executed 1 test, with 4 failures (0 unexpected) in 0.094 (0.094) seconds
+Test Suite 'Selected tests' failed at 2026-10-16 晚上7:18:47.528.
+	 Executed 1 test, with 4 failures (0 unexpected) in 0.094 (0.095) seconds
+Note: Some test targets reported failures:
+  - NotesCoreTests (XCTest)

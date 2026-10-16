@@ -149,4 +149,34 @@ import XCTest
         XCTAssertEqual(workspace.text, "链接 [[新目标]]\n\n`[[目标]]`\n\n```text\n[[目标]]\n```\n")
     }
 
+    func testDottedLinksCopyAttachmentsAndRevealNavigation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = Workspace()
+        try workspace.open(root)
+        try workspace.createFolder("阅读")
+        try workspace.createNote(title: "v1.0", folder: "阅读")
+        let image = try workspace.importAttachment(data: Data([7,8]), name: "图.png")
+        workspace.edit(image)
+        try workspace.save()
+        try workspace.createNote(title: "入口", folder: "")
+        workspace.edit("[[阅读/v1.0]]")
+        try workspace.save()
+        workspace.selectedFolder = "其他"
+        try workspace.followLink("阅读/v1.0")
+        XCTAssertTrue(workspace.visibleNotes.contains { $0.path == workspace.current })
+        try workspace.renameCurrent(title: "v2.0")
+        try workspace.select("入口.md")
+        XCTAssertEqual(workspace.text, "[[阅读/v2.0]]")
+        try workspace.followLink("阅读/v2.0")
+        workspace.edit(workspace.text + "\n保留输入")
+        try workspace.saveCopy(title: "图片副本")
+        XCTAssertFalse(workspace.text.contains("(../"))
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(workspace.resolveFile("附件/图.png"))), Data([7,8]))
+        workspace.selectedFolder = "阅读"
+        try workspace.relocateCurrent(to: "根目录副本.md")
+        XCTAssertTrue(workspace.visibleNotes.contains { $0.path == workspace.current })
+    }
+
 }

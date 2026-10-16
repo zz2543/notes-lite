@@ -1,0 +1,2 @@
+  PID  PPID COMM
+43555     1 /Users/zhangzuhao/code-project/markdown 笔记/NotesLite/build/NotesLite.app/Contents/MacOS/NotesLite

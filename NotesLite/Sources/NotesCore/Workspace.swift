@@ -43,6 +43,7 @@ public enum NoteError: LocalizedError {
     public var saveState = "已保存"
     public private(set) var lastDeleted: (path: String, url: URL)?
     @ObservationIgnored private var baseline: Data?
+    private var searchBodies: [String: String] = [:]
     @ObservationIgnored private var autosave: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults?
     public init(defaults: UserDefaults? = nil) { self.defaults = defaults }
@@ -70,6 +71,7 @@ public enum NoteError: LocalizedError {
     public func refresh() throws {
         guard let root else { return }
         var scanned: [Note] = [], directories: [String] = []
+        var bodies: [String: String] = [:]
         guard let entries = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return }
         for case let u as URL in entries {
             let values = try u.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey])
@@ -80,8 +82,10 @@ public enum NoteError: LocalizedError {
             if values.isDirectory == true { directories.append(relative); continue }
             guard u.pathExtension.lowercased() == "md" else { continue }
             let body = (try? String(contentsOf: u, encoding: .utf8)) ?? ""
+            bodies[relative] = body
             scanned.append(Note(path: relative, modified: values.contentModificationDate ?? .distantPast, preview: NotePreview.text(body)))
         }
+        searchBodies = bodies
         notes = scanned.sorted { $0.modified > $1.modified }
         folders = directories.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
@@ -93,8 +97,7 @@ public enum NoteError: LocalizedError {
             guard folderMatches && recentMatches else { return false }
             guard !query.isEmpty else { return true }
             if n.title.localizedCaseInsensitiveContains(query) { return true }
-            guard let u = try? url(for: n.path), let body = try? String(contentsOf: u, encoding: .utf8) else { return false }
-            return body.localizedCaseInsensitiveContains(query)
+            return (n.path == current ? text : searchBodies[n.path] ?? "").localizedCaseInsensitiveContains(query)
         }
         return recentsOnly ? filtered.sorted { (recent.firstIndex(of: $0.path) ?? .max) < (recent.firstIndex(of: $1.path) ?? .max) } : filtered
     }
@@ -107,6 +110,13 @@ public enum NoteError: LocalizedError {
         current = path; text = body; baseline = data; dirty = false; revision += 1
         recent.removeAll { $0 == path }; recent.insert(path, at: 0); recent = Array(recent.prefix(40))
         persistRecent()
+        revealCurrent()
+    }
+
+    private func revealCurrent() {
+        guard let current else { return }
+        if let folder = selectedFolder, !(current as NSString).deletingLastPathComponent.hasPrefix(folder + "/"), (current as NSString).deletingLastPathComponent != folder { selectedFolder = nil }
+        if !query.isEmpty { query = "" }
     }
 
     public func createNote(title: String = "未命名笔记", folder: String? = nil) throws {
@@ -182,11 +192,13 @@ public enum NoteError: LocalizedError {
 
     public func saveCopy(title: String) throws {
         try validateName(title)
-        guard current != nil else { throw NoteError.noLibrary }
+        guard let current, let root else { throw NoteError.noLibrary }
         let newPath = title + ".md"
         let destination = try url(for: newPath)
         guard !FileManager.default.fileExists(atPath: destination.path) else { throw NoteError.exists(title) }
-        try Data(text.utf8).write(to: destination, options: .withoutOverwriting)
+        let source = try url(for: current)
+        let copied = References.updating(text, document: source, destination: destination, old: source, new: source, root: root, notes: notes)
+        try Data(copied.utf8).write(to: destination, options: .withoutOverwriting)
         autosave?.cancel(); dirty = false; saveState = "已保存"
         try refresh(); try select(newPath)
     }

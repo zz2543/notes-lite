@@ -33,4 +33,3 @@ enum WebSandbox {
         return c
     }
 }
-

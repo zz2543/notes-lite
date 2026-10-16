@@ -31,7 +31,7 @@ enum References {
                 let target = original.components(separatedBy: "|")[0].components(separatedBy: "#")[0]
                 guard !target.isEmpty, !target.contains("://"), !target.hasPrefix("mailto:"), !target.hasPrefix("data:") else { continue }
                 let decoded = target.removingPercentEncoding ?? target
-                let named = wiki && (decoded as NSString).pathExtension.isEmpty ? decoded + ".md" : decoded
+                let named = wiki && !decoded.lowercased().hasSuffix(".md") ? decoded + ".md" : decoded
                 let local = document.deletingLastPathComponent().appendingPathComponent(named).standardizedFileURL.resolvingSymlinksInPath()
                 let rooted = root.appendingPathComponent(named).standardizedFileURL.resolvingSymlinksInPath()
                 let resolved: URL?

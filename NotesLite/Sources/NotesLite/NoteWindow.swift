@@ -22,10 +22,14 @@ struct SoftButton: ButtonStyle {
     }
 }
 
+private enum PromptKind: String {
+    case folder = "新建文件夹", rename = "重命名笔记", move = "移动笔记", copy = "保存副本"
+}
+
 struct NoteWindow: View {
     @Bindable var workspace: Workspace
     @State private var searchOpen = false
-    @State private var prompt: String?
+    @State private var prompt: PromptKind?
     @State private var promptValue = ""
     @State private var promptError: String?
     @State private var discardConfirmation = false
@@ -81,7 +85,7 @@ struct NoteWindow: View {
         .alert("未能完成操作", isPresented: Binding(get: { workspace.error != nil }, set: { if !$0 { workspace.error = nil } })) {
             Button("返回笔记") { workspace.error = nil }
             if workspace.dirty {
-                Button("另存副本…") { workspace.error = nil; promptValue = "保留副本"; prompt = "保存副本" }
+                Button("另存副本…") { workspace.error = nil; promptValue = "保留副本"; prompt = .copy }
                 Button("重新载入磁盘内容…", role: .destructive) { workspace.error = nil; discardConfirmation = true }
             }
         } message: { Text(workspace.error ?? "") }
@@ -90,9 +94,9 @@ struct NoteWindow: View {
         }
         .sheet(isPresented: Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })) {
             VStack(alignment: .leading, spacing: 20) {
-                Text(prompt ?? "").font(.headline)
-                TextField(prompt == "移动笔记" ? "目标文件夹（留空为笔记库根目录）" : "名称", text: $promptValue).textFieldStyle(.roundedBorder).frame(width: 340)
-                if prompt == "移动笔记" { Text("可用文件夹：" + workspace.folders.joined(separator: "、")).font(.caption).foregroundStyle(.secondary) }
+                Text(prompt?.rawValue ?? "").font(.headline)
+                TextField(prompt == .move ? "目标文件夹（留空为笔记库根目录）" : "名称", text: $promptValue).textFieldStyle(.roundedBorder).frame(width: 340)
+                if prompt == .move { Text("可用文件夹：" + workspace.folders.joined(separator: "、")).font(.caption).foregroundStyle(.secondary) }
                 if let promptError { Text(promptError).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
                 HStack { Spacer(); Button("取消") { prompt = nil }.keyboardShortcut(.cancelAction); Button("确定") { applyPrompt() }.keyboardShortcut(.defaultAction) }
             }.padding(26).onAppear { promptError = nil }
@@ -116,7 +120,7 @@ struct NoteWindow: View {
             HStack {
                 Text("文件夹").font(.system(size: 10)).foregroundStyle(.tertiary)
                 Spacer()
-                Button { promptValue = ""; prompt = "新建文件夹" } label: { Image(systemName: "folder.badge.plus").font(.system(size: 12)) }.buttonStyle(SoftButton()).help("新建文件夹").accessibilityLabel("新建文件夹")
+                Button { promptValue = ""; prompt = .folder } label: { Image(systemName: "folder.badge.plus").font(.system(size: 12)) }.buttonStyle(SoftButton()).help("新建文件夹").accessibilityLabel("新建文件夹")
             }.padding(.horizontal, 18).padding(.top, 20)
             ScrollView {
                 VStack(spacing: 3) {
@@ -180,8 +184,8 @@ struct NoteWindow: View {
     }
 
     @ViewBuilder private func noteActions(_ note: Note) -> some View {
-        Button("重命名…") { performNoteAction(workspace) { try workspace.select(note.path); promptValue = note.title; prompt = "重命名笔记" } }
-        Button("移动到…") { performNoteAction(workspace) { try workspace.select(note.path); promptValue = note.folder; prompt = "移动笔记" } }
+        Button("重命名…") { performNoteAction(workspace) { try workspace.select(note.path); promptValue = note.title; prompt = .rename } }
+        Button("移动到…") { performNoteAction(workspace) { try workspace.select(note.path); promptValue = note.folder; prompt = .move } }
         Divider()
         Button("移到废纸篓", role: .destructive) { performNoteAction(workspace) { try workspace.select(note.path); try workspace.deleteCurrent() } }
     }
@@ -240,13 +244,13 @@ struct NoteWindow: View {
     private func applyPrompt() {
         do {
             switch prompt {
-            case "新建文件夹": try workspace.createFolder(promptValue)
-            case "重命名笔记": try workspace.renameCurrent(title: promptValue)
-            case "移动笔记":
+            case .folder: try workspace.createFolder(promptValue)
+            case .rename: try workspace.renameCurrent(title: promptValue)
+            case .move:
                 guard let current = workspace.current else { return }
                 try workspace.relocateCurrent(to: (promptValue.isEmpty ? "" : promptValue + "/") + (current as NSString).lastPathComponent)
-            case "保存副本": try workspace.saveCopy(title: promptValue)
-            default: break
+            case .copy: try workspace.saveCopy(title: promptValue)
+            case nil: return
             }
             prompt = nil
         } catch { promptError = error.localizedDescription }
