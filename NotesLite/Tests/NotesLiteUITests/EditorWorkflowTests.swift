@@ -32,6 +32,14 @@ import NotesCore
         workspace.source = true
         settle(host)
         XCTAssertTrue(editor.hasMarkedText(), "Style changes must not destroy IME composition")
+        for _ in 0..<3 {
+            withAnimation(Motion.panel) { workspace.focus = true }
+            settle(host)
+            withAnimation(Motion.panel) { workspace.focus = false }
+            settle(host)
+        }
+        XCTAssertTrue(editor.hasMarkedText(), "Reversing focus motion must retain the active composition")
+        XCTAssertTrue(findEditor(host) === editor)
         editor.insertText("中文组合输入", replacementRange: editor.markedRange())
         editor.unmarkText()
         XCTAssertTrue(workspace.text.contains("中文组合输入"))
@@ -118,6 +126,17 @@ import NotesCore
         workspace.edit("Metal 不可用仍能保存")
         try workspace.save()
         XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("降级验证.md"), encoding: .utf8), workspace.text)
+    }
+
+    func testGlassShaderBuildsNativePipelineOnAvailableDevice() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("No Metal device on this machine") }
+        let source = try XCTUnwrap(Bundle.module.url(forResource: "Glass", withExtension: "metal", subdirectory: "Shaders"))
+        let library = try device.makeLibrary(source: String(contentsOf: source, encoding: .utf8), options: nil)
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.vertexFunction = library.makeFunction(name: "glassVertex")
+        descriptor.fragmentFunction = library.makeFunction(name: "glassFragment")
+        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        _ = try device.makeRenderPipelineState(descriptor: descriptor)
     }
 
     private func findEditor(_ root: NSView) -> NSTextView? {

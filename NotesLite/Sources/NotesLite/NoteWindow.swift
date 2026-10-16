@@ -2,26 +2,6 @@ import AppKit
 import NotesCore
 import SwiftUI
 
-extension Color {
-    static let paper = Color(nsColor: .textBackgroundColor)
-    static let navigationAccent = Color.primary
-    static let library = Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua]) == .darkAqua ? NSColor(white: 0.13, alpha: 1) : NSColor(white: 0.962, alpha: 1) })
-}
-
-enum Motion {
-    static let panel = Animation.spring(duration: 0.42, bounce: 0.20)
-    static let feedback = Animation.spring(duration: 0.24, bounce: 0.16)
-}
-
-struct SoftButton: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.padding(8)
-            .background(configuration.isPressed ? Color.navigationAccent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(Motion.feedback, value: configuration.isPressed)
-    }
-}
-
 private enum PromptKind: String {
     case folder = "新建文件夹", rename = "重命名笔记", move = "移动笔记", copy = "保存副本"
 }
@@ -40,37 +20,45 @@ struct NoteWindow: View {
     @State private var edgeVisible = false
     @State private var edgeTask: Task<Void, Never>?
     @FocusState private var searchFocused: Bool
+    @AppStorage("layout.sidebarWidth") private var sidebarWidth = 208.0
+    @AppStorage("layout.listWidth") private var listWidth = 280.0
+    @State private var expandedFolders: Set<String> = []
+    @Namespace private var navigationSelection
+    @Namespace private var noteSelection
+    private var listTitle: String { workspace.recentsOnly ? "最近打开" : workspace.selectedFolder?.components(separatedBy: "/").last ?? "全部笔记" }
+    private var navigationID: String { workspace.recentsOnly ? "recent" : workspace.selectedFolder ?? "all" }
     var body: some View {
-        VStack(spacing: 0) {
-            if !workspace.focus {
-                HStack(spacing: 12) {
-                    Text("留白").font(.system(size: 14, weight: .medium, design: .serif)).padding(.leading, 76)
-                    Text("/  \(workspace.root?.lastPathComponent ?? "本地笔记")").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(workspace.saveState).font(.system(size: 10)).foregroundStyle(workspace.dirty ? .orange : .secondary)
-                    tool("magnifyingglass", "搜索笔记", key: "k") { showSearch() }
-                    tool("square.and.pencil", "新建笔记", key: "n") { performNoteAction(workspace) { try workspace.createNote() } }
-                    tool("arrow.up.left.and.arrow.down.right", "进入专注模式", key: "f", modifiers: [.command, .shift]) { setFocus(true) }
-                }.padding(.horizontal, 14).frame(height: 54)
-                Divider().opacity(0.35)
+        GeometryReader { geometry in
+            let widths = ColumnWidths.fitting(total: geometry.size.width, sidebar: sidebarWidth, list: listWidth)
+            VStack(spacing: 0) {
+                header(widths: widths)
+                    .frame(height: workspace.focus ? 0 : 52, alignment: .top).clipped()
+                    .opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
+                HStack(spacing: 0) {
+                    library.frame(width: widths.sidebar)
+                        .frame(width: workspace.focus ? 0 : widths.sidebar, alignment: .leading).clipped()
+                        .opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
+                    ColumnDivider(width: Binding(get: { widths.sidebar }, set: { sidebarWidth = $0 }), limits: 180...min(280, max(180, geometry.size.width - widths.list - 322)), label: "调整侧栏宽度")
+                        .frame(width: workspace.focus ? 0 : 1).opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
+                    noteList.frame(width: widths.list)
+                        .frame(width: workspace.focus ? 0 : widths.list, alignment: .leading).clipped()
+                        .opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
+                    ColumnDivider(width: Binding(get: { widths.list }, set: { listWidth = $0 }), limits: 220...min(380, max(220, geometry.size.width - widths.sidebar - 322)), label: "调整笔记列表宽度")
+                        .frame(width: workspace.focus ? 0 : 1).opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
+                    editor.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            HStack(spacing: 0) {
-                library.frame(width: workspace.focus ? 0 : 185).clipped().opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
-                Divider().frame(width: workspace.focus ? 0 : 1).opacity(workspace.focus ? 0 : 0.3)
-                noteList.frame(width: workspace.focus ? 0 : 230).clipped().opacity(workspace.focus ? 0 : 1).allowsHitTesting(!workspace.focus).accessibilityHidden(workspace.focus)
-                Divider().frame(width: workspace.focus ? 0 : 1).opacity(workspace.focus ? 0 : 0.3)
-                editor.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .leading) {
+                if edgeVisible {
+                    GlassSurface(backdrop: edgeBackdrop, impulse: edgeImpulse)
+                        .frame(width: 20).offset(x: workspace.focus ? -10 : widths.sidebar + widths.list - 8)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                        .animation(Motion.panel, value: workspace.focus)
+                }
             }
         }
         .background(Color.paper)
-        .overlay(alignment: .leading) {
-            if edgeVisible {
-                GlassSurface(backdrop: edgeBackdrop, impulse: edgeImpulse)
-                    .frame(width: 24).offset(x: workspace.focus ? -12 : 403)
-                    .allowsHitTesting(false).accessibilityHidden(true)
-                    .animation(Motion.panel, value: workspace.focus)
-            }
-        }
+        .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .topTrailing) {
             if workspace.focus {
                 Button { setFocus(false) } label: { Label("退出专注", systemImage: "arrow.down.right.and.arrow.up.left").font(.caption) }
@@ -79,7 +67,7 @@ struct NoteWindow: View {
             }
         }
         .overlay {
-            if searchOpen { searchOverlay.transition(.opacity.combined(with: .scale(scale: 0.96))) }
+            if searchOpen { searchOverlay.transition(.opacity.combined(with: .scale(scale: 0.96)).combined(with: .offset(y: -8))) }
         }
         .animation(Motion.panel, value: searchOpen)
         .alert("未能完成操作", isPresented: Binding(get: { workspace.error != nil }, set: { if !$0 { workspace.error = nil } })) {
@@ -105,89 +93,123 @@ struct NoteWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             performNoteAction(workspace) { try workspace.checkExternalChanges() }
         }
+        .onChange(of: workspace.selectedFolder) { _, folder in
+            if let folder { expandedFolders.formUnion(FolderEntry.ancestors(of: folder)) }
+        }
+        .onChange(of: workspace.root) { _, _ in expandedFolders = [] }
         .onReceive(NotificationCenter.default.publisher(for: .init("NotesLite.search"))) { _ in showSearch() }
         .onReceive(NotificationCenter.default.publisher(for: .init("NotesLite.focus"))) { _ in setFocus(!workspace.focus) }
     }
 
-    private var library: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) { Image(systemName: "leaf").font(.title3); Text("我的笔记").font(.system(size: 17, weight: .medium, design: .serif)) }
-                .padding(.horizontal, 18).padding(.top, 25).padding(.bottom, 20)
-            navigation("全部笔记", icon: "square.stack", selected: workspace.selectedFolder == nil && !workspace.recentsOnly, count: workspace.notes.count) {
-                workspace.selectedFolder = nil; workspace.recentsOnly = false
-            }
-            navigation("最近打开", icon: "clock", selected: workspace.recentsOnly) { workspace.recentsOnly = true; workspace.selectedFolder = nil }
-            HStack {
-                Text("文件夹").font(.system(size: 10)).foregroundStyle(.tertiary)
-                Spacer()
-                Button { promptValue = ""; prompt = .folder } label: { Image(systemName: "folder.badge.plus").font(.system(size: 12)) }.buttonStyle(SoftButton()).help("新建文件夹").accessibilityLabel("新建文件夹")
-            }.padding(.horizontal, 18).padding(.top, 20)
-            ScrollView {
-                VStack(spacing: 3) {
-                    ForEach(workspace.folders, id: \.self) { folder in
-                        navigation(folder, icon: "folder", selected: workspace.selectedFolder == folder) {
-                            workspace.selectedFolder = folder; workspace.recentsOnly = false
-                        }
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-            if workspace.lastDeleted != nil {
-                Button("恢复上次删除") { performNoteAction(workspace) { try workspace.restoreDeleted() } }.font(.caption).buttonStyle(SoftButton()).padding(.horizontal, 10)
-            }
-            Button { chooseLibrary(workspace) } label: { Label(workspace.root?.lastPathComponent ?? "打开笔记库", systemImage: "externaldrive").font(.system(size: 11)).lineLimit(1) }
-                .buttonStyle(SoftButton()).padding(10).foregroundStyle(.secondary)
-        }.frame(maxHeight: .infinity).background(Color.library)
+    private func header(widths: ColumnWidths) -> some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 7) {
+                Text("留白").font(.system(size: 14, weight: .medium, design: .serif))
+                Spacer(minLength: 0)
+            }.padding(.leading, 80).padding(.trailing, 14).frame(width: widths.sidebar, height: 52).background(Color.library)
+            Color.hairline.frame(width: 1)
+            HStack(spacing: 8) {
+                Text(listTitle).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Text("\(workspace.visibleNotes.count)").font(.system(size: 10, weight: .medium, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.secondary).padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.045), in: Capsule())
+                Spacer(minLength: 0)
+            }.padding(.horizontal, 20).frame(width: widths.list, height: 52).background(Color.listPaper)
+            Color.hairline.frame(width: 1)
+            HStack(spacing: 5) {
+                Text(workspace.root?.lastPathComponent ?? "本地笔记").font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
+                Spacer(minLength: 4)
+                Circle().fill(workspace.dirty ? Color.orange : Color.secondary.opacity(0.35)).frame(width: 4, height: 4)
+                Text(workspace.saveState).font(.system(size: 10)).foregroundStyle(.tertiary).padding(.trailing, 10)
+                tool("magnifyingglass", "搜索笔记") { showSearch() }
+                tool("square.and.pencil", "新建笔记") { withAnimation(Motion.selection) { performNoteAction(workspace) { try workspace.createNote() } } }
+                tool("arrow.up.left.and.arrow.down.right", "进入专注模式") { setFocus(true) }
+            }.padding(.horizontal, 18).frame(height: 52)
+        }.overlay(alignment: .bottom) { Color.hairline.frame(height: 1) }
     }
 
-    private func navigation(_ title: String, icon: String, selected: Bool, count: Int? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.system(size: 13)).frame(width: 18)
-                Text(title).lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 0)
-                if let count { Text("\(count)").font(.system(size: 10)).foregroundStyle(.secondary) }
-            }.font(.system(size: 12)).padding(.horizontal, 12).padding(.vertical, 10)
-                .background(selected ? Color.navigationAccent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 9))
-                .contentShape(Rectangle())
-        }.buttonStyle(.plain).padding(.horizontal, 8)
+    private var library: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("资料库").font(.system(size: 10, weight: .medium)).foregroundStyle(.tertiary)
+                .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 10)
+            VStack(spacing: 3) {
+                NavigationRow(title: "全部笔记", icon: "square.stack", selected: navigationID == "all", namespace: navigationSelection, count: workspace.notes.count) {
+                    withAnimation(Motion.selection) { workspace.selectedFolder = nil; workspace.recentsOnly = false }
+                }
+                NavigationRow(title: "最近打开", icon: "clock", selected: navigationID == "recent", namespace: navigationSelection) {
+                    withAnimation(Motion.selection) { workspace.recentsOnly = true; workspace.selectedFolder = nil }
+                }
+                HStack {
+                    Text("文件夹").font(.system(size: 10, weight: .medium)).foregroundStyle(.tertiary)
+                    Spacer()
+                    Button { promptValue = ""; prompt = .folder } label: { Image(systemName: "plus").font(.system(size: 10, weight: .medium)) }
+                        .buttonStyle(SoftButton()).help("新建文件夹").accessibilityLabel("新建文件夹")
+                }.padding(.leading, 10).padding(.trailing, 3).padding(.top, 18).padding(.bottom, 3)
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(FolderEntry.visible(paths: workspace.folders, expanded: expandedFolders)) { folder in
+                            NavigationRow(title: folder.title, icon: workspace.selectedFolder == folder.path ? "folder.fill" : "folder", selected: workspace.selectedFolder == folder.path, namespace: navigationSelection, depth: folder.depth,
+                                expanded: folder.hasChildren ? expandedFolders.contains(folder.path) : nil,
+                                toggle: {
+                                    withAnimation(Motion.selection) {
+                                        if !expandedFolders.insert(folder.path).inserted { expandedFolders.remove(folder.path) }
+                                    }
+                                }) {
+                                    withAnimation(Motion.selection) { workspace.selectedFolder = folder.path; workspace.recentsOnly = false }
+                                }
+                                .transition(Motion.row)
+                        }
+                        if workspace.folders.isEmpty { Text("用文件夹整理想法").font(.system(size: 11)).foregroundStyle(.tertiary).frame(maxWidth: .infinity, alignment: .leading).padding(10) }
+                    }.padding(.vertical, 2)
+                }.scrollIndicators(.hidden)
+            }.padding(.horizontal, 10)
+            Spacer(minLength: 14)
+            if workspace.lastDeleted != nil {
+                Button("恢复上次删除") { performNoteAction(workspace) { try workspace.restoreDeleted() } }
+                    .font(.caption).buttonStyle(SoftButton()).padding(.horizontal, 12).padding(.bottom, 8)
+            }
+            Button { chooseLibrary(workspace) } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "externaldrive").font(.system(size: 12))
+                    Text(workspace.root?.lastPathComponent ?? "打开笔记库").font(.system(size: 11)).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 8))
+                }.frame(maxWidth: .infinity).padding(.vertical, 4)
+            }.buttonStyle(SoftButton()).foregroundStyle(.secondary).padding(10)
+                .overlay(alignment: .top) { Color.hairline.frame(height: 1).padding(.horizontal, 18) }
+        }.frame(maxHeight: .infinity).background(Color.library)
+        .animation(Motion.selection, value: navigationID)
     }
 
     private var noteList: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack { Text(workspace.recentsOnly ? "最近打开" : workspace.selectedFolder?.components(separatedBy: "/").last ?? "全部笔记").font(.system(size: 15, weight: .medium)); Spacer(); Text("\(workspace.visibleNotes.count) 篇").font(.system(size: 10)).foregroundStyle(.tertiary) }.padding(20)
-            if workspace.notes.isEmpty {
-                Text(workspace.root == nil ? "先打开一个本地文件夹" : "还没有笔记，按 ⌘N 开始记录").font(.caption).foregroundStyle(.secondary).padding(20)
+        let visible = workspace.visibleNotes
+        let showFolders = Set(visible.map(\.folder)).count > 1
+        return VStack(spacing: 0) {
+            if visible.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: workspace.query.isEmpty ? "doc.text" : "magnifyingglass").font(.system(size: 22, weight: .ultraLight))
+                    Text(workspace.root == nil ? "打开文件夹，开始记录" : workspace.query.isEmpty ? "这里还没有笔记" : "没有找到笔记").font(.system(size: 11))
+                }.foregroundStyle(.tertiary).frame(maxWidth: .infinity).padding(.top, 50)
             }
             ScrollView {
-                LazyVStack(spacing: 6) {
-                    ForEach(workspace.visibleNotes) { note in
-                        Button { performNoteAction(workspace) { try workspace.select(note.path) } } label: {
-                            VStack(alignment: .leading, spacing: 9) {
-                                Text(note.title).font(.system(size: 13, weight: .medium)).lineLimit(2)
-                                Text(note.preview).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2).lineSpacing(4)
-                                HStack { Text(note.modified, style: .date); Spacer(); Text(note.folder.isEmpty ? "笔记库" : note.folder).lineLimit(1) }.font(.system(size: 9)).foregroundStyle(.tertiary)
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(15)
-                                .background(workspace.current == note.path ? Color.navigationAccent.opacity(0.11) : .clear, in: RoundedRectangle(cornerRadius: 11))
-                                .contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                        .contextMenu { noteActions(note) }
-                        .overlay(alignment: .topTrailing) {
-                            Menu { noteActions(note) } label: { Image(systemName: "ellipsis").font(.system(size: 11)) }
-                                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 20).padding(8)
-                                .accessibilityLabel("整理「\(note.title)」")
-                        }
+                LazyVStack(spacing: 4) {
+                    ForEach(visible) { note in
+                        NoteRow(note: note, selected: workspace.current == note.path, showFolder: showFolders, namespace: noteSelection,
+                            select: { performNoteAction(workspace) { try workspace.select(note.path) } }, actions: { noteActions(note) })
+                            .transition(Motion.row)
                     }
-                }.padding(.horizontal, 10)
-            }
-        }.frame(maxHeight: .infinity).background(Color.library.opacity(0.28))
+                }.padding(.horizontal, 10).padding(.vertical, 12)
+                .animation(Motion.selection, value: workspace.query)
+                .animation(Motion.selection, value: workspace.current)
+            }.scrollIndicators(.hidden)
+        }.frame(maxHeight: .infinity).background(Color.listPaper)
     }
 
     @ViewBuilder private func noteActions(_ note: Note) -> some View {
         Button("重命名…") { performNoteAction(workspace) { try workspace.select(note.path); promptValue = note.title; prompt = .rename } }
         Button("移动到…") { performNoteAction(workspace) { try workspace.select(note.path); promptValue = note.folder; prompt = .move } }
         Divider()
-        Button("移到废纸篓", role: .destructive) { performNoteAction(workspace) { try workspace.select(note.path); try workspace.deleteCurrent() } }
+        Button("移到废纸篓", role: .destructive) { performNoteAction(workspace) { try workspace.select(note.path); withAnimation(Motion.selection) { do { try workspace.deleteCurrent() } catch { workspace.error = error.localizedDescription } } } }
     }
 
     @ViewBuilder private var editor: some View {
@@ -236,7 +258,7 @@ struct NoteWindow: View {
             }.frame(width: 510)
                 .background { GlassSurface(backdrop: backdrop, impulse: glassImpulse).allowsHitTesting(false).clipShape(RoundedRectangle(cornerRadius: 20)) }
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-                .simultaneousGesture(SpatialTapGesture().onEnded { tap in glassImpulse.point = tap.location; glassImpulse.sequence += 1 }).overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.45), lineWidth: 1)).shadow(color: .black.opacity(0.14), radius: 32, y: 18)
+                .simultaneousGesture(SpatialTapGesture().onEnded { tap in glassImpulse.point = tap.location; glassImpulse.sequence += 1 }).overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.45), lineWidth: 1)).shadow(color: .black.opacity(0.12), radius: 30, y: 16)
                 .onExitCommand { searchOpen = false }
         }
     }
@@ -244,7 +266,9 @@ struct NoteWindow: View {
     private func applyPrompt() {
         do {
             switch prompt {
-            case .folder: try workspace.createFolder(promptValue)
+            case .folder:
+                try workspace.createFolder(promptValue)
+                if let parent = workspace.selectedFolder { withAnimation(Motion.selection) { _ = expandedFolders.insert(parent) } }
             case .rename: try workspace.renameCurrent(title: promptValue)
             case .move:
                 guard let current = workspace.current else { return }
@@ -283,10 +307,10 @@ struct NoteWindow: View {
         edgeTask = Task {
             try? await Task.sleep(for: .milliseconds(950))
             guard !Task.isCancelled else { return }
-            edgeVisible = false
+            withAnimation(.easeOut(duration: 0.16)) { edgeVisible = false }
         }
     }
-    private func tool(_ symbol: String, _ label: String, key: KeyEquivalent, modifiers: EventModifiers = .command, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).frame(width: 17, height: 17) }.buttonStyle(SoftButton()).help(label).accessibilityLabel(label).keyboardShortcut(key, modifiers: modifiers)
+    private func tool(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).frame(width: 17, height: 17) }.buttonStyle(SoftButton()).help(label).accessibilityLabel(label)
     }
 }

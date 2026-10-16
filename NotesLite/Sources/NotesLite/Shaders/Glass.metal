@@ -21,7 +21,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
     float2 p = in.uv * u.size;
     float2 halfSize = u.size * .5;
-    float radius = 20;
+    float radius = min(20.0, min(u.size.x, u.size.y)*.5);
     float2 q = abs(p-halfSize) - (halfSize-radius);
     float distanceToEdge = length(max(q,0.0)) + min(max(q.x,q.y),0.0) - radius;
     float alpha = 1-smoothstep(-.5,1.0,distanceToEdge);
@@ -35,11 +35,15 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float2 uv = (u.origin+p+displacement)/max(u.sourceSize,float2(1));
     float3 color = float3(0);
     // A frosted, refracted sample of the actual window, not a procedural substitute.
-    for (int y=-1;y<=1;y++) for (int x=-1;x<=1;x++) {
-        color += backdrop.sample(s,uv+float2(x,y)*5/u.sourceSize).rgb/9;
+    float totalWeight = 0;
+    for (int y=-2;y<=2;y++) for (int x=-2;x<=2;x++) {
+        float weight = exp(-float(x*x+y*y)*.5);
+        color += backdrop.sample(s,uv+float2(x,y)*3/u.sourceSize).rgb*weight;
+        totalWeight += weight;
     }
+    color /= totalWeight;
     float3 tint = mix(float3(.97,.97,.975),float3(.14,.14,.15),u.dark);
-    color = mix(color,tint,.78);
+    color = mix(color,tint,.84);
     float light = dot(normal,normalize(float2(-.65,-1)))*.5+.5;
     color += edge*light*.17 + pulse*.018;
     color = clamp(color,0.0,1.0);

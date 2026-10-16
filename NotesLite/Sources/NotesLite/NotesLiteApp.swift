@@ -24,7 +24,7 @@ import SwiftUI
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("打开笔记库…") { chooseLibrary(workspace) }.keyboardShortcut("o")
-                Button("新建笔记") { performNoteAction(workspace) { try workspace.createNote() } }.keyboardShortcut("n").disabled(workspace.root == nil)
+                Button("新建笔记") { withAnimation(Motion.selection) { performNoteAction(workspace) { try workspace.createNote() } } }.keyboardShortcut("n").disabled(workspace.root == nil)
                 Button("保存") { performNoteAction(workspace) { try workspace.save() } }.keyboardShortcut("s")
             }
             CommandMenu("笔记") {
