@@ -153,6 +153,7 @@ public final class SpaceAPI {
         let changes: [NoteRelocation.Change]
         do { changes = try NoteRelocation.move(root: root, notes: notes, from: from.url, to: to.url) }
         catch NoteError.conflict { throw SpaceAPIError.conflict("相关笔记正在被修改，请稍后再试。") }
+        try? library.syncPaths(from: from.path, to: to.path)
         var e = entry(kind, from.path)
         e.newPath = to.path
         e.related = changes.map { change in

@@ -218,4 +218,19 @@ import XCTest
         XCTAssertTrue(workspace.visibleNotes.contains { $0.path == workspace.current })
     }
 
+
+    func testRenamingANoteKeepsSpacesPointingAtIt() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("健身"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("| 日期 |\n|---|\n".utf8).write(to: root.appendingPathComponent("健身/训练.md"))
+        let library = SpaceLibrary(root: root)
+        try library.create(name: "健身", icon: "", scope: .folders(["健身"]))
+        try Data((try library.space(named: "健身").html + #"<lb-stat source="健身/训练.md"></lb-stat>"#).utf8).write(to: library.url(of: "健身"))
+        let workspace = Workspace()
+        try workspace.open(root)
+        try workspace.select("健身/训练.md")
+        try workspace.renameCurrent(title: "力量")
+        XCTAssertTrue(try library.space(named: "健身").html.contains(#"source="健身/力量.md""#))
+    }
 }

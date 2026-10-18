@@ -338,6 +338,7 @@ public enum NoteError: LocalizedError {
         if oldURL == newURL { return }
         guard !FileManager.default.fileExists(atPath: newURL.path) else { throw NoteError.exists(newURL.lastPathComponent) }
         try NoteRelocation.move(root: root, notes: notes, from: oldURL, to: newURL)
+        try? SpaceLibrary(root: root).syncPaths(from: oldPath, to: newPath)
         current = newPath
         recent = recent.map { $0 == oldPath ? newPath : $0 }; persistRecent()
         try refresh(); try select(newPath)

@@ -120,6 +120,7 @@ public final class OperationLog {
                   !FileManager.default.fileExists(atPath: url(entry.path).path) else { throw Self.changed }
             for change in entry.related ?? [] where text(change.path) != change.after { _ = change; throw Self.changed }
             try FileManager.default.moveItem(at: url(newPath), to: url(entry.path))
+            try? SpaceLibrary(root: root).syncPaths(from: newPath, to: entry.path)
             for change in entry.related ?? [] {
                 let target = change.path == newPath ? entry.path : change.path
                 try write(change.before, target)

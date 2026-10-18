@@ -81,4 +81,51 @@ final class SpaceLibraryTests: XCTestCase {
         try library.installGuide()
         XCTAssertEqual(try read(".留白/空间/编写说明.md"), SpaceGuide.text)
     }
+
+    func testOrderPersistsAndDeletingASpaceLeavesNotesAlone() throws {
+        try write("健身/训练.md", "笔记")
+        let library = SpaceLibrary(root: root)
+        for name in ["甲", "乙", "丙"] { try library.create(name: name, icon: "", scope: .folders(["健身"])) }
+        try library.reorder(["丙", "甲", "乙"])
+        XCTAssertEqual(try SpaceLibrary(root: root).spaces().map(\.name), ["丙", "甲", "乙"])
+        try library.delete("甲")
+        XCTAssertEqual(try library.spaces().map(\.name), ["丙", "乙"])
+        XCTAssertEqual(try read("健身/训练.md"), "笔记")
+        XCTAssertEqual(try String(contentsOf: library.folder.appendingPathComponent("顺序.json"), encoding: .utf8).contains("甲"), false)
+    }
+
+    func testEditingKeepsThePage() throws {
+        let library = SpaceLibrary(root: root)
+        try library.create(name: "健身", icon: "🏋️", scope: .folders(["健身"]))
+        try write(".留白/空间/健身.html", try read(".留白/空间/健身.html") + "<p>主页</p>")
+        let edited = try library.update("健身", newName: "力量", icon: "💪", scope: .library)
+        XCTAssertEqual(edited.scope, .library)
+        XCTAssertEqual(try library.spaces().map(\.name), ["力量"])
+        let html = try read(".留白/空间/力量.html")
+        XCTAssertTrue(html.contains("<p>主页</p>") && html.contains(#"content="*""#) && html.contains("💪"), html)
+    }
+
+    func testRenamingNotesAndFoldersUpdatesScopesAndWidgetPaths() throws {
+        let library = SpaceLibrary(root: root)
+        try library.create(name: "健身", icon: "", scope: .folders(["健身", "健身房", "日记"]))
+        let page = try read(".留白/空间/健身.html") + """
+        <lb-chart source="健身/训练记录.md#卧推" x="日期"></lb-chart>
+        <lb-quick-add target='健身/训练记录.md'></lb-quick-add>
+        <lb-stat source="健身房/训练记录.md"></lb-stat>
+        <script>lb.query("健身/训练记录.md#深蹲"); lb.query("健身/训练记录.md.bak");</script>
+        """
+        try write(".留白/空间/健身.html", page)
+        try library.syncPaths(from: "健身/训练记录.md", to: "健身/力量.md")
+        var html = try read(".留白/空间/健身.html")
+        XCTAssertTrue(html.contains(#"source="健身/力量.md#卧推""#), html)
+        XCTAssertTrue(html.contains("target='健身/力量.md'"))
+        XCTAssertTrue(html.contains(#"lb.query("健身/力量.md#深蹲")"#), "Exact path literals in scripts follow too")
+        XCTAssertTrue(html.contains(#"lb.query("健身/训练记录.md.bak")"#), "Other strings are left alone")
+        XCTAssertTrue(html.contains(#"source="健身房/训练记录.md""#))
+        try library.syncPaths(from: "健身", to: "运动/健身")
+        html = try read(".留白/空间/健身.html")
+        XCTAssertEqual(try library.space(named: "健身").scope, .folders(["运动/健身", "健身房", "日记"]))
+        XCTAssertTrue(html.contains(#"source="运动/健身/力量.md#卧推""#), html)
+        XCTAssertTrue(html.contains(#"source="健身房/训练记录.md""#), "A sibling folder sharing the prefix is untouched")
+    }
 }

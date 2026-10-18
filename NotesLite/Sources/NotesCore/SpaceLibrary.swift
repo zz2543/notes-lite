@@ -191,6 +191,41 @@ public struct SpaceLibrary: Sendable {
         try encoder.encode(names).write(to: folder.appendingPathComponent(Self.orderName), options: .atomic)
     }
 
+    /// Keeps every space pointing at a note or folder that moved: scopes, and quoted paths such as
+    /// widget `source`/`target` attributes or `lb.query("…")` literals (with or without `#标题`).
+    public func syncPaths(from old: String, to new: String) throws {
+        guard !old.isEmpty, old != new else { return }
+        let note = old.lowercased().hasSuffix(".md")
+        func moved(_ path: String) -> String? {
+            if path == old { return new }
+            if path.hasPrefix(old + "/") { return new + path.dropFirst(old.count) }
+            return nil
+        }
+        for space in try spaces() {
+            var html = space.html
+            if case .folders(let folders) = space.scope {
+                let updated = folders.map { moved($0) ?? $0 }
+                if updated != folders { html = SpaceFile.setting(html, "lb-scope", SpaceScope.folders(updated).meta) }
+            }
+            let ns = html as NSString
+            var result = "", last = 0
+            for match in Self.quotedRe.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+                let inner = ns.substring(with: match.range(at: 2))
+                let parts = inner.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+                let path = String(parts[0])
+                // A bare folder name is too common a string to rewrite; only paths inside it move.
+                guard let target = note || path != old ? moved(path) : nil else { continue }
+                let replacement = target + (parts.count > 1 ? "#" + parts[1] : "")
+                result += ns.substring(with: NSRange(location: last, length: match.range(at: 2).location - last)) + replacement
+                last = match.range(at: 2).location + match.range(at: 2).length
+            }
+            result += ns.substring(from: last)
+            if result != space.html { try Data(result.utf8).write(to: url(of: space.name), options: .atomic) }
+        }
+    }
+
+    static let quotedRe = try! NSRegularExpression(pattern: #"(["'`])([^"'`\n<>]+)\1"#)
+
     /// Writes the authoring guide when it is missing or differs from this version's.
     public func installGuide() throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

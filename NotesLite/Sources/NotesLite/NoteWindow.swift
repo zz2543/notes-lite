@@ -214,7 +214,7 @@ struct NoteWindow: View {
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 10)
                 .accessibilityLabel("切换资料库与空间")
             if inSpaces {
-                SpaceSidebarList(store: spaces, namespace: spaceSelection, create: { spaceSheet = .create }) { space in
+                SpaceSidebarList(store: spaces, namespace: spaceSelection, create: { spaceSheet = .create }, edit: { spaceSheet = .edit($0.name) }) { space in
                     withAnimation(Motion.selection) { spaces.select(space.name) }
                 }.padding(.horizontal, 10).transition(Motion.pane(true))
             } else {

@@ -82,6 +82,32 @@ enum SidebarMode: String { case library, spaces }
         selected = space.name
     }
 
+    /// Drops `name` just before `target` (or at the end), persisting the order in the library.
+    func move(_ name: String, before target: String?) {
+        guard name != target, let index = spaces.firstIndex(where: { $0.name == name }) else { return }
+        var reordered = spaces
+        let moving = reordered.remove(at: index)
+        let destination = target.flatMap { t in reordered.firstIndex { $0.name == t } } ?? reordered.endIndex
+        reordered.insert(moving, at: destination)
+        spaces = reordered
+        perform { try library?.reorder(reordered.map(\.name)) }
+    }
+
+    /// Removes only the space file; notes stay where they are.
+    func delete(_ name: String) {
+        perform {
+            try library?.delete(name)
+            controllers[name] = nil
+            if selected == name { selected = nil; pageState.reset() }
+            reload()
+        }
+    }
+
+    func revealSource(_ space: Space) {
+        guard let library else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([library.url(of: space.name)])
+    }
+
     func copyPrompt(for space: Space) throws {
         guard let library else { throw NoteError.noLibrary }
         let prompt = try library.prompt(for: space)
@@ -108,7 +134,10 @@ struct SpaceSidebarList: View {
     @Bindable var store: SpaceStore
     let namespace: Namespace.ID
     let create: () -> Void
+    let edit: (Space) -> Void
     let select: (Space) -> Void
+    @State private var dropTarget: String?
+    @State private var pendingDelete: Space?
     var body: some View {
         VStack(spacing: 2) {
             HStack {
@@ -121,7 +150,33 @@ struct SpaceSidebarList: View {
                 VStack(spacing: 2) {
                     ForEach(store.spaces) { space in
                         SpaceRow(space: space, selected: store.selected == space.name, namespace: namespace) { select(space) }
+                            .overlay(alignment: .top) {
+                                Capsule().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 8).offset(y: -2)
+                                    .opacity(dropTarget == space.name ? 1 : 0).scaleEffect(x: dropTarget == space.name ? 1 : 0.6)
+                            }
+                            .draggable(space.name) { SpaceRow(space: space, selected: true, namespace: namespace) {}.frame(width: 180).opacity(0.9) }
+                            .dropDestination(for: String.self) { names, _ in
+                                guard let name = names.first else { return false }
+                                withAnimation(Motion.selection) { store.move(name, before: space.name) }
+                                return true
+                            } isTargeted: { targeted in
+                                withAnimation(Motion.hover) { dropTarget = targeted ? space.name : (dropTarget == space.name ? nil : dropTarget) }
+                            }
+                            .contextMenu {
+                                Button("编辑空间…") { edit(space) }
+                                Button("复制给 agent 的提示词") { store.perform { try store.copyPrompt(for: space) } }
+                                Button("显示源文件") { store.revealSource(space) }
+                                Divider()
+                                Button("删除空间…", role: .destructive) { pendingDelete = space }
+                            }
+                            .transition(Motion.row)
                     }
+                    Color.clear.frame(height: 24)
+                        .dropDestination(for: String.self) { names, _ in
+                            guard let name = names.first else { return false }
+                            withAnimation(Motion.selection) { store.move(name, before: nil) }
+                            return true
+                        }
                     if store.spaces.isEmpty {
                         Button("新建空间", action: create).font(.caption).buttonStyle(SoftButton()).padding(.top, 20)
                         Text("空间围绕一个主题，把相关文件夹放在一起，并有一个由 agent 生成的主页。")
@@ -129,6 +184,12 @@ struct SpaceSidebarList: View {
                     }
                 }.padding(.vertical, 2)
             }.scrollIndicators(.hidden)
+            .animation(Motion.selection, value: store.spaces.map(\.name))
+        }
+        .confirmationDialog("删除空间「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), presenting: pendingDelete) { space in
+            Button("删除空间", role: .destructive) { withAnimation(Motion.selection) { store.delete(space.name) } }
+        } message: { _ in
+            Text("只删除这个空间的主页文件，范围内的笔记不会被改动。")
         }
     }
 }
