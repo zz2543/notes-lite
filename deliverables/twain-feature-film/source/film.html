@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>共笔 · Twain 功能介绍</title>
+<style>
+  :root {
+    --paper: #f4f1ea;
+    --ink: #1d1b18;
+    --ink2: #5b574f;
+    --ink3: #938d82;
+    --accent: #2f6bff;
+    --claude: #d97757;
+    --codex: #1f1f1f;
+    --add: #2f9e5b;
+    --del: #d6453d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); }
+  body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+
+  /* Soft moving light behind everything */
+  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; }
+  #b1 { width: 900px; height: 900px; background: #ffd9c4; }
+  #b2 { width: 820px; height: 820px; background: #cfdcff; }
+  #b3 { width: 600px; height: 600px; background: #e6f0dc; }
+  #grain { position: absolute; inset: 0; opacity: .05; background-image: radial-gradient(#000 0.6px, transparent 0.6px); background-size: 3px 3px; }
+
+  .scene { position: absolute; inset: 0; opacity: 0; }
+
+  /* Left column copy */
+  .copy { position: absolute; left: 110px; top: 0; bottom: 0; width: 470px; display: flex; flex-direction: column; justify-content: center; }
+  .kicker { font: 600 20px/1 "SF Mono", Menlo, monospace; letter-spacing: .12em; color: var(--ink3); margin-bottom: 26px; }
+  .kicker b { color: var(--accent); font-weight: 600; }
+  .h { font-size: 62px; line-height: 1.18; font-weight: 700; letter-spacing: -0.01em; }
+  .sub { margin-top: 28px; font-size: 25px; line-height: 1.7; color: var(--ink2); }
+  .sub code, .chip code { font: 500 0.9em "SF Mono", Menlo, monospace; background: rgba(0,0,0,.06); padding: 1px 7px; border-radius: 6px; color: var(--ink); }
+  .chips { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .chip { font-size: 19px; padding: 9px 18px; border-radius: 999px; background: rgba(255,255,255,.62); border: 1px solid rgba(0,0,0,.07);
+          box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 6px 18px rgba(40,30,10,.06); color: var(--ink); }
+  .reveal { opacity: 0; }
+
+  /* Screenshot frame with a camera */
+  .frame { position: absolute; left: 630px; top: 143px; width: 1210px; height: 775px; border-radius: 26px; overflow: hidden;
+           background: #fff; box-shadow: 0 50px 120px -30px rgba(40,30,10,.35), 0 0 0 1px rgba(0,0,0,.06); }
+  .frame .cam { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .frame img { display: block; width: 2560px; height: 1640px; }
+  .ring { position: absolute; border: 5px solid var(--accent); border-radius: 22px; box-shadow: 0 0 0 9999px rgba(20,18,15,0); opacity: 0; }
+  .cursor { position: absolute; width: 34px; height: 34px; opacity: 0; filter: drop-shadow(0 3px 5px rgba(0,0,0,.35)); }
+
+  /* Title cards */
+  .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .logo { font-family: "Songti SC", "STSong", serif; font-weight: 900; font-size: 210px; letter-spacing: .08em; line-height: 1; }
+  .logo-en { font-family: "New York", "Iowan Old Style", Georgia, serif; font-style: italic; font-size: 62px; color: var(--ink2); margin-top: 26px; letter-spacing: .02em; }
+  .dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); vertical-align: middle; margin: 0 28px; position: relative; top: -8px; }
+  .tag { font-size: 46px; font-weight: 600; margin-top: 60px; letter-spacing: .06em; }
+  .tag2 { font-size: 24px; color: var(--ink3); margin-top: 20px; letter-spacing: .08em; }
+  .pen { position: absolute; height: 4px; border-radius: 2px; background: var(--ink); }
+
+  /* Terminal */
+  .term { position: absolute; left: 630px; top: 143px; width: 1210px; height: 775px; border-radius: 26px; overflow: hidden;
+          background: rgba(24,24,28,.94); box-shadow: 0 50px 120px -30px rgba(10,10,20,.5), 0 0 0 1px rgba(255,255,255,.08) inset; }
+  .term .bar { height: 56px; display: flex; align-items: center; padding-left: 24px; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .term .bar i { width: 14px; height: 14px; border-radius: 50%; background: #4a4a50; display: block; }
+  .term .bar span { margin-left: 18px; font: 500 17px "SF Mono", Menlo, monospace; color: #8b8b95; }
+  .term pre { padding: 26px 34px; font: 400 21px/1.62 "SF Mono", Menlo, monospace; color: #e6e6ea; white-space: pre-wrap; }
+  .term .p { color: #7fd1a0; }
+  .term .c { color: #fff; font-weight: 600; }
+  .term .o { color: #b9b9c4; }
+  .term .dim { color: #6f6f7a; }
+  .term .caret { display: inline-block; width: 11px; height: 24px; background: #e6e6ea; vertical-align: -4px; }
+
+  /* Markdown file cards */
+  .file { position: absolute; width: 580px; border-radius: 22px; background: rgba(255,255,255,.8); border: 1px solid rgba(0,0,0,.07);
+          box-shadow: 0 30px 80px -24px rgba(40,30,10,.3); overflow: hidden; }
+  .file .fh { padding: 18px 24px; font: 600 18px "SF Mono", Menlo, monospace; color: var(--ink2); border-bottom: 1px solid rgba(0,0,0,.06); display: flex; justify-content: space-between; }
+  .file pre { padding: 22px 26px; font: 400 19px/1.66 "SF Mono", Menlo, monospace; color: var(--ink); white-space: pre-wrap; }
+  .file .fm { color: #8a8378; }
+  .file .k { color: #b0552e; }
+  .file .v { color: #2f5fbf; }
+  .badge { display: inline-block; font: 600 15px -apple-system, "PingFang SC"; padding: 4px 11px; border-radius: 999px; background: #e8efff; color: var(--accent); }
+
+  /* Montage */
+  .tile { position: absolute; border-radius: 20px; overflow: hidden; box-shadow: 0 40px 90px -30px rgba(20,15,10,.45), 0 0 0 1px rgba(0,0,0,.07); }
+  .tile img { display: block; width: 100%; }
+  .tile .lbl { position: absolute; left: 18px; bottom: 16px; font-size: 19px; font-weight: 600; padding: 8px 16px; border-radius: 999px;
+               background: rgba(255,255,255,.78); backdrop-filter: blur(10px); color: var(--ink); }
+
+  .note { position: absolute; right: 36px; bottom: 26px; font-size: 15px; color: rgba(0,0,0,.32); letter-spacing: .04em; }
+</style>
+<script src="data.js"></script>
+</head>
+<body>
+<div id="stage">
+  <div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div>
+  <div id="grain"></div>
+
+  <!-- 0 · Opening -->
+  <section class="scene" id="s0">
+    <div class="center">
+      <div class="logo" id="s0logo">共笔</div>
+      <div class="logo-en" id="s0en">Twain</div>
+      <div class="tag" id="s0tag">你掌舵，AI 执笔。</div>
+      <div class="tag2" id="s0tag2">agent 原生的 Markdown 笔记</div>
+    </div>
+  </section>
+
+  <!-- 1 · Local markdown -->
+  <section class="scene" id="s1">
+    <div class="copy">
+      <div class="kicker"><b>01</b> &nbsp;本地优先</div>
+      <div class="h">笔记就是<br>Markdown<br>文件夹</div>
+      <div class="sub">不导入，不锁定。<br>Finder 里看得见，git 里管得住。</div>
+      <div class="chips"><span class="chip">.md 纯文本</span><span class="chip">[[双链]] 与反链</span><span class="chip">#标签 · 待办</span></div>
+    </div>
+    <div class="frame"><div class="cam"><img src="img/focus-light.png"><div class="ring"></div></div></div>
+  </section>
+
+  <!-- 2 · Editor -->
+  <section class="scene" id="s2">
+    <div class="copy">
+      <div class="kicker"><b>02</b> &nbsp;写作</div>
+      <div class="h">所见即所写</div>
+      <div class="sub">Markdown 实时渲染，<code>/</code> 唤出斜杠菜单。打字机模式让当前行始终停在视线中央。</div>
+      <div class="chips"><span class="chip">斜杠菜单</span><span class="chip">打字机模式</span><span class="chip">段落聚焦</span></div>
+    </div>
+    <div class="frame"><div class="cam"><img src="img/slash-light.png"><div class="ring"></div></div></div>
+  </section>
+
+  <!-- 3 · Agents in the sidebar -->
+  <section class="scene" id="s3">
+    <div class="copy">
+      <div class="kicker"><b>03</b> &nbsp;Agent</div>
+      <div class="h">Claude Code<br>与 Codex，<br>就在侧栏</div>
+      <div class="sub">直接调用你本机的 CLI，<br>两位 agent 读同一份 AGENTS.md。</div>
+      <div class="chips"><span class="chip">切换模型与思考强度</span><span class="chip">Markdown 回复</span></div>
+    </div>
+    <div class="frame"><div class="cam"><img src="img/markdown-light.png"><div class="ring"></div></div></div>
+  </section>
+
+  <!-- 4 · Review -->
+  <section class="scene" id="s4">
+    <div class="copy">
+      <div class="kicker"><b>04</b> &nbsp;审阅</div>
+      <div class="h">每一处改动，<br>逐段审阅</div>
+      <div class="sub">agent 改了什么一目了然。逐段接受或还原，改动前自动留下 git 快照。</div>
+      <div class="chips"><span class="chip" style="color:var(--add)">✓ 接受</span><span class="chip">↶ 还原</span><span class="chip">快照 a1b2c3d</span></div>
+    </div>
+    <div class="frame"><div class="cam"><img src="img/diff-light.png"><div class="ring"></div></div></div>
+  </section>
+
+  <!-- 5 · Proposals & questions -->
+  <section class="scene" id="s5">
+    <div class="copy">
+      <div class="kicker"><b>05</b> &nbsp;人机闭环</div>
+      <div class="h">先提案，<br>再落笔</div>
+      <div class="sub">agent 提交带理由的修改，你点头之前磁盘上一个字都不变。拒绝时留一句原因，一键发回让它重改。</div>
+      <div class="chips"><span class="chip">逐段理由</span><span class="chip">向你提问</span><span class="chip">意见发回</span></div>
+    </div>
+    <div class="frame" id="s5a"><div class="cam"><img src="img/proposal-light.png"><div class="ring"></div></div></div>
+    <div class="frame" id="s5b" style="opacity:0"><div class="cam"><img src="img/panel-light.png"><div class="ring"></div></div></div>
+  </section>
+
+  <!-- 6 · CLI & MCP -->
+  <section class="scene" id="s6">
+    <div class="copy">
+      <div class="kicker"><b>06</b> &nbsp;开放接口</div>
+      <div class="h">你能做的，<br>agent 都能做</div>
+      <div class="sub">⌘K、斜杠菜单、<code>twain</code> 命令行与 MCP，出自同一张命令表。终端里的 agent 也能读到你此刻的光标。</div>
+      <div class="chips"><span class="chip">twain CLI</span><span class="chip">MCP</span><span class="chip">事件流</span></div>
+    </div>
+    <div class="term"><div class="bar"><i></i><i></i><i></i><span id="termtitle">~/我的笔记/项目</span></div><pre id="termpre"></pre></div>
+  </section>
+
+  <!-- 7 · Commands & automations as files -->
+  <section class="scene" id="s7">
+    <div class="copy">
+      <div class="kicker"><b>07</b> &nbsp;工作流</div>
+      <div class="h">工作流，<br>也是 Markdown</div>
+      <div class="sub">写一个文件，就多一条 <code>/命令</code>。自动化在后台随保存运行，改动照样交给你审阅。</div>
+      <div class="chips"><span class="chip">随库保存</span><span class="chip">每日上限</span><span class="chip">随时停止</span></div>
+    </div>
+    <div class="file" id="f1"><div class="fh"><span id="f1n"></span><span class="badge">/polish</span></div><pre id="f1b"></pre></div>
+    <div class="file" id="f2"><div class="fh"><span id="f2n"></span><span class="badge" style="background:#fdeee6;color:#b0552e">保存时触发</span></div><pre id="f2b"></pre></div>
+  </section>
+
+  <!-- 8 · Montage -->
+  <section class="scene" id="s8">
+    <div class="copy" style="width:430px">
+      <div class="kicker"><b>08</b> &nbsp;细节</div>
+      <div class="h">安静，<br>也可以很强大</div>
+      <div class="sub">⌘K 找到一切。专注模式只留下文字。深浅色都是 Liquid Glass。</div>
+    </div>
+    <div class="tile" id="t1" style="width:640px"><img src="img/palette-dark.png"><div class="lbl">⌘K 命令面板</div></div>
+    <div class="tile" id="t2" style="width:640px"><img src="img/zen-crop.png"><div class="lbl">专注模式</div></div>
+    <div class="tile" id="t3" style="width:640px"><img src="img/panel-dark.png"><div class="lbl">深色外观</div></div>
+  </section>
+
+  <!-- 9 · End card -->
+  <section class="scene" id="s9">
+    <div class="center">
+      <div class="logo" style="font-size:150px" id="s9logo">共笔<span class="dot"></span><span style="font-family:'New York',Georgia,serif;font-style:italic;font-weight:500;letter-spacing:0">Twain</span></div>
+      <div class="tag" id="s9tag">你掌舵，AI 执笔。</div>
+      <div class="tag2" id="s9tag2">Two minds, one manuscript.</div>
+      <div class="tag2" id="s9tag3" style="margin-top:70px;font-size:20px">macOS 26 · 本地 Markdown · Claude Code · Codex</div>
+    </div>
+  </section>
+
+  <div class="note" id="note">画面为应用真实界面，演示数据</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = x => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+
+// Scene timeline (seconds)
+const S = [
+  ["s0", 0, 5.2],
+  ["s1", 5, 11.4],
+  ["s2", 11.2, 17.6],
+  ["s3", 17.4, 24],
+  ["s4", 23.8, 31.6],
+  ["s5", 31.4, 40.4],
+  ["s6", 40.2, 49.6],
+  ["s7", 49.4, 56.2],
+  ["s8", 56, 61.6],
+  ["s9", 61.4, 68],
+];
+window.DURATION = 68;
+const FADE = 0.55;
+
+// Camera: keyframes of focal point (fx, fy in image px) and zoom z (1 = fit width), eased between.
+const IMG_W = 2560, IMG_H = 1640, FW = 1210, FH = 775;
+function camera(frame, t, keys) {
+  let a = keys[0], b = keys[0], k = 0;
+  for (let i = 0; i < keys.length; i++) {
+    if (t >= keys[i].t) { a = keys[i]; b = keys[i + 1] || keys[i]; }
+  }
+  k = b === a ? 0 : ease((t - a.t) / (b.t - a.t));
+  const fx = lerp(a.x, b.x, k), fy = lerp(a.y, b.y, k), z = lerp(a.z, b.z, k);
+  const s = (FW / IMG_W) * z;
+  let tx = FW / 2 - fx * s, ty = FH / 2 - fy * s;
+  tx = clamp(tx, FW - IMG_W * s, 0); ty = clamp(ty, FH - IMG_H * s, 0);
+  frame.querySelector(".cam").style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
+}
+// Highlight ring in image px, visible between t0 and t1.
+function ring(frame, t, t0, t1, r) {
+  const el = frame.querySelector(".ring");
+  const o = Math.min(out((t - t0) / .4), 1 - out((t - t1) / .4));
+  el.style.opacity = clamp(o);
+  const grow = 1 + .04 * (1 - out((t - t0) / .5));
+  el.style.left = (r[0] - 12) + "px"; el.style.top = (r[1] - 12) + "px";
+  el.style.width = (r[2] + 24) + "px"; el.style.height = (r[3] + 24) + "px";
+  el.style.transform = `scale(${grow})`; el.style.borderWidth = (6 / 1) + "px";
+}
+function copyIn(scene, t0, t) {
+  const els = scene.querySelectorAll(".kicker,.h,.sub,.chip");
+  els.forEach((el, i) => {
+    const p = out((t - t0 - i * .09) / .7);
+    el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * 26}px)`;
+  });
+}
+function frameIn(el, t0, t) {
+  const p = out((t - t0) / .9);
+  el.style.opacity = p;
+  el.style.transform = `translateY(${(1 - p) * 60}px) scale(${lerp(.965, 1, p)})`;
+}
+
+// Terminal script: filled in from terminal.js (real output captured from the app).
+const TERM = window.TERM || [];
+function renderTerm(t) {
+  const pre = $("#termpre"); let html = "", cursorShown = false;
+  let clock = 0.9; // start typing after the window lands
+  for (const step of TERM) {
+    const typeDur = step.cmd.length * 0.045;
+    const ts = clock, te = ts + typeDur;
+    if (t < ts) break;
+    const n = Math.floor(clamp((t - ts) / typeDur) * step.cmd.length);
+    html += `<span class="p">❯</span> <span class="c">${esc(step.cmd.slice(0, n))}</span>`;
+    if (t < te + .25) { html += `<span class="caret"></span>\n`; cursorShown = true; break; }
+    html += "\n";
+    const lines = step.out.split("\n");
+    const shown = Math.min(lines.length, Math.floor((t - te - .25) / .06) + 1);
+    html += lines.slice(0, shown).map(l => `<span class="o">${fmtOut(l)}</span>`).join("\n") + "\n\n";
+    clock = te + .25 + lines.length * .06 + step.hold;
+  }
+  if (!cursorShown) html += `<span class="p">❯</span> ` + (Math.floor(t * 2) % 2 ? "" : `<span class="caret"></span>`);
+  pre.innerHTML = html;
+}
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+function fmtOut(l) {
+  return esc(l).replace(/(\+\d+)/g, '<span style="color:#7fd1a0">$1</span>').replace(/(−\d+)/g, '<span style="color:#ff8a80">$1</span>')
+    .replace(/^(\S[^：]*：)/, '<span class="dim">$1</span>');
+}
+
+// File cards typed in
+const FILES = window.FILES || [];
+function fileHTML(src) {
+  return esc(src).split("\n").map(l => {
+    if (l === "---") return `<span class="fm">---</span>`;
+    const m = l.match(/^([a-z]+):(.*)$/);
+    if (m) return `<span class="k">${m[1]}</span>:<span class="v">${m[2]}</span>`;
+    return l.replace(/(\{\{\w+\}\})/g, '<span class="k">$1</span>');
+  }).join("\n");
+}
+
+window.render = function (t) {
+  // background drift
+  $("#b1").style.transform = `translate(${-200 + Math.sin(t * .23) * 160}px, ${-260 + Math.cos(t * .19) * 90}px)`;
+  $("#b2").style.transform = `translate(${1250 + Math.cos(t * .17) * 180}px, ${420 + Math.sin(t * .21) * 110}px)`;
+  $("#b3").style.transform = `translate(${500 + Math.sin(t * .13) * 260}px, ${700 + Math.cos(t * .11) * 80}px)`;
+
+  for (const [id, a, b] of S) {
+    const el = document.getElementById(id);
+    const o = Math.min(prog(t, a, a + FADE), 1 - prog(t, b - FADE, b));
+    el.style.opacity = o; el.style.display = o > 0 ? "block" : "none";
+  }
+  $("#note").style.opacity = (t > 5.4 && t < 49.4) || (t > 56.3 && t < 61.2) ? 1 : 0;
+
+  // 0 · opening
+  {
+    const p1 = out(prog(t, .3, 1.6)), p2 = out(prog(t, 1.1, 2.2)), p3 = out(prog(t, 1.9, 3)), p4 = out(prog(t, 2.5, 3.5));
+    $("#s0logo").style.cssText = `opacity:${p1};transform:translateY(${(1 - p1) * 40}px);letter-spacing:${lerp(.3, .08, p1)}em`;
+    $("#s0en").style.cssText = `opacity:${p2};transform:translateY(${(1 - p2) * 20}px)`;
+    $("#s0tag").style.cssText = `opacity:${p3};transform:translateY(${(1 - p3) * 20}px)`;
+    $("#s0tag2").style.cssText = `opacity:${p4}`;
+  }
+  // 1 · local markdown: sidebar
+  {
+    const s = $("#s1"), t0 = 5, f = s.querySelector(".frame");
+    copyIn(s, t0 + .2, t); frameIn(f, t0 + .1, t);
+    camera(f, t, [{ t: 0, x: 1280, y: 820, z: 1 }, { t: t0 + 1.8, x: 1280, y: 820, z: 1 }, { t: t0 + 3.4, x: 560, y: 640, z: 1.55 }, { t: 12, x: 540, y: 620, z: 1.6 }]);
+    ring(f, t, t0 + 3.5, t0 + 6.2, [24, 196, 440, 700]);
+  }
+  // 2 · editor + slash menu
+  {
+    const s = $("#s2"), t0 = 11.2, f = s.querySelector(".frame");
+    copyIn(s, t0 + .2, t); frameIn(f, t0 + .1, t);
+    camera(f, t, [{ t: 0, x: 1280, y: 820, z: 1 }, { t: t0 + 1.4, x: 1280, y: 820, z: 1 }, { t: t0 + 3, x: 800, y: 1300, z: 1.6 }, { t: 18, x: 800, y: 1330, z: 1.66 }]);
+    ring(f, t, t0 + 3.2, t0 + 6, [528, 998, 510, 700]);
+  }
+  // 3 · agents
+  {
+    const s = $("#s3"), t0 = 17.4, f = s.querySelector(".frame");
+    copyIn(s, t0 + .2, t); frameIn(f, t0 + .1, t);
+    camera(f, t, [{ t: 0, x: 1280, y: 820, z: 1 }, { t: t0 + 1.4, x: 1280, y: 820, z: 1 }, { t: t0 + 3, x: 2200, y: 480, z: 1.75 }, { t: 25, x: 2200, y: 520, z: 1.8 }]);
+    ring(f, t, t0 + 3.2, t0 + 6.3, [1869, 116, 668, 82]);
+  }
+  // 4 · review: pan from hunk 1 to hunk 2
+  {
+    const s = $("#s4"), t0 = 23.8, f = s.querySelector(".frame");
+    copyIn(s, t0 + .2, t); frameIn(f, t0 + .1, t);
+    camera(f, t, [{ t: 0, x: 1280, y: 820, z: 1 }, { t: t0 + 1.3, x: 1280, y: 820, z: 1 }, { t: t0 + 2.8, x: 1220, y: 420, z: 1.55 },
+      { t: t0 + 4.6, x: 1220, y: 420, z: 1.55 }, { t: t0 + 6.1, x: 1220, y: 1120, z: 1.55 }, { t: 32, x: 1220, y: 1130, z: 1.55 }]);
+    ring(f, t, t0 + 2.9, t0 + 4.6, [550, 374, 1345, 130]);
+    // second ring reuses the same element after the first fades
+    if (t > t0 + 4.8) ring(f, t, t0 + 6.1, t0 + 7.6, [550, 966, 1345, 318]);
+  }
+  // 5 · proposal, then the panel with question + feedback
+  {
+    const s = $("#s5"), t0 = 31.4, fa = $("#s5a"), fb = $("#s5b");
+    copyIn(s, t0 + .2, t); frameIn(fa, t0 + .1, t);
+    camera(fa, t, [{ t: 0, x: 1280, y: 820, z: 1 }, { t: t0 + 1.2, x: 1280, y: 820, z: 1 }, { t: t0 + 2.5, x: 1220, y: 560, z: 1.5 },
+      { t: t0 + 3.9, x: 1220, y: 560, z: 1.5 }, { t: t0 + 4.8, x: 1220, y: 1230, z: 1.5 }, { t: t0 + 6.2, x: 1220, y: 1240, z: 1.52 }]);
+    ring(fa, t, t0 + 2.6, t0 + 3.9, [547, 408, 1347, 284]);
+    if (t > t0 + 4.2) ring(fa, t, t0 + 4.9, t0 + 6.1, [547, 1100, 1347, 268]);
+    const pb = out(prog(t, t0 + 6.0, t0 + 6.8));
+    fb.style.opacity = pb; fb.style.transform = `translateY(${(1 - pb) * 40}px)`;
+    camera(fb, t, [{ t: 0, x: 2200, y: 700, z: 1.75 }, { t: t0 + 6.8, x: 2200, y: 700, z: 1.75 }, { t: t0 + 9, x: 2200, y: 790, z: 1.8 }]);
+    ring(fb, t, t0 + 6.9, t0 + 9.5, [1874, 604, 650, 402]);
+  }
+  // 6 · terminal
+  {
+    const s = $("#s6"), t0 = 40.2;
+    copyIn(s, t0 + .2, t); frameIn(s.querySelector(".term"), t0 + .1, t);
+    renderTerm(t - t0);
+  }
+  // 7 · files
+  {
+    const s = $("#s7"), t0 = 49.4;
+    copyIn(s, t0 + .2, t);
+    [["#f1", 650, 150, t0 + .3], ["#f2", 1250, 440, t0 + 1.6]].forEach(([id, x, y, ts], i) => {
+      const el = $(id), p = out(prog(t, ts, ts + .9));
+      el.style.left = x + "px"; el.style.top = (y + (1 - p) * 60) + "px"; el.style.opacity = p;
+      el.style.transform = `rotate(${i ? 1.2 : -1.2}deg)`;
+      const F = FILES[i]; if (!F) return;
+      $(id + "n").textContent = F.name;
+      const n = Math.floor(clamp((t - ts - .4) / 2.4) * F.body.length);
+      $(id + "b").innerHTML = fileHTML(F.body.slice(0, n)) + (n < F.body.length && t > ts ? '<span style="display:inline-block;width:3px;height:22px;background:var(--accent);vertical-align:-4px"></span>' : "");
+    });
+  }
+  // 8 · montage
+  {
+    const t0 = 56;
+    copyIn($("#s8"), t0 + .2, t);
+    [["#t1", 610, 150, 0, -1.5], ["#t2", 1230, 250, .35, 1.2], ["#t3", 700, 640, .7, -.4]].forEach(([id, x, y, d, r]) => {
+      const el = $(id), p = out(prog(t, t0 + .2 + d, t0 + 1.2 + d));
+      const drift = (t - t0) * 6;
+      el.style.left = x + "px"; el.style.top = (y + (1 - p) * 80 - drift) + "px"; el.style.opacity = p;
+      el.style.transform = `rotate(${r}deg) scale(${lerp(.94, 1, p)})`;
+    });
+  }
+  // 9 · end card
+  {
+    const t0 = 61.4;
+    const p1 = out(prog(t, t0 + .3, t0 + 1.4)), p2 = out(prog(t, t0 + 1, t0 + 2)), p3 = out(prog(t, t0 + 1.5, t0 + 2.5)), p4 = out(prog(t, t0 + 2.2, t0 + 3.2));
+    $("#s9logo").style.cssText = `font-size:150px;opacity:${p1};transform:scale(${lerp(1.04, 1, p1)})`;
+    $("#s9tag").style.cssText = `opacity:${p2};transform:translateY(${(1 - p2) * 18}px)`;
+    $("#s9tag2").style.cssText = `opacity:${p3}`;
+    $("#s9tag3").style.cssText = `margin-top:70px;font-size:20px;opacity:${p4}`;
+    // fade whole frame to paper at the very end
+    $("#s9").style.opacity = Math.min(parseFloat($("#s9").style.opacity), 1 - prog(t, 67.2, 68));
+  }
+};
+window.render(0);
+</script>
+</body>
+</html>

@@ -63,6 +63,7 @@ struct EditorView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator
+        c.textView?.caretGlowEnabled = model.caretGlow
         let style = EditorStyle(font: model.font, typewriter: model.typewriter, dim: model.dim, zen: model.zen, width: model.editorWidth,
                                 plain: model.activeNote?.isHTML == true || model.oversized,
                                 rail: model.visibleAnnotations.isEmpty || model.zen ? 0 : AnnotationRail.width)

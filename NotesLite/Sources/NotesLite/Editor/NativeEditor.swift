@@ -1,10 +1,12 @@
 import AppKit
+import QuartzCore
 import NotesCore
 import SwiftUI
 
 /// A stable native editor instance. Layout/focus transitions never replace its document.
 struct NativeEditor: NSViewRepresentable {
     let workspace: Workspace
+    var font: EditorFont = .sans
     func makeCoordinator() -> Coordinator { Coordinator(workspace) }
     func makeNSView(context: Context) -> NSScrollView {
         let storage = NSTextStorage()
@@ -17,6 +19,7 @@ struct NativeEditor: NSViewRepresentable {
         let textView = NoteTextView(frame: NSRect(x: 0, y: 0, width: 700, height: 600), textContainer: container)
         let c = context.coordinator
         textView.coordinator = c; textView.delegate = c; storage.delegate = c
+        textView.setUpInsertionCaret()
         textView.isRichText = false; textView.importsGraphics = false; textView.allowsUndo = true
         textView.isVerticallyResizable = true; textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
@@ -43,10 +46,10 @@ struct NativeEditor: NSViewRepresentable {
                 tv.insertText("\n" + snippet + "\n", replacementRange: tv.selectedRange())
             }
         }
-        c.observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main) { [weak c] _ in MainActor.assumeIsolated { c?.scheduleStyle() } }
+        c.observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main) { [weak c] _ in MainActor.assumeIsolated { c?.scheduleStyle(); c?.textView?.updateInsertionCaret(animated: false) } }
         return scroll
     }
-    func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.sync() }
+    func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.sync(font: font) }
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         if let observer = coordinator.observer { NotificationCenter.default.removeObserver(observer) }
         if let observer = coordinator.insertObserver { NotificationCenter.default.removeObserver(observer) }
@@ -70,20 +73,21 @@ struct NativeEditor: NSViewRepresentable {
             styler.needsRestyle = { [weak self] in self?.scheduleStyle() }
             styler.resolveEmbed = { [weak workspace] target in workspace?.resolveFile(target) }
         }
-        func sync() {
+        func sync(font: EditorFont) {
             guard let tv = textView, let storage = tv.textStorage else { return }
             if path != workspace.current || revision != workspace.revision {
                 path = workspace.current; revision = workspace.revision
                 styling = true
                 storage.setAttributedString(NSAttributedString(string: workspace.text, attributes: styler.baseAttributes()))
+                tv.insertionCaret.hide()
                 tv.undoManager?.removeAllActions()
                 tv.setSelectedRange(NSRange(location: 0, length: 0)); tv.scroll(.zero)
                 styling = false
                 styler.newDocument()
             }
-            if source != workspace.source {
+            if source != workspace.source || styler.style.font != font {
                 source = workspace.source
-                styler.setStyle(EditorStyle(font: .sans, typewriter: false, dim: false, zen: false, width: 680, plain: source))
+                styler.setStyle(EditorStyle(font: font, typewriter: false, dim: false, zen: false, width: 680, plain: source))
             }
             tv.layoutColumn()
             style()
@@ -93,7 +97,12 @@ struct NativeEditor: NSViewRepresentable {
             workspace.edit(tv.string)
             scheduleStyle()
         }
-        func textViewDidChangeSelection(_ notification: Notification) { if !styling { scheduleStyle() } }
+        func textViewDidChangeSelection(_ notification: Notification) {
+            if !styling {
+                textView?.updateInsertionCaret(animated: true)
+                scheduleStyle()
+            }
+        }
         func textStorage(_ storage: NSTextStorage, didProcessEditing mask: NSTextStorageEditActions, range: NSRange, changeInLength delta: Int) {
             if !styling, mask.contains(.editedCharacters) { styler.noteEdit(range, delta: delta) }
         }
@@ -105,7 +114,10 @@ struct NativeEditor: NSViewRepresentable {
         func style() {
             guard !styling, let tv = textView, !tv.hasMarkedText(), let storage = tv.textStorage, let layout = tv.layoutManager, let container = tv.textContainer else { return }
             styling = true
-            defer { styling = false }
+            defer {
+                styling = false
+                tv.updateInsertionCaret(animated: false)
+            }
             styler.setContainerWidth(container.size.width)
             styler.dark = tv.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let glyphs = layout.glyphRange(forBoundingRect: tv.visibleRect.offsetBy(dx: -tv.textContainerOrigin.x, dy: -tv.textContainerOrigin.y), in: container)
@@ -113,7 +125,8 @@ struct NativeEditor: NSViewRepresentable {
             let selection = tv.selectedRange()
             let origin = scroll?.contentView.bounds.origin ?? .zero
             let focused = tv.window?.firstResponder === tv
-            let ranges = styler.restyle(storage, caret: focused ? selection.location : nil)
+            var ranges: [NSRange] = []
+            tv.holdingHeight { ranges = styler.restyle(storage, caret: focused ? selection.location : nil) }
             for range in ranges {
                 layout.invalidateGlyphs(forCharacterRange: range, changeInLength: 0, actualCharacterRange: nil)
                 layout.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
@@ -167,13 +180,116 @@ struct NativeEditor: NSViewRepresentable {
 final class NoteTextView: NSTextView {
     weak var coordinator: NativeEditor.Coordinator?
     private var lastWidth: CGFloat = 0
+    let insertionCaret = InsertionCaret()
+    private(set) var caretInputDepth = 0
+    private var windowObservers: [NSObjectProtocol] = []
+    private var heightHeld = false
+    private var fitScheduled = false
+    private var listExitCaret: Int?
+
+    func setUpInsertionCaret() {
+        wantsLayer = true
+        insertionPointColor = .clear
+        layer?.addSublayer(insertionCaret.layer)
+    }
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {}
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        windowObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        windowObservers = []
+        if let window {
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+                windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.updateInsertionCaret(animated: false) }
+                })
+            }
+        }
+        updateInsertionCaret(animated: false)
+    }
+    deinit { windowObservers.forEach { NotificationCenter.default.removeObserver($0) } }
+    override func layout() {
+        super.layout()
+        // macOS also creates an insertion-indicator subview, independent of drawInsertionPoint.
+        for indicator in subviews.compactMap({ $0 as? NSTextInsertionIndicator }) { indicator.displayMode = .hidden }
+        updateInsertionCaret(animated: false)
+    }
+    func holdingHeight(_ edit: () -> Void) {
+        heightHeld = true
+        edit()
+        releaseHeightSoon()
+    }
+    private func releaseHeightSoon() {
+        guard !fitScheduled else { return }
+        fitScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            fitScheduled = false
+            heightHeld = false
+            guard let lm = layoutManager, let tc = textContainer else { return }
+            lm.ensureLayout(forBoundingRect: visibleRect.offsetBy(dx: -textContainerOrigin.x, dy: -textContainerOrigin.y), in: tc)
+            let contentHeight = max(lm.usedRect(for: tc).maxY, lm.extraLineFragmentRect.maxY)
+            setFrameSize(NSSize(width: frame.width, height: max(minSize.height, contentHeight + textContainerInset.height * 2)))
+            updateInsertionCaret(animated: false)
+        }
+    }
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        let allowed = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+        if allowed { heightHeld = true }
+        return allowed
+    }
+    override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
+        let allowed = super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings)
+        if allowed { heightHeld = true }
+        return allowed
+    }
+    override func didChangeText() {
+        super.didChangeText()
+        if heightHeld { releaseHeightSoon() }
+        updateInsertionCaret(animated: true)
+    }
+    override func keyDown(with event: NSEvent) {
+        listExitCaret = nil
+        super.keyDown(with: event)
+    }
+    override func insertText(_ text: Any, replacementRange: NSRange) {
+        if let caret = listExitCaret {
+            listExitCaret = nil
+            let incoming = (text as? NSAttributedString)?.string ?? text as? String ?? ""
+            if replacementRange.location == NSNotFound, selectedRange() == NSRange(location: caret, length: 0),
+               Markdown.blockType(incoming).isList, Markdown.prefixLength(incoming) == (incoming as NSString).length { return }
+        }
+        caretInputDepth += 1
+        defer {
+            caretInputDepth -= 1
+            updateInsertionCaret(animated: true)
+        }
+        super.insertText(text, replacementRange: replacementRange)
+    }
+    override func setMarkedText(_ text: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        caretInputDepth += 1
+        defer {
+            caretInputDepth -= 1
+            updateInsertionCaret(animated: true)
+        }
+        super.setMarkedText(text, selectedRange: selectedRange, replacementRange: replacementRange)
+    }
+    override func unmarkText() {
+        caretInputDepth += 1
+        defer {
+            caretInputDepth -= 1
+            updateInsertionCaret(animated: true)
+        }
+        super.unmarkText()
+    }
     func layoutColumn() {
         guard let container = textContainer else { return }
         let inset = max(16, (bounds.width - 740) / 2)
         textContainerInset = NSSize(width: inset, height: 48)
         container.size = NSSize(width: max(120, bounds.width - inset * 2), height: .greatestFiniteMagnitude)
     }
-    override func setFrameSize(_ size: NSSize) {
+    override func setFrameSize(_ newSize: NSSize) {
+        var size = newSize
+        if heightHeld { size.height = max(size.height, frame.height) }
         let widthChanged = abs(size.width - lastWidth) > 0.5
         var anchor: (index: Int, offset: CGFloat)?
         if widthChanged, let lm = layoutManager, let container = textContainer, lm.numberOfGlyphs > 0, let clip = enclosingScrollView?.contentView {
@@ -200,14 +316,16 @@ final class NoteTextView: NSTextView {
             coordinator?.scheduleStyle()
         }
     }
-    override func becomeFirstResponder() -> Bool { let result = super.becomeFirstResponder(); coordinator?.scheduleStyle(); return result }
-    override func resignFirstResponder() -> Bool { let result = super.resignFirstResponder(); coordinator?.scheduleStyle(); return result }
-    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); coordinator?.styler.reset(); coordinator?.scheduleStyle() }
+    override func becomeFirstResponder() -> Bool { let result = super.becomeFirstResponder(); coordinator?.scheduleStyle(); updateInsertionCaret(animated: false); return result }
+    override func resignFirstResponder() -> Bool { let result = super.resignFirstResponder(); coordinator?.scheduleStyle(); updateInsertionCaret(animated: false); return result }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); coordinator?.styler.reset(); coordinator?.scheduleStyle(); updateInsertionCaret(animated: false) }
     override func mouseDown(with event: NSEvent) {
+        listExitCaret = nil
         if coordinator?.handleClick(convert(event.locationInWindow, from: nil), event: event) == true { return }
         super.mouseDown(with: event)
     }
     override func paste(_ sender: Any?) {
+        listExitCaret = nil
         if importPasteboard(.general) { return }
         super.paste(sender)
     }
@@ -245,7 +363,8 @@ final class NoteTextView: NSTextView {
         let lineIndex = coordinator.styler.lineIndex(at: range.location)
         guard !coordinator.styler.isCode(line: lineIndex), let continuation = Markdown.continuation(for: line) else { super.insertNewline(sender); return }
         if continuation.exit {
-            insertText("\n", replacementRange: NSRange(location: lineRange.location, length: range.location - lineRange.location))
+            insertText("\n", replacementRange: NSRange(location: lineRange.location, length: NSMaxRange(range) - lineRange.location))
+            listExitCaret = selectedRange().location
         } else { insertText("\n" + continuation.prefix, replacementRange: range) }
     }
 }

@@ -1,0 +1,99 @@
+Building for debugging...
+[1 / 19]
+[3 / 14] NotesLite-product
+[9 / 20] NotesLite
+[9 / 20] NotesLite-product
+[18 / 27] NotesLite-product
+[21 / 26] NotesLiteUITests-product
+[25 / 28] NotesLiteUITests-product
+[26 / 29] NotesLiteUITests-product
+[28 / 32] NotesLiteUITests-product
+Build complete! (3.53秒)
+Test Suite 'All tests' started at 2026-10-16 晚上8:04:39.900.
+Test Suite 'NotesLiteUITests.xctest' started at 2026-10-16 晚上8:04:39.901.
+Test Suite 'EditorWorkflowTests' started at 2026-10-16 晚上8:04:39.901.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testCaretGeometryNavigationCompositionAndListExit]' started.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testCaretGeometryNavigationCompositionAndListExit]' passed (1.137 seconds).
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testChineseCompositionSourceToggleAndFocusKeepEditingContinuity]' started.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testChineseCompositionSourceToggleAndFocusKeepEditingContinuity]' passed (0.836 seconds).
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testGlassShaderBuildsNativePipelineOnAvailableDevice]' started.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testGlassShaderBuildsNativePipelineOnAvailableDevice]' passed (0.003 seconds).
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testLongDocumentCanBeEditedAndSavedInNativeWindow]' started.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testLongDocumentCanBeEditedAndSavedInNativeWindow]' passed (0.281 seconds).
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testReturnAtBottomOfLongNoteKeepsInsertionVisibleAndUndoable]' started.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testReturnAtBottomOfLongNoteKeepsInsertionVisibleAndUndoable]' passed (0.480 seconds).
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testSearchAndEditorRemainUsableWithoutMetal]' started.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testSearchAndEditorRemainUsableWithoutMetal]' passed (0.222 seconds).
+Test Suite 'EditorWorkflowTests' passed at 2026-10-16 晚上8:04:42.861.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 2.959 (2.959) seconds
+Test Suite 'LibraryLayoutTests' started at 2026-10-16 晚上8:04:42.861.
+Test Case '-[NotesLiteUITests.LibraryLayoutTests testCollapsedFoldersHideDescendantsAndRevealAncestorsForDeepSelection]' started.
+Test Case '-[NotesLiteUITests.LibraryLayoutTests testCollapsedFoldersHideDescendantsAndRevealAncestorsForDeepSelection]' passed (0.000 seconds).
+Test Case '-[NotesLiteUITests.LibraryLayoutTests testFolderTreeKeepsChildrenWithTheirParentBesideSimilarNames]' started.
+Test Case '-[NotesLiteUITests.LibraryLayoutTests testFolderTreeKeepsChildrenWithTheirParentBesideSimilarNames]' passed (0.000 seconds).
+Test Case '-[NotesLiteUITests.LibraryLayoutTests testNarrowWindowPreservesReadableEditorWithStoredWideColumns]' started.
+Test Case '-[NotesLiteUITests.LibraryLayoutTests testNarrowWindowPreservesReadableEditorWithStoredWideColumns]' passed (0.000 seconds).
+Test Suite 'LibraryLayoutTests' passed at 2026-10-16 晚上8:04:42.862.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'NotesLiteUITests.xctest' passed at 2026-10-16 晚上8:04:42.862.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 2.959 (2.960) seconds
+Test Suite 'All tests' passed at 2026-10-16 晚上8:04:42.862.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 2.959 (2.962) seconds
+Test Suite 'All tests' started at 2026-10-16 晚上8:04:42.934.
+Test Suite 'NotesCoreTests.xctest' started at 2026-10-16 晚上8:04:42.934.
+Test Suite 'RenderSyntaxTests' started at 2026-10-16 晚上8:04:42.934.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testCalloutFold]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testCalloutFold]' passed (0.001 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testDisplayMathLine]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testDisplayMathLine]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testDollarsThatAreNotMath]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testDollarsThatAreNotMath]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testFastPathsKeepParsing]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testFastPathsKeepParsing]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testFenceInfo]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testFenceInfo]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testFootnotes]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testFootnotes]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testHighlight]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testHighlight]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testInlineMath]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testInlineMath]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testTable]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testTable]' passed (0.000 seconds).
+Test Case '-[NotesCoreTests.RenderSyntaxTests testTableWithoutTrailingPipe]' started.
+Test Case '-[NotesCoreTests.RenderSyntaxTests testTableWithoutTrailingPipe]' passed (0.000 seconds).
+Test Suite 'RenderSyntaxTests' passed at 2026-10-16 晚上8:04:42.938.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'WorkspaceTests' started at 2026-10-16 晚上8:04:42.938.
+Test Case '-[NotesCoreTests.WorkspaceTests testAutosavePersistsWithoutManualSave]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testAutosavePersistsWithoutManualSave]' passed (0.793 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testConflictPreservesBothVersionsAndWriterCanSaveCopy]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testConflictPreservesBothVersionsAndWriterCanSaveCopy]' passed (0.005 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation]' passed (0.019 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testFollowingLinkFindsChineseNoteAndRejectsAmbiguity]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testFollowingLinkFindsChineseNoteAndRejectsAmbiguity]' passed (0.003 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testImportAndMovePreservesImageReferenceAndBacklink]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testImportAndMovePreservesImageReferenceAndBacklink]' passed (0.007 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testRenamingUpdatesRealLinksButLeavesCodeExamplesAlone]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testRenamingUpdatesRealLinksButLeavesCodeExamplesAlone]' passed (0.003 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testSaveFailureKeepsDraftAndCanRetry]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testSaveFailureKeepsDraftAndCanRetry]' passed (0.002 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testSearchRecentsAndDuplicateNamesRemainUnambiguous]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testSearchRecentsAndDuplicateNamesRemainUnambiguous]' passed (0.002 seconds).
+Test Case '-[NotesCoreTests.WorkspaceTests testWriterCanCreateSaveAndReopenWithoutChangingLegacyMetadata]' started.
+Test Case '-[NotesCoreTests.WorkspaceTests testWriterCanCreateSaveAndReopenWithoutChangingLegacyMetadata]' passed (0.002 seconds).
+Test Suite 'WorkspaceTests' passed at 2026-10-16 晚上8:04:43.776.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.838 (0.839) seconds
+Test Suite 'NotesCoreTests.xctest' passed at 2026-10-16 晚上8:04:43.777.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.841 (0.842) seconds
+Test Suite 'All tests' passed at 2026-10-16 晚上8:04:43.777.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.841 (0.843) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

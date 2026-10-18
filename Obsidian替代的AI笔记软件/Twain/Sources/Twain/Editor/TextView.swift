@@ -213,6 +213,13 @@ final class TwainTextView: NSTextView {
 
     let caret = CALayer()
     private let caretTrail = CAGradientLayer()
+    var caretGlowEnabled = true {
+        didSet {
+            guard caretGlowEnabled != oldValue, !caretGlowEnabled else { return }
+            caretTrail.removeAnimation(forKey: "movementTrail")
+            caretTrail.opacity = 0
+        }
+    }
     private let trailMask = CAGradientLayer()
     private enum TrailSide { case left, right }
     private var trailSide: TrailSide = .left
@@ -388,7 +395,7 @@ final class TwainTextView: NSTextView {
         // The glow only exists while the caret travels; at rest it is fully gone.
         caretTrail.opacity = 0
         CATransaction.commit()
-        if moved && width > 0 && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        if caretGlowEnabled && moved && width > 0 && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let trail = CABasicAnimation(keyPath: "opacity")
             trail.fromValue = 0.9
             trail.toValue = 0

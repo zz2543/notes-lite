@@ -2,6 +2,45 @@ import XCTest
 @testable import NotesCore
 
 @MainActor final class WorkspaceTests: XCTestCase {
+    func testDirectoryContentsSearchScopesAndNewItemTargets() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = Workspace()
+        try workspace.open(root)
+        try workspace.createFolder("A")
+        try workspace.createFolder("A B")
+        try workspace.createFolder("空目录", folder: "A")
+        try workspace.createFolder("子目录", folder: "A")
+        try workspace.createNote(title: "直属", folder: "A")
+        try workspace.createNote(title: "深层", folder: "A/子目录")
+        try workspace.createNote(title: "邻居", folder: "A B")
+        try workspace.createNote(title: "根目录", folder: "")
+        workspace.selectedFolder = "A"
+        XCTAssertEqual(workspace.visibleNotes.map(\.path), ["A/直属.md"])
+        XCTAssertEqual(Set(workspace.childFolders), ["A/空目录", "A/子目录"])
+        XCTAssertEqual(Set(workspace.searchNotes("", in: "A").map(\.path)), ["A/直属.md", "A/子目录/深层.md"])
+        workspace.recentsOnly = true
+        XCTAssertEqual(workspace.searchNotes("邻居").map(\.path), ["A B/邻居.md"], "Global search ignores the browser's directory and recent filters")
+        workspace.recentsOnly = false
+        workspace.selectedFolder = ""
+        XCTAssertEqual(workspace.visibleNotes.map(\.path), ["根目录.md"])
+        XCTAssertEqual(Set(workspace.childFolders), ["A", "A B"])
+        XCTAssertEqual(workspace.searchNotes("", in: "").count, 4)
+        workspace.selectedFolder = "A"
+        try workspace.select("A/子目录/深层.md")
+        XCTAssertEqual(workspace.selectedFolder, "A/子目录")
+        try workspace.createNote(title: "新增", folder: workspace.creationFolder)
+        XCTAssertEqual(workspace.current, "A/子目录/新增.md")
+        try workspace.createFolder("新增目录", folder: workspace.creationFolder)
+        XCTAssertTrue(workspace.folders.contains("A/子目录/新增目录"))
+        workspace.selectedFolder = nil
+        XCTAssertEqual(workspace.creationFolder, "A/子目录")
+        workspace.edit("尚未保存的搜索词")
+        XCTAssertEqual(workspace.searchNotes("尚未保存").map(\.path), ["A/子目录/新增.md"])
+        try workspace.save()
+    }
+
     func testWriterCanCreateSaveAndReopenWithoutChangingLegacyMetadata() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root.appendingPathComponent(".twain"), withIntermediateDirectories: true)

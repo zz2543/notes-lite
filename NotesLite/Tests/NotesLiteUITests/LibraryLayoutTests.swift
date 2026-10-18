@@ -1,4 +1,5 @@
 import XCTest
+@testable import NotesCore
 @testable import NotesLite
 
 final class LibraryLayoutTests: XCTestCase {
@@ -25,6 +26,16 @@ final class LibraryLayoutTests: XCTestCase {
     func testFolderTreeKeepsChildrenWithTheirParentBesideSimilarNames() {
         let rows = FolderEntry.visible(paths: ["A", "A B", "A/子目录", "A/子目录/下一层"], expanded: ["A", "A/子目录"])
         XCTAssertEqual(rows.map(\.path), ["A", "A/子目录", "A/子目录/下一层", "A B"])
+    }
+
+    func testMixedTreeKeepsEmptyFoldersAndNotesInsideTheirOwnParent() {
+        let notes = ["根.md", "A/直属.md", "A/子目录/深层.md", "A B/邻居.md"].map {
+            Note(path: $0, modified: .distantPast, preview: "")
+        }
+        let folders = ["A", "A/子目录", "A/空目录", "A B"]
+        XCTAssertEqual(LibraryTreeEntry.visible(folders: folders, notes: notes, expanded: []).map(\.id), ["folder:A", "folder:A B", "note:根.md"])
+        let rows = LibraryTreeEntry.visible(folders: folders, notes: notes, expanded: ["A", "A/子目录"])
+        XCTAssertEqual(rows.map(\.id), ["folder:A", "folder:A/空目录", "folder:A/子目录", "note:A/子目录/深层.md", "note:A/直属.md", "folder:A B", "note:根.md"])
     }
 
 }

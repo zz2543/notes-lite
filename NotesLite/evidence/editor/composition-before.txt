@@ -1,0 +1,27 @@
+Building for debugging...
+[3 / 8] NotesLiteUITests-product
+[5 / 10] NotesLiteUITests-product
+[8 / 11] NotesLiteUITests-product
+[10 / 14] NotesLiteUITests-product
+[12 / 14] NotesLiteUITests-product
+Build complete! (2.01秒)
+Test Suite 'Selected tests' started at 2026-10-16 晚上8:11:32.372.
+Test Suite 'NotesLiteUITests.xctest' started at 2026-10-16 晚上8:11:32.374.
+Test Suite 'EditorWorkflowTests' started at 2026-10-16 晚上8:11:32.374.
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testTypingKeepsCaretTravelThroughNativeLayoutAndRestyling]' started.
+/Users/zhangzuhao/code-project/markdown 笔记/NotesLite/Tests/NotesLiteUITests/EditorWorkflowTests.swift:175: error: -[NotesLiteUITests.EditorWorkflowTests testTypingKeepsCaretTravelThroughNativeLayoutAndRestyling] : XCTUnwrap failed: expected non-nil value of type "CABasicAnimation" - Chinese preedit typing must animate before candidate confirmation
+Test Case '-[NotesLiteUITests.EditorWorkflowTests testTypingKeepsCaretTravelThroughNativeLayoutAndRestyling]' failed (1.001 seconds).
+Test Suite 'EditorWorkflowTests' failed at 2026-10-16 晚上8:11:33.375.
+	 Executed 1 test, with 1 failure (0 unexpected) in 1.001 (1.001) seconds
+Test Suite 'NotesLiteUITests.xctest' failed at 2026-10-16 晚上8:11:33.375.
+	 Executed 1 test, with 1 failure (0 unexpected) in 1.001 (1.002) seconds
+Test Suite 'Selected tests' failed at 2026-10-16 晚上8:11:33.375.
+	 Executed 1 test, with 1 failure (0 unexpected) in 1.001 (1.003) seconds
+Test Suite 'Selected tests' started at 2026-10-16 晚上8:11:33.453.
+Test Suite 'NotesCoreTests.xctest' started at 2026-10-16 晚上8:11:33.454.
+Test Suite 'NotesCoreTests.xctest' passed at 2026-10-16 晚上8:11:33.454.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-16 晚上8:11:33.454.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Note: Some test targets reported failures:
+  - NotesLiteUITests (XCTest)

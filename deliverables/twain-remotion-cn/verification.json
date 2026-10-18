@@ -1,0 +1,43 @@
+{
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "frames": 2889,
+  "seconds": 96.3,
+  "narrationClips": 16,
+  "checkpoints": [
+    {
+      "id": "Opening",
+      "frame": 180
+    },
+    {
+      "id": "Writing",
+      "frame": 506
+    },
+    {
+      "id": "Agent",
+      "frame": 832
+    },
+    {
+      "id": "Review",
+      "frame": 1212
+    },
+    {
+      "id": "Research",
+      "frame": 1593
+    },
+    {
+      "id": "Spaces",
+      "frame": 1967
+    },
+    {
+      "id": "Workflow",
+      "frame": 2354
+    },
+    {
+      "id": "Closing",
+      "frame": 2693
+    }
+  ],
+  "status": "timing-and-stills-passed"
+}

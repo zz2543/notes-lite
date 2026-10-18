@@ -81,6 +81,7 @@ final class AppModel {
     var font: EditorFont = .serif { didSet { save("font", font.rawValue) } }
     var typewriter = true { didSet { save("typewriter", typewriter) } }
     var dim = true { didSet { save("dim", dim) } }
+    var caretGlow = true { didSet { save("caretGlow", caretGlow) } }
     /// How pasted pictures are named (`Attachments.swift`).
     var attachmentNaming: AttachmentNaming = .pasted { didSet { save("attachmentName", attachmentNaming.rawValue) } }
     var ghostOn = false { didSet { save("ghostOn", ghostOn); if !ghostOn { clearGhost() } } }
@@ -288,6 +289,7 @@ final class AppModel {
         font = EditorFont(rawValue: defaults.string(forKey: "pref.font") ?? "") ?? .serif
         typewriter = b("typewriter", true)
         dim = b("dim", true)
+        caretGlow = b("caretGlow", true)
         attachmentNaming = AttachmentNaming(rawValue: defaults.string(forKey: "pref.attachmentName") ?? "") ?? .pasted
         ghostOn = b("ghostOn", false)
         syncContext = b("syncCtx", true)

@@ -65,6 +65,10 @@ struct EditorSettings: View {
                     .foregroundStyle(.secondary)
             }
             Section("专注与输入") {
+                Toggle(isOn: $model.caretGlow) {
+                    Text("光标辉光")
+                    Text("光标移动时显示渐隐的辉光拖尾")
+                }
                 Toggle(isOn: $model.typewriter) {
                     Text("打字机滚动")
                     Text("当前行始终停在视线高度")

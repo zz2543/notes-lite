@@ -16,4 +16,6 @@
 
 ## Comments
 
+2026-10-16：按用户要求，进入与退出专注改用同一个窗口右上角图标按钮，固定在 52 点高区域、距右侧 18 点，按钮不参与工具栏的收起布局，仅切换图标和辅助说明；保留 Esc 返回。`./scripts/bundle.sh` 构建打包通过；现有 `EditorWorkflowTests.testChineseCompositionSourceToggleAndFocusKeepEditingContinuity` 通过（1 项，0 失败），验证转场中中文组合输入与编辑连续性。本次未进行屏幕坐标实测。
+
 2026-10-16：实现与检查证据见 [交付记录](../../../NotesLite/evidence/verification.md)。未勾选项仍需补齐实际验收，不能据代码存在视为通过。

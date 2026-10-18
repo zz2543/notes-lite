@@ -92,7 +92,9 @@ public enum NoteError: LocalizedError {
 
     public var visibleNotes: [Note] {
         let filtered = notes.filter { n in
-            let folderMatches = selectedFolder.map { n.folder == $0 || n.folder.hasPrefix($0 + "/") } ?? true
+            let folderMatches = selectedFolder.map { folder in
+                query.isEmpty ? n.folder == folder : Self.contains(n.folder, in: folder)
+            } ?? true
             let recentMatches = !recentsOnly || recent.contains(n.path)
             guard folderMatches && recentMatches else { return false }
             guard !query.isEmpty else { return true }
@@ -100,6 +102,26 @@ public enum NoteError: LocalizedError {
             return (n.path == current ? text : searchBodies[n.path] ?? "").localizedCaseInsensitiveContains(query)
         }
         return recentsOnly ? filtered.sorted { (recent.firstIndex(of: $0.path) ?? .max) < (recent.firstIndex(of: $1.path) ?? .max) } : filtered
+    }
+
+    /// Search is independent of the active directory and recent-list filter.
+    public func searchNotes(_ query: String, in folder: String? = nil) -> [Note] {
+        notes.filter { note in
+            guard folder.map({ Self.contains(note.folder, in: $0) }) ?? true else { return false }
+            return query.isEmpty || note.title.localizedCaseInsensitiveContains(query)
+                || (note.path == current ? text : searchBodies[note.path] ?? "").localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private static func contains(_ child: String, in folder: String) -> Bool {
+        folder.isEmpty || child == folder || child.hasPrefix(folder + "/")
+    }
+
+    public var creationFolder: String { selectedFolder ?? current.map { ($0 as NSString).deletingLastPathComponent } ?? "" }
+
+    public var childFolders: [String] {
+        guard let selectedFolder, !recentsOnly else { return [] }
+        return folders.filter { ($0 as NSString).deletingLastPathComponent == selectedFolder }
     }
 
     public func select(_ path: String) throws {
@@ -115,7 +137,7 @@ public enum NoteError: LocalizedError {
 
     private func revealCurrent() {
         guard let current else { return }
-        if let folder = selectedFolder, !(current as NSString).deletingLastPathComponent.hasPrefix(folder + "/"), (current as NSString).deletingLastPathComponent != folder { selectedFolder = nil }
+        if selectedFolder != nil { selectedFolder = (current as NSString).deletingLastPathComponent }
         if !query.isEmpty { query = "" }
     }
 
@@ -223,9 +245,10 @@ public enum NoteError: LocalizedError {
     }
 
 
-    public func createFolder(_ name: String) throws {
+    public func createFolder(_ name: String, folder: String? = nil) throws {
         try validateName(name)
-        let path = selectedFolder.map { $0 + "/" + name } ?? name
+        let parent = folder ?? selectedFolder ?? ""
+        let path = parent.isEmpty ? name : parent + "/" + name
         let folder = try url(for: path)
         guard !FileManager.default.fileExists(atPath: folder.path) else { throw NoteError.exists(name) }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)

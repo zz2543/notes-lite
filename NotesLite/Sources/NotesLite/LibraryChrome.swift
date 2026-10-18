@@ -46,6 +46,39 @@ struct SoftButton: ButtonStyle {
 }
 
 /// Presentation sizing, independent of the document and of animation state.
+enum NavigationMode: String {
+    case unified, split
+}
+
+/// A depth-first tree keeps each directory's children together, including empty folders.
+enum LibraryTreeEntry: Identifiable {
+    case folder(FolderEntry)
+    case note(Note, depth: Int)
+    var id: String {
+        switch self {
+        case .folder(let entry): "folder:" + entry.path
+        case .note(let note, _): "note:" + note.path
+        }
+    }
+    static func visible(folders: [String], notes: [Note], expanded: Set<String>) -> [LibraryTreeEntry] {
+        let directories = Dictionary(grouping: folders) { ($0 as NSString).deletingLastPathComponent }
+        let documents = Dictionary(grouping: notes, by: \.folder)
+        var result: [LibraryTreeEntry] = []
+        func visit(_ parent: String, depth: Int) {
+            for path in (directories[parent] ?? []).sorted(by: { $0.localizedStandardCompare($1) == .orderedAscending }) {
+                let hasChildren = !(directories[path] ?? []).isEmpty || !(documents[path] ?? []).isEmpty
+                result.append(.folder(FolderEntry(path: path, depth: depth, hasChildren: hasChildren)))
+                if expanded.contains(path) { visit(path, depth: depth + 1) }
+            }
+            for note in (documents[parent] ?? []).sorted(by: { $0.title.localizedStandardCompare($1.title) == .orderedAscending }) {
+                result.append(.note(note, depth: depth))
+            }
+        }
+        visit("", depth: 0)
+        return result
+    }
+}
+
 struct ColumnWidths: Equatable {
     var sidebar: Double
     var list: Double

@@ -1,0 +1,266 @@
+{
+  "Opening": {
+    "duration": 10.866666666666667,
+    "clips": [
+      {
+        "file": "voice/Opening-0.wav",
+        "from": 0.8,
+        "duration": 3.264
+      },
+      {
+        "file": "voice/Opening-1.wav",
+        "from": 4.414,
+        "duration": 5.184
+      }
+    ],
+    "captions": [
+      {
+        "text": "共笔，让想法有一个自己的家。",
+        "startMs": 800,
+        "endMs": 4064,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "从一页笔记开始，和 AI 一起，把想法做得更好。",
+        "startMs": 4414,
+        "endMs": 9598,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Writing": {
+    "duration": 10.866666666666667,
+    "clips": [
+      {
+        "file": "voice/Writing-0.wav",
+        "from": 0.8,
+        "duration": 3.312
+      },
+      {
+        "file": "voice/Writing-1.wav",
+        "from": 4.462,
+        "duration": 5.136
+      }
+    ],
+    "captions": [
+      {
+        "text": "笔记，就在你的本地文件夹里。",
+        "startMs": 800,
+        "endMs": 4112,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "用 Markdown 记录，实时排版，专心写下每一个想法。",
+        "startMs": 4462,
+        "endMs": 9598,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Agent": {
+    "duration": 12.666666666666666,
+    "clips": [
+      {
+        "file": "voice/Agent-0.wav",
+        "from": 0.8,
+        "duration": 2.928
+      },
+      {
+        "file": "voice/Agent-1.wav",
+        "from": 4.078,
+        "duration": 7.32
+      }
+    ],
+    "captions": [
+      {
+        "text": "让 AI，接住你的下一步。",
+        "startMs": 800,
+        "endMs": 3728,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "在侧栏选择 Claude Code 或 Codex，围绕当前笔记，讨论、总结和修改。",
+        "startMs": 4078,
+        "endMs": 11398,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Review": {
+    "duration": 12.7,
+    "clips": [
+      {
+        "file": "voice/Review-0.wav",
+        "from": 0.8,
+        "duration": 2.76
+      },
+      {
+        "file": "voice/Review-1.wav",
+        "from": 3.91,
+        "duration": 7.536
+      }
+    ],
+    "captions": [
+      {
+        "text": "每一处改动，都能看清。",
+        "startMs": 800,
+        "endMs": 3560,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "逐段审阅，接受合适的修改，还原不需要的内容。决定权，始终在你。",
+        "startMs": 3910,
+        "endMs": 11446,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Research": {
+    "duration": 12.466666666666667,
+    "clips": [
+      {
+        "file": "voice/Research-0.wav",
+        "from": 0.8,
+        "duration": 3.576
+      },
+      {
+        "file": "voice/Research-1.wav",
+        "from": 4.726,
+        "duration": 6.48
+      }
+    ],
+    "captions": [
+      {
+        "text": "把零散资料，变成有依据的思考。",
+        "startMs": 800,
+        "endMs": 4376,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "围绕问题整理结论和证据，保留来源，把有用的卡片收进草稿。",
+        "startMs": 4726,
+        "endMs": 11206,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Spaces": {
+    "duration": 12.9,
+    "clips": [
+      {
+        "file": "voice/Spaces-0.wav",
+        "from": 0.8,
+        "duration": 3.912
+      },
+      {
+        "file": "voice/Spaces-1.wav",
+        "from": 5.061999999999999,
+        "duration": 6.576
+      }
+    ],
+    "captions": [
+      {
+        "text": "同一份笔记，也可以有不同的打开方式。",
+        "startMs": 800,
+        "endMs": 4712,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "用空间组织日记、习惯和项目，让文字、数据和图表，在一起。",
+        "startMs": 5062,
+        "endMs": 11638,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Workflow": {
+    "duration": 11.3,
+    "clips": [
+      {
+        "file": "voice/Workflow-0.wav",
+        "from": 0.8,
+        "duration": 3.144
+      },
+      {
+        "file": "voice/Workflow-1.wav",
+        "from": 4.2940000000000005,
+        "duration": 5.736
+      }
+    ],
+    "captions": [
+      {
+        "text": "常做的事，让工作流接手。",
+        "startMs": 800,
+        "endMs": 3944,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "自定义命令和自动化，再用开放接口，连接你已有的工具。",
+        "startMs": 4294,
+        "endMs": 10030,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  },
+  "Closing": {
+    "duration": 12.533333333333333,
+    "clips": [
+      {
+        "file": "voice/Closing-0.wav",
+        "from": 0.8,
+        "duration": 3.744
+      },
+      {
+        "file": "voice/Closing-1.wav",
+        "from": 4.894,
+        "duration": 6.36
+      }
+    ],
+    "captions": [
+      {
+        "text": "共笔。你掌舵，AI 执笔。",
+        "startMs": 800,
+        "endMs": 4544,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      },
+      {
+        "text": "从记录，到思考，再到行动。让每一个想法，都向前一步。",
+        "startMs": 4894,
+        "endMs": 11254,
+        "timestampMs": null,
+        "confidence": null,
+        "pageBreakAfter": true
+      }
+    ]
+  }
+}

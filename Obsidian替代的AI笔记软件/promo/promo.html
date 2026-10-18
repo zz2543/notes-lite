@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Plume Promo</title>
+<style>
+@font-face { font-family: "NY"; src: url("file:///System/Library/Fonts/NewYork.ttf"); }
+:root {
+  --ink: #1d1b18;
+  --muted: #5d5850;
+  --accent: #3f6fe0;
+  --warm: #d9774b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #f3f0ea; }
+body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+#frame { position: absolute; inset: 0; overflow: hidden; }
+
+#bg { position: absolute; inset: 0; background: #f3f0ea; }
+.blob { position: absolute; border-radius: 50%; filter: blur(90px); }
+#darken { position: absolute; inset: 0; background: #121110; opacity: 0; }
+
+#cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+#rise { position: absolute; left: 290px; top: 180px; width: 1340px; height: 858.4px; transform-origin: 50% 0%; }
+#win { position: absolute; inset: 0; border-radius: 22px;
+  box-shadow: 0 50px 120px -20px rgba(40, 32, 20, .35), 0 18px 40px -12px rgba(40, 32, 20, .25), 0 0 0 1px rgba(0,0,0,.06); }
+#win img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+
+#fx { position: absolute; inset: 0; pointer-events: none; }
+.ring { position: absolute; border-radius: 18px; border: 3px solid var(--accent);
+  box-shadow: 0 0 0 8px rgba(63, 111, 224, .16), 0 0 40px rgba(63, 111, 224, .35); opacity: 0; }
+#accepted { position: absolute; border-radius: 16px; border: 3px solid #34c759; background: rgba(52,199,89,.08); opacity: 0; }
+#okpill { position: absolute; padding: 10px 22px; border-radius: 999px; background: #34c759; color: white;
+  font-size: 26px; font-weight: 600; opacity: 0; white-space: nowrap; box-shadow: 0 10px 30px rgba(52,199,89,.4); }
+#cursor { position: absolute; width: 40px; height: 40px; opacity: 0; filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)); }
+#ripple { position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%;
+  border: 3px solid var(--accent); opacity: 0; }
+
+#keys { position: absolute; left: 50%; top: 440px; display: flex; gap: 22px; transform: translateX(-50%); opacity: 0; }
+.key { width: 150px; height: 150px; border-radius: 34px; display: flex; align-items: center; justify-content: center;
+  font-size: 72px; font-weight: 500; color: #2a2723;
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(240,237,232,.9));
+  box-shadow: 0 2px 0 rgba(255,255,255,.9) inset, 0 -6px 0 rgba(0,0,0,.08) inset, 0 24px 50px -12px rgba(30,24,16,.35), 0 0 0 1px rgba(0,0,0,.06); }
+
+/* Captions */
+.cap { position: absolute; bottom: 64px; padding: 34px 44px 36px; max-width: 1000px; border-radius: 30px;
+  background: rgba(255, 255, 255, .74); backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  box-shadow: 0 30px 70px -20px rgba(30, 24, 16, .35), 0 0 0 1px rgba(255,255,255,.7) inset, 0 0 0 1px rgba(0,0,0,.05);
+  opacity: 0; }
+.cap.bl { left: 72px; }
+.cap.br { right: 72px; }
+.cap .eb { font-size: 22px; font-weight: 600; letter-spacing: .12em; color: var(--accent); margin-bottom: 12px; }
+.cap .t { white-space: nowrap; font-size: 54px; font-weight: 600; letter-spacing: .01em; line-height: 1.2; }
+.cap .s { font-size: 26px; line-height: 1.55; color: var(--muted); margin-top: 14px; }
+
+#top { position: absolute; top: 50px; left: 0; right: 0; text-align: center; opacity: 0; }
+#top .t { font-family: "NY", "Songti SC", serif; font-size: 52px; font-weight: 600; letter-spacing: .02em; }
+#chips { display: flex; gap: 14px; justify-content: center; margin-top: 18px; }
+.chip { font-size: 22px; padding: 7px 20px; border-radius: 999px; color: #3b3831; background: rgba(255,255,255,.7);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.07), 0 8px 20px -10px rgba(0,0,0,.2); opacity: 0; }
+
+/* Title cards */
+.card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
+#logo { width: 150px; height: 150px; }
+#word { font-family: "NY", serif; font-size: 170px; font-weight: 600; letter-spacing: -.01em; margin-top: 10px; display: flex; }
+#word span { display: inline-block; opacity: 0; }
+#tag { font-family: "Songti SC", serif; font-size: 44px; color: #3c3830; margin-top: 18px; letter-spacing: .06em; opacity: 0; }
+#tag2 { font-size: 24px; color: #7a746a; margin-top: 26px; letter-spacing: .1em; opacity: 0; }
+
+#outro { color: #f3efe8; }
+.line { font-family: "Songti SC", serif; font-size: 62px; font-weight: 600; letter-spacing: .04em; margin: 16px 0; opacity: 0; }
+.line.dim { color: #a9a296; font-weight: 400; font-size: 48px; }
+#end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; color: #f3efe8; }
+#end svg { width: 120px; height: 120px; }
+#end .w { font-family: "NY", serif; font-size: 130px; font-weight: 600; margin-top: 6px; }
+#end .s { font-family: "Songti SC", serif; font-size: 36px; color: #bdb5a8; margin-top: 12px; letter-spacing: .06em; }
+#end .m { font-size: 22px; color: #8c857a; margin-top: 34px; letter-spacing: .18em; }
+
+#black { position: absolute; inset: 0; background: #000; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <div id="bg">
+    <div class="blob" id="b1" style="width:900px;height:900px;background:#cdd9f6"></div>
+    <div class="blob" id="b2" style="width:800px;height:800px;background:#f6d9c6"></div>
+    <div class="blob" id="b3" style="width:700px;height:700px;background:#e3dcf3"></div>
+  </div>
+  <div id="darken"></div>
+
+  <div id="cam">
+    <div id="rise">
+      <div id="win">
+        <img id="i-focus" src="img/focus.png">
+        <img id="i-slash" src="img/slash.png">
+        <img id="i-agent" src="img/agent.png">
+        <img id="i-banner" src="img/banner.png">
+        <img id="i-diff" src="img/diff.png">
+        <img id="i-palette" src="img/palette.png">
+        <img id="i-zen" src="img/zen.png">
+        <img id="i-dark" src="img/diff-dark.png">
+      </div>
+    </div>
+  </div>
+
+  <div id="fx">
+    <div class="ring" id="r-side"></div>
+    <div class="ring" id="r-banner"></div>
+    <div class="ring" id="r-card"></div>
+    <div id="accepted"></div>
+    <div id="okpill">✓ 已接受</div>
+    <div id="ripple"></div>
+    <svg id="cursor" viewBox="0 0 32 32"><path d="M6 3 L6 25 L11.5 19.8 L15.2 28 L19 26.3 L15.4 18.4 L23 18.4 Z" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+    <div id="keys"><div class="key" id="k1">⌘</div><div class="key" id="k2">K</div></div>
+  </div>
+
+  <div id="top">
+    <div class="t">你的笔记，只是一个文件夹</div>
+    <div id="chips"><div class="chip">纯 .md 文件</div><div class="chip">本地优先</div><div class="chip">写入前自动 Git 快照</div><div class="chip">实时监听磁盘改动</div></div>
+  </div>
+
+  <div id="caps"></div>
+
+  <div class="card" id="intro">
+    <svg id="logo" viewBox="0 0 100 100">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6b8cf0"/><stop offset="1" stop-color="#3a5bd0"/></linearGradient></defs>
+      <path id="lf" d="M78 6 C 96 30, 82 66, 42 82 C 34 58, 46 26, 78 6 Z" fill="url(#g)" stroke="#3a5bd0" stroke-width="2" stroke-linejoin="round"/>
+      <path id="ls" d="M78 8 Q 54 46, 20 96" fill="none" stroke="#2a2723" stroke-width="3.2" stroke-linecap="round"/>
+      <path id="lv" d="M66 30 L 76 26 M58 44 L 72 42 M50 57 L 64 58" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
+    </svg>
+    <div id="word"><span>P</span><span>l</span><span>u</span><span>m</span><span>e</span></div>
+    <div id="tag">为 AI 时代重新设计的 Markdown 笔记</div>
+    <div id="tag2">CLAUDE CODE · CODEX · 原生 macOS</div>
+  </div>
+
+  <div class="card" id="outro">
+    <div class="line" id="o1">Plume 不托管模型。</div>
+    <div class="line dim" id="o2">库就是磁盘上的一个文件夹，AI 在里面直接读写。</div>
+    <div class="line" id="o3">每一次改动，都由你来决定。</div>
+  </div>
+
+  <div id="end">
+    <svg viewBox="0 0 100 100">
+      <path d="M78 6 C 96 30, 82 66, 42 82 C 34 58, 46 26, 78 6 Z" fill="url(#g)" stroke="#6b8cf0" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M78 8 Q 54 46, 20 96" fill="none" stroke="#f3efe8" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M66 30 L 76 26 M58 44 L 72 42 M50 57 L 64 58" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
+    </svg>
+    <div class="w">Plume</div>
+    <div class="s">为 AI 时代重新设计的 Markdown 笔记</div>
+    <div class="m">MACOS 26 · LIQUID GLASS</div>
+  </div>
+
+  <div id="black"></div>
+</div>
+
+<script>
+const DURATION = 55;
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const ioc = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const oexp = k => k >= 1 ? 1 : 1 - Math.pow(2, -10 * k);
+const ocub = k => 1 - Math.pow(1 - k, 3);
+// Visible between a and b with fade in/out durations.
+const win = (t, a, b, fi = .5, fo = .5) => ocub(prog(t, a, a + fi)) * (1 - ioc(prog(t, b - fo, b)));
+
+// Window rect inside the 1920x1080 frame.
+const W = { x: 290, y: 180, w: 1340, h: 858.4 };
+
+// Captions: [start, end, side, eyebrow, title, sub]
+const CAPS = [
+  [11.9, 14.7, "br", "编辑器", "所见即所写", "Markdown 语法只在你正在写的那一段出现，<br>其余时候，只剩文字本身。"],
+  [15.5, 18.1, "br", "斜杠命令", "输入 / 就够了", "标题、待办、引用——<br>或者直接让 Claude Code 续写，让 Codex 整理本页。"],
+  [19.3, 22.2, "bl", "AI AGENT", "Claude Code 与 Codex，就在手边", "直接调用你电脑上的命令行 agent，<br>它们在你的笔记库里读写 Markdown。"],
+  [23.0, 26.1, "bl", "透明", "每一次改动，都被看见", "无论来自 Plume 还是终端里的 agent，<br>写入的内容都会先进入审阅。"],
+  [27.7, 34.7, "bl", "审阅", "逐段审阅，随时还原", "接受或还原每一处改动；<br>写入前自动 Git 快照，随时回到从前。"],
+  [36.0, 39.9, "bl", "命令面板", "⌘K，一切触手可及", "搜索笔记、执行命令、切换模式，<br>手不离开键盘。"],
+  [40.8, 44.1, "br", "专注", "只留下正在写的这一句", "专注模式、打字机滚动、段落聚焦。"],
+  [45.0, 48.4, "bl", "原生", "为 macOS 26 而生", "SwiftUI 与 AppKit 原生打造，Liquid Glass 设计，<br>浅色深色都自然。"],
+];
+const capEls = CAPS.map(c => {
+  const d = document.createElement("div");
+  d.className = "cap " + c[2];
+  d.innerHTML = `<div class="eb">${c[3]}</div><div class="t">${c[4]}</div><div class="s">${c[5]}</div>`;
+  $("caps").appendChild(d);
+  return d;
+});
+
+// Screenshot layers: [id, in, out]; later layers sit above earlier ones.
+const LAYERS = [
+  ["i-focus", 5.0, 15.6], ["i-slash", 14.7, 19.4], ["i-agent", 18.6, 23.0], ["i-banner", 22.2, 27.0],
+  ["i-diff", 26.3, 99], ["i-palette", 35.45, 40.6], ["i-zen", 40.1, 44.7],
+];
+
+// Camera keyframes: [t, scale, focusX, focusY, screenX, screenY] (focus in window fractions).
+const WIDE = [1, .5, .5, 960, W.y + W.h / 2];
+const CAM = [
+  [0, ...WIDE], [11.0, ...WIDE],
+  [12.5, 1.7, .42, .56, 960, 560], [14.6, 1.76, .42, .565, 960, 560],
+  [15.6, 1.6, .33, .74, 900, 560], [18.3, 1.64, .33, .745, 900, 560],
+  [19.5, 1.8, .86, .45, 1470, 540], [22.3, 1.86, .86, .45, 1470, 540],
+  [23.4, 1.3, .5, .25, 960, 430], [26.1, 1.33, .5, .25, 960, 430],
+  [27.1, ...WIDE], [27.7, ...WIDE],
+  [29.1, 1.8, .47, .27, 960, 500], [31.5, 1.8, .47, .27, 960, 500],
+  [32.9, 1.8, .47, .92, 960, 640], [33.7, 1.8, .47, .92, 960, 640],
+  [34.9, ...WIDE], [35.4, ...WIDE],
+  [36.4, 1.4, .5, .47, 960, 530], [39.9, 1.46, .5, .47, 960, 530],
+  [40.7, 1.3, .42, .55, 960, 560], [44.0, 1.36, .42, .55, 960, 560],
+  [44.8, ...WIDE], [99, ...WIDE],
+];
+function camAt(t) {
+  let i = 0;
+  while (i < CAM.length - 2 && CAM[i + 1][0] <= t) i++;
+  const a = CAM[i], b = CAM[i + 1];
+  const k = ioc(prog(t, a[0], b[0]));
+  const [s, fx, fy, cx, cy] = [1, 2, 3, 4, 5].map(j => lerp(a[j], b[j], k));
+  return { s, tx: cx - s * (W.x + fx * W.w), ty: cy - s * (W.y + fy * W.h) };
+}
+let cam = camAt(0);
+const toScreen = (fx, fy) => [cam.tx + cam.s * (W.x + fx * W.w), cam.ty + cam.s * (W.y + fy * W.h)];
+function place(el, x0, y0, x1, y1, pad = 10) {
+  const [a, b] = toScreen(x0, y0), [c, d] = toScreen(x1, y1);
+  Object.assign(el.style, { left: a - pad + "px", top: b - pad + "px", width: c - a + 2 * pad + "px", height: d - b + 2 * pad + "px" });
+}
+
+function render(t) {
+  // Background drift and the move to dark near the end.
+  $("b1").style.transform = `translate(${-200 + 120 * Math.sin(t * .13)}px, ${-300 + 80 * Math.cos(t * .11)}px)`;
+  $("b2").style.transform = `translate(${1300 + 100 * Math.cos(t * .12)}px, ${500 + 90 * Math.sin(t * .1)}px)`;
+  $("b3").style.transform = `translate(${700 + 140 * Math.sin(t * .09 + 1)}px, ${-350 + 60 * Math.sin(t * .14)}px)`;
+  const dark = ioc(prog(t, 45.0, 47.2));
+  $("darken").style.opacity = dark;
+
+  // Intro
+  const introOut = ioc(prog(t, 4.3, 5.0));
+  $("intro").style.opacity = t < 5 ? 1 - introOut : 0;
+  $("intro").style.transform = `translateY(${-60 * introOut}px) scale(${1 - .04 * introOut})`;
+  const draw = ocub(prog(t, .2, 1.3));
+  const logo = $("logo");
+  logo.style.opacity = ocub(prog(t, .1, .6));
+  logo.style.transform = `translateY(${30 * (1 - draw)}px) rotate(${-12 * (1 - draw)}deg)`;
+  $("lf").style.fillOpacity = ocub(prog(t, .7, 1.4));
+  $("lf").style.strokeDasharray = 260; $("lf").style.strokeDashoffset = 260 * (1 - draw);
+  $("ls").style.strokeDasharray = 120; $("ls").style.strokeDashoffset = 120 * (1 - ocub(prog(t, .5, 1.4)));
+  $("lv").style.opacity = .85 * ocub(prog(t, 1.2, 1.6));
+  [...$("word").children].forEach((sp, i) => {
+    const k = oexp(prog(t, 1.0 + i * .08, 1.8 + i * .08));
+    sp.style.opacity = k; sp.style.transform = `translateY(${40 * (1 - k)}px)`; sp.style.filter = `blur(${8 * (1 - k)}px)`;
+  });
+  const tg = oexp(prog(t, 2.0, 2.8));
+  $("tag").style.opacity = tg; $("tag").style.transform = `translateY(${20 * (1 - tg)}px)`;
+  $("tag2").style.opacity = oexp(prog(t, 2.6, 3.4));
+
+  // Window rise
+  const r = oexp(prog(t, 5.0, 6.8));
+  const out = ioc(prog(t, 48.5, 49.6));
+  const rise = $("rise");
+  rise.style.opacity = t < 5 ? 0 : ocub(prog(t, 5.0, 5.8)) * (1 - out);
+  rise.style.transform = `perspective(2400px) translateY(${520 * (1 - r) + 60 * out}px) rotateX(${22 * (1 - r)}deg) scale(${(.92 + .08 * r) * (1 - .06 * out)})`;
+
+  cam = camAt(t);
+  $("cam").style.transform = `translate(${cam.tx}px, ${cam.ty}px) scale(${cam.s})`;
+
+  for (const [id, a, b] of LAYERS) $(id).style.opacity = ocub(prog(t, a, a + .6)) * (1 - prog(t, b, b + .6));
+  const wipe = ioc(prog(t, 45.2, 47.0));
+  const dk = $("i-dark");
+  dk.style.opacity = t > 45.2 ? 1 : 0;
+  const px = -30 + wipe * 160; // diagonal edge sweeping left to right, in percent
+  dk.style.clipPath = `polygon(0 0, ${px + 20}% 0, ${px}% 100%, 0 100%)`;
+
+  // Top headline (scene 2)
+  $("top").style.opacity = win(t, 5.5, 11.0, .7, .6);
+  $("top").style.transform = `translateY(${-20 * (1 - ocub(prog(t, 5.5, 6.3)))}px)`;
+  [...$("chips").children].forEach((c, i) => {
+    const k = oexp(prog(t, 6.4 + i * .18, 7.1 + i * .18));
+    c.style.opacity = k; c.style.transform = `translateY(${14 * (1 - k)}px) scale(${.9 + .1 * k})`;
+  });
+
+  // Highlight rings, placed in screen space so strokes stay crisp.
+  const rs = $("r-side"); place(rs, .005, .11, .185, .50, 6); rs.style.opacity = win(t, 7.8, 10.7, .5, .5);
+  const rb = $("r-banner"); place(rb, .292, .075, .614, .128, 8); rb.style.opacity = win(t, 23.6, 26.0, .4, .4);
+  const rc = $("r-card"); place(rc, .729, .344, .988, .412, 8); rc.style.opacity = win(t, 24.3, 26.0, .4, .4);
+
+  // Cursor clicks "接受" on the first hunk.
+  const cur = $("cursor");
+  const [bx, by] = toScreen(.7066, .291);
+  const mv = ioc(prog(t, 29.6, 30.7));
+  const cx = lerp(bx + 380, bx - 8, mv), cy = lerp(by + 300, by - 6, mv);
+  const press = t > 30.85 && t < 31.05 ? .85 : 1;
+  cur.style.left = cx + "px"; cur.style.top = cy + "px";
+  cur.style.transform = `scale(${press})`; cur.style.transformOrigin = "20% 10%";
+  cur.style.opacity = win(t, 29.5, 32.4, .3, .4);
+  const rp = prog(t, 30.9, 31.5);
+  Object.assign($("ripple").style, { left: bx + "px", top: by + "px", opacity: t > 30.9 ? (1 - rp) * .9 : 0, transform: `scale(${.4 + rp})` });
+  const acc = $("accepted"); place(acc, .213, .226, .74, .313, 4); acc.style.opacity = win(t, 31.0, 33.5, .3, .5);
+  const ok = $("okpill"); const [ox, oy] = toScreen(.74, .226);
+  const okk = oexp(prog(t, 31.0, 31.5));
+  Object.assign(ok.style, { left: ox - 190 + "px", top: oy - 30 + "px", opacity: okk * (1 - prog(t, 33.0, 33.5)), transform: `scale(${.7 + .3 * okk})` });
+
+  // ⌘K keycaps
+  const ks = win(t, 34.9, 36.0, .3, .35);
+  $("keys").style.opacity = ks;
+  $("keys").style.transform = `translateX(-50%) scale(${.9 + .1 * ocub(prog(t, 34.9, 35.2))})`;
+  $("k1").style.transform = `translateY(${t > 35.25 && t < 35.6 ? 8 : 0}px)`;
+  $("k2").style.transform = `translateY(${t > 35.35 && t < 35.6 ? 8 : 0}px)`;
+
+  CAPS.forEach((c, i) => {
+    const e = capEls[i], k = oexp(prog(t, c[0], c[0] + .7)), o = ioc(prog(t, c[1] - .45, c[1]));
+    e.style.opacity = k * (1 - o);
+    e.style.transform = `translateY(${30 * (1 - k) - 16 * o}px)`;
+    e.style.filter = `blur(${10 * (1 - k) + 6 * o}px)`;
+  });
+
+  // Outro
+  const oo = $("outro");
+  oo.style.opacity = t > 49 && t < 53 ? 1 - ioc(prog(t, 52.3, 52.9)) : 0;
+  [["o1", 49.4], ["o2", 50.2], ["o3", 51.0]].forEach(([id, a]) => {
+    const k = oexp(prog(t, a, a + .9));
+    $(id).style.opacity = k; $(id).style.transform = `translateY(${24 * (1 - k)}px)`; $(id).style.filter = `blur(${8 * (1 - k)}px)`;
+  });
+  const ek = oexp(prog(t, 52.8, 53.8));
+  $("end").style.opacity = ek;
+  $("end").style.transform = `scale(${.94 + .06 * ek})`;
+  $("black").style.opacity = ioc(prog(t, 54.3, 55));
+}
+window.render = render;
+window.DURATION = DURATION;
+render(0);
+</script>
+</body>
+</html>
