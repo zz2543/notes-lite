@@ -132,6 +132,14 @@ struct NativeEditor: NSViewRepresentable {
                 layout.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
                 layout.invalidateDisplay(forCharacterRange: range)
             }
+            // A restyle can shrink what is below it (a table first laid out for a narrow column, then
+            // for the real one), and what was drawn past the new last line is covered by no
+            // character: repaint from the first restyled line down, or the old drawing stays under it.
+            if let first = ranges.first, layout.numberOfGlyphs > 0 {
+                let glyph = min(layout.glyphIndexForCharacter(at: first.location), layout.numberOfGlyphs - 1)
+                let top = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY + tv.textContainerOrigin.y
+                tv.setNeedsDisplay(NSRect(x: 0, y: top, width: tv.bounds.width, height: max(0, tv.bounds.maxY - top)))
+            }
             tv.typingAttributes = styler.baseAttributes()
             if tv.selectedRange() != selection { tv.setSelectedRange(selection) }
             if let scroll, scroll.contentView.bounds.origin != origin { scroll.contentView.scroll(to: origin); scroll.reflectScrolledClipView(scroll.contentView) }
