@@ -13,11 +13,18 @@ enum SidebarMode: String { case library, spaces }
     var showingHome = true
     var copiedPrompt = false
     var error: String?
+    /// Errors and write notices of the homepage on screen.
+    let pageState = SpacePageState()
+    @ObservationIgnored private var controllers: [String: SpacePageController] = [:]
+    @ObservationIgnored private(set) var log: OperationLog?
 
     var current: Space? { spaces.first { $0.name == selected } ?? nil }
 
     func load(root: URL?) {
         library = root.map(SpaceLibrary.init(root:))
+        log = root.map(OperationLog.init(root:))
+        controllers = [:]
+        pageState.reset()
         // Keep the installed guide in step with this version of the app.
         if let library, FileManager.default.fileExists(atPath: library.folder.path) { try? library.installGuide() }
         reload()
@@ -28,13 +35,43 @@ enum SidebarMode: String { case library, spaces }
         if fresh != spaces { spaces = fresh }
         if let selected, !spaces.contains(where: { $0.name == selected }) { self.selected = nil }
         if selected == nil { selected = spaces.first?.name }
+        for (name, controller) in controllers {
+            if let space = spaces.first(where: { $0.name == name }) { controller.update(space) } else { controllers[name] = nil }
+        }
+    }
+
+    func select(_ name: String) {
+        guard name != selected else { showingHome = true; return }
+        selected = name; showingHome = true; copiedPrompt = false
+        pageState.reset()
+        controllers[name]?.load()
+    }
+
+    /// The homepage's web view, created once per space and kept while the library stays open.
+    func controller(for space: Space, root: URL) -> SpacePageController? {
+        if let existing = controllers[space.name] { return existing }
+        guard let log else { return nil }
+        let controller = SpacePageController(root: root, space: space, log: log, state: pageState)
+        controllers[space.name] = controller
+        return controller
+    }
+
+    /// Library changes reach the open homepage's `lb.on("change")`.
+    func libraryChanged(_ paths: [String]) {
+        if paths.contains(where: { $0.hasPrefix(SpaceLibrary.directory) }) { reload() }
+        if let selected { controllers[selected]?.notify(paths) }
+    }
+
+    func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     func create(name: String, icon: String, scope: SpaceScope) throws {
         guard let library else { throw NoteError.noLibrary }
         let space = try library.create(name: name, icon: icon, scope: scope)
         reload()
-        selected = space.name; showingHome = true
+        select(space.name)
         try copyPrompt(for: space)
     }
 

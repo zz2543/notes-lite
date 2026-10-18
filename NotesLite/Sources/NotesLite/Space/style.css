@@ -1,0 +1,118 @@
+/* 留白空间主页样式包：与原生界面一致的中性灰白色，跟随深色模式。 */
+:root {
+  color-scheme: light dark;
+  --lb-bg: #ffffff;
+  --lb-card: #fafafa;
+  --lb-text: #1d1d1f;
+  --lb-muted: #86868b;
+  --lb-line: rgba(0, 0, 0, 0.075);
+  --lb-accent: #3b82f6;
+  --lb-accent: -apple-system-control-accent;
+  --lb-accent-soft: color-mix(in srgb, var(--lb-accent) 14%, transparent);
+  --lb-good: #34a058;
+  --lb-warn: #d8902a;
+  --lb-bad: #d64545;
+  --lb-radius: 14px;
+  --lb-font: -apple-system, "PingFang SC", system-ui, sans-serif;
+  --lb-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --lb-chart-1: #5b7fd6;
+  --lb-chart-2: #4fa58c;
+  --lb-chart-3: #d79a4e;
+  --lb-chart-4: #c96f8a;
+  --lb-chart-5: #8a7ad1;
+  --lb-chart-6: #5aa7c4;
+  --lb-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.035);
+  --lb-spring: cubic-bezier(0.22, 1.12, 0.36, 1);
+  --lb-ease: cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lb-bg: #1e1e1e;
+    --lb-card: #252525;
+    --lb-text: #f2f2f4;
+    --lb-muted: #98989d;
+    --lb-line: rgba(255, 255, 255, 0.08);
+    --lb-good: #4cc274;
+    --lb-warn: #e6a648;
+    --lb-bad: #ef6b6b;
+    --lb-chart-1: #7d9cf0;
+    --lb-chart-2: #64c2a6;
+    --lb-chart-3: #e8b06a;
+    --lb-chart-4: #e08aa3;
+    --lb-chart-5: #a596ec;
+    --lb-chart-6: #70bfdc;
+    --lb-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.18);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--lb-bg); color: var(--lb-text); }
+body.lb-page {
+  font: 13px/1.55 var(--lb-font);
+  padding: 28px 32px 48px;
+  max-width: 1080px;
+  margin: 0 auto;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; margin: 0 0 10px; }
+h1 { font-size: 22px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
+p { margin: 0 0 10px; }
+a { color: var(--lb-accent); }
+code { font-family: var(--lb-mono); font-size: 0.92em; }
+
+.lb-card {
+  background: var(--lb-card);
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-radius);
+  box-shadow: var(--lb-shadow);
+  padding: 18px 20px;
+  margin: 0 0 16px;
+  transition: box-shadow 0.2s var(--lb-ease), transform 0.2s var(--lb-ease);
+}
+.lb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0 0 16px;
+}
+.lb-grid > .lb-card { margin: 0; }
+.lb-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.lb-muted { color: var(--lb-muted); }
+
+.lb-button {
+  font: inherit; font-weight: 500;
+  color: var(--lb-bg); background: var(--lb-text);
+  border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  transition: transform 0.16s var(--lb-spring), opacity 0.16s var(--lb-ease);
+}
+.lb-button:hover { opacity: 0.88; }
+.lb-button:active { transform: scale(0.96); }
+.lb-button:disabled { opacity: 0.45; cursor: default; transform: none; }
+.lb-button.lb-secondary { color: var(--lb-text); background: var(--lb-accent-soft); }
+
+.lb-input, .lb-card input, .lb-card select, .lb-card textarea {
+  font: inherit; color: var(--lb-text);
+  background: var(--lb-bg);
+  border: 1px solid var(--lb-line); border-radius: 8px;
+  padding: 6px 9px; outline: none;
+  transition: border-color 0.16s var(--lb-ease), box-shadow 0.16s var(--lb-ease);
+}
+.lb-input:focus, .lb-card input:focus, .lb-card select:focus, .lb-card textarea:focus {
+  border-color: color-mix(in srgb, var(--lb-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px var(--lb-accent-soft);
+}
+
+/* Cards settle in once when the page opens; nothing loops. */
+@keyframes lb-enter { from { opacity: 0; transform: translateY(6px) scale(0.995); } to { opacity: 1; transform: none; } }
+body.lb-page > *, .lb-grid > * { animation: lb-enter 0.42s var(--lb-spring) both; }
+body.lb-page > *:nth-child(2) { animation-delay: 30ms; }
+body.lb-page > *:nth-child(3) { animation-delay: 60ms; }
+body.lb-page > *:nth-child(4) { animation-delay: 90ms; }
+body.lb-page > *:nth-child(5) { animation-delay: 120ms; }
+body.lb-page > *:nth-child(n+6) { animation-delay: 150ms; }
+.lb-grid > *:nth-child(2) { animation-delay: 40ms; }
+.lb-grid > *:nth-child(3) { animation-delay: 80ms; }
+.lb-grid > *:nth-child(n+4) { animation-delay: 120ms; }
+@media (prefers-reduced-motion: reduce) {
+  body.lb-page > *, .lb-grid > * { animation: none; }
+}

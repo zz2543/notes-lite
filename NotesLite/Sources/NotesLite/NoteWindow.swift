@@ -44,6 +44,7 @@ struct NoteWindow: View {
     @State var spaces = SpaceStore()
     @State private var spaceSheet: SpaceSheetKind?
     @State private var changeToken: UUID?
+    @State private var showOperationLog = false
     @Namespace private var navigationSelection
     @Namespace private var noteSelection
     @Namespace private var spaceSelection
@@ -149,9 +150,7 @@ struct NoteWindow: View {
             enforceVisibleLocation(); revealSelection(); workspace.startWatching(); spaces.load(root: workspace.root)
             if changeToken == nil {
                 let store = spaces
-                changeToken = workspace.observeChanges { paths in
-                    if paths.contains(where: { $0.hasPrefix(SpaceLibrary.directory) }) { store.reload() }
-                }
+                changeToken = workspace.observeChanges { paths in store.libraryChanged(paths) }
             }
         }
         .onChange(of: spaces.error) { _, message in if let message { workspace.error = message; spaces.error = nil } }
@@ -213,7 +212,7 @@ struct NoteWindow: View {
                 .accessibilityLabel("切换资料库与空间")
             if inSpaces {
                 SpaceSidebarList(store: spaces, namespace: spaceSelection, create: { spaceSheet = .create }) { space in
-                    withAnimation(Motion.selection) { spaces.selected = space.name; spaces.showingHome = true; spaces.copiedPrompt = false }
+                    withAnimation(Motion.selection) { spaces.select(space.name) }
                 }.padding(.horizontal, 10).transition(Motion.pane(true))
             } else {
             VStack(spacing: 3) {
@@ -407,8 +406,8 @@ struct NoteWindow: View {
     }
 
     @ViewBuilder private func spaceHome(_ space: Space) -> some View {
-        if space.hasPage {
-            Text(space.name).frame(maxWidth: .infinity, maxHeight: .infinity)
+        if space.hasPage, let root = workspace.root {
+            SpaceHome(space: space, root: root, store: spaces, showLog: { showOperationLog = true })
         } else {
             SpaceEmptyHome(space: space, store: spaces)
         }
