@@ -303,3 +303,99 @@ struct SpaceWriteNotice: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// Every write the homepages made, newest first, each undoable on its own.
+struct OperationLogSheet: View {
+    let log: OperationLog
+    let space: String?
+    let close: () -> Void
+    @State private var entries: [OperationLog.Entry] = []
+    @State private var onlyThisSpace = true
+    @State private var failure: (id: UUID, message: String)?
+
+    private var shown: [OperationLog.Entry] { entries.filter { !onlyThisSpace || space == nil || $0.space == space } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("操作记录").font(.headline)
+                    Text("空间主页对笔记做出的每次写入，保留 30 天，可以逐条撤销。").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let space { Toggle("只看「\(space)」", isOn: $onlyThisSpace.animation(Motion.selection)).toggleStyle(.checkbox).font(.caption) }
+            }.padding(.horizontal, 22).padding(.top, 20).padding(.bottom, 14)
+            Divider().opacity(0.5)
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(shown) { entry in
+                        OperationRow(entry: entry, failure: failure?.id == entry.id ? failure?.message : nil) { undo(entry) }
+                            .transition(Motion.row)
+                    }
+                    if shown.isEmpty {
+                        Text("还没有记录。").font(.caption).foregroundStyle(.tertiary).padding(40)
+                    }
+                }.padding(10).animation(Motion.selection, value: shown)
+            }.frame(height: 380)
+            Divider().opacity(0.5)
+            HStack { Spacer(); Button("完成", action: close).keyboardShortcut(.defaultAction) }.padding(14)
+        }
+        .frame(width: 560)
+        .onAppear { entries = log.entries() }
+    }
+
+    private func undo(_ entry: OperationLog.Entry) {
+        do {
+            try log.undo(entry.id)
+            failure = nil
+            withAnimation(Motion.selection) { entries = log.entries() }
+        } catch {
+            withAnimation(Motion.feedback) { failure = (entry.id, (error as? SpaceAPIError)?.message ?? error.localizedDescription) }
+        }
+    }
+}
+
+private struct OperationRow: View {
+    let entry: OperationLog.Entry
+    let failure: String?
+    let undo: () -> Void
+    @State private var hovered = false
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 18).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.summary).font(.system(size: 12)).lineLimit(2)
+                    .strikethrough(entry.undone, color: .secondary).foregroundStyle(entry.undone ? .secondary : .primary)
+                HStack(spacing: 6) {
+                    Text(entry.date, format: .dateTime.month().day().hour().minute())
+                    Text("·"); Text(entry.space)
+                    if entry.undone { Text("· 已撤销") }
+                }.font(.system(size: 10)).foregroundStyle(.tertiary)
+                if let failure { Text(failure).font(.system(size: 10.5)).foregroundStyle(.orange).transition(.opacity.combined(with: .offset(y: -3))) }
+            }
+            Spacer(minLength: 8)
+            if !entry.undone {
+                Button("撤销", action: undo).buttonStyle(SoftButton()).font(.system(size: 11, weight: .medium))
+                    .opacity(hovered ? 1 : 0.55)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Color.primary.opacity(hovered ? 0.04 : 0), in: RoundedRectangle(cornerRadius: 9))
+        .onHover { hovered = $0 }
+        .animation(Motion.hover, value: hovered)
+    }
+
+    private var icon: String {
+        switch entry.kind {
+        case .recordAppend: "plus.circle"
+        case .recordUpdate: "pencil.circle"
+        case .recordRemove: "minus.circle"
+        case .noteCreate: "doc.badge.plus"
+        case .noteWrite: "doc.text"
+        case .noteRename: "character.cursor.ibeam"
+        case .noteMove: "folder"
+        case .noteTrash: "trash"
+        case .pageWrite: "macwindow"
+        }
+    }
+}

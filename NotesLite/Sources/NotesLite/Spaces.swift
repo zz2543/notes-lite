@@ -22,7 +22,7 @@ enum SidebarMode: String { case library, spaces }
 
     func load(root: URL?) {
         library = root.map(SpaceLibrary.init(root:))
-        log = root.map(OperationLog.init(root:))
+        log = root.map { OperationLog(root: $0) }
         controllers = [:]
         pageState.reset()
         // Keep the installed guide in step with this version of the app.

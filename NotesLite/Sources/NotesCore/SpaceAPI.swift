@@ -96,8 +96,88 @@ public final class SpaceAPI {
         }
     }
 
-    /// Filled in by the write half of the interface.
-    func writeDispatch(_ method: String, _ args: Arguments) throws -> Any? { nil }
+    func writeDispatch(_ method: String, _ args: Arguments) throws -> Any? {
+        switch method {
+        case "append": return try append(args.string(0, "target"), args[1], args.object(2))
+        case "update": return try update(args.string(0, "target"), args.object(1), args.object(2))
+        case "remove": return try update(args.string(0, "target"), args.object(1), nil)
+        default: return try noteDispatch(method, args)
+        }
+    }
+
+    /// Filled in by the note half of the interface.
+    func noteDispatch(_ method: String, _ args: Arguments) throws -> Any? { nil }
+
+    func entry(_ kind: OperationLog.Kind, _ path: String) -> OperationLog.Entry {
+        OperationLog.Entry(date: now(), space: spaceName, kind: kind, path: path)
+    }
+
+    func commit(_ text: String, to url: URL, entries: [OperationLog.Entry]) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url, options: .atomic)
+        try log?.record(entries)
+        lastChanges += entries.count
+    }
+
+    /// String values may use placeholders; every value is stored as its cell text.
+    func cellValues(_ record: [String: Any]) -> [String: String] {
+        record.reduce(into: [:]) { result, pair in
+            guard pair.key != "_row" else { return }
+            let text = Self.text(of: pair.value)
+            result[pair.key] = pair.value is String ? Placeholders.expand(text, now: now()) : text
+        }
+    }
+
+    func append(_ target: String, _ value: Any?, _ options: [String: Any]) throws -> [String: Any] {
+        let source = try source(target)
+        let records: [[String: Any]]
+        if let one = value as? [String: Any] { records = [one] }
+        else if let many = value as? [[String: Any]] { records = many }
+        else { throw SpaceAPIError.invalid("lb.append 需要一条记录（对象）或记录数组。") }
+        guard !records.isEmpty else { return ["count": 0] }
+        let values = records.map(cellValues)
+        var header = (options["header"] as? [Any])?.map { Self.text(of: $0) }.filter { !$0.isEmpty } ?? []
+        if header.isEmpty { for record in records { for key in record.keys.sorted() where key != "_row" && !header.contains(key) { header.append(key) } } }
+        let title = ((source.path as NSString).lastPathComponent as NSString).deletingPathExtension
+        let result = try RecordEdit.append(try text(at: source.url), title: title, heading: source.heading, header: header, records: values)
+        let entries = result.rows.map { row -> OperationLog.Entry in
+            var e = entry(.recordAppend, source.path); e.heading = source.heading; e.header = result.header; e.after = row; return e
+        }
+        try commit(result.text, to: source.url, entries: entries)
+        return ["count": entries.count]
+    }
+
+    /// `changes == nil` removes the matching records.
+    func update(_ target: String, _ match: [String: Any], _ changes: [String: Any]?) throws -> [String: Any] {
+        let source = try source(target)
+        guard !match.isEmpty else { throw SpaceAPIError.invalid("需要用 match 指定要修改的记录，例如 { 日期: \"2026-10-18\" } 或 { _row: 0 }。") }
+        guard let text = try text(at: source.url), let table = RecordTable.find(in: text, heading: source.heading) else { throw SpaceAPIError.notFound(target) }
+        let width = table.header.count
+        let types = table.types
+        let updates = changes.map(cellValues)
+        if let updates, let unknown = updates.keys.sorted().first(where: { !table.header.contains($0) }) { throw SpaceAPIError.unknownField(unknown) }
+        if let unknown = match.keys.sorted().first(where: { $0 != "_row" && !table.header.contains($0) }) { throw SpaceAPIError.unknownField(unknown) }
+        let indices = table.rows.indices.filter { i in
+            if let row = match["_row"] as? Int, row != i { return false }
+            return match.allSatisfy { key, wanted in
+                guard key != "_row", let c = table.header.firstIndex(of: key) else { return true }
+                return Self.matches(Self.value(c < table.rows[i].count ? table.rows[i][c] : "", type: types[c]), wanted)
+            }
+        }
+        guard !indices.isEmpty else { return ["count": 0] }
+        var entries: [OperationLog.Entry] = []
+        let updated = RecordEdit.rewrite(text, table: table, rows: indices) { index, before in
+            var e = entry(updates == nil ? .recordRemove : .recordUpdate, source.path)
+            e.heading = source.heading; e.header = table.header; e.before = before; e.row = index
+            guard let updates else { entries.append(e); return nil }
+            var after = before
+            for (key, value) in updates { if let c = table.header.firstIndex(of: key), c < width { after[c] = RecordEdit.normalized(value) } }
+            e.after = after; entries.append(e)
+            return after
+        }
+        try commit(updated, to: source.url, entries: entries.reversed().filter { $0.before != $0.after })
+        return ["count": indices.count]
+    }
 
     // MARK: paths
 

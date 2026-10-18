@@ -2,7 +2,7 @@ import XCTest
 @testable import NotesCore
 
 /// The lb request handler: one JSON request from a space homepage in, one JSON result out, checked against the library on disk.
-final class SpaceAPITests: XCTestCase {
+class SpaceAPITestCase: XCTestCase {
     var root: URL!
     /// 2026-10-18 (Sunday, ISO week 42) at noon, local time.
     let today: Date = {
@@ -55,7 +55,9 @@ final class SpaceAPITests: XCTestCase {
     }
 
     func records(_ reply: Reply) -> [[String: Any]] { (reply.result as? [String: Any])?["records"] as? [[String: Any]] ?? [] }
+}
 
+final class SpaceAPITests: SpaceAPITestCase {
     func testQueryReturnsTypedRecordsFromTheTableUnderAHeading() {
         let reply = call(api(), "query", "健身/训练记录.md#卧推")
         XCTAssertTrue(reply.ok, reply.message ?? "")

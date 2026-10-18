@@ -153,6 +153,9 @@ struct NoteWindow: View {
                 changeToken = workspace.observeChanges { paths in store.libraryChanged(paths) }
             }
         }
+        .sheet(isPresented: $showOperationLog) {
+            if let log = spaces.log { OperationLogSheet(log: log, space: spaces.selected) { showOperationLog = false } }
+        }
         .onChange(of: spaces.error) { _, message in if let message { workspace.error = message; spaces.error = nil } }
         .sheet(item: $spaceSheet) { kind in
             switch kind {
@@ -305,6 +308,10 @@ struct NoteWindow: View {
                     }.padding(.horizontal, 10).padding(.vertical, 12)
                     .animation(Motion.selection, value: spaceNotes.map(\.path))
                 }.scrollIndicators(.hidden).id(space.name).transition(.opacity.combined(with: .offset(y: 6)))
+                Button { showOperationLog = true } label: {
+                    Label("操作记录", systemImage: "clock.arrow.circlepath").font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(SoftButton()).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.vertical, 8)
+                    .overlay(alignment: .top) { Color.hairline.frame(height: 1).padding(.horizontal, 18) }
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "square.grid.2x2").font(.system(size: 22, weight: .ultraLight))

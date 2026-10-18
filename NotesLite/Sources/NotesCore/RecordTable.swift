@@ -76,3 +76,58 @@ public struct RecordTable: Equatable, Sendable {
         [render(header), "|" + header.map { _ in "---" }.joined(separator: "|") + "|"]
     }
 }
+
+/// Line-level edits of one record table that leave the rest of the note as it was.
+enum RecordEdit {
+    /// Rows as cells in header order, padded to the header's width.
+    static func cells(_ record: [String: String], header: [String]) throws -> [String] {
+        if let unknown = record.keys.sorted().first(where: { !header.contains($0) }) { throw SpaceAPIError.unknownField(unknown) }
+        return header.map { normalized(record[$0] ?? "") }
+    }
+
+    /// A value as it reads back from the table: one line, trimmed.
+    static func normalized(_ value: String) -> String {
+        value.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+    }
+
+    static func padded(_ row: [String], _ count: Int) -> [String] {
+        Array((row + Array(repeating: "", count: max(0, count - row.count))).prefix(count))
+    }
+
+    /// Appends rows, creating the note, the heading or the table when missing. Returns the new text and the stored cells.
+    static func append(_ text: String?, title: String, heading: String?, header fallback: [String], records: [[String: String]]) throws -> (text: String, header: [String], rows: [[String]]) {
+        if let text, let table = RecordTable.find(in: text, heading: heading) {
+            let rows = try records.map { try cells($0, header: table.header) }
+            var lines = Markdown.lines(text)
+            lines.insert(contentsOf: rows.map(RecordTable.render), at: table.lines.upperBound)
+            return (lines.joined(separator: "\n"), table.header, rows)
+        }
+        guard !fallback.isEmpty else { throw SpaceAPIError.invalid("记录表不存在，且没有可用来新建的表头。") }
+        let rows = try records.map { try cells($0, header: fallback) }
+        let block = (RecordTable.newTable(fallback) + rows.map(RecordTable.render)).joined(separator: "\n") + "\n"
+        guard var text else {
+            return ("# \(title)\n\n" + (heading.map { "## \($0)\n\n" } ?? "") + block, fallback, rows)
+        }
+        if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
+        if !text.isEmpty { text += "\n" }
+        text += (heading.map { "## \($0)\n\n" } ?? "") + block
+        return (text, fallback, rows)
+    }
+
+    /// Replaces or deletes body rows; `edit` returns nil to delete a row.
+    static func rewrite(_ text: String, table: RecordTable, rows indices: [Int], _ edit: (Int, [String]) -> [String]?) -> String {
+        var lines = Markdown.lines(text)
+        for index in indices.sorted(by: >) {
+            let line = table.lines.lowerBound + 2 + index
+            let before = padded(table.rows[index], table.header.count)
+            if let after = edit(index, before) { lines[line] = RecordTable.render(after) } else { lines.remove(at: line) }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func insert(_ text: String, table: RecordTable, row: [String], at index: Int) -> String {
+        var lines = Markdown.lines(text)
+        lines.insert(RecordTable.render(row), at: table.lines.lowerBound + 2 + min(max(0, index), table.rows.count))
+        return lines.joined(separator: "\n")
+    }
+}
