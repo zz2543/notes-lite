@@ -119,12 +119,12 @@ public enum SpaceGuide {
 ### `<lb-calendar>` 打卡热力日历
 
 ```html
-<lb-calendar source="健身/训练记录.md" field="日期" label="打卡" weeks="20"></lb-calendar>
+<lb-calendar source="健身/训练记录.md" field="日期" label="打卡"></lb-calendar>
 ```
 
 - `field`：日期字段（默认第一个日期类型的字段）。
 - `value`：可选，用这个数字字段的合计决定颜色深浅；不写时按条数。
-- `weeks`：显示最近几周（默认 20）。
+- `weeks`：显示最近几周（默认按卡片宽度铺满）。
 
 ### `<lb-quick-add>` 快捷录入
 
