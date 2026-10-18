@@ -87,4 +87,16 @@ import XCTest
         XCTAssertEqual(workspace.searchNotes("二").map(\.path), ["甲.md"])
         XCTAssertTrue(workspace.searchNotes("一").isEmpty)
     }
+
+    func testCleanEditorLetsGoOfANoteTrashedElsewhere() async throws {
+        try Data("内容".utf8).write(to: root.appendingPathComponent("要删.md"))
+        let workspace = Workspace()
+        try workspace.open(root)
+        workspace.startWatching()
+        defer { workspace.stopWatching() }
+        XCTAssertEqual(workspace.current, "要删.md")
+        try FileManager.default.trashItem(at: root.appendingPathComponent("要删.md"), resultingItemURL: nil)
+        let released = await eventually { workspace.current == nil && workspace.notes.isEmpty }
+        XCTAssertTrue(released)
+    }
 }

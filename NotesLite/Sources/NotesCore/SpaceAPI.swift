@@ -105,8 +105,86 @@ public final class SpaceAPI {
         }
     }
 
-    /// Filled in by the note half of the interface.
-    func noteDispatch(_ method: String, _ args: Arguments) throws -> Any? { nil }
+    func noteDispatch(_ method: String, _ args: Arguments) throws -> Any? {
+        switch method {
+        case "create": return try writeNote(args.string(0, "path"), (args[1] as? String) ?? "", create: true)
+        case "write": return try writeNote(args.string(0, "path"), (args[1] as? String) ?? "", create: false)
+        case "rename": return try rename(args.string(0, "path"), args.string(1, "newTitle"))
+        case "move": return try move(args.string(0, "path"), (args[1] as? String) ?? "")
+        case "trash": return try trash(args.string(0, "path"))
+        case "writePage": return try writePage((args[0] as? String) ?? "")
+        default: return nil
+        }
+    }
+
+    func writeNote(_ raw: String, _ content: String, create: Bool) throws -> [String: Any] {
+        let target = try resolve(raw)
+        let before = try text(at: target.url)
+        if create, before != nil { throw SpaceAPIError.exists(raw) }
+        var e = entry(before == nil ? .noteCreate : .noteWrite, target.path)
+        e.before = before.map { [$0] }; e.after = [content]
+        try commit(content, to: target.url, entries: [e])
+        return ["path": target.path]
+    }
+
+    func rename(_ raw: String, _ title: String) throws -> [String: Any] {
+        var name = title.trimmingCharacters(in: .whitespaces)
+        if name.lowercased().hasSuffix(".md") { name = String(name.dropLast(3)) }
+        guard !name.isEmpty, !name.hasPrefix("."), !name.contains("/"), !name.contains(":"), !name.contains("\n") else {
+            throw SpaceAPIError.invalid("新名称不能为空，不能包含斜杠、冒号或以点开头。")
+        }
+        let folder = (try resolve(raw).path as NSString).deletingLastPathComponent
+        return try relocate(raw, to: (folder.isEmpty ? "" : folder + "/") + name + ".md", kind: .noteRename)
+    }
+
+    func move(_ raw: String, _ folder: String) throws -> [String: Any] {
+        let destination = folder.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        let name = (try resolve(raw).path as NSString).lastPathComponent
+        return try relocate(raw, to: (destination.isEmpty ? "" : destination + "/") + name, kind: .noteMove)
+    }
+
+    func relocate(_ raw: String, to newRaw: String, kind: OperationLog.Kind) throws -> [String: Any] {
+        let from = try resolve(raw), to = try resolve(newRaw)
+        guard FileManager.default.fileExists(atPath: from.url.path) else { throw SpaceAPIError.notFound(raw) }
+        if from.path == to.path { return ["path": to.path] }
+        guard !FileManager.default.fileExists(atPath: to.url.path) else { throw SpaceAPIError.exists(newRaw) }
+        try FileManager.default.createDirectory(at: to.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let notes = try LibraryScan.run(root: root, previous: [:]).notes
+        let changes: [NoteRelocation.Change]
+        do { changes = try NoteRelocation.move(root: root, notes: notes, from: from.url, to: to.url) }
+        catch NoteError.conflict { throw SpaceAPIError.conflict("相关笔记正在被修改，请稍后再试。") }
+        var e = entry(kind, from.path)
+        e.newPath = to.path
+        e.related = changes.map { change in
+            OperationLog.FileChange(path: String(change.destination.path.dropFirst(root.path.count + 1)),
+                                    before: String(decoding: change.before, as: UTF8.self), after: String(decoding: change.after, as: UTF8.self))
+        }
+        try log?.record([e])
+        lastChanges += 1
+        return ["path": to.path]
+    }
+
+    func trash(_ raw: String) throws -> [String: Any] {
+        let target = try resolve(raw)
+        guard FileManager.default.fileExists(atPath: target.url.path) else { throw SpaceAPIError.notFound(raw) }
+        var trashed: NSURL?
+        try FileManager.default.trashItem(at: target.url, resultingItemURL: &trashed)
+        var e = entry(.noteTrash, target.path)
+        e.trashed = (trashed as URL?)?.path
+        try log?.record([e])
+        lastChanges += 1
+        return ["path": target.path]
+    }
+
+    /// The homepage may rewrite its own file, but its scope stays what the user set.
+    func writePage(_ html: String) throws -> [String: Any] {
+        let current = try library.space(named: spaceName)
+        guard SpaceFile.meta(html, "lb-scope").map(SpaceScope.init(meta:)) == current.scope else { throw SpaceAPIError.scopeChange }
+        var e = entry(.pageWrite, current.path)
+        e.before = [current.html]; e.after = [html]
+        try commit(html, to: library.url(of: spaceName), entries: [e])
+        return ["path": current.path]
+    }
 
     func entry(_ kind: OperationLog.Kind, _ path: String) -> OperationLog.Entry {
         OperationLog.Entry(date: now(), space: spaceName, kind: kind, path: path)

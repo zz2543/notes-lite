@@ -121,7 +121,13 @@ public enum NoteError: LocalizedError {
         for observer in observers.values { observer(paths) }
         if paths.contains(where: { !$0.split(separator: "/").contains { $0.hasPrefix(".") } }) { refreshInBackground() }
         guard let current, paths.contains(current) || paths.contains((current as NSString).deletingLastPathComponent),
-              let disk = try? Data(contentsOf: url(for: current)), disk != baseline else { return }
+              let location = try? url(for: current) else { return }
+        guard FileManager.default.fileExists(atPath: location.path) else {
+            // Moved or trashed by another tool: a clean editor lets go; unsaved input stays for the user to keep.
+            if !dirty { self.current = nil; text = ""; baseline = nil; revision += 1 }
+            return
+        }
+        guard let disk = try? Data(contentsOf: location), disk != baseline else { return }
         if dirty { saveState = "保存冲突"; error = NoteError.conflict.localizedDescription; return }
         do { try reloadFromDisk() } catch { self.error = error.localizedDescription }
     }
@@ -331,30 +337,7 @@ public enum NoteError: LocalizedError {
         try validateName(newURL.lastPathComponent)
         if oldURL == newURL { return }
         guard !FileManager.default.fileExists(atPath: newURL.path) else { throw NoteError.exists(newURL.lastPathComponent) }
-        var changes: [(source: URL, destination: URL, before: Data, after: Data)] = []
-        for note in notes {
-            let source = try url(for: note.path)
-            let before = try Data(contentsOf: source)
-            guard let body = String(data: before, encoding: .utf8) else { throw CocoaError(.fileReadInapplicableStringEncoding) }
-            let destination = source == oldURL ? newURL : source
-            let updated = References.updating(body, document: source, destination: destination, old: oldURL, new: newURL, root: root, notes: notes)
-            if body != updated { changes.append((source, destination, before, Data(updated.utf8))) }
-        }
-        // Preflight every referenced document before moving anything.
-        for change in changes where try Data(contentsOf: change.source) != change.before { throw NoteError.conflict }
-        try FileManager.default.moveItem(at: oldURL, to: newURL)
-        var written: [(source: URL, destination: URL, before: Data, after: Data)] = []
-        do {
-            for change in changes {
-                guard try Data(contentsOf: change.destination) == change.before else { throw NoteError.conflict }
-                try change.after.write(to: change.destination, options: .atomic)
-                written.append(change)
-            }
-        } catch {
-            for change in written.reversed() { try? change.before.write(to: change.destination, options: .atomic) }
-            try? FileManager.default.moveItem(at: newURL, to: oldURL)
-            throw error
-        }
+        try NoteRelocation.move(root: root, notes: notes, from: oldURL, to: newURL)
         current = newPath
         recent = recent.map { $0 == oldPath ? newPath : $0 }; persistRecent()
         try refresh(); try select(newPath)
