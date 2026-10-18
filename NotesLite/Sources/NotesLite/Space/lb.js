@@ -62,7 +62,18 @@
       Object.defineProperty(rows, "fields", { value: result.fields, enumerable: false });
       return rows;
     },
-    append: (target, records, options) => call("append", target, plain(records), options || {}),
+    append(target, records, options) {
+      // Object key order is lost crossing into native code; send it as the default header for new tables.
+      const request = { ...(options || {}) };
+      if (!request.header) {
+        const header = [];
+        for (const record of Array.isArray(records) ? records : [records]) {
+          for (const key of Object.keys(record || {})) if (!header.includes(key)) header.push(key);
+        }
+        request.header = header;
+      }
+      return call("append", target, plain(records), request);
+    },
     update: (target, match, changes) => call("update", target, plain(match), plain(changes)),
     remove: (target, match) => call("remove", target, plain(match)),
     create: (path, content) => call("create", path, content == null ? "" : String(content)),

@@ -4,9 +4,8 @@ import Foundation
 enum NoteRelocation {
     struct Change { var source: URL; var destination: URL; var before: Data; var after: Data }
 
-    /// Returns the documents whose text changed (the moved note at its new location).
-    @discardableResult
-    static func move(root: URL, notes: [Note], from oldURL: URL, to newURL: URL) throws -> [Change] {
+    /// The documents whose text would change (the moved note at its new location), without touching anything.
+    static func plan(root: URL, notes: [Note], from oldURL: URL, to newURL: URL) throws -> [Change] {
         var changes: [Change] = []
         for note in notes {
             let source = root.appendingPathComponent(note.path)
@@ -16,6 +15,11 @@ enum NoteRelocation {
             let updated = References.updating(body, document: source, destination: destination, old: oldURL, new: newURL, root: root, notes: notes)
             if body != updated { changes.append(Change(source: source, destination: destination, before: before, after: Data(updated.utf8))) }
         }
+        return changes
+    }
+
+    /// Applies a plan: moves the note, then rewrites references, undoing everything if any step fails.
+    static func apply(_ changes: [Change], from oldURL: URL, to newURL: URL) throws {
         // Preflight every referenced document before moving anything.
         for change in changes where try Data(contentsOf: change.source) != change.before { throw NoteError.conflict }
         try FileManager.default.moveItem(at: oldURL, to: newURL)
@@ -27,10 +31,21 @@ enum NoteRelocation {
                 written.append(change)
             }
         } catch {
-            for change in written.reversed() { try? change.before.write(to: change.destination, options: .atomic) }
-            try? FileManager.default.moveItem(at: newURL, to: oldURL)
+            rollback(written, from: oldURL, to: newURL)
             throw error
         }
+    }
+
+    /// Puts a moved note and the references written for it back as they were.
+    static func rollback(_ written: [Change], from oldURL: URL, to newURL: URL) {
+        for change in written.reversed() { try? change.before.write(to: change.destination, options: .atomic) }
+        try? FileManager.default.moveItem(at: newURL, to: oldURL)
+    }
+
+    @discardableResult
+    static func move(root: URL, notes: [Note], from oldURL: URL, to newURL: URL) throws -> [Change] {
+        let changes = try plan(root: root, notes: notes, from: oldURL, to: newURL)
+        try apply(changes, from: oldURL, to: newURL)
         return changes
     }
 }

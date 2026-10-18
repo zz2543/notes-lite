@@ -99,4 +99,12 @@ import XCTest
         let released = await eventually { workspace.current == nil && workspace.notes.isEmpty }
         XCTAssertTrue(released)
     }
+
+    func testOpeningInTheBackgroundFillsTheLibraryAndOpensTheFirstNote() async throws {
+        try Data("内容".utf8).write(to: root.appendingPathComponent("第一篇.md"))
+        let workspace = Workspace()
+        try workspace.open(root, scanInBackground: true)
+        let opened = await eventually { workspace.notes.map(\.path) == ["第一篇.md"] && workspace.current == "第一篇.md" && workspace.text == "内容" }
+        XCTAssertTrue(opened)
+    }
 }

@@ -14,6 +14,7 @@ final class SpaceNoteWriteTests: SpaceAPITestCase {
         XCTAssertEqual(try read("健身/计划.md"), "# 计划\n\n周一练胸")
         let entries = log.entries()
         XCTAssertEqual(entries.map(\.kind), [.noteWrite, .noteCreate])
+        XCTAssertEqual(entries[0].changes.map { "\($0.sign)\($0.text)" }, ["+周一练胸"], "The log shows what the write changed")
         try log.undo(entries[0].id)
         XCTAssertEqual(try read("健身/计划.md"), "# 计划\n")
         try log.undo(entries[1].id)
@@ -61,5 +62,16 @@ final class SpaceNoteWriteTests: SpaceAPITestCase {
         XCTAssertEqual(call(api, "write", ".留白/空间/编写说明.md", "x").code, "outside-scope")
         try log.undo(try XCTUnwrap(log.entries().first).id)
         XCTAssertEqual(try read(".留白/空间/健身.html"), page)
+    }
+
+    func testRenameIsRefusedWhenNotesOutsideTheScopeLinkToIt() throws {
+        try write("别处/引用.md", "见 [[训练记录]]")
+        let log = log(), api = api(log: log)
+        let reply = call(api, "rename", "健身/训练记录.md", "力量训练")
+        XCTAssertEqual(reply.code, "outside-scope")
+        XCTAssertTrue(reply.message?.contains("别处/引用.md") == true, reply.message ?? "")
+        XCTAssertTrue(exists("健身/训练记录.md"), "Nothing moved")
+        XCTAssertEqual(try read("别处/引用.md"), "见 [[训练记录]]", "Notes outside the scope are never written")
+        XCTAssertTrue(log.entries().isEmpty)
     }
 }

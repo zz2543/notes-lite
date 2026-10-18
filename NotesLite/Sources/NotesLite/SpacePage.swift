@@ -23,23 +23,24 @@ enum SpaceAssets {
         directory.flatMap { try? String(contentsOf: $0.appendingPathComponent(file), encoding: .utf8) } ?? ""
     }
 
-    /// The page as WebKit loads it: the injected kit first, so errors in the page's own scripts are already caught.
+    /// The page as WebKit loads it. The space file starts on line 2, so an error's line minus one is its line in the file.
     static func document(for space: Space) -> String {
-        """
-        <!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>\(SpaceText.escape(space.name))</title>
-        <style>\(text("style.css"))</style>
-        <script>\(text("lb.js"))</script>
-        <script>\(text("components.js"))</script>
-        </head><body class="lb-page">
-        \(space.html)
-        </body></html>
-        """
+        "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>\(escape(space.name))</title></head><body class=\"lb-page\">\n" + space.html + "\n</body></html>"
     }
-}
+    static let documentLineOffset = 1
 
-enum SpaceText {
+    /// The kit runs before the page's own scripts (so their errors are caught) and only in the homepage's main frame.
+    static func userScripts() -> [WKUserScript] {
+        let style = "(() => { const s = document.createElement('style'); s.textContent = \(json(text("style.css"))); document.documentElement.appendChild(s); })();"
+        return [style, text("lb.js"), text("components.js")].map {
+            WKUserScript(source: $0, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)
+        }
+    }
+
+    private static func json(_ s: String) -> String {
+        (try? JSONSerialization.data(withJSONObject: [s])).flatMap { String(data: $0, encoding: .utf8) }.map { String($0.dropFirst().dropLast()) } ?? "\"\""
+    }
+
     static func escape(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
     }
@@ -65,8 +66,10 @@ struct SpacePageError: Equatable, Identifiable {
 /// Live state of the homepage being shown: errors, the write notice and its web view.
 @MainActor @Observable final class SpacePageState {
     var errors: [SpacePageError] = []
-    /// Records and notes the homepage changed recently; drives 「主页刚修改了 N 条记录 · 查看」.
+    /// Writes the homepage made recently; drives 「主页刚修改了 N 条记录 · 查看」.
     var recentChanges = 0
+    /// Whether every recent write was a record (otherwise the notice speaks of changes, not records).
+    var recentOnlyRecords = true
     var noticeVersion = 0
     @ObservationIgnored weak var controller: SpacePageController?
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
@@ -76,8 +79,10 @@ struct SpacePageError: Equatable, Identifiable {
         errors = Array((errors + [error]).suffix(5))
     }
 
-    func wrote(_ count: Int) {
+    func wrote(_ count: Int, records: Int) {
         guard count > 0 else { return }
+        if recentChanges == 0 { recentOnlyRecords = true }
+        recentOnlyRecords = recentOnlyRecords && records == count
         recentChanges += count; noticeVersion += 1
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
@@ -98,11 +103,14 @@ struct SpacePageError: Equatable, Identifiable {
     let state: SpacePageState
     let webView: WKWebView
     private var loadedHTML: String?
+    /// Requests run one at a time, off the main thread, so two writes never interleave and typing never waits.
+    private let queue = DispatchQueue(label: "noteslite.space-api", qos: .userInitiated)
 
     init(root: URL, space: Space, log: OperationLog, state: SpacePageState) {
         self.root = root; self.space = space; self.state = state
         api = SpaceAPI(root: root, space: space.name, log: log)
         let configuration = WKWebViewConfiguration()
+        for script in SpaceAssets.userScripts() { configuration.userContentController.addUserScript(script) }
         // Network stays open (unlike the math sandbox); storage persists per space and only holds UI preferences.
         configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: Self.storeIdentifier(root: root, space: space.name))
         configuration.preferences.isElementFullscreenEnabled = true
@@ -152,33 +160,53 @@ struct SpacePageError: Equatable, Identifiable {
 
     // MARK: bridge
 
+    /// Only the homepage's own main frame speaks for the space; embedded frames get nothing.
+    private func trusted(_ message: WKScriptMessage) -> Bool {
+        let origin = Self.origin(root: root, space: space.name)
+        return message.frameInfo.isMainFrame && message.frameInfo.securityOrigin.host == origin.host
+            && message.frameInfo.securityOrigin.protocol == origin.scheme
+    }
+
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
+        guard trusted(message) else {
+            replyHandler(["ok": false, "error": ["code": "outside-scope", "message": "只有空间主页本身可以使用 lb。"]], nil); return
+        }
         guard let body = message.body as? [String: Any], let request = try? JSONSerialization.data(withJSONObject: body) else {
             replyHandler(["ok": false, "error": ["code": "invalid", "message": "请求格式不正确。"]], nil); return
         }
-        let reply = api.handle(request)
-        state.wrote(api.lastChanges)
-        replyHandler(try? JSONSerialization.jsonObject(with: reply, options: [.fragmentsAllowed]), nil)
+        let api = self.api
+        queue.async { [weak self] in
+            let reply = api.handle(request)
+            let changes = api.lastChanges, records = api.lastRecordChanges
+            DispatchQueue.main.async {
+                self?.state.wrote(changes, records: records)
+                replyHandler(try? JSONSerialization.jsonObject(with: reply, options: [.fragmentsAllowed]), nil)
+            }
+        }
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any] else { return }
+        guard trusted(message), let body = message.body as? [String: Any] else { return }
         let source = (body["source"] as? String) ?? ""
         let line = (body["line"] as? Int) ?? 0
         let column = (body["column"] as? Int) ?? 0
-        let location = line > 0 ? (source.hasPrefix("https://space-") || source.isEmpty ? "空间文件" : source) + " 第 \(line) 行" + (column > 0 ? "，第 \(column) 列" : "") : ""
+        let inPage = source.isEmpty || source.hasPrefix(Self.origin(root: root, space: space.name).absoluteString)
+        let location: String
+        if line <= 0 { location = "" }
+        else if inPage { location = "空间文件第 \(max(1, line - SpaceAssets.documentLineOffset)) 行" + (column > 0 ? "，第 \(column) 列" : "") }
+        else { location = source + " 第 \(line) 行" }
         state.record(SpacePageError(message: (body["message"] as? String) ?? "未知错误", location: location, stack: (body["stack"] as? String) ?? ""))
     }
 
     // MARK: navigation
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
-        // Links leave for the user's browser; the homepage itself never navigates away.
-        if action.navigationType == .linkActivated, let url = action.request.url, action.targetFrame?.isMainFrame != false {
-            if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
-            decisionHandler(.cancel); return
-        }
-        decisionHandler(.allow)
+        // The homepage itself never navigates away: clicked links open in the user's browser, anything else is dropped.
+        // Embedded frames may navigate freely; they never receive lb.
+        guard action.targetFrame?.isMainFrame != false, let url = action.request.url else { decisionHandler(.allow); return }
+        if url == Self.origin(root: root, space: space.name) || url.absoluteString == "about:blank" { decisionHandler(.allow); return }
+        if action.navigationType == .linkActivated, ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
+        decisionHandler(.cancel)
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
@@ -238,7 +266,7 @@ struct SpaceHome: View {
                         .transition(Motion.banner)
                 }
                 if state.recentChanges > 0 {
-                    SpaceWriteNotice(count: state.recentChanges, version: state.noticeVersion, show: showLog)
+                    SpaceWriteNotice(count: state.recentChanges, onlyRecords: state.recentOnlyRecords, version: state.noticeVersion, show: showLog)
                         .transition(Motion.banner)
                 }
             }
@@ -286,20 +314,20 @@ struct SpaceErrorBar: View {
 
 struct SpaceWriteNotice: View {
     let count: Int
+    var onlyRecords = true
     let version: Int
     let show: () -> Void
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "pencil.and.list.clipboard").font(.system(size: 11)).foregroundStyle(.secondary)
-            Text("主页刚修改了 ").font(.system(size: 11.5)) + Text("\(count)").font(.system(size: 11.5, weight: .semibold)).monospacedDigit() + Text(" 条记录").font(.system(size: 11.5))
+                .symbolEffect(.bounce, value: version)
+            Text("主页刚修改了 ").font(.system(size: 11.5)) + Text("\(count)").font(.system(size: 11.5, weight: .semibold)).monospacedDigit() + Text(onlyRecords ? " 条记录" : " 处内容").font(.system(size: 11.5))
             Button("查看", action: show).buttonStyle(.plain).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.accentColor)
             Spacer(minLength: 0)
         }
         .contentTransition(.numericText(value: Double(count)))
         .padding(.horizontal, 12).padding(.vertical, 7)
         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-        .scaleEffect(1)
-        .animation(Motion.feedback, value: version)
         .accessibilityElement(children: .combine)
     }
 }
@@ -360,6 +388,7 @@ private struct OperationRow: View {
     let failure: String?
     let undo: () -> Void
     @State private var hovered = false
+    @State private var expanded = false
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon).font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 18).padding(.top, 2)
@@ -370,7 +399,16 @@ private struct OperationRow: View {
                     Text(entry.date, format: .dateTime.month().day().hour().minute())
                     Text("·"); Text(entry.space)
                     if entry.undone { Text("· 已撤销") }
+                    if !entry.changes.isEmpty {
+                        Button { withAnimation(Motion.selection) { expanded.toggle() } } label: {
+                            HStack(spacing: 3) {
+                                Text(expanded ? "收起差异" : "查看差异")
+                                Image(systemName: "chevron.right").font(.system(size: 7, weight: .semibold)).rotationEffect(.degrees(expanded ? 90 : 0))
+                            }
+                        }.buttonStyle(.plain).foregroundStyle(.secondary)
+                    }
                 }.font(.system(size: 10)).foregroundStyle(.tertiary)
+                if expanded { OperationDiff(lines: entry.changes).transition(.opacity.combined(with: .offset(y: -4))) }
                 if let failure { Text(failure).font(.system(size: 10.5)).foregroundStyle(.orange).transition(.opacity.combined(with: .offset(y: -3))) }
             }
             Spacer(minLength: 8)
@@ -397,5 +435,26 @@ private struct OperationRow: View {
         case .noteTrash: "trash"
         case .pageWrite: "macwindow"
         }
+    }
+}
+
+/// Before and after of one write, as `-`/`+` lines.
+private struct OperationDiff: View {
+    let lines: [(sign: String, text: String)]
+    private static let limit = 14
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(lines.prefix(Self.limit).enumerated()), id: \.offset) { _, line in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(String(line.sign)).foregroundStyle(line.sign == "+" ? Color.green : Color.red).frame(width: 8)
+                    Text(line.text.isEmpty ? " " : line.text).lineLimit(1).truncationMode(.tail)
+                }
+                .padding(.horizontal, 6).padding(.vertical, 1.5)
+                .background((line.sign == "+" ? Color.green : Color.red).opacity(0.07), in: RoundedRectangle(cornerRadius: 4))
+            }
+            if lines.count > Self.limit { Text("还有 \(lines.count - Self.limit) 行……").foregroundStyle(.tertiary).padding(.leading, 20) }
+        }
+        .font(.system(size: 10.5, design: .monospaced)).textSelection(.enabled)
+        .padding(.top, 4)
     }
 }

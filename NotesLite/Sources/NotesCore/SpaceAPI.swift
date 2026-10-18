@@ -32,19 +32,30 @@ public struct SpaceAPIError: Error, Equatable {
 
 /// The native side of the `lb` interface: everything a space homepage can do to the library goes through `handle`.
 /// Requests are `{"method": …, "args": […]}`; replies are `{"ok": true, "result": …}` or `{"ok": false, "error": {code, message}}`.
-public final class SpaceAPI {
+/// Not thread-safe by itself: the app serialises every request on one queue per homepage.
+public final class SpaceAPI: @unchecked Sendable {
     public let root: URL
     public let spaceName: String
-    let log: OperationLog?
+    let log: OperationLog
     let now: () -> Date
-    /// Records and notes changed by the last request, for the 「主页刚修改了 N 条记录」 notice.
+    /// Log entries written by the last request, for the 「主页刚修改了 N 条记录」 notice.
     public private(set) var lastChanges = 0
+    /// How many of `lastChanges` were records (the rest are notes or the page itself).
+    public private(set) var lastRecordChanges = 0
+    private var scanCache: [String: LibraryScan.Cached] = [:]
 
     public init(root: URL, space: String, log: OperationLog? = nil, now: @escaping () -> Date = Date.init) {
         self.root = root.resolvingSymlinksInPath().standardizedFileURL
         self.spaceName = space
-        self.log = log
+        self.log = log ?? OperationLog(root: root, now: now)
         self.now = now
+    }
+
+    /// The library as it is now, reusing unchanged bodies between requests.
+    func scan() throws -> LibraryScan {
+        let scan = try LibraryScan.run(root: root, previous: scanCache)
+        scanCache = scan.cache
+        return scan
     }
 
     var library: SpaceLibrary { SpaceLibrary(root: root) }
@@ -56,7 +67,7 @@ public final class SpaceAPI {
     }
 
     public func handle(_ request: Data) -> Data {
-        lastChanges = 0
+        lastChanges = 0; lastRecordChanges = 0
         let reply: [String: Any]
         do {
             guard let object = try? JSONSerialization.jsonObject(with: request) as? [String: Any],
@@ -148,20 +159,29 @@ public final class SpaceAPI {
         guard FileManager.default.fileExists(atPath: from.url.path) else { throw SpaceAPIError.notFound(raw) }
         if from.path == to.path { return ["path": to.path] }
         guard !FileManager.default.fileExists(atPath: to.url.path) else { throw SpaceAPIError.exists(newRaw) }
-        try FileManager.default.createDirectory(at: to.url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let notes = try LibraryScan.run(root: root, previous: [:]).notes
-        let changes: [NoteRelocation.Change]
-        do { changes = try NoteRelocation.move(root: root, notes: notes, from: from.url, to: to.url) }
-        catch NoteError.conflict { throw SpaceAPIError.conflict("相关笔记正在被修改，请稍后再试。") }
-        try? library.syncPaths(from: from.path, to: to.path)
+        let scope = try scope()
+        let changes = try NoteRelocation.plan(root: root, notes: try scan().notes, from: from.url, to: to.url)
+        let relative = { (url: URL) in String(url.path.dropFirst(self.root.path.count + 1)) }
+        // Links from notes outside the scope would need rewriting; the scope is the limit, so refuse instead.
+        if let outside = changes.first(where: { !scope.contains(relative($0.destination)) && $0.destination != to.url }) {
+            throw SpaceAPIError(code: "outside-scope", message: "范围外的笔记「\(relative(outside.source))」链接到「\(from.path)」。为了不改动范围外的笔记，不能改名或移动它。")
+        }
         var e = entry(kind, from.path)
         e.newPath = to.path
         e.related = changes.map { change in
-            OperationLog.FileChange(path: String(change.destination.path.dropFirst(root.path.count + 1)),
-                                    before: String(decoding: change.before, as: UTF8.self), after: String(decoding: change.after, as: UTF8.self))
+            OperationLog.FileChange(path: relative(change.destination), before: String(decoding: change.before, as: UTF8.self), after: String(decoding: change.after, as: UTF8.self))
         }
-        try log?.record([e])
-        lastChanges += 1
+        try log.record([e])
+        do {
+            try FileManager.default.createDirectory(at: to.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try NoteRelocation.apply(changes, from: from.url, to: to.url)
+        } catch {
+            try? log.discard([e.id])
+            if case NoteError.conflict = error { throw SpaceAPIError.conflict("相关笔记正在被修改，请稍后再试。") }
+            throw error
+        }
+        try? library.syncPaths(from: from.path, to: to.path)
+        counted([e])
         return ["path": to.path]
     }
 
@@ -172,8 +192,12 @@ public final class SpaceAPI {
         try FileManager.default.trashItem(at: target.url, resultingItemURL: &trashed)
         var e = entry(.noteTrash, target.path)
         e.trashed = (trashed as URL?)?.path
-        try log?.record([e])
-        lastChanges += 1
+        do { try log.record([e]) } catch {
+            // Without a log entry the trash couldn't be undone from here: put the note back.
+            if let back = trashed as URL? { try? FileManager.default.moveItem(at: back, to: target.url) }
+            throw error
+        }
+        counted([e])
         return ["path": target.path]
     }
 
@@ -191,11 +215,22 @@ public final class SpaceAPI {
         OperationLog.Entry(date: now(), space: spaceName, kind: kind, path: path)
     }
 
+    /// Logs first and writes second, so nothing reaches the disk that the operation log can't undo.
     func commit(_ text: String, to url: URL, entries: [OperationLog.Entry]) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(text.utf8).write(to: url, options: .atomic)
-        try log?.record(entries)
+        try log.record(entries)
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(text.utf8).write(to: url, options: .atomic)
+        } catch {
+            try? log.discard(entries.map(\.id))
+            throw error
+        }
+        counted(entries)
+    }
+
+    func counted(_ entries: [OperationLog.Entry]) {
         lastChanges += entries.count
+        lastRecordChanges += entries.filter { [.recordAppend, .recordUpdate, .recordRemove].contains($0.kind) }.count
     }
 
     /// String values may use placeholders; every value is stored as its cell text.
@@ -318,7 +353,7 @@ public final class SpaceAPI {
 
     func scopedNotes() throws -> [Note] {
         let scope = try scope()
-        return try LibraryScan.run(root: root, previous: [:]).notes.filter { scope.contains($0.path) }
+        return try scan().notes.filter { scope.contains($0.path) }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
@@ -337,7 +372,7 @@ public final class SpaceAPI {
 
     func tables(_ raw: String?) throws -> [[String: Any]] {
         let only = try raw.map { try resolve($0).path }
-        return library.recordTables(in: try scope()).filter { table in
+        return library.recordTables(in: try scope(), scan: try scan()).filter { table in
             only.map { table.source == $0 || table.source.hasPrefix($0 + "#") } ?? true
         }.map { ["source": $0.source, "header": $0.header] }
     }

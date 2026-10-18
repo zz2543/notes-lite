@@ -55,7 +55,7 @@ public final class FileWatcher: @unchecked Sendable {
 
 /// One pass over a library's visible Markdown, reusing bodies whose modification date and size are unchanged.
 struct LibraryScan: Sendable {
-    struct Cached: Sendable { var modified: Date; var size: Int; var body: String }
+    struct Cached: Sendable { var modified: Date; var size: Int; var body: String; var preview: String }
     var notes: [Note] = []
     var folders: [String] = []
     var cache: [String: Cached] = [:]
@@ -73,11 +73,14 @@ struct LibraryScan: Sendable {
             if values.isDirectory == true { result.folders.append(relative); continue }
             guard u.pathExtension.lowercased() == "md" else { continue }
             let modified = values.contentModificationDate ?? .distantPast, size = values.fileSize ?? -1
-            let body: String
-            if let hit = previous[relative], hit.modified == modified, hit.size == size { body = hit.body }
-            else { body = (try? String(contentsOf: u, encoding: .utf8)) ?? "" }
-            result.cache[relative] = Cached(modified: modified, size: size, body: body)
-            result.notes.append(Note(path: relative, modified: modified, preview: NotePreview.text(body)))
+            let cached: Cached
+            if let hit = previous[relative], hit.modified == modified, hit.size == size { cached = hit }
+            else {
+                let body = (try? String(contentsOf: u, encoding: .utf8)) ?? ""
+                cached = Cached(modified: modified, size: size, body: body, preview: NotePreview.text(body))
+            }
+            result.cache[relative] = cached
+            result.notes.append(Note(path: relative, modified: modified, preview: cached.preview))
         }
         result.notes.sort { $0.modified > $1.modified }
         result.folders.sort { $0.localizedStandardCompare($1) == .orderedAscending }

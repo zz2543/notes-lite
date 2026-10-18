@@ -112,6 +112,7 @@ final class SpaceLibraryTests: XCTestCase {
         <lb-chart source="健身/训练记录.md#卧推" x="日期"></lb-chart>
         <lb-quick-add target='健身/训练记录.md'></lb-quick-add>
         <lb-stat source="健身房/训练记录.md"></lb-stat>
+        <lb-records source="健身/训练记录#卧推"></lb-records>
         <script>lb.query("健身/训练记录.md#深蹲"); lb.query("健身/训练记录.md.bak");</script>
         """
         try write(".留白/空间/健身.html", page)
@@ -122,6 +123,7 @@ final class SpaceLibraryTests: XCTestCase {
         XCTAssertTrue(html.contains(#"lb.query("健身/力量.md#深蹲")"#), "Exact path literals in scripts follow too")
         XCTAssertTrue(html.contains(#"lb.query("健身/训练记录.md.bak")"#), "Other strings are left alone")
         XCTAssertTrue(html.contains(#"source="健身房/训练记录.md""#))
+        XCTAssertTrue(html.contains(#"source="健身/力量#卧推""#), "Sources written without .md follow too")
         try library.syncPaths(from: "健身", to: "运动/健身")
         html = try read(".留白/空间/健身.html")
         XCTAssertEqual(try library.space(named: "健身").scope, .folders(["运动/健身", "健身房", "日记"]))

@@ -32,6 +32,30 @@ public final class OperationLog {
         public var related: [FileChange]?
         public var undone = false
 
+        /// What changed, line by line: `-` for what was there before, `+` for what the write left.
+        public var changes: [(sign: String, text: String)] {
+            switch kind {
+            case .recordAppend: return after.map { [("+", RecordTable.render($0))] } ?? []
+            case .recordRemove: return before.map { [("-", RecordTable.render($0))] } ?? []
+            case .recordUpdate:
+                return (before.map { [("-", RecordTable.render($0))] } ?? []) + (after.map { [("+", RecordTable.render($0))] } ?? [])
+            case .noteCreate: return Self.lines(after?.first).map { ("+", $0) }
+            case .noteWrite, .pageWrite:
+                let old = Self.lines(before?.first), new = Self.lines(after?.first)
+                let lines = new.difference(from: old).map { change -> (offset: Int, sign: String, text: String) in
+                    switch change {
+                    case .remove(let offset, let line, _): (offset, "-", line)
+                    case .insert(let offset, let line, _): (offset, "+", line)
+                    }
+                }
+                // Roughly in reading order; at the same place, what left comes before what replaced it.
+                return lines.sorted { ($0.offset, $0.sign == "+" ? 1 : 0) < ($1.offset, $1.sign == "+" ? 1 : 0) }.map { ($0.sign, $0.text) }
+            case .noteRename, .noteMove: return [("-", path), ("+", newPath ?? "")]
+            case .noteTrash: return [("-", path)]
+            }
+        }
+        private static func lines(_ text: String?) -> [String] { text.map(Markdown.lines) ?? [] }
+
         public var summary: String {
             let table = path + (heading.map { "#" + $0 } ?? "")
             let cells = { (row: [String]?) in (row ?? []).filter { !$0.isEmpty }.joined(separator: " · ") }
@@ -70,7 +94,10 @@ public final class OperationLog {
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         let all = (try? decoder.decode([Entry].self, from: data)) ?? []
         let cutoff = now().addingTimeInterval(-Self.retention)
-        return all.filter { $0.date >= cutoff }
+        let kept = all.filter { $0.date >= cutoff }
+        // Expired entries leave the file as soon as anyone looks.
+        if kept.count < all.count { try? save(kept) }
+        return kept
     }
 
     func save(_ entries: [Entry]) throws {
@@ -83,6 +110,11 @@ public final class OperationLog {
     public func record(_ new: [Entry]) throws {
         guard !new.isEmpty else { return }
         try save(stored() + new)
+    }
+
+    /// Drops entries whose write never happened.
+    func discard(_ ids: [UUID]) throws {
+        try save(stored().filter { !ids.contains($0.id) })
     }
 
     // MARK: undo
@@ -118,13 +150,14 @@ public final class OperationLog {
         case .noteRename, .noteMove:
             guard let newPath = entry.newPath, FileManager.default.fileExists(atPath: url(newPath).path),
                   !FileManager.default.fileExists(atPath: url(entry.path).path) else { throw Self.changed }
-            for change in entry.related ?? [] where text(change.path) != change.after { _ = change; throw Self.changed }
-            try FileManager.default.moveItem(at: url(newPath), to: url(entry.path))
-            try? SpaceLibrary(root: root).syncPaths(from: newPath, to: entry.path)
-            for change in entry.related ?? [] {
-                let target = change.path == newPath ? entry.path : change.path
-                try write(change.before, target)
+            if (entry.related ?? []).contains(where: { text($0.path) != $0.after }) { throw Self.changed }
+            // The same all-or-nothing move as the original, in reverse.
+            let reverse = (entry.related ?? []).map { change in
+                NoteRelocation.Change(source: url(change.path), destination: url(change.path == newPath ? entry.path : change.path),
+                                      before: Data(change.after.utf8), after: Data(change.before.utf8))
             }
+            try NoteRelocation.apply(reverse, from: url(newPath), to: url(entry.path))
+            try? SpaceLibrary(root: root).syncPaths(from: newPath, to: entry.path)
         case .noteTrash:
             guard let trashed = entry.trashed, FileManager.default.fileExists(atPath: trashed),
                   !FileManager.default.fileExists(atPath: url(entry.path).path) else { throw Self.changed }

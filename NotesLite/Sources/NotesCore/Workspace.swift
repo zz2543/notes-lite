@@ -48,11 +48,14 @@ public enum NoteError: LocalizedError {
     @ObservationIgnored private var observers: [UUID: ([String]) -> Void] = [:]
     @ObservationIgnored private var backgroundScan: Task<Void, Never>?
     @ObservationIgnored private var rescanPending = false
+    @ObservationIgnored private var scanCompletions: [() -> Void] = []
     @ObservationIgnored private var autosave: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults?
     public init(defaults: UserDefaults? = nil) { self.defaults = defaults }
 
-    public func open(_ url: URL) throws {
+    /// Opens a library. With `scanInBackground`, the first pass over its notes runs off the main thread
+    /// (the app's choice for large libraries); the first note opens when it lands.
+    public func open(_ url: URL, scanInBackground: Bool = false) throws {
         try save()
         var directory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &directory), directory.boolValue else { throw NoteError.missing(url.path) }
@@ -64,6 +67,15 @@ public enum NoteError: LocalizedError {
         current = nil; text = ""; baseline = nil; dirty = false; revision += 1
         selectedFolder = nil; query = ""; recentsOnly = false
         recent = defaults?.stringArray(forKey: "recent.\(root!.path)") ?? []
+        if scanInBackground {
+            notes = []; folders = []
+            if watching { startWatching() }
+            refreshInBackground { [weak self] in
+                guard let self, self.current == nil, let first = self.notes.first else { return }
+                do { try self.select(first.path) } catch { self.error = error.localizedDescription }
+            }
+            return
+        }
         try refresh()
         if watching { startWatching() }
         if let first = notes.first { try select(first.path) }
@@ -88,8 +100,9 @@ public enum NoteError: LocalizedError {
     }
 
     /// Rescans off the main thread, reusing unchanged bodies; overlapping requests coalesce into one more pass.
-    public func refreshInBackground() {
+    public func refreshInBackground(then done: (() -> Void)? = nil) {
         guard let root else { return }
+        if let done { scanCompletions.append(done) }
         if backgroundScan != nil { rescanPending = true; return }
         let previous = scanCache
         backgroundScan = Task { [weak self] in
@@ -97,7 +110,9 @@ public enum NoteError: LocalizedError {
             guard let self else { return }
             self.backgroundScan = nil
             if let scan, self.root == root { self.apply(scan) }
-            if self.rescanPending { self.rescanPending = false; self.refreshInBackground() }
+            if self.rescanPending { self.rescanPending = false; self.refreshInBackground(); return }
+            let completions = self.scanCompletions; self.scanCompletions = []
+            for completion in completions { completion() }
         }
     }
 

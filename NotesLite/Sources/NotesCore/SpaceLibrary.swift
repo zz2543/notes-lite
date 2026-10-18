@@ -170,10 +170,10 @@ public struct SpaceLibrary: Sendable {
         return Self.space(name: newName, html: html)
     }
 
-    /// Deletes only the space file; no note is touched.
+    /// Moves only the space file to the trash; no note is touched.
     public func delete(_ name: String) throws {
         guard FileManager.default.fileExists(atPath: url(of: name).path) else { throw SpaceError.missing(name) }
-        try FileManager.default.removeItem(at: url(of: name))
+        try FileManager.default.trashItem(at: url(of: name), resultingItemURL: nil)
         try saveOrder(order().filter { $0 != name })
     }
 
@@ -196,8 +196,11 @@ public struct SpaceLibrary: Sendable {
     public func syncPaths(from old: String, to new: String) throws {
         guard !old.isEmpty, old != new else { return }
         let note = old.lowercased().hasSuffix(".md")
+        // Record table sources may leave out `.md`; those follow the note too.
+        let oldStem = note ? String(old.dropLast(3)) : old, newStem = note && new.lowercased().hasSuffix(".md") ? String(new.dropLast(3)) : new
         func moved(_ path: String) -> String? {
             if path == old { return new }
+            if note, path == oldStem { return newStem }
             if path.hasPrefix(old + "/") { return new + path.dropFirst(old.count) }
             return nil
         }
@@ -244,6 +247,10 @@ public struct SpaceLibrary: Sendable {
     /// Record tables inside the scope, as `路径#标题` with their header.
     public func recordTables(in scope: SpaceScope) -> [(source: String, header: [String])] {
         guard let scan = try? LibraryScan.run(root: root, previous: [:]) else { return [] }
+        return recordTables(in: scope, scan: scan)
+    }
+
+    func recordTables(in scope: SpaceScope, scan: LibraryScan) -> [(source: String, header: [String])] {
         var result: [(String, [String])] = []
         for note in scan.notes.sorted(by: { $0.path.localizedStandardCompare($1.path) == .orderedAscending }) where scope.contains(note.path) {
             let body = scan.cache[note.path]?.body ?? ""

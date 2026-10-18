@@ -34,7 +34,9 @@ public enum SpaceGuide {
 - 只写 `<body>` 里的内容即可（可以包含 `<style>`、`<script>`），留白会注入样式包、组件和 `lb` 接口。
 - meta 之后为空表示「还没有主页」。保存文件后，留白会自动刷新显示。
 - 页面可以联网，可以用 `<script src="https://cdn.jsdelivr.net/...">` 引用网上的库，也可以 `fetch` 外部数据。
-- 页面里的 JS 报错会显示在页面顶部的错误条上，用户可以把错误复制给你修复。
+- 网上的 `<script src>` 加载完之前，它后面的脚本不会运行。先用组件和 `lb` 把数据显示出来，再在需要外部库的地方检查它是否已加载（例如 `if (window.Chart)`），网络慢时页面也不会空着。
+- 页面里的 JS 报错会显示在页面顶部的错误条上，用户可以把错误复制给你修复。错误里的行号就是空间文件里的行号。
+- 页面不能跳转到别的网址（点击链接会在用户的浏览器里打开）。嵌入的 `<iframe>` 里没有 `lb`。
 
 ## 记录表
 
@@ -165,7 +167,7 @@ public enum SpaceGuide {
 
 ### 写记录
 
-- `lb.append(target, record 或 records, options?)` → `{ count }`。`options.header` 指定新建时的表头，默认用记录的字段。记录里有表头之外的字段会报错。
+- `lb.append(target, record 或 records, options?)` → `{ count }`。`options.header` 指定新建时的表头，默认按记录里字段出现的顺序。记录里有表头之外的字段会报错。
 - `lb.update(target, match, changes)` → `{ count }`。`match` 是对象：字段等于该值的记录都会被修改；也可以用 `{ _row: 3 }` 指定行。
 - `lb.remove(target, match)` → `{ count }`，`match` 同上。
 - 字符串值里的占位符会被展开，例如 `{ 日期: "{今天}" }`。
@@ -174,14 +176,19 @@ public enum SpaceGuide {
 
 - `lb.create(path, content)`：新建笔记，已存在时报错。
 - `lb.write(path, content)`：覆盖笔记全文（笔记不存在时新建）。
-- `lb.rename(path, newTitle)`：改名（不含 `.md`），指向它的链接会被更新。
-- `lb.move(path, folder)`：移动到范围内的另一个文件夹，链接会被更新。
+- `lb.rename(path, newTitle)`：改名（不含 `.md`），范围内指向它的链接会被更新。
+- `lb.move(path, folder)`：移动到范围内的另一个文件夹，范围内的链接会被更新。
+- 如果范围外的笔记链接到这篇笔记，改名和移动会被拒绝（`outside-scope`），因为范围外的笔记不能被修改。
 - `lb.trash(path)`：移到废纸篓。
 
 ### 空间文件自身
 
 - `lb.page()` → 当前空间文件的全文。
 - `lb.writePage(html)`：重写当前空间文件。不能改变 `lb-scope`，不能访问其他空间文件。
+
+### 其他
+
+- `lb.today()` → 今天的日期 `YYYY-MM-DD`（本地时间，同步返回）。
 
 ### 事件
 
@@ -209,8 +216,9 @@ public enum SpaceGuide {
   async function draw() {
     const rows = await lb.query("健身/训练记录.md#卧推", { sort: "-日期" });
     const days = new Set(rows.map(r => r.日期));
+    const key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
     let streak = 0, d = new Date();
-    while (days.has(d.toISOString().slice(0, 10))) { streak++; d.setDate(d.getDate() - 1); }
+    while (days.has(key(d))) { streak++; d.setDate(d.getDate() - 1); }
     document.getElementById("streak").textContent = `已连续训练 ${streak} 天`;
   }
   draw();

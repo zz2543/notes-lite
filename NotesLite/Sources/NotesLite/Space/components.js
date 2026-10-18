@@ -54,16 +54,20 @@
   };
   /** Tween a number with requestAnimationFrame; returns a cancel function. */
   const tween = (from, to, duration, step, done) => {
-    if (reduceMotion() || from === to || from == null || to == null) { step(to, 1); if (done) done(); return () => {}; }
+    if (reduceMotion() || document.visibilityState !== "visible" || from === to || from == null || to == null) { step(to, 1); if (done) done(); return () => {}; }
     const start = performance.now();
-    let frame = 0;
+    let frame = 0, finished = false;
+    const finish = () => { if (finished) return; finished = true; cancelAnimationFrame(frame); step(to, 1); if (done) done(); };
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
+      if (t >= 1) { finish(); return; }
       step(from + (to - from) * easeOut(t), t);
-      if (t < 1) frame = requestAnimationFrame(tick); else if (done) done();
+      frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    // Frames stop when the page is hidden mid-tween; the final value still lands.
+    const fallback = setTimeout(finish, duration + 80);
+    return () => { finished = true; cancelAnimationFrame(frame); clearTimeout(fallback); };
   };
 
   const baseStyle = `
@@ -98,7 +102,8 @@
     refresh() {
       if (this.pending) return;
       this.pending = true;
-      requestAnimationFrame(async () => {
+      // A task rather than a frame: hidden pages pause frames, but their data must still be current.
+      setTimeout(async () => {
         this.pending = false;
         const generation = ++this.generation;
         try {
@@ -109,7 +114,7 @@
           this.body.innerHTML = `<div class="problem">${escape(this.localName)}：${escape(e && e.message ? e.message : e)}</div>`;
           report(`<${this.localName}> ${e && e.message ? e.message : e}`);
         }
-      });
+      }, 0);
     }
     header() { const t = this.attr("title", ""); return t ? `<div class="title">${escape(t)}</div>` : ""; }
     async rows() {
@@ -163,9 +168,10 @@
       if (this.cancel) this.cancel();
       if (numeric == null) { this.valueNode.textContent = value == null ? "—" : String(value); this.shown = null; return; }
       const from = this.shown == null ? 0 : this.shown;
-      this.cancel = tween(from, numeric, this.shown == null ? 700 : 450, (v) => { this.valueNode.textContent = format(v, digits); });
+      const duration = this.shown == null ? 700 : 450;
       this.valueNode.textContent = format(from, digits);
       this.shown = numeric;
+      this.cancel = tween(from, numeric, duration, (v) => { this.valueNode.textContent = format(v, digits); });
     }
   }
 

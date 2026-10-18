@@ -1,6 +1,7 @@
 import AppKit
 import NotesCore
 import SwiftUI
+import WebKit
 
 enum SidebarMode: String { case library, spaces }
 
@@ -98,6 +99,10 @@ enum SidebarMode: String { case library, spaces }
         perform {
             try library?.delete(name)
             controllers[name] = nil
+            // Its UI preferences go with it, so a later space of the same name starts clean.
+            if let root = library?.root {
+                WKWebsiteDataStore.remove(forIdentifier: SpacePageController.storeIdentifier(root: root, space: name)) { _ in }
+            }
             if selected == name { selected = nil; pageState.reset() }
             reload()
         }

@@ -16,7 +16,7 @@ import SwiftUI
                     let args = ProcessInfo.processInfo.arguments
                     let argPath = args.firstIndex(of: "--vault").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
                     if let path = argPath ?? UserDefaults.standard.string(forKey: "library") {
-                        do { try workspace.open(URL(fileURLWithPath: path)) } catch { workspace.error = error.localizedDescription }
+                        do { try workspace.open(URL(fileURLWithPath: path), scanInBackground: true) } catch { workspace.error = error.localizedDescription }
                     }
                 }
         }
@@ -91,7 +91,7 @@ struct NavigationSettings: View {
     panel.prompt = "打开笔记库"
     if panel.runModal() == .OK, let url = panel.url {
         performNoteAction(workspace) {
-            try workspace.open(url)
+            try workspace.open(url, scanInBackground: true)
             UserDefaults.standard.set(url.path, forKey: "library")
         }
     }
