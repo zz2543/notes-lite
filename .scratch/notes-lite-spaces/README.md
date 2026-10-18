@@ -4,6 +4,8 @@
 
 `ready-for-agent` 表示任务描述可供执行，不表示阻塞项已完成。
 
+2026-10-18：9 项均已实现；04、08、09 仍有少量只能在原生界面手动确认的交互未勾选。实测见 [空间实测记录](../../NotesLite/evidence/spaces/verification.md)。
+
 | 任务 | 阻塞项 |
 | --- | --- |
 | [01：持续文件监听：外部修改即时可见](issues/01-file-watching.md) | 无 |

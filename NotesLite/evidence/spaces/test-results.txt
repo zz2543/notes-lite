@@ -1,0 +1,82 @@
+NotesLiteUITests.EditorWorkflowTests testCaretGeometryNavigationCompositionAndListExit failed (1.285 seconds).
+NotesLiteUITests.EditorWorkflowTests testChineseCompositionSourceToggleAndFocusKeepEditingContinuity passed (0.907 seconds).
+NotesLiteUITests.EditorWorkflowTests testFontChangesPreserveNativeDocumentSelectionCompositionAndUndo passed (0.508 seconds).
+NotesLiteUITests.EditorWorkflowTests testGlassShaderBuildsNativePipelineOnAvailableDevice passed (0.004 seconds).
+NotesLiteUITests.EditorWorkflowTests testLongDocumentCanBeEditedAndSavedInNativeWindow passed (0.304 seconds).
+NotesLiteUITests.EditorWorkflowTests testNavigationSettingsKeepNativeEditorAndComposition passed (0.673 seconds).
+NotesLiteUITests.EditorWorkflowTests testReturnAtBottomOfLongNoteKeepsInsertionVisibleAndUndoable passed (0.382 seconds).
+NotesLiteUITests.EditorWorkflowTests testSearchAndEditorRemainUsableWithoutMetal passed (0.232 seconds).
+NotesLiteUITests.EditorWorkflowTests testTypingKeepsCaretTravelThroughNativeLayoutAndRestyling passed (0.943 seconds).
+	 Executed 9 tests, with 18 failures (0 unexpected) in 5.239 (5.240) seconds
+NotesLiteUITests.LibraryLayoutTests testCollapsedFoldersHideDescendantsAndRevealAncestorsForDeepSelection passed (0.000 seconds).
+NotesLiteUITests.LibraryLayoutTests testFolderTreeKeepsChildrenWithTheirParentBesideSimilarNames passed (0.000 seconds).
+NotesLiteUITests.LibraryLayoutTests testMixedTreeKeepsEmptyFoldersAndNotesInsideTheirOwnParent passed (0.000 seconds).
+NotesLiteUITests.LibraryLayoutTests testNarrowWindowPreservesReadableEditorWithStoredWideColumns passed (0.000 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+NotesLiteUITests.SpaceWorkflowTests testSpaceHomepageRendersWritesRefreshesAndReportsErrors passed (2.856 seconds).
+	 Executed 14 tests, with 18 failures (0 unexpected) in 8.096 (8.098) seconds
+	 Executed 14 tests, with 18 failures (0 unexpected) in 8.096 (8.099) seconds
+NotesCoreTests.FileWatchingTests testCleanCurrentNoteReloadsButDirtyNoteKeepsInputAndReportsConflict passed (0.076 seconds).
+NotesCoreTests.FileWatchingTests testCleanEditorLetsGoOfANoteTrashedElsewhere passed (0.085 seconds).
+NotesCoreTests.FileWatchingTests testExternalCreateModifyAndDeleteAppearWithoutReactivation passed (0.084 seconds).
+NotesCoreTests.FileWatchingTests testOpeningInTheBackgroundFillsTheLibraryAndOpensTheFirstNote passed (0.041 seconds).
+NotesCoreTests.FileWatchingTests testRefreshReusesUnchangedBodiesAndPicksUpModifiedOnes passed (0.003 seconds).
+NotesCoreTests.FileWatchingTests testSubscribersSeeHiddenAppDirectoryChangesThatTheNoteListIgnores passed (0.073 seconds).
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.362 (0.364) seconds
+NotesCoreTests.RenderSyntaxTests testCalloutFold passed (0.001 seconds).
+NotesCoreTests.RenderSyntaxTests testDisplayMathLine passed (0.000 seconds).
+NotesCoreTests.RenderSyntaxTests testDollarsThatAreNotMath passed (0.001 seconds).
+NotesCoreTests.RenderSyntaxTests testFastPathsKeepParsing passed (0.000 seconds).
+NotesCoreTests.RenderSyntaxTests testFenceInfo passed (0.000 seconds).
+NotesCoreTests.RenderSyntaxTests testFootnotes passed (0.000 seconds).
+NotesCoreTests.RenderSyntaxTests testHighlight passed (0.001 seconds).
+NotesCoreTests.RenderSyntaxTests testInlineMath passed (0.000 seconds).
+NotesCoreTests.RenderSyntaxTests testTable passed (0.001 seconds).
+NotesCoreTests.RenderSyntaxTests testTableWithoutTrailingPipe passed (0.000 seconds).
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+NotesCoreTests.SpaceAPITests testPageReadsTheSpaceFileItself passed (0.012 seconds).
+NotesCoreTests.SpaceAPITests testPathsOutsideTheScopeAreRefused passed (0.006 seconds).
+NotesCoreTests.SpaceAPITests testPlaceholdersExpandToToday passed (0.006 seconds).
+NotesCoreTests.SpaceAPITests testQueryReturnsTypedRecordsFromTheTableUnderAHeading passed (0.004 seconds).
+NotesCoreTests.SpaceAPITests testQueryWithoutHeadingUsesFirstTableAndSupportsFilterSortLimit passed (0.006 seconds).
+NotesCoreTests.SpaceAPITests testScopeNotesReadAndTables passed (0.007 seconds).
+NotesCoreTests.SpaceAPITests testWholeLibraryScopeStillRefusesTheAppDirectory passed (0.003 seconds).
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.045 (0.046) seconds
+NotesCoreTests.SpaceLibraryTests testCreatingASpaceWritesAnEmptyPageWithScopeAndIconMeta passed (0.002 seconds).
+NotesCoreTests.SpaceLibraryTests testEditingKeepsThePage passed (0.003 seconds).
+NotesCoreTests.SpaceLibraryTests testGuideIsRewrittenWhenOutdated passed (0.001 seconds).
+NotesCoreTests.SpaceLibraryTests testOrderPersistsAndDeletingASpaceLeavesNotesAlone passed (0.005 seconds).
+NotesCoreTests.SpaceLibraryTests testPromptNamesGuideFileScopeAndExistingRecordTables passed (0.003 seconds).
+NotesCoreTests.SpaceLibraryTests testRenamingNotesAndFoldersUpdatesScopesAndWidgetPaths passed (0.003 seconds).
+NotesCoreTests.SpaceLibraryTests testSameFolderInSeveralSpacesAndInvalidNames passed (0.002 seconds).
+NotesCoreTests.SpaceLibraryTests testWholeLibraryScopeAndPageDetection passed (0.001 seconds).
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.019 (0.020) seconds
+NotesCoreTests.SpaceNoteWriteTests testCreateWriteAndUndo passed (0.007 seconds).
+NotesCoreTests.SpaceNoteWriteTests testPageCanRewriteItselfButNotItsScopeOrOtherSpaceFiles passed (0.004 seconds).
+NotesCoreTests.SpaceNoteWriteTests testRenameAndMoveUpdateLinksAndUndoTogether passed (0.010 seconds).
+NotesCoreTests.SpaceNoteWriteTests testRenameIsRefusedWhenNotesOutsideTheScopeLinkToIt passed (0.004 seconds).
+NotesCoreTests.SpaceNoteWriteTests testTrashGoesToTheTrashAndUndoRestores passed (0.004 seconds).
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.028 (0.028) seconds
+NotesCoreTests.SpaceRecordWriteTests testAppendAddsRowsAtTheTableEndAndKeepsTheRestOfTheNote passed (0.004 seconds).
+NotesCoreTests.SpaceRecordWriteTests testAppendCreatesMissingNotesAndTablesFromTheHeader passed (0.004 seconds).
+NotesCoreTests.SpaceRecordWriteTests testAppendRefusesUnknownFieldsAndEscapesPipes passed (0.003 seconds).
+NotesCoreTests.SpaceRecordWriteTests testEachRecordUndoesOnItsOwnEvenAfterReopening passed (0.005 seconds).
+NotesCoreTests.SpaceRecordWriteTests testEntriesOlderThanThirtyDaysArePruned passed (0.004 seconds).
+NotesCoreTests.SpaceRecordWriteTests testTheLogIsNotReachableThroughLb passed (0.002 seconds).
+NotesCoreTests.SpaceRecordWriteTests testUndoRefusesWhenTheRecordChangedSince passed (0.004 seconds).
+NotesCoreTests.SpaceRecordWriteTests testUpdateAndRemoveByFieldOrRow passed (0.004 seconds).
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.030 (0.031) seconds
+NotesCoreTests.WorkspaceTests testAutosavePersistsWithoutManualSave passed (0.802 seconds).
+NotesCoreTests.WorkspaceTests testConflictPreservesBothVersionsAndWriterCanSaveCopy passed (0.008 seconds).
+NotesCoreTests.WorkspaceTests testDirectoryContentsSearchScopesAndNewItemTargets passed (0.016 seconds).
+NotesCoreTests.WorkspaceTests testDottedLinksCopyAttachmentsAndRevealNavigation passed (0.011 seconds).
+NotesCoreTests.WorkspaceTests testFollowingLinkFindsChineseNoteAndRejectsAmbiguity passed (0.003 seconds).
+NotesCoreTests.WorkspaceTests testImportAndMovePreservesImageReferenceAndBacklink passed (0.006 seconds).
+NotesCoreTests.WorkspaceTests testRenamingANoteKeepsSpacesPointingAtIt passed (0.004 seconds).
+NotesCoreTests.WorkspaceTests testRenamingUpdatesRealLinksButLeavesCodeExamplesAlone passed (0.003 seconds).
+NotesCoreTests.WorkspaceTests testSaveFailureKeepsDraftAndCanRetry passed (0.001 seconds).
+NotesCoreTests.WorkspaceTests testSearchRecentsAndDuplicateNamesRemainUnambiguous passed (0.002 seconds).
+NotesCoreTests.WorkspaceTests testWriterCanCreateSaveAndReopenWithoutChangingLegacyMetadata passed (0.002 seconds).
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.859 (0.860) seconds
+	 Executed 55 tests, with 0 failures (0 unexpected) in 1.349 (1.355) seconds
+	 Executed 55 tests, with 0 failures (0 unexpected) in 1.349 (1.356) seconds
