@@ -6,6 +6,11 @@ private enum PromptKind: String {
     case folder = "新建文件夹", rename = "重命名笔记", move = "移动笔记", copy = "保存副本"
 }
 
+private enum SpaceSheetKind: Identifiable {
+    case create, edit(String)
+    var id: String { switch self { case .create: "create"; case .edit(let name): "edit:" + name } }
+}
+
 private enum LibraryLocation: Equatable {
     case all, recent, folder(String)
 }
@@ -35,12 +40,20 @@ struct NoteWindow: View {
     @AppStorage("layout.listWidth") private var listWidth = 280.0
     @AppStorage("editor.font") private var editorFont: EditorFont = .sans
     @State private var expandedFolders: Set<String> = []
+    @AppStorage("sidebar.mode") private var sidebarMode: SidebarMode = .library
+    @State var spaces = SpaceStore()
+    @State private var spaceSheet: SpaceSheetKind?
+    @State private var changeToken: UUID?
     @Namespace private var navigationSelection
     @Namespace private var noteSelection
-    private var unified: Bool { navigationMode == .unified }
+    @Namespace private var spaceSelection
+    @Namespace private var spaceTreeSelection
+    private var inSpaces: Bool { sidebarMode == .spaces }
+    private var unified: Bool { navigationMode == .unified && !inSpaces }
+    private var spaceNotes: [Note] { spaces.current.map { SpaceTree.notes(workspace.notes, in: $0.scope) } ?? [] }
     private var newTarget: String { workspace.creationFolder.isEmpty ? "笔记库根目录" : workspace.creationFolder }
     private var searchResults: [Note] { workspace.searchNotes(searchQuery, in: searchLocal ? searchFolder : nil) }
-    private var listTitle: String { workspace.recentsOnly ? "最近打开" : workspace.selectedFolder.map { $0.isEmpty ? "笔记库" : ($0 as NSString).lastPathComponent } ?? "全部笔记" }
+    private var listTitle: String { inSpaces ? (spaces.current.map { $0.icon + " " + $0.name } ?? "空间") : workspace.recentsOnly ? "最近打开" : workspace.selectedFolder.map { $0.isEmpty ? "笔记库" : ($0 as NSString).lastPathComponent } ?? "全部笔记" }
     private var navigationID: LibraryLocation {
         if workspace.recentsOnly { return .recent }
         return workspace.selectedFolder.map(LibraryLocation.folder) ?? .all
@@ -131,8 +144,29 @@ struct NoteWindow: View {
         .onChange(of: workspace.selectedFolder) { _, folder in
             if let folder { expandedFolders.formUnion(FolderEntry.ancestors(of: folder)) }
         }
-        .onChange(of: workspace.root) { _, _ in expandedFolders = []; enforceVisibleLocation(); workspace.startWatching() }
-        .onAppear { enforceVisibleLocation(); revealSelection(); workspace.startWatching() }
+        .onChange(of: workspace.root) { _, root in expandedFolders = []; enforceVisibleLocation(); workspace.startWatching(); spaces.load(root: root) }
+        .onAppear {
+            enforceVisibleLocation(); revealSelection(); workspace.startWatching(); spaces.load(root: workspace.root)
+            if changeToken == nil {
+                let store = spaces
+                changeToken = workspace.observeChanges { paths in
+                    if paths.contains(where: { $0.hasPrefix(SpaceLibrary.directory) }) { store.reload() }
+                }
+            }
+        }
+        .onChange(of: spaces.error) { _, message in if let message { workspace.error = message; spaces.error = nil } }
+        .sheet(item: $spaceSheet) { kind in
+            switch kind {
+            case .create:
+                SpaceSheet(title: "新建空间", folders: workspace.folders, space: nil, save: { name, icon, scope in
+                    try spaces.create(name: name, icon: icon, scope: scope); spaceSheet = nil
+                }, cancel: { spaceSheet = nil })
+            case .edit(let name):
+                SpaceSheet(title: "编辑空间", folders: workspace.folders, space: spaces.spaces.first { $0.name == name }, save: { newName, icon, scope in
+                    try spaces.update(name, newName: newName, icon: icon, scope: scope); spaceSheet = nil
+                }, cancel: { spaceSheet = nil })
+            }
+        }
         .onChange(of: workspace.current) { _, _ in revealSelection() }
         .onChange(of: navigationMode) { _, _ in revealSelection() }
         .onChange(of: showAll) { _, _ in enforceVisibleLocation() }
@@ -150,7 +184,7 @@ struct NoteWindow: View {
             Color.hairline.frame(width: unified ? 0 : 1)
             HStack(spacing: 8) {
                 Text(listTitle).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                Text("\(workspace.visibleNotes.count)").font(.system(size: 10, weight: .medium, design: .rounded)).monospacedDigit()
+                Text("\(inSpaces ? spaceNotes.count : workspace.visibleNotes.count)").font(.system(size: 10, weight: .medium, design: .rounded)).monospacedDigit()
                     .foregroundStyle(.secondary).padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Color.primary.opacity(0.045), in: Capsule())
                 Spacer(minLength: 0)
@@ -171,8 +205,17 @@ struct NoteWindow: View {
 
     private var library: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("资料库").font(.system(size: 10, weight: .medium)).foregroundStyle(.tertiary)
-                .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 10)
+            Picker("侧栏", selection: Binding(get: { sidebarMode }, set: { mode in withAnimation(Motion.panel) { sidebarMode = mode } })) {
+                Text("资料库").tag(SidebarMode.library)
+                Text("空间").tag(SidebarMode.spaces)
+            }.pickerStyle(.segmented).labelsHidden().controlSize(.small).frame(maxWidth: .infinity)
+                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 10)
+                .accessibilityLabel("切换资料库与空间")
+            if inSpaces {
+                SpaceSidebarList(store: spaces, namespace: spaceSelection, create: { spaceSheet = .create }) { space in
+                    withAnimation(Motion.selection) { spaces.selected = space.name; spaces.showingHome = true; spaces.copiedPrompt = false }
+                }.padding(.horizontal, 10).transition(Motion.pane(true))
+            } else {
             VStack(spacing: 3) {
                 if showAll { NavigationRow(title: "全部笔记", icon: "square.stack", selected: navigationID == .all, namespace: navigationSelection, count: workspace.notes.count) {
                     withAnimation(Motion.selection) { workspace.selectedFolder = nil; workspace.recentsOnly = false }
@@ -214,7 +257,8 @@ struct NoteWindow: View {
                         }
                     }.padding(.vertical, 2)
                 }.scrollIndicators(.hidden)
-            }.padding(.horizontal, 10)
+            }.padding(.horizontal, 10).transition(Motion.pane(false))
+            }
             Spacer(minLength: 14)
             if workspace.lastDeleted != nil {
                 Button("恢复上次删除") { performNoteAction(workspace) { try workspace.restoreDeleted() } }
@@ -233,7 +277,50 @@ struct NoteWindow: View {
         .animation(Motion.selection, value: navigationID)
     }
 
-    private var noteList: some View {
+    @ViewBuilder private var noteList: some View {
+        ZStack {
+            if inSpaces { spaceTreeList.transition(Motion.pane(true)) } else { libraryNoteList.transition(Motion.pane(false)) }
+        }.clipped()
+    }
+
+    private var spaceTreeList: some View {
+        VStack(spacing: 0) {
+            if let space = spaces.current {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        NavigationRow(title: "主页", icon: spaces.showingHome ? "house.fill" : "house", selected: spaces.showingHome, namespace: spaceTreeSelection) {
+                            withAnimation(Motion.selection) { spaces.showingHome = true }
+                        }
+                        ForEach(LibraryTreeEntry.visible(folders: SpaceTree.folders(workspace.folders, in: space.scope), notes: spaceNotes, expanded: expandedFolders)) { entry in
+                            switch entry {
+                            case .folder(let folder):
+                                NavigationRow(title: folder.title, icon: "folder", selected: false, namespace: spaceTreeSelection, depth: folder.depth,
+                                              expanded: folder.hasChildren ? expandedFolders.contains(folder.path) : nil,
+                                              toggle: { toggleFolder(folder.path) }) { toggleFolder(folder.path) }
+                                    .transition(Motion.row)
+                            case .note(let note, let depth):
+                                NavigationRow(title: note.title, icon: "doc.text", selected: !spaces.showingHome && workspace.current == note.path, namespace: spaceTreeSelection, depth: depth + 1) { openNote(note) }
+                                    .contextMenu { noteActions(note) }.transition(Motion.row)
+                            }
+                        }
+                    }.padding(.horizontal, 10).padding(.vertical, 12)
+                    .animation(Motion.selection, value: spaceNotes.map(\.path))
+                }.scrollIndicators(.hidden).id(space.name).transition(.opacity.combined(with: .offset(y: 6)))
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "square.grid.2x2").font(.system(size: 22, weight: .ultraLight))
+                    Text(workspace.root == nil ? "打开笔记库后可以新建空间" : "新建一个空间开始").font(.system(size: 11))
+                }.foregroundStyle(.tertiary).frame(maxWidth: .infinity).padding(.top, 50)
+                Spacer()
+            }
+        }.frame(maxHeight: .infinity).background(Color.listPaper)
+    }
+
+    private func toggleFolder(_ path: String) {
+        withAnimation(Motion.selection) { if !expandedFolders.insert(path).inserted { expandedFolders.remove(path) } }
+    }
+
+    private var libraryNoteList: some View {
         let visible = workspace.visibleNotes
         let showFolders = workspace.selectedFolder == nil || workspace.recentsOnly
         return VStack(spacing: 0) {
@@ -275,7 +362,19 @@ struct NoteWindow: View {
         Button("移到废纸篓", role: .destructive) { performNoteAction(workspace) { try workspace.select(note.path); withAnimation(Motion.selection) { do { try workspace.deleteCurrent() } catch { workspace.error = error.localizedDescription } } } }
     }
 
-    @ViewBuilder private var editor: some View {
+    private var editor: some View {
+        ZStack {
+            if inSpaces, spaces.showingHome, let space = spaces.current {
+                spaceHome(space).id("home:" + space.name).transition(Motion.surface)
+            } else {
+                noteEditor.transition(Motion.surface)
+            }
+        }
+        .animation(Motion.panel, value: spaces.current?.name)
+        .animation(Motion.panel, value: spaces.showingHome)
+    }
+
+    @ViewBuilder private var noteEditor: some View {
         if workspace.current != nil {
             VStack(spacing: 0) {
                 if !workspace.focus {
@@ -304,6 +403,14 @@ struct NoteWindow: View {
             }
         } else {
             ContentUnavailableView { Label("让想法，在这里停留", systemImage: "leaf") } description: { Text("打开一个本地文件夹，开始记录。") } actions: { Button("打开笔记库…") { chooseLibrary(workspace) } }
+        }
+    }
+
+    @ViewBuilder private func spaceHome(_ space: Space) -> some View {
+        if space.hasPage {
+            Text(space.name).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            SpaceEmptyHome(space: space, store: spaces)
         }
     }
 
@@ -362,6 +469,7 @@ struct NoteWindow: View {
     }
 
     private func openNote(_ note: Note) {
+        if spaces.showingHome { withAnimation(Motion.panel) { spaces.showingHome = false } }
         guard workspace.current != note.path else { return }
         performNoteAction(workspace) { try workspace.select(note.path) }
     }

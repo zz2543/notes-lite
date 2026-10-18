@@ -22,6 +22,17 @@ enum Motion {
     static let feedback = Animation.spring(duration: 0.24, bounce: 0.16)
     static let hover = Animation.easeOut(duration: 0.16)
     static let row = AnyTransition.opacity.combined(with: .offset(y: 7)).combined(with: .scale(scale: 0.985))
+    /// Sideways hand-off between sibling panes (资料库 ↔ 空间); `forward` moves toward the right-hand pane.
+    static func pane(_ forward: Bool) -> AnyTransition {
+        .asymmetric(insertion: .opacity.combined(with: .offset(x: forward ? 16 : -16)),
+                    removal: .opacity.combined(with: .offset(x: forward ? -16 : 16)))
+    }
+    /// A content surface settling into place: the space homepage and the editor swap with it.
+    static let surface = AnyTransition.asymmetric(
+        insertion: .opacity.combined(with: .scale(scale: 0.99, anchor: .top)).combined(with: .offset(y: 8)),
+        removal: .opacity.combined(with: .scale(scale: 0.995, anchor: .top)))
+    /// Banners and bars that drop in from the top edge of a column.
+    static let banner = AnyTransition.move(edge: .top).combined(with: .opacity)
 }
 
 struct SoftButton: ButtonStyle {
