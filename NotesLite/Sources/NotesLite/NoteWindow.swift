@@ -131,8 +131,8 @@ struct NoteWindow: View {
         .onChange(of: workspace.selectedFolder) { _, folder in
             if let folder { expandedFolders.formUnion(FolderEntry.ancestors(of: folder)) }
         }
-        .onChange(of: workspace.root) { _, _ in expandedFolders = []; enforceVisibleLocation() }
-        .onAppear { enforceVisibleLocation(); revealSelection() }
+        .onChange(of: workspace.root) { _, _ in expandedFolders = []; enforceVisibleLocation(); workspace.startWatching() }
+        .onAppear { enforceVisibleLocation(); revealSelection(); workspace.startWatching() }
         .onChange(of: workspace.current) { _, _ in revealSelection() }
         .onChange(of: navigationMode) { _, _ in revealSelection() }
         .onChange(of: showAll) { _, _ in enforceVisibleLocation() }

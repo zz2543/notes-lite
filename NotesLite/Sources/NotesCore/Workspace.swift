@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import Observation
 
-public struct Note: Identifiable, Equatable {
+public struct Note: Identifiable, Equatable, Sendable {
     public let path: String
     public let modified: Date
     public let preview: String
@@ -43,7 +43,11 @@ public enum NoteError: LocalizedError {
     public var saveState = "已保存"
     public private(set) var lastDeleted: (path: String, url: URL)?
     @ObservationIgnored private var baseline: Data?
-    private var searchBodies: [String: String] = [:]
+    private var scanCache: [String: LibraryScan.Cached] = [:]
+    @ObservationIgnored private var watcher: FileWatcher?
+    @ObservationIgnored private var observers: [UUID: ([String]) -> Void] = [:]
+    @ObservationIgnored private var backgroundScan: Task<Void, Never>?
+    @ObservationIgnored private var rescanPending = false
     @ObservationIgnored private var autosave: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults?
     public init(defaults: UserDefaults? = nil) { self.defaults = defaults }
@@ -52,12 +56,16 @@ public enum NoteError: LocalizedError {
         try save()
         var directory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &directory), directory.boolValue else { throw NoteError.missing(url.path) }
+        let watching = watcher != nil
+        stopWatching()
         root = url.resolvingSymlinksInPath().standardizedFileURL
+        scanCache = [:]
         lastDeleted = nil
         current = nil; text = ""; baseline = nil; dirty = false; revision += 1
         selectedFolder = nil; query = ""; recentsOnly = false
         recent = defaults?.stringArray(forKey: "recent.\(root!.path)") ?? []
         try refresh()
+        if watching { startWatching() }
         if let first = notes.first { try select(first.path) }
     }
 
@@ -70,24 +78,52 @@ public enum NoteError: LocalizedError {
 
     public func refresh() throws {
         guard let root else { return }
-        var scanned: [Note] = [], directories: [String] = []
-        var bodies: [String: String] = [:]
-        guard let entries = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return }
-        for case let u as URL in entries {
-            let values = try u.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey])
-            if values.isSymbolicLink == true { entries.skipDescendants(); continue }
-            let canonicalPath = u.resolvingSymlinksInPath().path
-            guard canonicalPath.hasPrefix(root.path + "/") else { continue }
-            let relative = String(canonicalPath.dropFirst(root.path.count + 1))
-            if values.isDirectory == true { directories.append(relative); continue }
-            guard u.pathExtension.lowercased() == "md" else { continue }
-            let body = (try? String(contentsOf: u, encoding: .utf8)) ?? ""
-            bodies[relative] = body
-            scanned.append(Note(path: relative, modified: values.contentModificationDate ?? .distantPast, preview: NotePreview.text(body)))
+        apply(try LibraryScan.run(root: root, previous: scanCache))
+    }
+
+    private func apply(_ scan: LibraryScan) {
+        scanCache = scan.cache
+        if notes != scan.notes { notes = scan.notes }
+        if folders != scan.folders { folders = scan.folders }
+    }
+
+    /// Rescans off the main thread, reusing unchanged bodies; overlapping requests coalesce into one more pass.
+    public func refreshInBackground() {
+        guard let root else { return }
+        if backgroundScan != nil { rescanPending = true; return }
+        let previous = scanCache
+        backgroundScan = Task { [weak self] in
+            let scan = await Task.detached(priority: .userInitiated) { try? LibraryScan.run(root: root, previous: previous) }.value
+            guard let self else { return }
+            self.backgroundScan = nil
+            if let scan, self.root == root { self.apply(scan) }
+            if self.rescanPending { self.rescanPending = false; self.refreshInBackground() }
         }
-        searchBodies = bodies
-        notes = scanned.sorted { $0.modified > $1.modified }
-        folders = directories.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    /// Follows changes made by other tools while the app stays open.
+    public func startWatching() {
+        guard watcher == nil, let root else { return }
+        let watcher = FileWatcher(root: root) { [weak self] paths in self?.externalChange(paths) }
+        watcher.start()
+        self.watcher = watcher
+    }
+
+    public func stopWatching() { watcher?.stop(); watcher = nil }
+
+    /// Library-relative paths of every change, hidden app files included.
+    @discardableResult public func observeChanges(_ handler: @escaping ([String]) -> Void) -> UUID {
+        let token = UUID(); observers[token] = handler; return token
+    }
+    public func removeObserver(_ token: UUID) { observers[token] = nil }
+
+    private func externalChange(_ paths: [String]) {
+        for observer in observers.values { observer(paths) }
+        if paths.contains(where: { !$0.split(separator: "/").contains { $0.hasPrefix(".") } }) { refreshInBackground() }
+        guard let current, paths.contains(current) || paths.contains((current as NSString).deletingLastPathComponent),
+              let disk = try? Data(contentsOf: url(for: current)), disk != baseline else { return }
+        if dirty { saveState = "保存冲突"; error = NoteError.conflict.localizedDescription; return }
+        do { try reloadFromDisk() } catch { self.error = error.localizedDescription }
     }
 
     public var visibleNotes: [Note] {
@@ -99,7 +135,7 @@ public enum NoteError: LocalizedError {
             guard folderMatches && recentMatches else { return false }
             guard !query.isEmpty else { return true }
             if n.title.localizedCaseInsensitiveContains(query) { return true }
-            return (n.path == current ? text : searchBodies[n.path] ?? "").localizedCaseInsensitiveContains(query)
+            return (n.path == current ? text : scanCache[n.path]?.body ?? "").localizedCaseInsensitiveContains(query)
         }
         return recentsOnly ? filtered.sorted { (recent.firstIndex(of: $0.path) ?? .max) < (recent.firstIndex(of: $1.path) ?? .max) } : filtered
     }
@@ -109,7 +145,7 @@ public enum NoteError: LocalizedError {
         notes.filter { note in
             guard folder.map({ Self.contains(note.folder, in: $0) }) ?? true else { return false }
             return query.isEmpty || note.title.localizedCaseInsensitiveContains(query)
-                || (note.path == current ? text : searchBodies[note.path] ?? "").localizedCaseInsensitiveContains(query)
+                || (note.path == current ? text : scanCache[note.path]?.body ?? "").localizedCaseInsensitiveContains(query)
         }
     }
 
