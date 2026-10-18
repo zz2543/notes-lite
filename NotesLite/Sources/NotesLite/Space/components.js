@@ -68,6 +68,7 @@
 
   const baseStyle = `
     :host { display: block; font: inherit; color: var(--lb-text); }
+    *, *::before, *::after { box-sizing: border-box; }
     .title { font-size: 12px; font-weight: 600; margin: 0 0 10px; color: var(--lb-text); letter-spacing: -0.005em; }
     .muted { color: var(--lb-muted); }
     .empty, .problem { font-size: 12px; color: var(--lb-muted); padding: 6px 0; }
@@ -492,7 +493,7 @@
       .names { border-top: 0; padding: 0 0 6px; font-size: 10.5px; color: var(--lb-muted); }
       li span, .names span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       li span:first-child { color: var(--lb-muted); }
-      .num { text-align: right; }
+      li .num, .names .num { justify-self: end; text-align: right; }
       li.new { animation: arrive 0.6s var(--lb-spring, ease) both; }
       @keyframes arrive {
         from { opacity: 0; transform: translateY(-6px); background: var(--lb-accent-soft); }
@@ -523,6 +524,113 @@
     }
   }
 
+  // MARK: <lb-quick-add>
+
+  class LbQuickAdd extends LbElement {
+    static get observedAttributes() { return ["target", "fields", "defaults", "label", "title"]; }
+    static style = `
+      form { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px 12px; align-items: end; }
+      label { display: flex; flex-direction: column; gap: 5px; font-size: 10.5px; color: var(--lb-muted); min-width: 0; }
+      .actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+      input { font: inherit; font-size: 13px; color: var(--lb-text); background: var(--lb-bg); border: 1px solid var(--lb-line);
+              border-radius: 8px; padding: 0 9px; height: 32px; line-height: 30px; outline: none; min-width: 0; width: 100%;
+              transition: border-color 0.16s var(--lb-ease, ease), box-shadow 0.16s var(--lb-ease, ease); }
+      input:focus { border-color: color-mix(in srgb, var(--lb-accent) 60%, transparent); box-shadow: 0 0 0 3px var(--lb-accent-soft); }
+      input[type=number] { font-variant-numeric: tabular-nums; }
+      input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      input::-webkit-datetime-edit { padding: 0; }
+      button { font: inherit; font-weight: 550; font-size: 12.5px; color: var(--lb-bg); background: var(--lb-text); border: 0; border-radius: 8px;
+               padding: 7px 16px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-width: 84px; justify-content: center;
+               transition: transform 0.18s var(--lb-spring, ease), opacity 0.16s ease, background-color 0.25s ease; }
+      button:hover { opacity: 0.9; }
+      button:active { transform: scale(0.95); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      button.done { background: var(--lb-good); }
+      .check { display: inline-block; width: 12px; height: 12px; }
+      .check path { stroke-dasharray: 16; stroke-dashoffset: 16; animation: draw 0.34s 0.05s cubic-bezier(0.33, 1, 0.68, 1) forwards; }
+      @keyframes draw { to { stroke-dashoffset: 0; } }
+      .message { font-size: 11.5px; color: var(--lb-bad); }
+      .message:empty { display: none; }
+      .shake { animation: shake 0.32s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+      @keyframes shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+      @media (prefers-reduced-motion: reduce) { .shake, .check path { animation: none; stroke-dashoffset: 0; } }
+    `;
+    async load() {
+      const target = this.attr("target", "");
+      if (!target) throw new Error("缺少 target 属性。");
+      const rows = await lb.query(target);
+      let fields = (rows.fields || []).map((f) => ({ name: f.name, type: f.type }));
+      const declared = list(this.attr("fields", ""));
+      if (!fields.length) {
+        if (!declared.length) throw new Error("记录表还不存在，请用 fields 属性给出新建时的表头。");
+        const defaults = this.defaults();
+        fields = declared.map((name) => ({
+          name,
+          type: /日期|date/i.test(name) ? "date" : typeof defaults[name] === "number" ? "number" : "text",
+        }));
+      }
+      // A column with no values yet types as text; a numeric default says otherwise.
+      const defaults = this.defaults();
+      fields = fields.map((f) => (f.type === "text" && !rows.length && typeof defaults[f.name] === "number" ? { ...f, type: "number" } : f));
+      return { fields, header: fields.map((f) => f.name), fresh: !(rows.fields || []).length };
+    }
+    defaults() {
+      try { return JSON.parse(this.attr("defaults", "{}")) || {}; } catch (_) { return {}; }
+    }
+    draw(data) {
+      const signature = data.fields.map((f) => f.name + ":" + f.type).join("|");
+      this.data = data;
+      if (signature === this.signature) return; // keep whatever the user is typing
+      this.signature = signature;
+      const defaults = this.defaults();
+      const label = this.attr("label", "记录");
+      const input = (f) => {
+        const value = defaults[f.name] != null ? defaults[f.name] : f.type === "date" ? lb.today() : "";
+        const type = f.type === "date" ? "date" : f.type === "number" ? "number" : "text";
+        return `<label class="${f.type}">${escape(f.name)}<input name="${escape(f.name)}" type="${type}" ${type === "number" ? 'step="any" inputmode="decimal"' : ""} value="${escape(value)}" data-default="${escape(value)}" data-type="${f.type}" autocomplete="off"></label>`;
+      };
+      this.body.innerHTML = `${this.header()}<form novalidate>${data.fields.map(input).join("")}<div class="actions"><button type="submit">${escape(label)}</button><div class="message" role="status"></div></div></form>`;
+      const form = this.body.querySelector("form");
+      form.addEventListener("submit", (event) => { event.preventDefault(); this.submit(form); });
+    }
+    async submit(form) {
+      const button = form.querySelector("button"), message = form.querySelector(".message");
+      const record = {};
+      let problem = "";
+      for (const el of form.querySelectorAll("input")) {
+        const raw = el.value.trim();
+        if (!raw) continue;
+        if (el.dataset.type === "number") {
+          const n = Number(raw);
+          if (!Number.isFinite(n)) { problem = `「${el.name}」需要数字。`; break; }
+          record[el.name] = n;
+        } else record[el.name] = raw;
+      }
+      if (!problem && !Object.keys(record).length) problem = "请至少填写一项。";
+      if (problem) return this.fail(form, problem);
+      button.disabled = true; message.textContent = "";
+      try {
+        await lb.append(this.attr("target", ""), record, { header: this.data.header });
+        const label = this.attr("label", "记录");
+        button.classList.add("done");
+        button.innerHTML = `<svg class="check" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.4 5 8.8 9.6 3.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>已记录`;
+        for (const el of form.querySelectorAll("input")) if (el.dataset.type !== "date") el.value = el.dataset.default;
+        const first = [...form.querySelectorAll("input")].find((el) => el.dataset.type !== "date" && !el.dataset.default);
+        if (first) first.focus();
+        clearTimeout(this.reset);
+        this.reset = setTimeout(() => { button.classList.remove("done"); button.textContent = label; button.disabled = false; }, 1300);
+      } catch (e) {
+        button.disabled = false;
+        this.fail(form, e && e.message ? e.message : String(e));
+      }
+    }
+    fail(form, text) {
+      form.querySelector(".message").textContent = text;
+      form.classList.remove("shake"); void form.offsetWidth; form.classList.add("shake");
+    }
+  }
+
+  customElements.define("lb-quick-add", LbQuickAdd);
   customElements.define("lb-stat", LbStat);
   customElements.define("lb-chart", LbChart);
   customElements.define("lb-calendar", LbCalendar);
