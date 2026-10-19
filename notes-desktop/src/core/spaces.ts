@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { collator } from "./library";
 import { spaceGuide } from "./spaceGuide";
@@ -130,6 +130,11 @@ function checkDraft({ name, scope }: SpaceDraft) {
   if (bad !== undefined) throw new SpaceError("scope-name", `文件夹“${bad}”的名称含有逗号，不能加入范围。`);
 }
 
+const exists = (path: string) => access(path).then(
+  () => true,
+  () => false,
+);
+
 const taken = (name: string) => new SpaceError("exists", `已经有名为“${name}”的空间。`);
 
 // --- the library of spaces -----------------------------------------------------------------
@@ -146,6 +151,12 @@ export interface SpaceLibrary {
   create(draft: SpaceDraft): Promise<Space>;
   /** Writes the authoring guide when it is missing or differs from this version's. */
   installGuide(): Promise<void>;
+  /** Renames, re-icons and re-scopes a space, keeping its page and its place in the order. */
+  update(name: string, draft: SpaceDraft): Promise<Space>;
+  /** Moves only the space file to the trash; no note is touched. */
+  delete(name: string): Promise<void>;
+  /** Saves the order of the spaces, by name, in the library. */
+  reorder(names: string[]): Promise<void>;
 }
 
 export interface SpaceLibraryOptions {
@@ -153,7 +164,7 @@ export interface SpaceLibraryOptions {
   trash?(path: string): Promise<void>;
 }
 
-export function spaceLibrary(root: string, _options: SpaceLibraryOptions = {}): SpaceLibrary {
+export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): SpaceLibrary {
   const folder = join(root, ...spacesFolder.split("/"));
   const guidePath = join(folder, spaceGuideName);
   const fileOf = (name: string) => join(folder, `${name}.html`);
@@ -218,5 +229,34 @@ export function spaceLibrary(root: string, _options: SpaceLibraryOptions = {}): 
     return parseSpace(name, html);
   };
 
-  return { folder, guidePath, spaces, space, create, installGuide };
+  const update = async (name: string, draft: SpaceDraft): Promise<Space> => {
+    checkDraft(draft);
+    const current = await space(name);
+    const html = settingMeta(settingMeta(current.html, "lb-icon", draft.icon), "lb-scope", scopeMeta(draft.scope));
+    const renamed = draft.name !== name;
+    // A change of case only is the same file on a case-insensitive disk, not a clash.
+    if (renamed && draft.name.toLowerCase() !== name.toLowerCase() && (await exists(fileOf(draft.name)))) throw taken(draft.name);
+    await writeAtomic(fileOf(name), html);
+    if (renamed) {
+      await rename(fileOf(name), fileOf(draft.name));
+      await saveOrder((await order()).map((n) => (n === name ? draft.name : n)));
+    }
+    return parseSpace(draft.name, html);
+  };
+
+  /** Moves only the space file to the trash; no note is touched. */
+  const delete_ = async (name: string) => {
+    if (!(await exists(fileOf(name)))) throw new SpaceError("not-found", `找不到空间“${name}”。`);
+    try {
+      if (!options.trash) throw new Error("没有可用的废纸篓");
+      await options.trash(fileOf(name));
+    } catch (error) {
+      throw new SpaceError("write-failed", `无法把空间“${name}”移到废纸篓：${(error as Error).message}。`);
+    }
+    await saveOrder((await order()).filter((n) => n !== name));
+  };
+
+  const reorder = (names: string[]) => saveOrder(names);
+
+  return { folder, guidePath, spaces, space, create, update, delete: delete_, reorder, installGuide };
 }

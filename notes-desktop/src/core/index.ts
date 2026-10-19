@@ -4,3 +4,4 @@ export type { OrganizeOptions, Organizer, Relocation } from "./organize";
 export * from "./search";
 export * from "./watcher";
 export * from "./spaces";
+export { spaceGuide, spaceGuideVersion } from "./spaceGuide";
