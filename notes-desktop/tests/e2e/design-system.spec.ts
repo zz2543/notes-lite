@@ -71,6 +71,28 @@ test("the selection pill slides to the chosen folder", async ({ scratch }) => {
   await app.close();
 });
 
+const scaleOf = (frame: Frame | undefined) => (!frame || frame.scale === "none" ? 1 : Number(frame.scale));
+
+test("hover only tints a row; pressing shrinks it with a spring and it springs back", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "散步.md": "# 散步", "读书.md": "# 读书" });
+  const { app, page } = await launchWith(scratch, root);
+  const item = page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "读书" });
+  const selector = '[aria-label="当前目录内容"] button:hover';
+
+  await item.hover();
+  await expect(item).toHaveCSS("background-color", await computed(page, "color", "var(--hover)"));
+  await expect(item).toHaveCSS("scale", "none");
+
+  const pressed = await film(page, selector, () => page.mouse.down(), 700);
+  // It eases through in-between sizes, not a jump, and holds at 0.97 while pressed.
+  expect(pressed.some((f) => scaleOf(f) < 0.995 && scaleOf(f) > 0.975)).toBe(true);
+  expect(scaleOf(pressed.at(-1))).toBeCloseTo(0.97, 3);
+  const released = await film(page, selector, () => page.mouse.up(), 700);
+  expect(released.some((f) => scaleOf(f) > 0.975 && scaleOf(f) < 0.995)).toBe(true);
+  expect(scaleOf(released.at(-1))).toBe(1);
+  await app.close();
+});
+
 // The design system's tables (docs/design-system.md), copied as written: [variable, light, dark].
 const colours: [string, string, string][] = [
   ["--side-fg", "#1d1d1f", "#f2f2f4"],

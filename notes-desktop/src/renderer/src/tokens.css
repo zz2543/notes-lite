@@ -83,6 +83,10 @@
   --settings-nav-width: 190px;
   --inline-gap: 8px;
 
+  /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */
+  --press-scale: 0.97;
+  --press-scale-icon: 0.89;
+
   /* 界面文字 */
   --font-ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
   --text-side-row: 13.5px;
@@ -139,4 +143,13 @@
 :root[data-material="vibrancy"],
 :root[data-material="mica"] {
   --window-bg: transparent;
+}
+
+
+/* 减弱动态效果: nothing moves or scales; colours and opacity still change. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-scale: 1;
+    --press-scale-icon: 1;
+  }
 }

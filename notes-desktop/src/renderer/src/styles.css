@@ -323,3 +323,20 @@ button {
 .pill.list {
   background: var(--list-pill);
 }
+
+
+/* 悬停与按压 (轻弹): hover only adds the --hover tint, never lifts; pressing shrinks, release springs back. */
+.row,
+.item,
+.side-foot,
+.primary {
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.row:active,
+.item:active,
+.side-foot:active,
+.primary:active {
+  scale: var(--press-scale);
+}
