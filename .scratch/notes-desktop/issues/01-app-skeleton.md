@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress（代码与本地验证已完成；等 CI 在 macOS 与 Windows 上实际跑通后记 completed）
+**Progress:** completed（2026-10-19，证据见 Comments）
 
 - [x] Electron + TypeScript + React 应用位于自包含的 `notes-desktop/` 目录，不依赖仓库其他目录
 - [x] 首次启动选择笔记库，之后记住并自动打开；可以切换笔记库
@@ -14,7 +14,7 @@
 - [x] 选中笔记显示其 Markdown 原文（只读即可）
 - [x] 核心库与界面分离：核心库只依赖 Node 文件系统能力，有一个对临时笔记库的 Vitest 用例
 - [x] 一个 Playwright 驱动 Electron 打开临时笔记库的冒烟用例
-- [ ] CI 在 macOS 与 Windows 上构建、运行两类测试并产出安装包（不签名）
+- [x] CI 在 macOS 与 Windows 上构建、运行两类测试并产出安装包（不签名）
 
 ## Comments
 
@@ -41,4 +41,8 @@
 - macOS 用 ad-hoc 签名（无需证书），下载的安装包首次打开需右键“打开”或在系统设置中允许，不会被报“已损坏”。
 
 留给后续任务：Windows 下为红绿灯预留的 52px 拖拽条会在侧栏顶部留出空白，窗口边框与窗口内菜单按钮由任务 22 处理；渲染进程包未压缩（约 670 KB），由任务 07 按启动耗时实测决定是否处理。
+
+### 2026-10-19 CI 验证
+
+分支推送后，GitHub Actions 运行 [39220263723](https://github.com/zz2543/notes-lite/actions/runs/39220263723)（提交 `98bc4d7`）在 `macos-latest` 与 `windows-latest` 上全部通过：类型检查、接缝 A、接缝 B、electron-builder 打包；产物 `notes-desktop-macOS`（dmg，约 120 MB）与 `notes-desktop-Windows`（NSIS exe，约 106 MB）。Windows 安装包尚未人工安装走查，留给任务 22。全部验收标准已满足，记为 completed。
 
