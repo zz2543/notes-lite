@@ -452,6 +452,10 @@ button {
   font-size: var(--text-side-row);
   user-select: text;
 }
+/* The box itself is the field; the input inside draws no ring of its own. */
+.search-box input:focus-visible {
+  box-shadow: none;
+}
 .search-box input::placeholder {
   color: var(--card-muted);
 }
