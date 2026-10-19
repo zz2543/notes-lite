@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
 import { LibraryError, openLibrary, watchLibrary, type Library, type LibraryWatcher } from "../core";
-import { channels, type CloseCheck, type CopyResult, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
+import { channels, type CloseCheck, type Confirmation, type CopyResult, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -90,6 +90,11 @@ function registerIpc() {
       const code = error instanceof LibraryError ? error.code : "write-failed";
       return { ok: false, code, message: (error as Error).message };
     }
+  });
+  ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
+    const options = { type: "warning" as const, message, detail, buttons: ["取消", action], defaultId: 0, cancelId: 0 };
+    const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
+    return response === 1;
   });
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {

@@ -10,6 +10,8 @@ import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 interface Choices {
   /** The input was saved as a new note at `path`: open it in place of this one. */
   onOpenCopy(path: string): void;
+  /** The note can no longer be shown and nothing unsaved holds it: close it, saying why. */
+  onLetGo(reason: string): void;
 }
 
 /** The open note on its card: Markdown source edited in place, saved as it is typed. */
@@ -31,7 +33,7 @@ const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\
 
 const wordCountDelay = 150;
 
-function Editor({ path, source, onOpenCopy }: { path: string; source: string } & Choices) {
+function Editor({ path, source, onOpenCopy, onLetGo }: { path: string; source: string } & Choices) {
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView>(null);
   const [draft, setDraft] = useState<NoteDraft>();
@@ -89,7 +91,7 @@ function Editor({ path, source, onOpenCopy }: { path: string; source: string } &
 
   return (
     <>
-      {draft && <ConflictNotice draft={draft} onKeep={() => editor.current?.focus()} onOpenCopy={onOpenCopy} />}
+      {draft && <ConflictNotice draft={draft} onKeep={() => editor.current?.focus()} onOpenCopy={onOpenCopy} onLetGo={onLetGo} />}
       <div className="editor" ref={host} />
       <footer className="card-foot">
         {draft && <SaveState draft={draft} />}

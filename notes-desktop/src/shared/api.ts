@@ -41,6 +41,15 @@ export interface NotesApi {
   onLibraryChanged(listener: (paths: string[]) => void): () => void;
   /** Writes `text` as a new note “<title> 副本” beside the note at `path`, which is left alone. */
   saveCopy(path: string, text: string): Promise<CopyResult>;
+  /** Asks before something the user cannot take back; true when they go ahead. */
+  confirm(question: Confirmation): Promise<boolean>;
+}
+
+export interface Confirmation {
+  message: string;
+  detail: string;
+  /** The button that goes ahead; the other one cancels. */
+  action: string;
 }
 
 export const channels = {
@@ -55,4 +64,5 @@ export const channels = {
   closeChecked: "window:close-checked",
   libraryChanged: "library:changed",
   saveCopy: "library:save-copy",
+  confirm: "window:confirm",
 } as const;

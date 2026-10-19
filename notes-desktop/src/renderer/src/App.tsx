@@ -111,10 +111,11 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
   const [note, setNote] = useState<string | null>(null);
   // Other programs may move, delete or rewrite what is shown.
   useFolderFallback(folder, setFolder);
-  useOpenNoteFollowsDisk(note, (reason) => {
+  const letGo = (reason: string) => {
     setNote(null);
     notify(reason);
-  });
+  };
+  useOpenNoteFollowsDisk(note, letGo);
 
   const toggle = (path: string) =>
     setExpanded((now) => {
@@ -168,7 +169,7 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
         <FolderContentsList folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={(path) => void openNote(path)} />
       </section>
       <main className="card-wrap">
-        <NoteEditor path={note} onOpenCopy={openCopy} />
+        <NoteEditor path={note} onOpenCopy={openCopy} onLetGo={letGo} />
       </main>
     </div>
   );

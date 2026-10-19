@@ -128,3 +128,43 @@ test("unsaved input is never overwritten: the conflict lets you keep it, retry, 
   await expect(editor).toContainText("同步来的一段");
   await app.close();
 });
+
+test("reloading the disk's version, or dropping input for a note deleted elsewhere, asks first", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n", "日记/读书.md": "# 读书\n" });
+  const walk = join(root, "日记/散步.md");
+  const { app, page } = await launchWith(scratch, root);
+  const editor = page.getByLabel("笔记正文");
+  const conflict = page.getByRole("alert", { name: "保存冲突" });
+  const answerConfirm = (response: number) =>
+    app.evaluate(({ dialog }, choice) => {
+      dialog.showMessageBox = (async () => ({ response: choice, checkboxChecked: false })) as typeof dialog.showMessageBox;
+    }, response);
+
+  await openNote(page, "日记", "散步");
+  await page.keyboard.press("ControlOrMeta+End");
+  let commit = await startComposing(page, "yuhou");
+  await writeFile(walk, "# 散步\n\n同步来的一段\n");
+  await expect(conflict).toBeVisible();
+  await commit("雨后");
+
+  await answerConfirm(0); // 取消
+  await conflict.getByRole("button", { name: "重新载入…" }).click();
+  await expect(editor).toContainText("雨后");
+  await answerConfirm(1); // 放弃输入并重新载入
+  await conflict.getByRole("button", { name: "重新载入…" }).click();
+  await expect(editor).toContainText("同步来的一段");
+  await expect(editor).not.toContainText("雨后");
+  await expect(conflict).toHaveCount(0);
+  await expect(saveState(page)).toHaveText("已保存");
+
+  // Deleted elsewhere while the input is unsaved: kept until the user drops it.
+  await page.keyboard.press("ControlOrMeta+End");
+  commit = await startComposing(page, "qingtai");
+  await rm(walk);
+  await expect(conflict).toContainText("找不到“散步”，它可能已在别处移动或删除。");
+  await commit("青苔");
+  await conflict.getByRole("button", { name: "放弃输入…" }).click();
+  await expect(page.getByText("选择一篇笔记")).toBeVisible();
+  await expect(page.getByRole("list", { name: "当前目录内容" }).getByRole("button")).toHaveText(["读书"]);
+  await app.close();
+});
