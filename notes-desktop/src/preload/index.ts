@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { channels, type CloseCheck, type NotesApi } from "../shared/api";
+import { readAppearance } from "../shared/appearance";
 
 const api: NotesApi = {
+  appearance: readAppearance(process.argv),
   launchState: () => ipcRenderer.invoke(channels.launchState),
   chooseLibrary: () => ipcRenderer.invoke(channels.chooseLibrary),
   onOpenLibraryRequest: (listener) => {

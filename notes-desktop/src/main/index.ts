@@ -1,8 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
+import { release } from "node:os";
 import { basename, join } from "node:path";
 import { LibraryError, openLibrary, type Library } from "../core";
 import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
+import { appearanceArguments, type Appearance } from "../shared/appearance";
+import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -21,6 +24,8 @@ let quitting = false;
 // File > 打开笔记库… with no window open: asked again once the new page listens.
 let openLibraryPending = false;
 const closeCheckTimeout = 5000;
+// Windows keeps its system frame (and so the fallback colour) until the app draws its own title bar there.
+const appearance: Appearance = { material: windowMaterial({ platform: process.platform, release: release(), frameless: false }) };
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -127,12 +132,16 @@ function createWindow() {
     height: 780,
     minWidth: 760,
     minHeight: 480,
-    // Shown once the first frame is ready, over the window's own color: no white flash on launch.
-    // The color is --win-fallback from the design system, needed here before any CSS has loaded.
+    // Shown once the first frame is ready, over the window's own material or color: no white flash.
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1e22" : "#f2f1f5",
+    ...materialWindowOptions(appearance.material, nativeTheme.shouldUseDarkColors),
     ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
-    webPreferences: { preload: join(__dirname, "../preload/index.js"), sandbox: true, contextIsolation: true },
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: true,
+      contextIsolation: true,
+      additionalArguments: appearanceArguments(appearance),
+    },
   });
   window.once("ready-to-show", () => window?.show());
   closeAllowed = false;

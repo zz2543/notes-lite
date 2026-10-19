@@ -1,4 +1,5 @@
 import type { FolderContents, LibraryErrorCode } from "../core";
+import type { Appearance } from "./appearance";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -20,6 +21,8 @@ export type CloseCheck = { saved: true } | { saved: false; message: string };
 
 /** What the renderer may ask of the main process; exposed as `window.notes`. */
 export interface NotesApi {
+  /** The window material (and system colours), known before the page draws its first frame. */
+  readonly appearance: Appearance;
   launchState(): Promise<LaunchState>;
   /** Lets the user pick a folder and opens it; null when they cancel. */
   chooseLibrary(): Promise<LibraryInfo | null>;
