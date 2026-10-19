@@ -1,4 +1,4 @@
-import { CaretUpDown, HardDrives, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo } from "../../shared/api";
@@ -8,6 +8,7 @@ import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startS
 import { errorText } from "./ipc";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote } from "./noteDraft";
+import { useOrganize } from "./Organize";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
@@ -58,7 +59,9 @@ export function App() {
     <>
       {/* Until the remembered library answers, the window shows only its own color: no spinner. */}
       {phase.kind === "welcome" && <Welcome missing={phase.missing} onChoose={choose} />}
-      {phase.kind === "open" && <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} />}
+      {phase.kind === "open" && (
+        <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
+      )}
       {error && (
         <div className="toast" role="alert">
           {error}
@@ -100,9 +103,11 @@ interface LibraryViewProps {
   onSwitch(): void;
   /** Saves the open note; false when it could not, so the note must stay open. */
   saveFirst(): Promise<boolean>;
+  /** Shows a notice, such as why a note could not be moved to the trash. */
+  notify(message: string): void;
 }
 
-function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
+function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps) {
   const [folder, setFolder] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([""]));
   const [note, setNote] = useState<string | null>(null);
@@ -133,9 +138,28 @@ function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
     requested.current = path;
     if (path === note) return true;
     if (!(await saveFirst()) || requested.current !== path) return false;
-    setNote(path);
+    showNote(path);
     return true;
   };
+
+  // 整理笔记与文件夹: a new note opens ready to type; a note rewritten on disk is read again.
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [reloads, setReloads] = useState(0);
+  const showNote = (path: string | null, how: { fresh?: boolean; reload?: boolean } = {}) => {
+    requested.current = path;
+    setNote(path);
+    setFresh(how.fresh ? path : null);
+    if (how.reload) setReloads((n) => n + 1);
+  };
+  const relocated = (from: string, to: string) => {
+    const remap = (path: string) => (path === from || path.startsWith(`${from}/`) ? to + path.slice(from.length) : path);
+    setFolder(remap);
+    setExpanded((now) => new Set([...now].map(remap)));
+    requested.current = requested.current && remap(requested.current);
+    setNote((now) => now && remap(now));
+  };
+  const organize = useOrganize({ libraryName: library.name, folder, note, saveFirst, notify, showFolder: openFolder, showNote, relocated });
+  const lastDeletedName = organize.lastDeleted?.split("/").pop()?.replace(/\.md$/i, "");
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
@@ -177,7 +201,21 @@ function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
             <MagnifyingGlass size={icon.small} />
           </button>
         </div>
-        <FolderTree libraryName={library.name} selected={folder} expanded={expanded} onActivate={activate} onToggle={toggle} />
+        <FolderTree
+          libraryName={library.name}
+          selected={folder}
+          expanded={expanded}
+          onActivate={activate}
+          onToggle={toggle}
+          onNewNote={(path) => void organize.newNote(path)}
+          onMenu={organize.folderMenu}
+        />
+        {lastDeletedName !== undefined && (
+          <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
+            <ArrowCounterClockwise size={icon.small} />
+            <span className="label">恢复上次删除</span>
+          </button>
+        )}
         <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
           <HardDrives size={icon.small} />
           <span className="label">{library.name}</span>
@@ -198,12 +236,20 @@ function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
         {search?.query ? (
           <SearchResultsList answer={answer} libraryName={library.name} openNote={note} onOpen={(hit) => void openResult(hit)} />
         ) : (
-          <FolderContentsList folder={folder} title={search ? null : title} openNote={note} onOpenFolder={openFolder} onOpenNote={(path) => void openNote(path)} />
+          <FolderContentsList
+            folder={folder}
+            title={search ? null : title}
+            openNote={note}
+            onOpenFolder={openFolder}
+            onOpenNote={(path) => void openNote(path)}
+            onMenu={organize.itemMenu}
+          />
         )}
       </section>
       <main className="card-wrap">
-        <NoteEditor path={note} />
+        <NoteEditor key={reloads} path={note} fresh={note !== null && note === fresh} />
       </main>
+      {organize.overlay}
     </div>
   );
 }

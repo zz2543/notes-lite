@@ -6,15 +6,18 @@ import { countWords } from "../../core/markdown";
 import { useNoteSource } from "./ipc";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 
-/** The open note on its card: Markdown source edited in place, saved as it is typed. */
-export function NoteEditor({ path }: { path: string | null }) {
+/**
+ * The open note on its card: Markdown source edited in place, saved as it is typed. A `fresh` note
+ * (just created) opens with the caret after its title, ready to type.
+ */
+export function NoteEditor({ path, fresh = false }: { path: string | null; fresh?: boolean }) {
   const { value: source, error } = useNoteSource(path);
   return (
     <article className="card">
       <header className="card-head">{path?.split("/").join(" / ")}</header>
       {!path && <p className="empty">选择一篇笔记</p>}
       {error && <p className="empty">{error}</p>}
-      {path && source !== undefined && <Editor key={path} path={path} source={source} />}
+      {path && source !== undefined && <Editor key={path} path={path} source={source} fresh={fresh} />}
     </article>
   );
 }
@@ -25,7 +28,7 @@ const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\
 
 const wordCountDelay = 150;
 
-function Editor({ path, source }: { path: string; source: string }) {
+function Editor({ path, source, fresh }: { path: string; source: string; fresh: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<NoteDraft>();
   const [words, setWords] = useState(() => countWords(source));
@@ -59,6 +62,7 @@ function Editor({ path, source }: { path: string; source: string }) {
     const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }));
     setOpenDraft(draft);
     setDraft(draft);
+    if (fresh) view.dispatch({ selection: { anchor: view.state.doc.length } });
     view.focus();
     return () => {
       clearTimeout(countTimer);

@@ -1,5 +1,5 @@
-import { CaretRight, Folder, FolderOpen } from "@phosphor-icons/react";
-import type { CSSProperties, KeyboardEvent } from "react";
+import { CaretRight, Folder, FolderOpen, NotePencil } from "@phosphor-icons/react";
+import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { useFolder } from "./ipc";
 import { icon } from "./tokens";
 
@@ -10,6 +10,10 @@ interface TreeProps {
   /** A row was clicked: select it, or fold it if it is already the selected, open folder. */
   onActivate(path: string): void;
   onToggle(path: string): void;
+  /** The new-note icon that appears on a hovered row was clicked. */
+  onNewNote?(path: string): void;
+  /** A row was right-clicked: its folder's menu. */
+  onMenu?(path: string, name: string, event: MouseEvent): void;
 }
 
 /** 资料库导航: the library root and its folders, loaded level by level as they are expanded. */
@@ -47,7 +51,7 @@ function Branch(props: RowProps) {
 }
 
 // Rows are flat siblings carrying their level, so a row's name and hit area never include its children.
-function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate, onToggle }: RowProps) {
+function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate, onToggle, onNewNote, onMenu }: RowProps) {
   const isSelected = selected === path;
   const isOpen = expandable && expanded.has(path);
   const Icon = isSelected ? FolderOpen : Folder;
@@ -69,6 +73,10 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
       style={{ "--depth": depth } as CSSProperties}
       onClick={() => onActivate(path)}
       onKeyDown={onKeyDown}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onMenu?.(path, name, event);
+      }}
     >
       <span
         className="caret"
@@ -82,6 +90,20 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
       </span>
       <Icon size={icon.regular} weight={isSelected ? "fill" : "regular"} />
       <span className="label">{name}</span>
+      {onNewNote && (
+        <button
+          className="row-new"
+          aria-label={`在“${name}”中新建笔记`}
+          title="新建笔记"
+          tabIndex={-1}
+          onClick={(event) => {
+            event.stopPropagation();
+            onNewNote(path);
+          }}
+        >
+          <NotePencil size={icon.small} />
+        </button>
+      )}
     </div>
   );
 }
