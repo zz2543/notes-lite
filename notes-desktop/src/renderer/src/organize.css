@@ -1,0 +1,159 @@
+/* 整理笔记与文件夹: the folder row's new-note icon, the restore button, menus and dialogs. Menus and
+   dialogs are design-system 浮层: in-app blur over the window. Values are the variables in tokens.css. */
+
+/* The new-note icon appears at the end of a hovered folder row. */
+.row-new {
+  width: var(--icon-button-small);
+  height: var(--icon-button-small);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--icon-button-small-radius);
+  color: var(--side-muted);
+  opacity: 0;
+}
+.row:hover .row-new {
+  opacity: 1;
+}
+.row-new:hover {
+  background: var(--hover);
+  color: var(--side-fg);
+}
+
+.side-restore {
+  margin-bottom: 0;
+}
+
+.menu {
+  position: fixed;
+  z-index: 20;
+  min-width: var(--menu-min-width);
+  display: flex;
+  flex-direction: column;
+  padding: var(--menu-padding);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--menu-radius);
+  background: var(--glass);
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: var(--menu-blur);
+  color: var(--side-fg);
+  font-size: var(--text-side-row);
+}
+.menu-item {
+  height: var(--menu-item-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--row-padding);
+  border-radius: calc(var(--menu-radius) - var(--menu-padding));
+  text-align: left;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: none;
+}
+.menu-separator {
+  height: 1px;
+  margin: var(--menu-padding) var(--row-padding);
+  background: var(--line);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+}
+.dialog {
+  width: var(--dialog-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  padding: var(--dialog-padding);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--dialog-radius);
+  background: var(--glass);
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: var(--overlay-blur);
+  color: var(--side-fg);
+}
+.dialog h2 {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--text-list-title);
+  font-weight: var(--weight-list-title);
+}
+.dialog-hint {
+  margin: 0;
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+}
+.dialog-input {
+  height: var(--row-height);
+  padding: 0 var(--row-padding);
+  border: 0;
+  border-radius: var(--icon-button-radius);
+  outline: none;
+  background: var(--card-bg);
+  color: var(--card-fg);
+  box-shadow: var(--pill-shadow);
+  caret-color: var(--accent);
+  font: inherit;
+  font-size: var(--text-item);
+  user-select: text;
+}
+.dialog-input::selection {
+  background: var(--selection);
+}
+.dialog-error {
+  margin: 0;
+  color: var(--side-fg);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-item);
+}
+.dialog-list {
+  max-height: var(--dialog-list-height);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.dialog-option {
+  height: var(--row-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 var(--row-padding) 0 calc(var(--row-padding) + var(--depth, 0) * var(--row-indent));
+  border-radius: var(--row-radius);
+  font-size: var(--text-side-row);
+}
+.dialog-option:hover:not(:disabled) {
+  background: var(--hover);
+}
+.dialog-option[aria-selected="true"] {
+  background: var(--side-pill);
+  box-shadow: var(--pill-shadow);
+}
+.dialog-option:disabled {
+  opacity: var(--disabled-opacity);
+}
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--inline-gap);
+}
+.secondary {
+  height: var(--row-height);
+  padding: 0 var(--row-padding);
+  border-radius: var(--icon-button-radius);
+  background: var(--hover);
+}
+.dialog .primary:disabled {
+  opacity: var(--disabled-opacity);
+}

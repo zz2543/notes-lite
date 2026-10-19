@@ -12,6 +12,7 @@
   --accent-orange: #ff9f0a;
   --accent-green: #30d158;
   --accent: var(--accent-blue);
+  --on-accent: #ffffff;
   --selection: color-mix(in srgb, var(--accent) 28%, transparent);
 
   /* 颜色 · 浅色 */
@@ -94,6 +95,8 @@
   --weight-group: 600;
   --text-item: 14px;
   --weight-item: 560;
+  --text-summary: 12.5px;
+  --list-summary: color-mix(in srgb, var(--list-fg) 62%, transparent);
   --text-list-title: 15px;
   --weight-list-title: 650;
   --text-path: 13px;
@@ -108,6 +111,13 @@
   /* Placeholders owned by a later ticket: the welcome page (empty states). */
   --welcome-title: 22px;
   --welcome-width: 420px;
+  /* Placeholders until the dialog design (ui-motion-spec, 设计范围 9) settles them. */
+  --menu-min-width: 168px;
+  --dialog-width: 360px;
+  --dialog-padding: 20px;
+  --dialog-radius: 16px;
+  --dialog-list-height: 260px;
+  --disabled-opacity: 0.45;
 }
 
 /* 颜色 · 深色: its own set, not the light one inverted. */

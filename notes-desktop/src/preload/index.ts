@@ -24,6 +24,19 @@ const api: NotesApi = {
     ipcRenderer.on(channels.beforeClose, handler);
     return () => ipcRenderer.off(channels.beforeClose, handler);
   },
+  onNewNoteRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.newNoteRequest, handler);
+    return () => ipcRenderer.off(channels.newNoteRequest, handler);
+  },
+  createNote: (folder) => ipcRenderer.invoke(channels.createNote, folder),
+  createFolder: (parent, name) => ipcRenderer.invoke(channels.createFolder, parent, name),
+  rename: (path, name) => ipcRenderer.invoke(channels.rename, path, name),
+  move: (path, folder) => ipcRenderer.invoke(channels.move, path, folder),
+  trash: (path) => ipcRenderer.invoke(channels.trash, path),
+  restoreLastDeleted: () => ipcRenderer.invoke(channels.restoreLastDeleted),
+  listFolders: () => ipcRenderer.invoke(channels.listFolders),
+  search: (query, options) => ipcRenderer.invoke(channels.search, query, options),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

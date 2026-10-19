@@ -1,7 +1,18 @@
 import { chmod, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, sep } from "node:path";
+import { organizer, type OrganizeOptions, type Organizer } from "./organize";
 
-export type LibraryErrorCode = "not-a-folder" | "outside-library" | "not-utf8" | "conflict" | "write-failed";
+export type LibraryErrorCode =
+  | "not-a-folder"
+  | "outside-library"
+  | "not-utf8"
+  | "conflict"
+  | "write-failed"
+  // 整理笔记与文件夹
+  | "invalid-name"
+  | "exists"
+  | "not-allowed"
+  | "nothing-to-restore";
 
 export class LibraryError extends Error {
   constructor(
@@ -34,7 +45,7 @@ export interface FolderContents {
   notes: NoteEntry[];
 }
 
-export interface Library {
+export interface Library extends Organizer {
   readonly root: string;
   readFolder(path?: string): Promise<FolderContents>;
   /** The note's Markdown source, verbatim. */
@@ -47,7 +58,7 @@ export interface Library {
 }
 
 /** Why the disk refused a write, in the words shown to the user. */
-const writeFailures: Record<string, string> = {
+export const writeFailures: Record<string, string> = {
   EACCES: "没有写入权限",
   EPERM: "没有写入权限",
   EROFS: "所在磁盘是只读的",
@@ -59,9 +70,9 @@ const writeFailures: Record<string, string> = {
 // Strict, and keeping a byte-order mark as text, so that decoding and re-encoding is lossless.
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
-const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
+export const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
 
-export async function openLibrary(root: string): Promise<Library> {
+export async function openLibrary(root: string, options: OrganizeOptions = {}): Promise<Library> {
   const notFolder = new LibraryError("not-a-folder", `找不到笔记库文件夹：${root}`);
   const realRoot = await realpath(root).catch(() => {
     throw notFolder;
@@ -134,5 +145,5 @@ export async function openLibrary(root: string): Promise<Library> {
       throw new LibraryError("write-failed", `无法保存“${basename(real, ".md")}”：${reason}。`);
     }
   };
-  return { root, readFolder, readNote, saveNote };
+  return { root, readFolder, readNote, saveNote, ...organizer({ ...options, root: realRoot, resolve }) };
 }
