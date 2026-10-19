@@ -60,6 +60,27 @@ test("notes and folders added, edited, moved or deleted elsewhere show up in the
   await app.close();
 });
 
+test("search finds notes as other programs leave them", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n\n小路\n" });
+  const { app, page } = await launchWith(scratch, root);
+  await expect(page.getByRole("list", { name: "当前目录内容" }).getByRole("button")).toHaveText(["日记"]);
+  await page.keyboard.press("ControlOrMeta+KeyK");
+  const field = page.getByRole("searchbox", { name: "搜索笔记" });
+  const hits = page.getByRole("list", { name: "搜索结果" }).getByRole("button");
+  await field.fill("青苔");
+  await expect(page.getByText("没有找到“青苔”")).toBeVisible();
+
+  await writeFile(join(root, "日记/散步.md"), "# 散步\n\n小路上长满了青苔。\n");
+  await writeFile(join(root, "苔藓图鉴.md"), "# 苔藓图鉴\n\n青苔喜欢阴凉\n");
+  // Asked again until the watcher's notice has reached the index.
+  await expect(async () => {
+    await field.fill("");
+    await field.fill("青苔");
+    await expect(hits).toHaveCount(2, { timeout: 500 });
+  }).toPass();
+  await app.close();
+});
+
 test("an open note with nothing unsaved follows the disk, and is let go when deleted elsewhere", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n", "日记/读书.md": "# 读书\n" });
   const walk = join(root, "日记/散步.md");

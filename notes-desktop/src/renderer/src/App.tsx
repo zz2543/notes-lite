@@ -1,8 +1,10 @@
-import { CaretUpDown, HardDrives } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { CaretUpDown, HardDrives, MagnifyingGlass } from "@phosphor-icons/react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
+import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
 import { errorText } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
 import { NoteEditor } from "./NoteEditor";
@@ -137,12 +139,14 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
     setExpanded((now) => new Set([...now, ...ancestors(path)]));
   };
 
-  // The last note clicked wins, however long saving the current one takes.
+  // The last note clicked wins, however long saving the current one takes. True once it is open.
   const requested = useRef(note);
-  const openNote = async (path: string) => {
+  const openNote = async (path: string): Promise<boolean> => {
     requested.current = path;
-    if (path === note || !(await saveFirst())) return;
-    if (requested.current === path) setNote(path);
+    if (path === note) return true;
+    if (!(await saveFirst()) || requested.current !== path) return false;
+    setNote(path);
+    return true;
   };
 
   // The input saved as a copy beside its note: shown where it lies, and opened.
@@ -153,11 +157,44 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
+  // 就地搜索: the list header turns into the search field; results stand in for the list.
+  const [search, setSearch] = useState<SearchState | null>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
+  const answer = useSearch(search?.query ?? "", search?.scope === "folder" ? folder : undefined);
+  const openSearch = () => {
+    setSearch((now) => now ?? startSearch);
+    setFocusRequest((n) => n + 1);
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isSearchShortcut(event)) return;
+      event.preventDefault();
+      openSearch();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+  // A result opens in its own folder, as if reached by browsing; the search is done.
+  const openResult = async (hit: SearchHit) => {
+    if (!(await openNote(hit.path))) return;
+    openFolder(hit.folder);
+    setSearch(null);
+  };
+  const closeOnEscape = (event: ReactKeyboardEvent) => {
+    if (search && event.key === "Escape" && !event.nativeEvent.isComposing) setSearch(null);
+  };
+  const firstHit = answer?.query === search?.query ? answer?.results?.hits[0] : undefined;
+
   return (
     <div className="app">
       <aside className="side">
         <div className="drag" />
-        <div className="side-label">文件夹</div>
+        <div className="side-label">
+          <span className="label">文件夹</span>
+          <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+            <MagnifyingGlass size={icon.small} />
+          </button>
+        </div>
         <FolderTree libraryName={library.name} selected={folder} expanded={expanded} onActivate={activate} onToggle={toggle} />
         <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
           <HardDrives size={icon.small} />
@@ -165,8 +202,22 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
           <CaretUpDown size={icon.caret} />
         </button>
       </aside>
-      <section className="list">
-        <FolderContentsList folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={(path) => void openNote(path)} />
+      <section className="list" onKeyDown={closeOnEscape}>
+        {search && (
+          <SearchHead
+            state={search}
+            folderName={title}
+            focusRequest={focusRequest}
+            onChange={setSearch}
+            onSubmit={() => firstHit && void openResult(firstHit)}
+            onClose={() => setSearch(null)}
+          />
+        )}
+        {search?.query ? (
+          <SearchResultsList answer={answer} libraryName={library.name} openNote={note} onOpen={(hit) => void openResult(hit)} />
+        ) : (
+          <FolderContentsList folder={folder} title={search ? null : title} openNote={note} onOpenFolder={openFolder} onOpenNote={(path) => void openNote(path)} />
+        )}
       </section>
       <main className="card-wrap">
         <NoteEditor path={note} onOpenCopy={openCopy} onLetGo={letGo} />

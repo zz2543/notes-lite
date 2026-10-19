@@ -22,6 +22,7 @@ const api: NotesApi = {
     ipcRenderer.on(channels.beforeClose, handler);
     return () => ipcRenderer.off(channels.beforeClose, handler);
   },
+  search: (query, options) => ipcRenderer.invoke(channels.search, query, options),
   onLibraryChanged: (listener) => {
     const handler = (_: unknown, paths: string[]) => listener(paths);
     ipcRenderer.on(channels.libraryChanged, handler);
