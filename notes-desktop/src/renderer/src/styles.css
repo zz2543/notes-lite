@@ -130,10 +130,6 @@ button {
 .row:hover {
   background: var(--hover);
 }
-.row.on {
-  background: var(--side-pill);
-  box-shadow: var(--pill-shadow);
-}
 .caret {
   width: 14px;
   display: grid;
@@ -195,10 +191,6 @@ button {
 }
 .item:hover {
   background: var(--hover);
-}
-.item.on {
-  background: var(--list-pill);
-  box-shadow: var(--pill-shadow);
 }
 
 .card-wrap {
@@ -310,4 +302,24 @@ button {
   color: var(--card-fg);
   box-shadow: var(--card-shadow);
   font-size: var(--text-path);
+}
+
+/* 选中底板: one pill per group slides between rows (SelectionPill); the row keeps its content above it. */
+.row,
+.item {
+  position: relative;
+  isolation: isolate;
+}
+.pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: var(--pill-shadow);
+}
+.pill.side {
+  background: var(--side-pill);
+}
+.pill.list {
+  background: var(--list-pill);
 }

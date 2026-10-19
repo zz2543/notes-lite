@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, launch, launchWith, library, test } from "./fixtures";
 
 const windowColor = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -15,6 +15,61 @@ const computed = (page: Page, property: string, value: string) =>
     },
     { property, value },
   );
+
+interface Frame {
+  top: number;
+  scale: string;
+  filter: string;
+}
+
+/** Films the element matching `selector` once per frame while `act` runs and `ms` after it. */
+async function film(page: Page, selector: string, act: () => Promise<void>, ms = 900): Promise<Frame[]> {
+  await page.evaluate((selector) => {
+    const w = window as unknown as { film: Frame[]; filming: boolean };
+    w.film = [];
+    w.filming = true;
+    const frame = () => {
+      if (!w.filming) return;
+      const element = document.querySelector(selector);
+      if (element) {
+        const style = getComputedStyle(element);
+        w.film.push({ top: element.getBoundingClientRect().top, scale: style.scale, filter: style.filter });
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }, selector);
+  await act();
+  await page.waitForTimeout(ms);
+  return page.evaluate(() => {
+    const w = window as unknown as { film: Frame[]; filming: boolean };
+    w.filming = false;
+    return w.film;
+  });
+}
+
+const sidePill = '[role="tree"] [data-testid="selection-pill"]';
+
+async function top(locator: Locator): Promise<number> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("not on screen");
+  return box.y;
+}
+
+test("the selection pill slides to the chosen folder", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "甲/一.md": "一", "乙/二.md": "二", "丙/三.md": "三" });
+  const { app, page } = await launchWith(scratch, root);
+  const tree = page.getByRole("tree", { name: "文件夹" });
+  const from = await top(tree.getByRole("treeitem", { name: "笔记库" }));
+  const target = tree.getByRole("treeitem", { name: "丙" });
+  const to = await top(target);
+
+  const frames = await film(page, sidePill, () => target.click());
+  // It passes through the rows in between instead of jumping, and comes to rest on the chosen row.
+  expect(frames.some((f) => f.top > from + 2 && f.top < to - 2)).toBe(true);
+  expect(frames.at(-1)?.top).toBeCloseTo(to, 0);
+  await app.close();
+});
 
 // The design system's tables (docs/design-system.md), copied as written: [variable, light, dark].
 const colours: [string, string, string][] = [

@@ -1,5 +1,6 @@
 import { Folder } from "@phosphor-icons/react";
 import { useFolder } from "./ipc";
+import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
 
 interface Props {
@@ -34,6 +35,7 @@ export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOp
           {contents.notes.map((n) => (
             <li key={n.path}>
               <button className={`item ${openNote === n.path ? "on" : ""}`} aria-current={openNote === n.path || undefined} onClick={() => onOpenNote(n.path)}>
+                {openNote === n.path && <SelectionPill group="list" />}
                 <span className="label">{n.title}</span>
               </button>
             </li>
