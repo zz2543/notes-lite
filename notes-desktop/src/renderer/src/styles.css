@@ -34,6 +34,8 @@
   --card-gap: 10px;
   --card-radius: 12px;
   --card-head-height: 46px;
+  --card-foot-height: 34px;
+  --card-padding: 28px 40px;
   --icon-button-radius: 8px;
 
   /* 界面文字 */
@@ -47,11 +49,16 @@
   --text-path: 13px;
   --text-meta: 11.5px;
 
-  /* Placeholders owned by later tickets: the welcome page (empty states) and the source view (editor). */
+  /* 正文排版的默认值（排版设置以后改这些变量） */
+  --body-font: var(--font-ui);
+  --body-size: 17px;
+  --body-leading: 1.8;
+  --measure: 680px;
+  --selection: color-mix(in srgb, var(--accent) 28%, transparent);
+
+  /* Placeholders owned by a later ticket: the welcome page (empty states). */
   --welcome-title: 22px;
   --welcome-width: 420px;
-  --source-font: 14px/1.7 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --source-padding: 8px 40px 40px;
 
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
@@ -299,21 +306,80 @@ button {
   font-size: var(--text-path);
   -webkit-app-region: drag;
 }
-.source {
+.editor {
   flex: 1;
-  margin: 0;
-  padding: var(--source-padding);
-  overflow: auto;
-  font: var(--source-font);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: text;
+  min-height: 0;
+}
+.editor .cm-editor {
+  height: 100%;
+  color: var(--card-fg);
+}
+.editor .cm-editor.cm-focused {
+  outline: none;
+}
+.editor .cm-scroller {
+  padding: var(--card-padding);
+  font-family: var(--body-font);
+  font-size: var(--body-size);
+  line-height: var(--body-leading);
+}
+.editor .cm-content {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 0;
+  caret-color: var(--accent);
+}
+.editor .cm-line {
+  padding: 0;
+}
+.editor .cm-cursor {
+  border-left-color: var(--accent);
+}
+.editor .cm-selectionBackground,
+.editor .cm-focused .cm-selectionBackground,
+.editor ::selection {
+  background: var(--selection);
+}
+.card-foot {
+  height: var(--card-foot-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--card-gap);
+  padding: 0 calc(var(--row-padding) * 2);
+  color: var(--card-muted);
+  font-size: var(--text-meta);
+}
+.save {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.save-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.save.problem {
+  color: var(--card-fg);
+}
+.retry {
+  flex: none;
+  margin-left: 8px;
+  color: var(--accent);
+  font-size: var(--text-meta);
+}
+.words {
+  flex: none;
 }
 
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--card-gap) * 2);
+  bottom: calc(var(--card-foot-height) + var(--card-gap) * 2);
+  pointer-events: none;
   transform: translateX(-50%);
   max-width: var(--welcome-width);
   padding: var(--item-padding);

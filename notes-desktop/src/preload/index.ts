@@ -1,16 +1,25 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { channels, type LibraryInfo, type NotesApi } from "../shared/api";
+import { channels, type CloseCheck, type NotesApi } from "../shared/api";
 
 const api: NotesApi = {
   launchState: () => ipcRenderer.invoke(channels.launchState),
   chooseLibrary: () => ipcRenderer.invoke(channels.chooseLibrary),
-  onLibraryChanged: (listener) => {
-    const handler = (_: unknown, library: LibraryInfo) => listener(library);
-    ipcRenderer.on(channels.libraryChanged, handler);
-    return () => ipcRenderer.off(channels.libraryChanged, handler);
+  onOpenLibraryRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.openLibraryRequest, handler);
+    return () => ipcRenderer.off(channels.openLibraryRequest, handler);
   },
   readFolder: (path) => ipcRenderer.invoke(channels.readFolder, path),
   readNote: (path) => ipcRenderer.invoke(channels.readNote, path),
+  saveNote: (path, text, expected) => ipcRenderer.invoke(channels.saveNote, path, text, expected),
+  onBeforeClose: (check) => {
+    const handler = async () => {
+      const answer: CloseCheck = await check().catch((error: Error) => ({ saved: false, message: error.message }));
+      ipcRenderer.send(channels.closeChecked, answer);
+    };
+    ipcRenderer.on(channels.beforeClose, handler);
+    return () => ipcRenderer.off(channels.beforeClose, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("notes", api);

@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
-import { openLibrary, type Library } from "../core";
-import { channels, type LaunchState, type LibraryInfo } from "../shared/api";
+import { LibraryError, openLibrary, type Library } from "../core";
+import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -12,6 +12,9 @@ const settings = settingsStore(app.getPath("userData"));
 const mac = process.platform === "darwin";
 let library: Library | null = null;
 let window: BrowserWindow | null = null;
+// Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
+let closeAllowed = false;
+let quitting = false;
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -47,20 +50,46 @@ function registerIpc() {
   ipcMain.handle(channels.chooseLibrary, () => chooseLibrary());
   ipcMain.handle(channels.readFolder, (_, path: string) => requireLibrary().readFolder(path));
   ipcMain.handle(channels.readNote, (_, path: string) => requireLibrary().readNote(path));
+  // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
+  ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
+    try {
+      await requireLibrary().saveNote(path, text, expected);
+      return { ok: true };
+    } catch (error) {
+      const conflict = error instanceof LibraryError && error.code === "conflict";
+      return { ok: false, conflict, message: (error as Error).message };
+    }
+  });
+  ipcMain.on(channels.closeChecked, async (_, check: CloseCheck) => {
+    if (!window) return;
+    if (!check.saved) {
+      const { response } = await dialog.showMessageBox(window, {
+        type: "warning",
+        message: "笔记还没有保存",
+        detail: `${check.message}\n关闭后，这些输入会丢失。`,
+        buttons: ["返回", "不保存，直接关闭"],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (response === 0) {
+        quitting = false;
+        return;
+      }
+    }
+    closeAllowed = true;
+    if (quitting) app.quit();
+    else window.close();
+  });
 }
 
 function buildMenu() {
   const openLibraryItem: MenuItemConstructorOptions = {
     label: "打开笔记库…",
     accelerator: "CmdOrCtrl+O",
-    click: async () => {
-      try {
-        const next = await chooseLibrary();
-        if (next) window?.webContents.send(channels.libraryChanged, next);
-      } catch (error) {
-        const options = { type: "warning" as const, message: "无法打开这个笔记库", detail: String((error as Error).message ?? error) };
-        await (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options));
-      }
+    // The page saves the open note first, then asks for the folder like its own switch button.
+    click: () => {
+      if (!window) createWindow();
+      window?.webContents.send(channels.openLibraryRequest);
     },
   };
   const template: MenuItemConstructorOptions[] = [
@@ -87,6 +116,13 @@ function createWindow() {
     webPreferences: { preload: join(__dirname, "../preload/index.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window?.show());
+  closeAllowed = false;
+  // The page saves what is still unsaved before the window goes, on close and on quit alike.
+  window.on("close", (event) => {
+    if (closeAllowed || !window || window.webContents.isCrashed()) return;
+    event.preventDefault();
+    window.webContents.send(channels.beforeClose);
+  });
   window.on("closed", () => (window = null));
   // The page only ever shows the app itself.
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -104,6 +140,8 @@ void app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on("before-quit", () => (quitting = true));
 
 app.on("window-all-closed", () => {
   if (!mac) app.quit();

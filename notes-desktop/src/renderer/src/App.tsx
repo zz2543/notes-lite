@@ -4,22 +4,36 @@ import type { LaunchState, LibraryInfo } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { errorText } from "./ipc";
-import { NoteView } from "./NoteView";
+import { NoteEditor } from "./NoteEditor";
+import { flushActive } from "./noteSession";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
+
+const NOTICE_DURATION = 6000;
 
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "starting" });
   const [error, setError] = useState<string>();
 
+  // A notice, not a dialog: it fades on its own and never blocks what is under it.
   useEffect(() => {
-    void window.notes.launchState().then(setPhase);
-    return window.notes.onLibraryChanged((library) => setPhase({ kind: "open", library }));
-  }, []);
+    if (!error) return;
+    const timer = setTimeout(() => setError(undefined), NOTICE_DURATION);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  // Anything unsaved reaches the disk before the open note goes away: another note, another
+  // library, or the window itself.
+  const saveFirst = async (): Promise<boolean> => {
+    const check = await flushActive();
+    if (!check.saved) setError(`${check.message}你的输入仍保留在编辑器中。`);
+    return check.saved;
+  };
 
   const choose = async () => {
     setError(undefined);
+    if (!(await saveFirst())) return;
     try {
       const library = await window.notes.chooseLibrary();
       if (library) setPhase({ kind: "open", library });
@@ -28,11 +42,21 @@ export function App() {
     }
   };
 
+  useEffect(() => {
+    void window.notes.launchState().then(setPhase);
+    const offMenu = window.notes.onOpenLibraryRequest(() => void choose());
+    const offClose = window.notes.onBeforeClose(flushActive);
+    return () => {
+      offMenu();
+      offClose();
+    };
+  }, []);
+
   return (
     <>
       {/* Until the remembered library answers, the window shows only its own color: no spinner. */}
       {phase.kind === "welcome" && <Welcome missing={phase.missing} onChoose={choose} />}
-      {phase.kind === "open" && <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} />}
+      {phase.kind === "open" && <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} />}
       {error && (
         <div className="toast" role="alert">
           {error}
@@ -69,7 +93,14 @@ function ancestors(path: string): string[] {
   return ["", ...parts.map((_, i) => parts.slice(0, i + 1).join("/"))];
 }
 
-function LibraryView({ library, onSwitch }: { library: LibraryInfo; onSwitch(): void }) {
+interface LibraryViewProps {
+  library: LibraryInfo;
+  onSwitch(): void;
+  /** Saves the open note; false when it could not, so the note must stay open. */
+  saveFirst(): Promise<boolean>;
+}
+
+function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
   const [folder, setFolder] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([""]));
   const [note, setNote] = useState<string | null>(null);
@@ -94,6 +125,10 @@ function LibraryView({ library, onSwitch }: { library: LibraryInfo; onSwitch(): 
     setExpanded((now) => new Set([...now, ...ancestors(path)]));
   };
 
+  const openNote = async (path: string) => {
+    if (path !== note && (await saveFirst())) setNote(path);
+  };
+
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
   return (
@@ -109,10 +144,10 @@ function LibraryView({ library, onSwitch }: { library: LibraryInfo; onSwitch(): 
         </button>
       </aside>
       <section className="list">
-        <FolderContentsList folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={setNote} />
+        <FolderContentsList folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={(path) => void openNote(path)} />
       </section>
       <main className="card-wrap">
-        <NoteView path={note} />
+        <NoteEditor path={note} />
       </main>
     </div>
   );
