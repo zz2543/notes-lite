@@ -352,7 +352,7 @@ import NotesCore
         editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
         editor.insertNewline(nil)
         settle(host)
-        XCTAssertTrue(editor.string.hasSuffix("- 项目\n\n"))
+        XCTAssertTrue(editor.string.hasSuffix("- 项目\n") && !editor.string.hasSuffix("\n\n"), "Exiting a list removes only the marker")
         let exited = editor.string
         editor.insertText("- ", replacementRange: NSRange(location: NSNotFound, length: 0))
         XCTAssertEqual(editor.string, exited, "Ignore an IME's immediate list-marker echo")

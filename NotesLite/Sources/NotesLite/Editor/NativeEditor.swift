@@ -83,6 +83,7 @@ struct NativeEditor: NSViewRepresentable {
                 storage.setAttributedString(NSAttributedString(string: workspace.text, attributes: styler.baseAttributes()))
                 tv.insertionCaret.hide()
                 tv.undoManager?.removeAllActions()
+                tv.forgetListGap()
                 tv.setSelectedRange(NSRange(location: 0, length: 0)); tv.scroll(.zero)
                 styling = false
                 styler.newDocument()
@@ -122,6 +123,7 @@ struct NativeEditor: NSViewRepresentable {
             }
             styler.setContainerWidth(container.size.width)
             styler.dark = tv.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            styler.listGap = tv.listGap
             let glyphs = layout.glyphRange(forBoundingRect: tv.visibleRect.offsetBy(dx: -tv.textContainerOrigin.x, dy: -tv.textContainerOrigin.y), in: container)
             if glyphs.location < layout.numberOfGlyphs { styler.priorityLine = styler.lineIndex(at: layout.characterIndexForGlyph(at: glyphs.location)) }
             let selection = tv.selectedRange()
@@ -188,6 +190,11 @@ final class NoteTextView: NSTextView {
     private var heightHeld = false
     private var fitScheduled = false
     private var listExitCaret: Int?
+    func forgetListGap() { listGap = nil }
+    /// The blank line (分隔空行) this editor put in to end a list, while the line below it is being
+    /// written; taken out again if that line ends up empty or a list item.
+    private(set) var listGap: Int?
+    private var editingListGap = false
 
     func setUpInsertionCaret() {
         wantsLayer = true
@@ -250,6 +257,7 @@ final class NoteTextView: NSTextView {
     }
     override func didChangeText() {
         super.didChangeText()
+        closeListGapIfNeeded()
         if heightHeld { releaseHeightSoon() }
         updateInsertionCaret(animated: true)
     }
@@ -260,7 +268,7 @@ final class NoteTextView: NSTextView {
     override func insertText(_ text: Any, replacementRange: NSRange) {
         if let caret = listExitCaret {
             listExitCaret = nil
-            let incoming = (text as? NSAttributedString)?.string ?? text as? String ?? ""
+            let incoming = Self.string(text)
             if replacementRange.location == NSNotFound, selectedRange() == NSRange(location: caret, length: 0),
                Markdown.blockType(incoming).isList, Markdown.prefixLength(incoming) == (incoming as NSString).length { return }
         }
@@ -269,6 +277,8 @@ final class NoteTextView: NSTextView {
             caretInputDepth -= 1
             updateInsertionCaret(animated: true)
         }
+        var replacementRange = replacementRange
+        openListGap(for: text, &replacementRange)
         super.insertText(text, replacementRange: replacementRange)
     }
     override func setMarkedText(_ text: Any, selectedRange: NSRange, replacementRange: NSRange) {
@@ -277,7 +287,58 @@ final class NoteTextView: NSTextView {
             caretInputDepth -= 1
             updateInsertionCaret(animated: true)
         }
+        var replacementRange = replacementRange
+        openListGap(for: text, &replacementRange)
         super.setMarkedText(text, selectedRange: selectedRange, replacementRange: replacementRange)
+    }
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        // The blank line is kept or taken out only while the caret stays on the line below it.
+        guard !editingListGap, let gap = listGap else { return }
+        let ns = string as NSString
+        let sel = selectedRange()
+        if sel.length > 0 || ns.lineRange(for: NSRange(location: min(sel.location, ns.length), length: 0)).location != gap + 1 { listGap = nil }
+    }
+    private static func string(_ text: Any) -> String { (text as? NSAttributedString)?.string ?? text as? String ?? "" }
+    /// Text is about to start on an empty line right below a list item: Markdown needs a blank line
+    /// (分隔空行) above it to end the list, or the text would continue the item.
+    private func openListGap(for text: Any, _ replacementRange: inout NSRange) {
+        guard listGap == nil, !hasMarkedText(), let coordinator, selectedRange().length == 0,
+              !Self.string(text).allSatisfy(\.isNewline) else { return }
+        let ns = string as NSString
+        let line = ns.lineRange(for: NSRange(location: selectedRange().location, length: 0))
+        guard line.location > 0, ns.substring(with: line).trimmingCharacters(in: .newlines).isEmpty else { return }
+        let above = ns.lineRange(for: NSRange(location: line.location - 1, length: 0))
+        guard Markdown.blockType(ns.substring(with: above).trimmingCharacters(in: .newlines)).isList,
+              !coordinator.styler.isCode(line: coordinator.styler.lineIndex(at: above.location)) else { return }
+        replaceListGap(NSRange(location: line.location, length: 0), with: "\n")
+        listGap = line.location
+        // Styling waits while text is composed; the blank line must take no room before that.
+        coordinator.style()
+        if replacementRange.location != NSNotFound, replacementRange.location >= line.location { replacementRange.location += 1 }
+    }
+    /// After an edit: the blank line goes again once the line below it is empty or a list item.
+    private func closeListGapIfNeeded() {
+        guard !editingListGap, let gap = listGap, !hasMarkedText() else { return }
+        // Undo and redo replay recorded edits, the blank line's included.
+        if undoManager?.isUndoing == true || undoManager?.isRedoing == true { listGap = nil; return }
+        let ns = string as NSString
+        guard gap + 1 <= ns.length else { listGap = nil; return }
+        let line = ns.substring(with: ns.lineRange(for: NSRange(location: gap + 1, length: 0))).trimmingCharacters(in: .newlines)
+        guard line.isEmpty || (Markdown.blockType(line).isList && Markdown.prefixLength(line) > 0) else { return }
+        replaceListGap(NSRange(location: gap, length: 1), with: "")
+        listGap = nil
+    }
+    /// An undoable edit that keeps the caret on its text.
+    private func replaceListGap(_ range: NSRange, with text: String) {
+        editingListGap = true
+        defer { editingListGap = false }
+        let sel = selectedRange()
+        guard shouldChangeText(in: range, replacementString: text) else { return }
+        textStorage?.replaceCharacters(in: range, with: text)
+        didChangeText()
+        let delta = (text as NSString).length - range.length
+        setSelectedRange(NSRange(location: sel.location >= range.location ? sel.location + delta : sel.location, length: sel.length))
     }
     override func unmarkText() {
         caretInputDepth += 1
@@ -338,7 +399,12 @@ final class NoteTextView: NSTextView {
     override func paste(_ sender: Any?) {
         listExitCaret = nil
         if importPasteboard(.general) { return }
+        if let pasted = NSPasteboard.general.string(forType: .string) {
+            var none = NSRange(location: NSNotFound, length: 0)
+            openListGap(for: pasted, &none)
+        }
         super.paste(sender)
+        closeListGapIfNeeded()
     }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) ? .copy : super.draggingEntered(sender)
@@ -366,6 +432,23 @@ final class NoteTextView: NSTextView {
         }
         return false
     }
+    /// The nearest list item above `location` indented less than `line`; nil at the outermost level.
+    private func parentItem(of line: String, above location: Int) -> String? {
+        func indent(_ s: String) -> Int { s.prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) } }
+        let own = indent(line)
+        guard own > 0 else { return nil }
+        let ns = string as NSString
+        var end = location
+        while end > 0 {
+            let r = ns.lineRange(for: NSRange(location: end - 1, length: 0))
+            end = r.location
+            let text = ns.substring(with: r).trimmingCharacters(in: .newlines)
+            if text.allSatisfy(\.isWhitespace) { continue }
+            let depth = indent(text)
+            if depth < own { return Markdown.blockType(text).isList ? text : nil }
+        }
+        return nil
+    }
     override func insertNewline(_ sender: Any?) {
         guard !hasMarkedText(), let coordinator else { super.insertNewline(sender); return }
         let range = selectedRange()
@@ -373,8 +456,12 @@ final class NoteTextView: NSTextView {
         let line = (string as NSString).substring(with: lineRange).trimmingCharacters(in: .newlines)
         let lineIndex = coordinator.styler.lineIndex(at: range.location)
         guard !coordinator.styler.isCode(line: lineIndex), let continuation = Markdown.continuation(for: line) else { super.insertNewline(sender); return }
-        if continuation.exit {
-            insertText("\n", replacementRange: NSRange(location: lineRange.location, length: NSMaxRange(range) - lineRange.location))
+        if continuation.exit, let parent = parentItem(of: line, above: lineRange.location), let next = Markdown.continuation(for: parent), !next.exit {
+            // A nested empty item steps out one level and continues its parent's list.
+            insertText(next.prefix, replacementRange: NSRange(location: lineRange.location, length: NSMaxRange(range) - lineRange.location))
+        } else if continuation.exit {
+            // Only the marker goes; the blank line that ends the list waits for text (`openListGap`).
+            insertText("", replacementRange: NSRange(location: lineRange.location, length: NSMaxRange(range) - lineRange.location))
             listExitCaret = selectedRange().location
         } else { insertText("\n" + continuation.prefix, replacementRange: range) }
     }

@@ -88,6 +88,9 @@ final class MarkdownStyler {
     var depth = 0
     /// The line to style first when there is more to do than one slice (the top of the view).
     var priorityLine = 0
+    /// The start of the blank line just put in to end a list, kept without height while the line
+    /// after it is being written (even before it reads as a paragraph, as during composition).
+    var listGap: Int? { didSet { if listGap != oldValue { generation += 1 } } }
     /// Lines are still waiting for a slice.
     private(set) var pending = false
 
@@ -441,6 +444,7 @@ final class MarkdownStyler {
                 sig.active = true
                 sig.reveal = reveals(ns, r, caret: caret! - r.location, forced: sig.forced)
             }
+            if b < 0, i != activeLine, isListGap(ns, i, roles, owner, len) { sig.mode = .collapsed }
             sig.dim = style.dim && activeLine != nil && i != activeLine
             if let target = embedTarget(ns, i, r, forced: sig.forced) { sig.embedStamp = embedStamps[target, default: 0] }
             let textDirty = all || (i >= textA && i <= textB) || (b >= 0 && dirtyBlocks.contains(b))
@@ -510,6 +514,18 @@ final class MarkdownStyler {
         p.headIndent = Self.gutter
         p.tailIndent = -Self.gutter
         return [.font: style.plain ? typo.mono(size: 14) : body, .foregroundColor: Theme.NS.ink, .paragraphStyle: p]
+    }
+
+    /// The one blank line between a list and the paragraph after it: Markdown needs it to end the
+    /// list, but it takes no room, so the paragraph sits as close as if it followed the list.
+    private func isListGap(_ ns: NSString, _ i: Int, _ roles: [Role], _ owner: [Int32], _ len: Int) -> Bool {
+        guard i > 0, i + 1 < lineStarts.count, firstChar(i) == nil, roles[i].forced == nil,
+              ns.substring(with: lineRange(i, length: len)).allSatisfy(\.isWhitespace) else { return false }
+        func type(_ j: Int) -> BlockType? {
+            guard owner[j] < 0, roles[j].forced == nil else { return nil }
+            return Markdown.blockType(ns.substring(with: lineRange(j, length: len)))
+        }
+        return type(i - 1)?.isList == true && (type(i + 1) == .p || lineStarts[i] == listGap)
     }
 
     private func needsText(_ i: Int, _ r: NSRange, _ ctx: BlockContext) -> Bool {

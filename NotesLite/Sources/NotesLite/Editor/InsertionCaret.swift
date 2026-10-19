@@ -74,7 +74,17 @@ extension NoteTextView {
             let index = min(location, storage.length - 1)
             font = storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont ?? font
             let glyph = lm.glyphIndexForCharacter(at: index)
-            baseline = textContainerOrigin.y + lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY + lm.location(forGlyphAt: glyph).y
+            let fragment = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let chars = storage.string as NSString
+            if chars.character(at: index) == 0x0A, index == 0 || chars.character(at: index - 1) == 0x0A {
+                // An empty line has only its line break, whose glyph sits below the text baseline:
+                // place the caret where the line's first character, typed in the typing attributes, will be.
+                font = (typingAttributes[.font] as? NSFont) ?? font
+                let before = (storage.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle)?.paragraphSpacingBefore ?? 0
+                baseline = textContainerOrigin.y + fragment.minY + before + lm.defaultBaselineOffset(for: font)
+            } else {
+                baseline = textContainerOrigin.y + fragment.minY + lm.location(forGlyphAt: glyph).y
+            }
         }
         let scale = window.backingScaleFactor
         // Optical height follows the type size, centered within its ascent/descent envelope.
