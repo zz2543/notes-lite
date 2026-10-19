@@ -1,4 +1,4 @@
-import type { FolderContents, LibraryErrorCode } from "../core";
+import type { FolderContents, LibraryErrorCode, Relocation } from "../core";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -31,7 +31,21 @@ export interface NotesApi {
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
+
+  // 整理笔记与文件夹 (ticket 04). Each answers with a result, so the page can show why it failed.
+  /** File > 新建笔记 (⌘N / Ctrl+N): the page creates a note in the current folder. */
+  onNewNoteRequest(listener: () => void): () => void;
+  createNote(folder: string): Promise<Organized<string>>;
+  createFolder(parent: string, name: string): Promise<Organized<string>>;
+  rename(path: string, name: string): Promise<Organized<Relocation>>;
+  move(path: string, folder: string): Promise<Organized<Relocation>>;
+  trash(path: string): Promise<Organized<null>>;
+  restoreLastDeleted(): Promise<Organized<string>>;
+  listFolders(): Promise<string[]>;
 }
+
+/** The outcome of creating, renaming, moving, deleting or restoring. */
+export type Organized<T> = { ok: true; value: T } | { ok: false; code: LibraryErrorCode; message: string };
 
 export const channels = {
   launchState: "library:launch-state",
@@ -43,4 +57,12 @@ export const channels = {
   saveNote: "library:save-note",
   beforeClose: "window:before-close",
   closeChecked: "window:close-checked",
+  newNoteRequest: "menu:new-note",
+  createNote: "library:create-note",
+  createFolder: "library:create-folder",
+  rename: "library:rename",
+  move: "library:move",
+  trash: "library:trash",
+  restoreLastDeleted: "library:restore-last-deleted",
+  listFolders: "library:list-folders",
 } as const;

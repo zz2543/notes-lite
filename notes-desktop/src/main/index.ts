@@ -1,8 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
-import { LibraryError, openLibrary, type Library } from "../core";
-import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
+import { LibraryError, openLibrary, type Library, type OrganizeOptions } from "../core";
+import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type Organized, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -24,11 +24,14 @@ const closeCheckTimeout = 5000;
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
+// Deleting goes to the system trash. Looked up on each call, so tests can stand in for the trash.
+const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path) };
+
 // Starts while the window loads, so the remembered library is ready by the time the page asks.
 const launch: Promise<LaunchState> = (async () => {
   const { libraryPath } = await settings.read();
   if (!libraryPath) return { kind: "welcome" };
-  library = await openLibrary(libraryPath).catch(() => null);
+  library = await openLibrary(libraryPath, libraryOptions).catch(() => null);
   return library ? { kind: "open", library: libraryInfo(library) } : { kind: "welcome", missing: libraryPath };
 })();
 
@@ -41,7 +44,7 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   const picked = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
   const path = picked.filePaths[0];
   if (picked.canceled || !path) return null;
-  library = await openLibrary(path);
+  library = await openLibrary(path, libraryOptions);
   await settings.update({ libraryPath: path });
   return libraryInfo(library);
 }
@@ -66,6 +69,23 @@ function registerIpc() {
       return { ok: false, code, message: (error as Error).message };
     }
   });
+  // 整理笔记与文件夹: a refusal (a taken name, say) reaches the page as a result it can show.
+  const organize = <T>(channel: string, run: (lib: Library, ...args: string[]) => Promise<T>) =>
+    ipcMain.handle(channel, async (_, ...args: string[]): Promise<Organized<T>> => {
+      try {
+        return { ok: true, value: await run(requireLibrary(), ...args) };
+      } catch (error) {
+        const code = error instanceof LibraryError ? error.code : "write-failed";
+        return { ok: false, code, message: (error as Error).message };
+      }
+    });
+  organize(channels.createNote, (lib, folder) => lib.createNote(folder ?? ""));
+  organize(channels.createFolder, (lib, parent, name) => lib.createFolder(parent ?? "", name ?? ""));
+  organize(channels.rename, (lib, path, name) => lib.rename(path ?? "", name ?? ""));
+  organize(channels.move, (lib, path, folder) => lib.move(path ?? "", folder ?? ""));
+  organize(channels.trash, async (lib, path) => (await lib.trash(path ?? ""), null));
+  organize(channels.restoreLastDeleted, (lib) => lib.restoreLastDeleted());
+  ipcMain.handle(channels.listFolders, () => requireLibrary().listFolders());
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {
     if (!openLibraryPending) return;
@@ -111,9 +131,19 @@ function buildMenu() {
       }
     },
   };
+  // The page knows the current folder, so it does the creating.
+  const newNoteItem: MenuItemConstructorOptions = {
+    id: "new-note",
+    label: "新建笔记",
+    accelerator: "CmdOrCtrl+N",
+    click: () => window?.webContents.send(channels.newNoteRequest),
+  };
   const template: MenuItemConstructorOptions[] = [
     ...(mac ? [{ role: "appMenu" } as const] : []),
-    { label: "文件", submenu: [openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }] },
+    {
+      label: "文件",
+      submenu: [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }],
+    },
     { role: "editMenu" },
     { role: "viewMenu" },
     { role: "windowMenu" },
