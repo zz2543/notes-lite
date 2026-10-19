@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { openLibrary } from "../../src/core";
-import { library } from "../support/library";
+import { contents, library } from "../support/library";
 
 describe("新建", () => {
   it("creates a note in the folder, numbering the name when it is taken", async () => {
@@ -33,5 +33,20 @@ describe("新建文件夹", () => {
 
     expect((await lib.readFolder("A")).folders.map((f) => f.path)).toEqual(["A/空目录", "A/子目录"]);
     expect(await lib.readFolder("A/子目录")).toMatchObject({ notes: [{ path: "A/子目录/深层.md" }] });
+  });
+});
+
+describe("改名", () => {
+  it("updates real links to a renamed note but leaves code examples alone", async () => {
+    const explained = "链接 [[目标]]\n\n`[[目标]]`\n\n```text\n[[目标]]\n```\n";
+    const root = await library({ "目标.md": "# 目标\n", "说明.md": explained });
+    const lib = await openLibrary(root);
+
+    expect(await lib.rename("目标.md", "新目标")).toEqual({ path: "新目标.md", updated: ["说明.md"] });
+
+    expect(await contents(root)).toEqual({
+      "新目标.md": "# 目标\n",
+      "说明.md": "链接 [[新目标]]\n\n`[[目标]]`\n\n```text\n[[目标]]\n```\n",
+    });
   });
 });

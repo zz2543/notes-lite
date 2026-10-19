@@ -58,7 +58,7 @@ export interface Library extends Organizer {
 }
 
 /** Why the disk refused a write, in the words shown to the user. */
-const writeFailures: Record<string, string> = {
+export const writeFailures: Record<string, string> = {
   EACCES: "没有写入权限",
   EPERM: "没有写入权限",
   EROFS: "所在磁盘是只读的",
@@ -145,5 +145,5 @@ export async function openLibrary(root: string): Promise<Library> {
       throw new LibraryError("write-failed", `无法保存“${basename(real, ".md")}”：${reason}。`);
     }
   };
-  return { root, readFolder, readNote, saveNote, ...organizer({ resolve }) };
+  return { root, readFolder, readNote, saveNote, ...organizer({ root: realRoot, resolve }) };
 }
