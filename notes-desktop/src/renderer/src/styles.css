@@ -1,88 +1,7 @@
-/* Every value comes from the design system; rules below only reference these variables. Until native
-   materials land, the window sits on the opaque --win-fallback color. */
+/* Component rules. Every value comes from the design system's variables in tokens.css. */
 :root {
-  color-scheme: light dark;
-  --win-fallback: #f2f1f5;
-  --side-fg: #1d1d1f;
-  --side-muted: rgba(29, 29, 31, 0.48);
-  --list-bg: rgba(255, 255, 255, 0.52);
-  --list-fg: #1d1d1f;
-  --list-muted: rgba(29, 29, 31, 0.5);
-  --card-bg: #ffffff;
-  --card-fg: #1d1d1f;
-  --card-muted: rgba(29, 29, 31, 0.42);
-  --card-path: color-mix(in srgb, var(--card-fg) 62%, transparent);
-  --side-pill: rgba(255, 255, 255, 0.72);
-  --list-pill: rgba(255, 255, 255, 0.85);
-  --pill-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.12);
-  --hover: rgba(0, 0, 0, 0.045);
-  --line: rgba(0, 0, 0, 0.08);
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 28px rgba(0, 0, 0, 0.08);
-  --accent: #0a84ff;
-
-  /* 尺寸与圆角 */
-  --side-width: 216px;
-  --list-width: 276px;
-  --titlebar-height: 52px;
-  --row-height: 32px;
-  --row-padding: 10px;
-  --row-radius: 9px;
-  --row-indent: 16px;
-  --item-padding: 9px 12px;
-  --item-radius: 10px;
-  --list-head-height: 52px;
-  --card-gap: 10px;
-  --card-radius: 12px;
-  --card-head-height: 46px;
-  --card-foot-height: 34px;
-  --card-padding: 28px 40px;
-  --icon-button-radius: 8px;
-  --inline-gap: 8px;
-
-  /* 界面文字 */
-  --font-ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
-  --text-side-row: 13.5px;
-  --text-group: 11px;
-  --text-item: 14px;
-  --weight-item: 560;
-  --text-list-title: 15px;
-  --weight-list-title: 650;
-  --text-path: 13px;
-  --text-meta: 11.5px;
-
-  /* 正文排版的默认值（排版设置以后改这些变量） */
-  --body-font: var(--font-ui);
-  --body-size: 17px;
-  --body-leading: 1.8;
-  --measure: 680px;
-  --selection: color-mix(in srgb, var(--accent) 28%, transparent);
-
-  /* Placeholders owned by a later ticket: the welcome page (empty states). */
-  --welcome-title: 22px;
-  --welcome-width: 420px;
-
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --win-fallback: #1e1e22;
-    --side-fg: #f2f2f4;
-    --side-muted: rgba(242, 242, 244, 0.45);
-    --list-bg: rgba(16, 16, 20, 0.38);
-    --list-fg: #f2f2f4;
-    --list-muted: rgba(242, 242, 244, 0.48);
-    --card-bg: #1e1e21;
-    --card-fg: #ececef;
-    --card-muted: rgba(236, 236, 239, 0.4);
-    --side-pill: rgba(255, 255, 255, 0.14);
-    --list-pill: rgba(255, 255, 255, 0.16);
-    --pill-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 1px 4px rgba(0, 0, 0, 0.3);
-    --hover: rgba(255, 255, 255, 0.06);
-    --line: rgba(255, 255, 255, 0.08);
-    --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.35);
-  }
 }
 
 * {
@@ -97,7 +16,7 @@ body,
 }
 
 body {
-  background: var(--win-fallback);
+  background: var(--window-bg);
   color: var(--side-fg);
   overflow: hidden;
   user-select: none;
@@ -196,7 +115,7 @@ button {
   padding: 0 2px 2px var(--row-padding);
   color: var(--side-muted);
   font-size: var(--text-group);
-  font-weight: 600;
+  font-weight: var(--weight-group);
 }
 .tree {
   flex: 1;
@@ -213,10 +132,6 @@ button {
 }
 .row:hover {
   background: var(--hover);
-}
-.row.on {
-  background: var(--side-pill);
-  box-shadow: var(--pill-shadow);
 }
 .caret {
   width: 14px;
@@ -279,10 +194,6 @@ button {
 }
 .item:hover {
   background: var(--hover);
-}
-.item.on {
-  background: var(--list-pill);
-  box-shadow: var(--pill-shadow);
 }
 
 .card-wrap {
@@ -459,67 +370,7 @@ button {
   font-size: var(--text-path);
 }
 
-/* 正文排版：Markdown 元素（原地排版，规则在 markdown.css）。标题字号按“标题大小比例”推算，排版设置以后改
-   这些变量；设计规范未列出的取值沿用旧版编辑器，见设计规范“正文排版”。 */
-:root {
-  --heading-font: var(--body-font);
-  --heading-ratio: 1.6;
-  --heading-weight: 650;
-  --para-gap: 0.9em;
-  --h1-size: calc(var(--body-size) * var(--heading-ratio) * 1.25);
-  --h2-size: calc(var(--body-size) * var(--heading-ratio) * 0.8);
-  --h3-size: calc(var(--body-size) * var(--heading-ratio) * 0.66);
-  --h4-size: var(--body-size);
-  --h5-size: calc(var(--body-size) * 0.94);
-  --h6-size: calc(var(--body-size) * 0.88);
-  /* Room left of the text column where "## " hangs while its line is edited. */
-  --mark-hang: 40px;
-  --list-indent: 28px;
-  --quote-indent: 18px;
-  --quote-bar: 3px;
-  --code-font: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Mono", monospace;
-  --code-size: 0.86em;
-  --code-leading: 1.5;
-  --code-inset: 14px;
-  --code-radius: 8px;
-  --code-bg: rgba(0, 0, 0, 0.04);
-  /* Code colours, after Xcode's default themes, as in the old editor. */
-  --code-keyword: #9b2393;
-  --code-string: #c41a16;
-  --code-comment: #707f8c;
-  --code-number: #1c00cf;
-  --code-type: #0b4f79;
-  --code-literal: #9b2393;
-  --code-tag: #0b4f79;
-  --code-attribute: #815f03;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --code-bg: rgba(255, 255, 255, 0.06);
-    --code-keyword: #ff7ab2;
-    --code-string: #ff8170;
-    --code-comment: #7f8c98;
-    --code-number: #d9c97c;
-    --code-type: #5dd8ff;
-    --code-literal: #ff7ab2;
-    --code-tag: #5dd8ff;
-    --code-attribute: #fd8f3f;
-  }
-}
-
-/* 就地搜索 (values from the design system) */
-:root {
-  --icon-button-small: 24px;
-  --icon-button-small-radius: 7px;
-  --search-height: 30px;
-  --search-radius: 9px;
-  --segment-padding: 3px;
-  --segment-radius: 10px;
-  --segment-height: 26px;
-  --text-summary: 12.5px;
-  --list-summary: color-mix(in srgb, var(--list-fg) 62%, transparent);
-}
+/* 就地搜索 */
 .icon-button {
   flex: none;
   display: grid;
@@ -579,19 +430,19 @@ button {
 }
 .segmented {
   display: flex;
-  padding: var(--segment-padding);
-  border-radius: var(--segment-radius);
+  padding: var(--segmented-padding);
+  border-radius: var(--segmented-radius);
   background: var(--hover);
   -webkit-app-region: no-drag;
 }
 .segmented button {
   flex: 1;
   min-width: 0;
-  height: var(--segment-height);
+  height: var(--segmented-height);
   display: flex;
   align-items: center;
   padding: 0 var(--row-padding);
-  border-radius: calc(var(--segment-radius) - var(--segment-padding));
+  border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
   color: var(--list-muted);
   font-size: var(--text-meta);
 }
@@ -632,4 +483,41 @@ button {
   gap: 4px;
   color: var(--list-muted);
   font-size: var(--text-meta);
+}
+
+/* 选中底板: one pill per group slides between rows (SelectionPill); the row keeps its content above it. */
+.row,
+.item {
+  position: relative;
+  isolation: isolate;
+}
+.pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: var(--pill-shadow);
+}
+.pill.side {
+  background: var(--side-pill);
+}
+.pill.list {
+  background: var(--list-pill);
+}
+
+
+/* 悬停与按压 (轻弹): hover only adds the --hover tint, never lifts; pressing shrinks, release springs back. */
+.row,
+.item,
+.side-foot,
+.primary {
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.row:active,
+.item:active,
+.side-foot:active,
+.primary:active {
+  scale: var(--press-scale);
 }

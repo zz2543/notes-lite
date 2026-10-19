@@ -1,6 +1,7 @@
 import { Folder } from "@phosphor-icons/react";
 import type { MouseEvent } from "react";
 import { useFolder } from "./ipc";
+import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
 
 /** A note or folder shown in 当前目录内容. */
@@ -56,6 +57,7 @@ export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOp
                 onClick={() => onOpenNote(n.path)}
                 onContextMenu={menu({ path: n.path, name: n.title, kind: "note" })}
               >
+                {openNote === n.path && <SelectionPill group="list" />}
                 <span className="label">{n.title}</span>
               </button>
             </li>
