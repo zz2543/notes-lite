@@ -9,6 +9,7 @@ import { errorText } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
+import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
 import { icon } from "./tokens";
 
@@ -50,7 +51,9 @@ export function App() {
     void window.notes.launchState().then(setPhase);
     const offMenu = window.notes.onOpenLibraryRequest(() => void choose());
     const offClose = window.notes.onBeforeClose(saveOpenNote);
+    const offSourceView = listenForSourceView();
     return () => {
+      offSourceView();
       offMenu();
       offClose();
     };

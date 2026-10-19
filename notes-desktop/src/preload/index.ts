@@ -14,6 +14,12 @@ const api: NotesApi = {
   readFolder: (path) => ipcRenderer.invoke(channels.readFolder, path),
   readNote: (path) => ipcRenderer.invoke(channels.readNote, path),
   saveNote: (path, text, expected) => ipcRenderer.invoke(channels.saveNote, path, text, expected),
+  onSourceViewRequest: (listener) => {
+    const handler = (_: unknown, showSource: boolean) => listener(showSource);
+    ipcRenderer.on(channels.sourceViewRequest, handler);
+    return () => ipcRenderer.off(channels.sourceViewRequest, handler);
+  },
+  sourceViewChanged: (showSource) => ipcRenderer.send(channels.sourceViewChanged, showSource),
   onBeforeClose: (check) => {
     const handler = async () => {
       const answer: CloseCheck = await check().catch((error: Error) => ({ saved: false, message: error.message }));

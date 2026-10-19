@@ -29,6 +29,8 @@ test("first launch opens a chosen library and browses it", async ({ scratch }) =
   await expect(tree.getByRole("treeitem")).toHaveText(["我的笔记库", "日记", "2026"]);
 
   await contents.getByRole("button", { name: "雨后的散步" }).click();
+  // Typeset by default; the Markdown source shows the note exactly as written.
+  await page.getByRole("button", { name: "Markdown 源码" }).click();
   await expect(page.getByLabel("笔记正文")).toHaveText(source, { useInnerText: true });
 
   await app.close();

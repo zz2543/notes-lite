@@ -41,6 +41,7 @@ let quitting = false;
 // File > 打开笔记库… with no window open: asked again once the new page listens.
 let openLibraryPending = false;
 const closeCheckTimeout = 5000;
+const sourceViewItem = "source-view";
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -130,6 +131,10 @@ function registerIpc() {
       return { ok: false, code, message: (error as Error).message };
     }
   });
+  ipcMain.on(channels.sourceViewChanged, (_, showSource: boolean) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(sourceViewItem);
+    if (item) item.checked = showSource;
+  });
   // 整理笔记与文件夹: a refusal (a taken name, say) reaches the page as a result it can show.
   const organize = <T>(channel: string, run: (lib: Library, ...args: string[]) => Promise<T>) =>
     ipcMain.handle(channel, async (_, ...args: string[]): Promise<Organized<T>> => {
@@ -218,6 +223,15 @@ function buildMenu() {
       }
     },
   };
+  const sourceViewToggle: MenuItemConstructorOptions = {
+    id: sourceViewItem,
+    label: "Markdown 源码",
+    type: "checkbox",
+    accelerator: "CmdOrCtrl+Shift+M",
+    // The page handles the shortcut itself, so it works however the menu is shown; the menu only shows it.
+    registerAccelerator: false,
+    click: (item) => window?.webContents.send(channels.sourceViewRequest, item.checked),
+  };
   // The page knows the current folder, so it does the creating.
   const newNoteItem: MenuItemConstructorOptions = {
     id: "new-note",
@@ -232,6 +246,7 @@ function buildMenu() {
       submenu: [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }],
     },
     { role: "editMenu" },
+    { label: "笔记", submenu: [sourceViewToggle] },
     { role: "viewMenu" },
     { role: "windowMenu" },
   ];
