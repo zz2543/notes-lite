@@ -66,6 +66,41 @@ describe("空间库", () => {
     expect((await spaces.spaces()).map((s) => s.name)).toEqual(["健身", "雅思"]);
   });
 
+  it("writes a prompt naming the guide, the space file, the scope and the record tables in it", async () => {
+    const root = await library({
+      "健身/训练记录.md":
+        "# 训练记录\n\n## 卧推\n\n| 日期 | 动作 | 重量 | 组数 |\n|---|---|---|---|\n| 2026-10-18 | 卧推 | 60 | 5 |\n\n```\n| 不是 | 表 |\n|---|---|\n```\n",
+      "健身/说明.md": "| 只是一行竖线 |\n\n正文",
+      "日记/2026-10.md": "| 日期 | 时长 |\n| --- | --- |\n",
+      "别处/无关.md": "| 字段 |\n|---|\n",
+      ".notes/空间/旧.html": "| 隐藏 |\n|---|\n",
+    });
+    const spaces = spaceLibrary(root);
+    const space = await spaces.create({ name: "健身", icon: "🏋️", scope: { library: false, folders: ["健身", "日记"] } });
+    const prompt = await spaces.prompt(space);
+
+    expect(prompt).toContain(join(root, ".notes", "空间", "编写说明.md"));
+    expect(prompt).toContain(join(root, ".notes", "空间", "健身.html"));
+    expect(prompt).toContain("健身、日记");
+    expect(prompt).toContain("健身/训练记录.md#卧推：日期 | 动作 | 重量 | 组数");
+    expect(prompt).toContain("日记/2026-10.md：日期 | 时长");
+    expect(prompt, "tables outside the scope are not offered").not.toContain("别处");
+    expect(prompt, "tables inside code fences are not record tables").not.toContain("不是");
+    expect(prompt, "a lone row of bars is not a table").not.toContain("只是一行竖线");
+    expect(prompt).not.toContain("隐藏");
+  });
+
+  it("offers a whole-library space every table, and says so when there are none", async () => {
+    const root = await library({ "a.md": "## 心情\n\n| 日期 | 分数 |\n|:-:|--:|\n| 2026-10-01 | 7 |\n" });
+    const spaces = spaceLibrary(root);
+    const whole = await spaces.create({ name: "全局", icon: "🌍", scope: { library: true } });
+    expect(await spaces.prompt(whole)).toContain("a.md#心情：日期 | 分数");
+    expect(await spaces.prompt(whole)).toContain("整个笔记库");
+
+    const empty = await spaces.create({ name: "空", icon: "", scope: { library: false, folders: ["没有"] } });
+    expect(await spaces.prompt(empty)).toContain("暂无");
+  });
+
   it("rewrites an outdated authoring guide", async () => {
     const root = await library({ ".notes/空间/编写说明.md": "旧版本" });
     await spaceLibrary(root).installGuide();

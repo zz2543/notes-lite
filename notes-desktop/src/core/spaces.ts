@@ -1,6 +1,7 @@
 import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { collator } from "./library";
+import { addressableTables } from "./recordTables";
 import { spaceGuide } from "./spaceGuide";
 
 /** The app's own folder inside a note library (spaces, guide, order, operation log). */
@@ -157,6 +158,10 @@ export interface SpaceLibrary {
   delete(name: string): Promise<void>;
   /** Saves the order of the spaces, by name, in the library. */
   reorder(names: string[]): Promise<void>;
+  /** Record tables inside the scope, as `路径#标题` with their header. */
+  recordTables(scope: SpaceScope): Promise<{ source: string; header: string[] }[]>;
+  /** What the user pastes to an external agent so it can write the homepage; installs the guide. */
+  prompt(space: Space): Promise<string>;
 }
 
 export interface SpaceLibraryOptions {
@@ -258,5 +263,53 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
 
   const reorder = (names: string[]) => saveOrder(names);
 
-  return { folder, guidePath, spaces, space, create, update, delete: delete_, reorder, installGuide };
+  // The visible notes inside the scope, by path; hidden folders such as `.notes/` are never entered.
+  const notesIn = async (scope: SpaceScope): Promise<string[]> => {
+    const found: string[] = [];
+    const walk = async (relative: string) => {
+      const entries = await readdir(join(root, ...relative.split("/").filter(Boolean)), { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (entry.name.startsWith(".")) continue;
+        const path = relative ? `${relative}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) await walk(path);
+        else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) found.push(path);
+      }
+    };
+    const starts = scope.library ? [""] : scope.folders.filter((f) => !f.split("/").some((part) => part.startsWith(".") || part === ".."));
+    // A folder inside another one in the scope is walked once.
+    for (const start of starts.filter((f) => !starts.some((other) => other !== f && (other === "" || f.startsWith(`${other}/`))))) {
+      await walk(start);
+    }
+    return [...new Set(found)].sort((a, b) => collator.compare(a, b));
+  };
+
+  const tablesIn = async (scope: SpaceScope) => {
+    const tables: { source: string; header: string[] }[] = [];
+    for (const path of await notesIn(scope)) {
+      const text = await readFile(join(root, ...path.split("/")), "utf8").catch(() => "");
+      tables.push(...addressableTables(path, text));
+    }
+    return tables;
+  };
+
+  const prompt = async (space: Space) => {
+    await installGuide();
+    const tables = await tablesIn(space.scope);
+    return [
+      `请为笔记应用编写“${space.name}”空间的空间主页。`,
+      "",
+      `- 编写说明：${guidePath}（请先完整阅读并遵守）`,
+      `- 空间文件：${fileOf(space.name)}（保留开头的 meta，在其后写主页；不要修改 lb-scope）`,
+      `- 空间名称：${space.name}`,
+      `- 范围：${scopeLabel(space.scope)}`,
+      "- 范围内现有记录表：",
+      ...(tables.length === 0
+        ? ["  - 暂无。可以用 lb-quick-add 或 lb.append 指定目标笔记和表头，笔记应用会自动新建记录表。"]
+        : tables.map((table) => `  - ${table.source}：${table.header.join(" | ")}`)),
+      "",
+      "请围绕我每天的进展设计这个主页：用美观的图表展示进展，并提供快捷录入。数据只能存进范围内的记录表。",
+    ].join("\n");
+  };
+
+  return { folder, guidePath, spaces, space, create, update, delete: delete_, reorder, installGuide, recordTables: tablesIn, prompt };
 }
