@@ -144,6 +144,12 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
     if (requested.current === path) setNote(path);
   };
 
+  // The input saved as a copy beside its note: shown where it lies, and opened.
+  const openCopy = (path: string) => {
+    openFolder(path.slice(0, Math.max(0, path.lastIndexOf("/"))));
+    void openNote(path);
+  };
+
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
   return (
@@ -162,7 +168,7 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
         <FolderContentsList folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={(path) => void openNote(path)} />
       </section>
       <main className="card-wrap">
-        <NoteEditor path={note} />
+        <NoteEditor path={note} onOpenCopy={openCopy} />
       </main>
     </div>
   );

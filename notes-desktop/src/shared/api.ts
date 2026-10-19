@@ -15,6 +15,9 @@ export type LaunchState =
 
 export type SaveResult = { ok: true } | { ok: false; code: LibraryErrorCode; message: string };
 
+/** A copy saved, with the new note's path, or why not. */
+export type CopyResult = { ok: true; path: string } | { ok: false; code: LibraryErrorCode; message: string };
+
 /** The page's answer when the window is about to close: everything saved, or why not. */
 export type CloseCheck = { saved: true } | { saved: false; message: string };
 
@@ -36,6 +39,8 @@ export interface NotesApi {
    * paths, hidden ones included; "" when anything may have changed.
    */
   onLibraryChanged(listener: (paths: string[]) => void): () => void;
+  /** Writes `text` as a new note “<title> 副本” beside the note at `path`, which is left alone. */
+  saveCopy(path: string, text: string): Promise<CopyResult>;
 }
 
 export const channels = {
@@ -49,4 +54,5 @@ export const channels = {
   beforeClose: "window:before-close",
   closeChecked: "window:close-checked",
   libraryChanged: "library:changed",
+  saveCopy: "library:save-copy",
 } as const;

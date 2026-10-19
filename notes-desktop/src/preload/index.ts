@@ -27,6 +27,7 @@ const api: NotesApi = {
     ipcRenderer.on(channels.libraryChanged, handler);
     return () => ipcRenderer.off(channels.libraryChanged, handler);
   },
+  saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

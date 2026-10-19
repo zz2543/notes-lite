@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
 import { LibraryError, openLibrary, watchLibrary, type Library, type LibraryWatcher } from "../core";
-import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
+import { channels, type CloseCheck, type CopyResult, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -78,6 +78,14 @@ function registerIpc() {
     try {
       await requireLibrary().saveNote(path, text, expected);
       return { ok: true };
+    } catch (error) {
+      const code = error instanceof LibraryError ? error.code : "write-failed";
+      return { ok: false, code, message: (error as Error).message };
+    }
+  });
+  ipcMain.handle(channels.saveCopy, async (_, path: string, text: string): Promise<CopyResult> => {
+    try {
+      return { ok: true, path: await requireLibrary().saveCopy(path, text) };
     } catch (error) {
       const code = error instanceof LibraryError ? error.code : "write-failed";
       return { ok: false, code, message: (error as Error).message };

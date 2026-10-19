@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { CloseCheck, SaveResult } from "../../shared/api";
+import type { CloseCheck, CopyResult, SaveResult } from "../../shared/api";
 import { errorText } from "./ipc";
 import { isWithin, onLibraryChange } from "./libraryChanges";
 
@@ -12,13 +12,20 @@ export interface Followed {
 
 const autosaveDelay = 450;
 
+const changedElsewhere = "这篇笔记已在别处修改。";
+
 /**
  * The open note's text as the editor holds it, and how it reaches the disk. A write reads the
- * editor's text when it starts, and "saved" is only ever reported for what the disk holds.
+ * editor's text when it starts, and "saved" is only ever reported for what the disk holds. When
+ * the disk changes under unsaved input, the input is held as a conflict until the user chooses.
  */
 export class NoteDraft {
   status: SaveStatus = "saved";
   message?: string;
+  /** The conflict notice is up, asking what to do with the input. */
+  notice = false;
+  /** In a conflict: the disk holds no version of the note that can be shown (moved, deleted, unreadable). */
+  unavailable = false;
   private saved: string;
   private timer?: ReturnType<typeof setTimeout>;
   private writing?: Promise<void>;
@@ -46,8 +53,9 @@ export class NoteDraft {
   };
 
   edited() {
-    if (this.closed) return;
-    if (this.status !== "failed" && this.status !== "conflict") this.set("pending");
+    // A conflict waits for the user's choice: writing again would only meet the same refusal.
+    if (this.closed || this.status === "conflict") return;
+    if (this.status !== "failed") this.set("pending");
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.write(), autosaveDelay);
   }
@@ -71,36 +79,96 @@ export class NoteDraft {
   }
 
   private async compareWithDisk(): Promise<Followed> {
-    let disk: { text?: string; error?: string };
+    let disk: Disk;
     let writes: number;
     // The change may be this draft's own write: read only once no write overlaps the read.
     do {
       await this.writing;
       writes = this.writes;
-      disk = await window.notes.readNote(this.path).then(
-        (text) => ({ text }),
-        (error: unknown) => ({ error: errorText(error) }),
-      );
+      disk = await this.readDisk();
     } while (this.writing || writes !== this.writes);
     if (this.closed) return {};
     const { text, composing } = this.readEditor();
-    const unsaved = composing || text !== this.saved;
-    if (disk.text === undefined) {
-      if (unsaved) return {};
-      this.close();
-      return { gone: disk.error };
+    if (!composing && text === this.saved) {
+      // Nothing unsaved to lose: show what the disk holds now, or let go when it holds nothing to show.
+      if (disk.text === undefined) return this.letGo(disk.error);
+      if (disk.text !== this.saved || this.status === "conflict") this.adopt(disk.text);
+      return {};
     }
-    if (disk.text === this.saved || unsaved || !this.showDisk) return {};
-    clearTimeout(this.timer);
-    this.saved = disk.text;
-    this.showDisk(disk.text);
-    this.set("saved");
+    if (disk.text === this.saved) {
+      // Back to the version the input was based on (the change was undone elsewhere): saving can go on.
+      if (this.status === "conflict") {
+        this.set("pending");
+        this.edited();
+      }
+      return {};
+    }
+    if (disk.text === text) {
+      clearTimeout(this.timer);
+      this.saved = text;
+      this.set("saved");
+      return {};
+    }
+    const unavailable = disk.text === undefined;
+    // Raised again only with news; the user may have set the notice aside already.
+    const news = this.status !== "conflict" || this.unavailable !== unavailable;
+    this.conflict(disk.error ?? changedElsewhere, unavailable, news);
     return {};
+  }
+
+  /** Keeps the input in the editor, unsaved, and puts the conflict notice away until there is news. */
+  keepInput() {
+    this.notice = false;
+    this.emit();
+  }
+
+  /** Saves the input as a new note beside this one; this draft is done with once it is saved. */
+  async saveCopy(): Promise<{ path: string } | { error: string }> {
+    const failed = (error: unknown): CopyResult => ({ ok: false, code: "write-failed", message: errorText(error) });
+    const result = await window.notes.saveCopy(this.path, this.readEditor().text).catch(failed);
+    if (!result.ok) return { error: result.message };
+    this.close();
+    return { path: result.path };
+  }
+
+  /** Drops the input for the version on disk; `gone` when there is none to show. */
+  async reload(): Promise<Followed> {
+    const disk = await this.readDisk();
+    if (this.closed) return {};
+    if (disk.text === undefined) return this.letGo(disk.error);
+    this.adopt(disk.text);
+    return {};
+  }
+
+  private readDisk(): Promise<Disk> {
+    return window.notes.readNote(this.path).then(
+      (text) => ({ text }),
+      (error: unknown) => ({ error: errorText(error) }),
+    );
+  }
+
+  /** Shows the version on disk as the note's saved text. */
+  private adopt(text: string) {
+    clearTimeout(this.timer);
+    this.saved = text;
+    this.showDisk?.(text);
+    this.set("saved");
+  }
+
+  private letGo(reason: string): Followed {
+    this.close();
+    return { gone: reason };
   }
 
   private close() {
     this.closed = true;
     clearTimeout(this.timer);
+  }
+
+  private conflict(message: string, unavailable: boolean, raise: boolean) {
+    this.unavailable = unavailable;
+    if (raise) this.notice = true;
+    this.set("conflict", message);
   }
 
   private write(force = false): Promise<void> {
@@ -125,8 +193,8 @@ export class NoteDraft {
         this.saved = text;
         this.set(this.readEditor().text === text ? "saved" : "pending");
         if (this.status === "pending") this.edited();
-      } else if (result.code === "conflict") {
-        this.set("conflict", `${result.message}为避免覆盖，没有保存；你的输入仍保留在编辑器中。`);
+      } else if (result.code === "conflict" || result.code === "not-found") {
+        this.conflict(result.message, result.code === "not-found", true);
       } else {
         this.set("failed", result.message);
       }
@@ -137,9 +205,17 @@ export class NoteDraft {
   private set(status: SaveStatus, message?: string) {
     this.status = status;
     this.message = message;
+    // A retry in flight keeps the notice up; anything but a conflict puts it away.
+    if (status !== "conflict" && status !== "saving") this.notice = false;
+    this.emit();
+  }
+
+  private emit() {
     for (const listener of this.listeners) listener();
   }
 }
+
+type Disk = { text: string; error?: undefined } | { text?: undefined; error: string };
 
 // Only one note is open at a time; the app saves it before anything takes it away.
 let openDraft: NoteDraft | null = null;

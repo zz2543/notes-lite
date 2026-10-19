@@ -3,18 +3,24 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
+import { ConflictNotice } from "./ConflictNotice";
 import { useNoteSource } from "./ipc";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 
+interface Choices {
+  /** The input was saved as a new note at `path`: open it in place of this one. */
+  onOpenCopy(path: string): void;
+}
+
 /** The open note on its card: Markdown source edited in place, saved as it is typed. */
-export function NoteEditor({ path }: { path: string | null }) {
+export function NoteEditor({ path, ...choices }: { path: string | null } & Choices) {
   const { value: source, error } = useNoteSource(path);
   return (
     <article className="card">
       <header className="card-head">{path?.split("/").join(" / ")}</header>
       {!path && <p className="empty">选择一篇笔记</p>}
       {error && <p className="empty">{error}</p>}
-      {path && source !== undefined && <Editor key={path} path={path} source={source} />}
+      {path && source !== undefined && <Editor key={path} path={path} source={source} {...choices} />}
     </article>
   );
 }
@@ -25,8 +31,9 @@ const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\
 
 const wordCountDelay = 150;
 
-function Editor({ path, source }: { path: string; source: string }) {
+function Editor({ path, source, onOpenCopy }: { path: string; source: string } & Choices) {
   const host = useRef<HTMLDivElement>(null);
+  const editor = useRef<EditorView>(null);
   const [draft, setDraft] = useState<NoteDraft>();
   const [words, setWords] = useState(() => countWords(source));
 
@@ -55,6 +62,7 @@ function Editor({ path, source }: { path: string; source: string }) {
       });
     };
     const view: EditorView = new EditorView({ parent: host.current!, state: stateFor(source) });
+    editor.current = view;
     // The version on disk starts afresh, with its own undo history, the caret and scroll kept in place.
     const showDisk = (text: string) => {
       const { scrollTop } = view.scrollDOM;
@@ -81,6 +89,7 @@ function Editor({ path, source }: { path: string; source: string }) {
 
   return (
     <>
+      {draft && <ConflictNotice draft={draft} onKeep={() => editor.current?.focus()} onOpenCopy={onOpenCopy} />}
       <div className="editor" ref={host} />
       <footer className="card-foot">
         {draft && <SaveState draft={draft} />}
@@ -107,8 +116,8 @@ function SaveState({ draft }: { draft: NoteDraft }) {
       <span className="save-text" title={problem ? draft.message : undefined}>
         {problem ? `${labels[status]}：${draft.message}` : labels[status]}
       </span>
-      {/* A conflict can't be retried away; resolving it (reload or save a copy) comes with external changes. */}
-      {status === "failed" && (
+      {/* Retrying a conflict succeeds once the disk is back to the version the input started from. */}
+      {problem && (
         <button className="retry" onClick={() => void draft.flush()}>
           重试
         </button>

@@ -9,8 +9,21 @@ const saveState = (page: Page) => page.getByRole("status", { name: "保存状态
 
 async function openNote(page: Page, folder: string, title: string) {
   await page.getByRole("treeitem", { name: folder }).click();
-  await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: title }).click();
+  await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: title, exact: true }).click();
   await expect(page.getByLabel("笔记正文")).toBeFocused();
+}
+
+/**
+ * Starts a pinyin composition and leaves it open. The input method holds the text until it
+ * commits, so nothing is saved meanwhile: unsaved input for as long as the test needs.
+ */
+async function startComposing(page: Page, pinyin: string) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: pinyin, selectionStart: pinyin.length, selectionEnd: pinyin.length });
+  return async function commit(text: string) {
+    await cdp.send("Input.insertText", { text });
+    await cdp.detach();
+  };
 }
 
 test("notes and folders added, edited, moved or deleted elsewhere show up in the tree and list", async ({ scratch }) => {
@@ -68,5 +81,50 @@ test("an open note with nothing unsaved follows the disk, and is let go when del
   await expect(page.getByRole("alert")).toContainText("找不到“散步”，它可能已在别处移动或删除。");
   await expect(page.getByText("选择一篇笔记")).toBeVisible();
   await expect(page.getByRole("list", { name: "当前目录内容" }).getByRole("button")).toHaveText(["读书"]);
+  await app.close();
+});
+
+test("unsaved input is never overwritten: the conflict lets you keep it, retry, or save it as a copy", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n" });
+  const walk = join(root, "日记/散步.md");
+  const synced = "# 散步\n\n同步来的一段\n";
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "日记", "散步");
+  const editor = page.getByLabel("笔记正文");
+  const conflict = page.getByRole("alert", { name: "保存冲突" });
+  await page.keyboard.press("ControlOrMeta+End");
+
+  // Mid-pinyin, so nothing is saved yet, a sync tool rewrites the note.
+  const commit = await startComposing(page, "yuhou");
+  await writeFile(walk, synced);
+  await expect(conflict).toContainText("这篇笔记已在别处修改。你的输入还没有保存，仍保留在编辑器中。");
+  await commit("雨后");
+  await expect(editor).toContainText("雨后");
+  await expect(editor).not.toContainText("同步来的一段");
+  expect(await readFile(walk, "utf8")).toBe(synced);
+
+  // Keep the input for now: back to typing, still unsaved, nothing written over.
+  await conflict.getByRole("button", { name: "保留输入" }).click();
+  await expect(conflict).toHaveCount(0);
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("，青苔");
+  await expect(saveState(page)).toContainText("保存冲突：这篇笔记已在别处修改。");
+  expect(await readFile(walk, "utf8")).toBe(synced);
+
+  // Retrying while the disk still holds the other version asks again.
+  await saveState(page).getByRole("button", { name: "重试" }).click();
+  await expect(conflict).toBeVisible();
+  expect(await readFile(walk, "utf8")).toBe(synced);
+
+  // A copy keeps both: the input in a new note beside the original, opened in its place.
+  await conflict.getByRole("button", { name: "另存副本" }).click();
+  const list = page.getByRole("list", { name: "当前目录内容" });
+  await expect(list.getByRole("button", { name: "散步 副本" })).toHaveAttribute("aria-current", "true");
+  await expect(saveState(page)).toHaveText("已保存");
+  expect(await readFile(join(root, "日记/散步 副本.md"), "utf8")).toBe("# 散步\n雨后，青苔");
+  expect(await readFile(walk, "utf8")).toBe(synced);
+
+  await list.getByRole("button", { name: "散步", exact: true }).click();
+  await expect(editor).toContainText("同步来的一段");
   await app.close();
 });
