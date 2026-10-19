@@ -1,0 +1,278 @@
+/* Names follow the design system; the window sits on an opaque color until native materials land. */
+:root {
+  color-scheme: light dark;
+  --win-bg: #f2f1f5;
+  --side-fg: #1d1d1f;
+  --side-muted: rgba(29, 29, 31, 0.48);
+  --list-bg: rgba(255, 255, 255, 0.52);
+  --list-fg: #1d1d1f;
+  --list-muted: rgba(29, 29, 31, 0.5);
+  --card-bg: #ffffff;
+  --card-fg: #1d1d1f;
+  --card-muted: rgba(29, 29, 31, 0.42);
+  --side-pill: rgba(255, 255, 255, 0.72);
+  --list-pill: rgba(255, 255, 255, 0.85);
+  --pill-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.12);
+  --hover: rgba(0, 0, 0, 0.045);
+  --line: rgba(0, 0, 0, 0.08);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 28px rgba(0, 0, 0, 0.08);
+  --accent: #0a84ff;
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --win-bg: #1e1e22;
+    --side-fg: #f2f2f4;
+    --side-muted: rgba(242, 242, 244, 0.45);
+    --list-bg: rgba(16, 16, 20, 0.38);
+    --list-fg: #f2f2f4;
+    --list-muted: rgba(242, 242, 244, 0.48);
+    --card-bg: #1e1e21;
+    --card-fg: #ececef;
+    --card-muted: rgba(236, 236, 239, 0.4);
+    --side-pill: rgba(255, 255, 255, 0.14);
+    --list-pill: rgba(255, 255, 255, 0.16);
+    --pill-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 1px 4px rgba(0, 0, 0, 0.3);
+    --hover: rgba(255, 255, 255, 0.06);
+    --line: rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--win-bg);
+  color: var(--side-fg);
+  overflow: hidden;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+.drag {
+  height: 52px;
+  flex: none;
+  -webkit-app-region: drag;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.empty {
+  margin: 24px 16px;
+  color: var(--list-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Welcome */
+.welcome {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.welcome h1 {
+  margin: 22vh 0 10px;
+  font-size: 22px;
+  font-weight: 650;
+}
+.welcome p {
+  margin: 0 0 22px;
+  color: var(--side-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.primary {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 560;
+}
+
+/* Layout: sidebar, 当前目录内容, then the note card. */
+.app {
+  display: flex;
+  height: 100%;
+}
+
+.side {
+  width: 216px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+}
+.side-label {
+  padding: 4px 10px 6px;
+  color: var(--side-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tree {
+  flex: 1;
+  overflow-y: auto;
+}
+.row {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 10px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  outline: none;
+}
+.row:hover {
+  background: var(--hover);
+}
+.row.on {
+  background: var(--side-pill);
+  box-shadow: var(--pill-shadow);
+}
+.row:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.caret {
+  width: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--side-muted);
+}
+.side-foot {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--side-muted);
+  font-size: 12.5px;
+}
+.side-foot:hover {
+  background: var(--hover);
+}
+
+.list {
+  width: 276px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--list-bg);
+  color: var(--list-fg);
+  border-left: 1px solid var(--line);
+}
+.list-head {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  -webkit-app-region: drag;
+}
+.list-head h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.items {
+  flex: 1;
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+  overflow-y: auto;
+}
+.item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 560;
+}
+.item:hover {
+  background: var(--hover);
+}
+.item.on {
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+
+.card-wrap {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+}
+.card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  color: var(--card-fg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+.card-head {
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  color: color-mix(in srgb, var(--card-fg) 62%, transparent);
+  font-size: 13px;
+  -webkit-app-region: drag;
+}
+.source {
+  flex: 1;
+  margin: 0;
+  padding: 8px 40px 40px;
+  overflow: auto;
+  font: 14px/1.7 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  max-width: 480px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--card-fg);
+  box-shadow: var(--card-shadow);
+  font-size: 13px;
+}

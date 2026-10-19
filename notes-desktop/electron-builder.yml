@@ -1,0 +1,18 @@
+# Unsigned installers for the first releases: no signing, notarization or auto-update yet.
+appId: dev.notes-desktop.app
+productName: notes-desktop
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+mac:
+  target: dmg
+  category: public.app-category.productivity
+  identity: null
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+publish: null

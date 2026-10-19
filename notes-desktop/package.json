@@ -10,14 +10,11 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "electron-vite build && playwright test",
     "dist": "electron-vite build && electron-builder --publish never"
   },
-  "dependencies": {
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
-  },
   "devDependencies": {
+    "@phosphor-icons/react": "2.1.10",
     "@playwright/test": "1.63.0",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
@@ -26,8 +23,11 @@
     "electron": "44.5.1",
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "typescript": "7.0.2",
     "vite": "7.3.7",
     "vitest": "5.0.3"
-  }
+  },
+  "author": "zhangzuhao"
 }
