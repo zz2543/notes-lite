@@ -37,4 +37,4 @@
 | [29: 审查卡片与“直接保留”模式](issues/29-turn-review.md) | 28 |
 | [30: 其余 Agent 与对话历史](issues/30-more-agents-history.md) | 28 |
 
-当前可开始：01（无阻塞）。
+进度：01 进行中（代码与本地验证已完成，等 CI 在 macOS 与 Windows 上跑通后记完成）。01 完成后可开始 02、03、06。
