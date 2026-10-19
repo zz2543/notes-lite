@@ -1,6 +1,7 @@
 import { CaretRight, Folder, FolderOpen, NotePencil } from "@phosphor-icons/react";
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { useFolder } from "./ipc";
+import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
 
 interface TreeProps {
@@ -78,6 +79,7 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
         onMenu?.(path, name, event);
       }}
     >
+      {isSelected && <SelectionPill group="side" />}
       <span
         className="caret"
         style={{ visibility: expandable ? "visible" : "hidden" }}

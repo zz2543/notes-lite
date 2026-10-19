@@ -181,3 +181,56 @@ describe("保存笔记", () => {
     expect(await readFile(note, "utf8")).toBe("# 散步\n\n雨后\n");
   });
 });
+
+describe("外部移动或删除", () => {
+  it("reports a note or folder that is no longer there as not found, and saving it writes nothing", async () => {
+    const root = await library({ "日记/散步.md": "# 散步\n" });
+    const lib = await openLibrary(root);
+    await rm(join(root, "日记"), { recursive: true });
+
+    await expect(lib.readNote("日记/散步.md")).rejects.toMatchObject({
+      code: "not-found",
+      message: "找不到“散步”，它可能已在别处移动或删除。",
+    });
+    await expect(lib.readFolder("日记")).rejects.toMatchObject({ code: "not-found", message: "找不到“日记”，它可能已在别处移动或删除。" });
+    await expect(lib.saveNote("日记/散步.md", "# 散步\n\n雨后\n", "# 散步\n")).rejects.toMatchObject({ code: "not-found" });
+    expect(await readdir(root)).toEqual([]);
+  });
+});
+
+describe("另存副本", () => {
+  it("saves the input as a new note beside the original, leaving the original as it is on disk", async () => {
+    const root = await library({ "日记/散步.md": "# 散步\r\n\r\n同步来的一段\r\n" });
+    const lib = await openLibrary(root);
+
+    const copy = await lib.saveCopy("日记/散步.md", "# 散步\r\n\r\n我的输入\r\n");
+
+    expect(copy).toBe("日记/散步 副本.md");
+    expect(await readFile(join(root, "日记/散步 副本.md"), "utf8")).toBe("# 散步\r\n\r\n我的输入\r\n");
+    expect(await readFile(join(root, "日记/散步.md"), "utf8")).toBe("# 散步\r\n\r\n同步来的一段\r\n");
+  });
+
+  it("numbers the copy rather than overwrite an earlier one", async () => {
+    const root = await library({ "散步.md": "原文", "散步 副本.md": "第一份", "散步 副本 2.md": "第二份" });
+    const lib = await openLibrary(root);
+
+    expect(await lib.saveCopy("散步.md", "第三份")).toBe("散步 副本 3.md");
+
+    expect(await readFile(join(root, "散步 副本.md"), "utf8")).toBe("第一份");
+    expect(await readFile(join(root, "散步 副本 2.md"), "utf8")).toBe("第二份");
+    expect(await readFile(join(root, "散步 副本 3.md"), "utf8")).toBe("第三份");
+  });
+
+  it("keeps the input of a note deleted elsewhere: beside it if its folder remains, else at the library root", async () => {
+    const root = await library({ "日记/散步.md": "原文", "读书/三体.md": "原文" });
+    const lib = await openLibrary(root);
+    await rm(join(root, "日记/散步.md"));
+    await rm(join(root, "读书"), { recursive: true });
+
+    expect(await lib.saveCopy("日记/散步.md", "我的输入")).toBe("日记/散步 副本.md");
+    expect(await lib.saveCopy("读书/三体.md", "我的笔记")).toBe("三体 副本.md");
+
+    expect(await readFile(join(root, "日记/散步 副本.md"), "utf8")).toBe("我的输入");
+    expect(await readFile(join(root, "三体 副本.md"), "utf8")).toBe("我的笔记");
+  });
+});

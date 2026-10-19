@@ -5,6 +5,7 @@ import { organizer, type OrganizeOptions, type Organizer } from "./organize";
 export type LibraryErrorCode =
   | "not-a-folder"
   | "outside-library"
+  | "not-found"
   | "not-utf8"
   | "conflict"
   | "write-failed"
@@ -55,6 +56,11 @@ export interface Library extends Organizer {
    * disk no longer matches it, nothing is written.
    */
   saveNote(path: string, text: string, expected: string): Promise<void>;
+  /**
+   * Writes `text` as a new note “<title> 副本” beside the note at `path`, which is left as it is,
+   * and returns the new note's path.
+   */
+  saveCopy(path: string, text: string): Promise<string>;
 }
 
 /** Why the disk refused a write, in the words shown to the user. */
@@ -85,7 +91,12 @@ export async function openLibrary(root: string, options: OrganizeOptions = {}): 
     const parts = path.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
     const outside = new LibraryError("outside-library", `该位置不在当前笔记库内：${path}`);
     if (isAbsolute(path) || parts.some((part) => part.startsWith("."))) throw outside;
-    const real = await realpath(join(realRoot, ...parts));
+    const real = await realpath(join(realRoot, ...parts)).catch((error: NodeJS.ErrnoException) => {
+      // Moved, renamed or deleted by another program since it was listed.
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+      const name = (parts.at(-1) ?? basename(realRoot)).replace(/\.md$/i, "");
+      throw new LibraryError("not-found", `找不到“${name}”，它可能已在别处移动或删除。`);
+    });
     if (real !== realRoot && !real.startsWith(realRoot + sep)) throw outside;
     return { real, relative: parts.join("/") };
   };
@@ -145,5 +156,28 @@ export async function openLibrary(root: string, options: OrganizeOptions = {}): 
       throw new LibraryError("write-failed", `无法保存“${basename(real, ".md")}”：${reason}。`);
     }
   };
-  return { root, readFolder, readNote, saveNote, ...organizer({ ...options, root: realRoot, resolve }) };
+  const saveCopy = async (path: string, text: string) => {
+    const parts = path.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
+    const note = parts.pop() ?? "";
+    if (isAbsolute(path) || note.startsWith(".")) throw new LibraryError("outside-library", `该位置不在当前笔记库内：${path}`);
+    const title = note.replace(/\.md$/i, "");
+    // A folder that went away with the note leaves the copy at the library root.
+    const { real: folder, relative } = await resolve(parts.join("/")).catch((error: unknown) => {
+      if (error instanceof LibraryError && error.code === "not-found") return { real: realRoot, relative: "" };
+      throw error;
+    });
+    for (let number = 1; ; number++) {
+      const name = `${title} 副本${number > 1 ? ` ${number}` : ""}.md`;
+      try {
+        // Created, never replaced: an earlier copy keeps what it holds.
+        await writeFile(join(folder, name), text, { encoding: "utf8", flag: "wx" });
+        return relative ? `${relative}/${name}` : name;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code ?? "";
+        if (code === "EEXIST") continue;
+        throw new LibraryError("write-failed", `无法另存“${title}”的副本：${writeFailures[code] ?? (error as Error).message}。`);
+      }
+    }
+  };
+  return { root, readFolder, readNote, saveNote, saveCopy, ...organizer({ ...options, root: realRoot, resolve }) };
 }

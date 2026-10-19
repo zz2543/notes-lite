@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { FolderContents } from "../../core";
+import { touchesFolder, useChangeCount } from "./libraryChanges";
 
 /** The user-facing part of an error that crossed over from the main process. */
 export function errorText(error: unknown): string {
@@ -63,9 +64,9 @@ export function pageShown() {
 const readFolder = (path: string) => window.notes.readFolder(path);
 const readNote = (path: string) => window.notes.readNote(path);
 
-/** 当前目录内容 of one folder. */
+/** 当前目录内容 of one folder, read again after the app's own changes and whenever the watcher reports one in it. */
 export const useFolder = (path: string): Read<FolderContents> =>
-  useRead(path, readFolder, useSyncExternalStore(subscribeRevision, () => revision));
+  useRead(path, readFolder, useSyncExternalStore(subscribeRevision, () => revision) + useChangeCount(path, touchesFolder));
 
 /** A note's Markdown source. */
 export const useNoteSource = (path: string | null): Read<string> => useRead(path, readNote);

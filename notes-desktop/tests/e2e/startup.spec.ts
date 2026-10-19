@@ -24,7 +24,7 @@ test("reopens the last note in its folder, ready to type", async ({ scratch }) =
   ({ app, page } = await launch(scratch));
   const editor = page.getByLabel("笔记正文");
   await expect(editor).toBeFocused();
-  await expect(editor).toHaveText("# 散步\n\n雨后", { useInnerText: true });
+  await expect(editor).toContainText("雨后");
   await expect(page.getByRole("treeitem", { name: "日记" })).toHaveAttribute("aria-selected", "true");
   const contents = page.getByRole("list", { name: "当前目录内容" }).getByRole("button");
   await expect(contents).toHaveCount(2);

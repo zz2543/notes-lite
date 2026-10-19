@@ -1,4 +1,5 @@
 import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults } from "../core";
+import type { Appearance } from "./appearance";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -22,11 +23,16 @@ export type LaunchState =
 
 export type SaveResult = { ok: true } | { ok: false; code: LibraryErrorCode; message: string };
 
+/** A copy saved, with the new note's path, or why not. */
+export type CopyResult = { ok: true; path: string } | { ok: false; code: LibraryErrorCode; message: string };
+
 /** The page's answer when the window is about to close: everything saved, or why not. */
 export type CloseCheck = { saved: true } | { saved: false; message: string };
 
 /** What the renderer may ask of the main process; exposed as `window.notes`. */
 export interface NotesApi {
+  /** The window material (and system colours), known before the page draws its first frame. */
+  readonly appearance: Appearance;
   launchState(): Promise<LaunchState>;
   /** Lets the user pick a folder and opens it; null when they cancel. */
   chooseLibrary(): Promise<LibraryInfo | null>;
@@ -40,8 +46,14 @@ export interface NotesApi {
   readNote(path: string): Promise<string>;
   /** `expected` is the source last read or saved; a note changed on disk since then is not overwritten. */
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
+  /** 笔记 › Markdown 源码 in the menu asks the page to show the source (true) or the typeset note. */
+  onSourceViewRequest(listener: (showSource: boolean) => void): () => void;
+  /** The page tells the menu which view the editor shows, so its check mark follows the card's button. */
+  sourceViewChanged(showSource: boolean): void;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
+  /** A window closed on macOS (only hidden) is shown again, as it was. */
+  onShownAgain(listener: () => void): () => void;
 
   // 整理笔记与文件夹 (ticket 04). Each answers with a result, so the page can show why it failed.
   /** File > 新建笔记 (⌘N / Ctrl+N): the page creates a note in the current folder. */
@@ -55,6 +67,22 @@ export interface NotesApi {
   listFolders(): Promise<string[]>;
   /** Titles and bodies of the open library; waits for the index the first time. */
   search(query: string, options: SearchOptions): Promise<SearchResults>;
+  /**
+   * Something in the open library changed, by this app or any other program: library-relative
+   * paths, hidden ones included; "" when anything may have changed.
+   */
+  onLibraryChanged(listener: (paths: string[]) => void): () => void;
+  /** Writes `text` as a new note “<title> 副本” beside the note at `path`, which is left alone. */
+  saveCopy(path: string, text: string): Promise<CopyResult>;
+  /** Asks before something the user cannot take back; true when they go ahead. */
+  confirm(question: Confirmation): Promise<boolean>;
+}
+
+export interface Confirmation {
+  message: string;
+  detail: string;
+  /** The button that goes ahead; the other one cancels. */
+  action: string;
 }
 
 /** The outcome of creating, renaming, moving, deleting or restoring. */
@@ -72,6 +100,8 @@ export const channels = {
   saveNote: "library:save-note",
   beforeClose: "window:before-close",
   closeChecked: "window:close-checked",
+  sourceViewRequest: "menu:source-view",
+  sourceViewChanged: "editor:source-view-changed",
   newNoteRequest: "menu:new-note",
   createNote: "library:create-note",
   createFolder: "library:create-folder",
@@ -81,4 +111,8 @@ export const channels = {
   restoreLastDeleted: "library:restore-last-deleted",
   listFolders: "library:list-folders",
   search: "library:search",
+  libraryChanged: "library:changed",
+  shownAgain: "window:shown-again",
+  saveCopy: "library:save-copy",
+  confirm: "window:confirm",
 } as const;

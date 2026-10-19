@@ -6,8 +6,10 @@ import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
 import { errorText, pageShown } from "./ipc";
+import { useFolderFallback } from "./libraryChanges";
 import { NoteEditor } from "./NoteEditor";
-import { saveOpenNote } from "./noteDraft";
+import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
+import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
 import { icon } from "./tokens";
 
@@ -48,10 +50,22 @@ export function App() {
   useEffect(() => {
     void window.notes.launchState().then(setPhase);
     const offMenu = window.notes.onOpenLibraryRequest(() => void choose());
-    const offClose = window.notes.onBeforeClose(saveOpenNote);
+    // A window closed on macOS is only hidden; shown again, typing goes on where it was, though
+    // the system may have moved focus to the first control meanwhile.
+    let focused: Element | null = null;
+    const offClose = window.notes.onBeforeClose(() => {
+      focused = document.activeElement;
+      return saveOpenNote();
+    });
+    const offShown = window.notes.onShownAgain(() => {
+      if (focused instanceof HTMLElement && focused.isConnected) focused.focus({ preventScroll: true });
+    });
+    const offSourceView = listenForSourceView();
     return () => {
+      offSourceView();
       offMenu();
       offClose();
+      offShown();
     };
   }, []);
 
@@ -106,7 +120,7 @@ interface LibraryViewProps {
   onSwitch(): void;
   /** Saves the open note; false when it could not, so the note must stay open. */
   saveFirst(): Promise<boolean>;
-  /** Shows a notice, such as why a note could not be moved to the trash. */
+  /** Shows a passing notice, such as why a note could not be moved to the trash. */
   notify(message: string): void;
 }
 
@@ -117,6 +131,19 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
 
   // The next launch reopens this folder and note.
   useEffect(() => window.notes.rememberPlace({ folder, note }), [folder, note]);
+  // The last note clicked wins, however long saving the current one takes.
+  const requested = useRef(note);
+  // Other programs may move, delete or rewrite what is shown.
+  useFolderFallback(folder, setFolder);
+  // `path`: the note the disk let go of. A note this app just renamed, moved or closed is not
+  // closed again by the watcher's late word about where it used to be.
+  const letGo = (reason: string, path?: string) => {
+    if (path !== undefined && requested.current !== path) return;
+    requested.current = null;
+    setNote(null);
+    notify(reason);
+  };
+  useOpenNoteFollowsDisk(note, letGo);
 
   const toggle = (path: string) =>
     setExpanded((now) => {
@@ -138,8 +165,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     setExpanded((now) => new Set([...now, ...ancestors(path)]));
   };
 
-  // The last note clicked wins, however long saving the current one takes. True once it is open.
-  const requested = useRef(note);
+  // Opens a note once the open one is saved; true once it is open.
   const openNote = async (path: string): Promise<boolean> => {
     requested.current = path;
     if (path === note) return true;
@@ -167,6 +193,12 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   };
   const organize = useOrganize({ libraryName: library.name, folder, note, saveFirst, notify, showFolder: openFolder, showNote, relocated });
   const lastDeletedName = organize.lastDeleted?.split("/").pop()?.replace(/\.md$/i, "");
+
+  // The input saved as a copy beside its note: shown where it lies, and opened.
+  const openCopy = (path: string) => {
+    openFolder(path.slice(0, Math.max(0, path.lastIndexOf("/"))));
+    void openNote(path);
+  };
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
@@ -254,7 +286,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         )}
       </section>
       <main className="card-wrap">
-        <NoteEditor key={reloads} path={note} fresh={note !== null && note === fresh} />
+        <NoteEditor key={reloads} path={note} fresh={note !== null && note === fresh} onOpenCopy={openCopy} onLetGo={letGo} />
       </main>
       {organize.overlay}
     </div>

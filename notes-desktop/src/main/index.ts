@@ -1,18 +1,33 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences } from "electron";
 import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { stat } from "node:fs/promises";
+import { release } from "node:os";
 import { basename, join } from "node:path";
 import {
   createSearchIndex,
   LibraryError,
   openLibrary,
+  watchLibrary,
   type Library,
+  type LibraryWatcher,
   type OrganizeOptions,
   type Relocation,
   type SearchIndex,
   type SearchOptions,
 } from "../core";
-import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type Organized, type Place, type SaveResult } from "../shared/api";
+import {
+  channels,
+  type CloseCheck,
+  type Confirmation,
+  type CopyResult,
+  type LaunchState,
+  type LibraryInfo,
+  type Organized,
+  type Place,
+  type SaveResult,
+} from "../shared/api";
+import { appearanceArguments, type Appearance } from "../shared/appearance";
+import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -33,11 +48,45 @@ let openLibraryPending = false;
 const closeCheckTimeout = 5000;
 const showFallback = 500;
 const backgroundWorkFallback = 3000;
+const sourceViewItem = "source-view";
+
+// Windows keeps its system frame (and so the fallback colour) until the app draws its own title bar there.
+const material = windowMaterial({ platform: process.platform, release: release(), frameless: false });
+
+/** The look the page needs before its first frame; the accent is read again for each new window. */
+function systemAppearance(): Appearance {
+  let accent: string | null = null;
+  if (mac || process.platform === "win32") {
+    // RGBA hex; the design system's blue stands in when the system does not say.
+    const rgba = systemPreferences.getAccentColor();
+    if (/^[0-9a-f]{6}/i.test(rgba)) accent = `#${rgba.slice(0, 6)}`;
+  }
+  return { material, accent };
+}
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
 // Deleting goes to the system trash. Looked up on each call, so tests can stand in for the trash.
 const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path) };
+
+let watcher: LibraryWatcher | null = null;
+let watched: Library | null = null;
+
+/** Passes every change in the open library, made here or by another program, on to the page. */
+function watch(lib: Library) {
+  watcher?.close();
+  watched = lib;
+  try {
+    watcher = watchLibrary(lib.root, (paths) => {
+      // Search finds notes as they are now, whoever changed them.
+      for (const path of paths) if (!path.split("/").some((part) => part.startsWith("."))) noteChanged(path);
+      if (window && !window.isDestroyed()) window.webContents.send(channels.libraryChanged, paths);
+    });
+  } catch {
+    // A folder the system will not watch still opens; it just won't follow changes made elsewhere.
+    watcher = null;
+  }
+}
 
 // Starts while the window loads, so the remembered library is ready by the time the page asks.
 const launch: Promise<LaunchState> = (async () => {
@@ -91,6 +140,7 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   if (picked.canceled || !path) return null;
   library = await openLibrary(path, libraryOptions);
   readsAhead.clear();
+  watch(library);
   // A new library starts at its root; the place remembered belonged to the old one.
   await settings.update({ libraryPath: path, place: undefined });
   return libraryInfo(library);
@@ -112,6 +162,13 @@ function searchIndex(): SearchIndex {
 }
 
 const indexInBackground = () => void (library && searchIndex());
+
+/** Once the page shows the remembered library: index it and follow its changes, if not yet. */
+function startBackgroundWork() {
+  if (!library) return;
+  if (watched !== library) watch(library);
+  indexInBackground();
+}
 
 /** A note the app saved (or otherwise changed) is searched as it is now. */
 function noteChanged(path: string) {
@@ -138,6 +195,10 @@ function registerIpc() {
       const code = error instanceof LibraryError ? error.code : "write-failed";
       return { ok: false, code, message: (error as Error).message };
     }
+  });
+  ipcMain.on(channels.sourceViewChanged, (_, showSource: boolean) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(sourceViewItem);
+    if (item) item.checked = showSource;
   });
   // 整理笔记与文件夹: a refusal (a taken name, say) reaches the page as a result it can show.
   const organize = <T>(channel: string, run: (lib: Library, ...args: string[]) => Promise<T>) =>
@@ -168,6 +229,19 @@ function registerIpc() {
     return touched(path, path);
   });
   ipcMain.handle(channels.listFolders, () => requireLibrary().listFolders());
+  ipcMain.handle(channels.saveCopy, async (_, path: string, text: string): Promise<CopyResult> => {
+    try {
+      return { ok: true, path: await requireLibrary().saveCopy(path, text) };
+    } catch (error) {
+      const code = error instanceof LibraryError ? error.code : "write-failed";
+      return { ok: false, code, message: (error as Error).message };
+    }
+  });
+  ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
+    const options = { type: "warning" as const, message, detail, buttons: ["取消", action], defaultId: 0, cancelId: 0 };
+    const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
+    return response === 1;
+  });
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {
@@ -211,7 +285,9 @@ async function finishClose(id: number | null, check: CloseCheck) {
 /** The window, brought forward; false when there is none to bring. */
 function reveal(): boolean {
   if (!window || window.isDestroyed()) return false;
+  const hidden = !window.isVisible();
   window.show();
+  if (hidden) window.webContents.send(channels.shownAgain);
   return true;
 }
 
@@ -228,6 +304,15 @@ function buildMenu() {
       }
     },
   };
+  const sourceViewToggle: MenuItemConstructorOptions = {
+    id: sourceViewItem,
+    label: "Markdown 源码",
+    type: "checkbox",
+    accelerator: "CmdOrCtrl+Shift+M",
+    // The page handles the shortcut itself, so it works however the menu is shown; the menu only shows it.
+    registerAccelerator: false,
+    click: (item) => window?.webContents.send(channels.sourceViewRequest, item.checked),
+  };
   // The page knows the current folder, so it does the creating.
   const newNoteItem: MenuItemConstructorOptions = {
     id: "new-note",
@@ -242,6 +327,7 @@ function buildMenu() {
       submenu: [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }],
     },
     { role: "editMenu" },
+    { label: "笔记", submenu: [sourceViewToggle] },
     { role: "viewMenu" },
     { role: "windowMenu" },
   ];
@@ -254,12 +340,16 @@ function createWindow() {
     height: 780,
     minWidth: 760,
     minHeight: 480,
-    // Shown once the first frame is ready, over the window's own color: no white flash on launch.
-    // The color is --win-fallback from the design system, needed here before any CSS has loaded.
+    // Shown once the first frame is ready, over the window's own material or color: no white flash.
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1e22" : "#f2f1f5",
+    ...materialWindowOptions(material, nativeTheme.shouldUseDarkColors),
     ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
-    webPreferences: { preload: join(__dirname, "../preload/index.js"), sandbox: true, contextIsolation: true },
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: true,
+      contextIsolation: true,
+      additionalArguments: appearanceArguments(systemAppearance()),
+    },
   }));
   // The window appears once its page shows where the user left off (or the welcome page): never
   // blank, never a spinner. A page that is slow to say so is shown anyway once it has painted.
@@ -280,10 +370,10 @@ function createWindow() {
   };
   void pageShown.then(showFirst);
   win.once("ready-to-show", () => setTimeout(showFirst, showFallback));
-  // Anything that reads the whole library (the search index, and later the file watcher) waits
+  // Anything that reads or watches the whole library (the search index, the file watcher) waits
   // until then too, so it never competes with the first note for the disk.
   const settled = Promise.race([pageShown, new Promise<void>((resolve) => setTimeout(resolve, backgroundWorkFallback))]);
-  void Promise.all([launch, settled]).then(indexInBackground);
+  void Promise.all([launch, settled]).then(startBackgroundWork);
   closeAllowed = false;
   // The page saves what is still unsaved before the window goes, on close and on quit alike.
   window.on("close", (event) => {

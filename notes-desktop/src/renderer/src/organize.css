@@ -1,36 +1,5 @@
 /* 整理笔记与文件夹: the folder row's new-note icon, the restore button, menus and dialogs. Menus and
-   dialogs are design-system 浮层: in-app blur over the window. Values come from design-system.md;
-   their motion presets arrive with the design-system foundation (ticket 03). */
-:root {
-  --glass: rgba(250, 250, 252, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --scrim: rgba(30, 30, 40, 0.14);
-  --float-shadow: 0 30px 90px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
-  --float-blur: blur(40px) saturate(1.7);
-  --menu-blur: blur(24px) saturate(1.6);
-  --menu-padding: 5px;
-  --menu-radius: 12px;
-  --menu-item-height: 30px;
-  --on-accent: #ffffff;
-  --icon-button-small: 24px;
-  --icon-button-radius-small: 7px;
-
-  /* Placeholders until the dialog design (ui-motion-spec, 设计范围 9) settles them. */
-  --menu-min-width: 168px;
-  --dialog-width: 360px;
-  --dialog-padding: 20px;
-  --dialog-radius: 16px;
-  --dialog-list-height: 260px;
-  --disabled-opacity: 0.45;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --glass: rgba(40, 40, 46, 0.72);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --scrim: rgba(0, 0, 0, 0.3);
-  }
-}
+   dialogs are design-system 浮层: in-app blur over the window. Values are the variables in tokens.css. */
 
 /* The new-note icon appears at the end of a hovered folder row. */
 .row-new {
@@ -39,7 +8,7 @@
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: var(--icon-button-radius-small);
+  border-radius: var(--icon-button-small-radius);
   color: var(--side-muted);
   opacity: 0;
 }
@@ -65,7 +34,7 @@
   border: 0.5px solid var(--glass-border);
   border-radius: var(--menu-radius);
   background: var(--glass);
-  box-shadow: var(--float-shadow);
+  box-shadow: var(--overlay-shadow);
   backdrop-filter: var(--menu-blur);
   color: var(--side-fg);
   font-size: var(--text-side-row);
@@ -108,8 +77,8 @@
   border: 0.5px solid var(--glass-border);
   border-radius: var(--dialog-radius);
   background: var(--glass);
-  box-shadow: var(--float-shadow);
-  backdrop-filter: var(--float-blur);
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: var(--overlay-blur);
   color: var(--side-fg);
 }
 .dialog h2 {

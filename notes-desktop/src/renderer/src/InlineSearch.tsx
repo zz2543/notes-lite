@@ -2,6 +2,7 @@ import { Folder, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import type { SearchHit, SearchResults, Snippet } from "../../core";
 import { errorText } from "./ipc";
+import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
 
 /** 就地搜索: the whole library by default, or the selected folder with its subfolders. */
@@ -147,6 +148,7 @@ export function SearchResultsList({ answer, libraryName, openNote, onOpen }: Res
         {hits.map((hit) => (
           <li key={hit.path}>
             <button className={`item result ${openNote === hit.path ? "on" : ""}`} aria-current={openNote === hit.path || undefined} onClick={() => onOpen(hit)}>
+              {openNote === hit.path && <SelectionPill group="list" />}
               <span className="label">{hit.title}</span>
               {hit.snippet.text && (
                 <span className="snippet">

@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [ ] ⌘N / Ctrl+N 在当前文件夹新建；悬停文件夹行浮现新建图标，在该文件夹新建
 - [ ] 笔记与文件夹改名、移动，并更新其他笔记中指向它们的链接（代码示例不被改动）
@@ -39,3 +39,7 @@
 
 留给后续任务：菜单与对话框的入场动效、悬停图标的“轻弹”过渡（任务 03/23）；对话框尺寸为占位变量（`organize.css`），待“提示与对话框”设计定稿；空间主页对改名的引用同步（任务 21）；拖拽移动未做。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 在 macOS 与 Windows 均通过：https://github.com/zz2543/notes-lite/actions/runs/39286887236

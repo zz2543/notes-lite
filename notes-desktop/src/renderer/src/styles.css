@@ -1,88 +1,7 @@
-/* Every value comes from the design system; rules below only reference these variables. Until native
-   materials land, the window sits on the opaque --win-fallback color. */
+/* Component rules. Every value comes from the design system's variables in tokens.css. */
 :root {
-  color-scheme: light dark;
-  --win-fallback: #f2f1f5;
-  --side-fg: #1d1d1f;
-  --side-muted: rgba(29, 29, 31, 0.48);
-  --list-bg: rgba(255, 255, 255, 0.52);
-  --list-fg: #1d1d1f;
-  --list-muted: rgba(29, 29, 31, 0.5);
-  --card-bg: #ffffff;
-  --card-fg: #1d1d1f;
-  --card-muted: rgba(29, 29, 31, 0.42);
-  --card-path: color-mix(in srgb, var(--card-fg) 62%, transparent);
-  --side-pill: rgba(255, 255, 255, 0.72);
-  --list-pill: rgba(255, 255, 255, 0.85);
-  --pill-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.12);
-  --hover: rgba(0, 0, 0, 0.045);
-  --line: rgba(0, 0, 0, 0.08);
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 28px rgba(0, 0, 0, 0.08);
-  --accent: #0a84ff;
-
-  /* 尺寸与圆角 */
-  --side-width: 216px;
-  --list-width: 276px;
-  --titlebar-height: 52px;
-  --row-height: 32px;
-  --row-padding: 10px;
-  --row-radius: 9px;
-  --row-indent: 16px;
-  --item-padding: 9px 12px;
-  --item-radius: 10px;
-  --list-head-height: 52px;
-  --card-gap: 10px;
-  --card-radius: 12px;
-  --card-head-height: 46px;
-  --card-foot-height: 34px;
-  --card-padding: 28px 40px;
-  --icon-button-radius: 8px;
-  --inline-gap: 8px;
-
-  /* 界面文字 */
-  --font-ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
-  --text-side-row: 13.5px;
-  --text-group: 11px;
-  --text-item: 14px;
-  --weight-item: 560;
-  --text-list-title: 15px;
-  --weight-list-title: 650;
-  --text-path: 13px;
-  --text-meta: 11.5px;
-
-  /* 正文排版的默认值（排版设置以后改这些变量） */
-  --body-font: var(--font-ui);
-  --body-size: 17px;
-  --body-leading: 1.8;
-  --measure: 680px;
-  --selection: color-mix(in srgb, var(--accent) 28%, transparent);
-
-  /* Placeholders owned by a later ticket: the welcome page (empty states). */
-  --welcome-title: 22px;
-  --welcome-width: 420px;
-
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --win-fallback: #1e1e22;
-    --side-fg: #f2f2f4;
-    --side-muted: rgba(242, 242, 244, 0.45);
-    --list-bg: rgba(16, 16, 20, 0.38);
-    --list-fg: #f2f2f4;
-    --list-muted: rgba(242, 242, 244, 0.48);
-    --card-bg: #1e1e21;
-    --card-fg: #ececef;
-    --card-muted: rgba(236, 236, 239, 0.4);
-    --side-pill: rgba(255, 255, 255, 0.14);
-    --list-pill: rgba(255, 255, 255, 0.16);
-    --pill-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 1px 4px rgba(0, 0, 0, 0.3);
-    --hover: rgba(255, 255, 255, 0.06);
-    --line: rgba(255, 255, 255, 0.08);
-    --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.35);
-  }
 }
 
 * {
@@ -97,7 +16,7 @@ body,
 }
 
 body {
-  background: var(--win-fallback);
+  background: var(--window-bg);
   color: var(--side-fg);
   overflow: hidden;
   user-select: none;
@@ -196,7 +115,7 @@ button {
   padding: 0 2px 2px var(--row-padding);
   color: var(--side-muted);
   font-size: var(--text-group);
-  font-weight: 600;
+  font-weight: var(--weight-group);
 }
 .tree {
   flex: 1;
@@ -213,10 +132,6 @@ button {
 }
 .row:hover {
   background: var(--hover);
-}
-.row.on {
-  background: var(--side-pill);
-  box-shadow: var(--pill-shadow);
 }
 .caret {
   width: 14px;
@@ -280,10 +195,6 @@ button {
 .item:hover {
   background: var(--hover);
 }
-.item.on {
-  background: var(--list-pill);
-  box-shadow: var(--pill-shadow);
-}
 
 .card-wrap {
   flex: 1;
@@ -320,6 +231,38 @@ button {
 }
 .editor .cm-editor.cm-focused {
   outline: none;
+}
+/* The caret shows where focus is; the text column needs no focus ring. */
+.editor .cm-content:focus-visible {
+  box-shadow: none;
+}
+/* Markdown 源码: every character as saved, in the code font. */
+.editor .cm-source .cm-content {
+  font-family: var(--code-font);
+  font-size: var(--code-size);
+}
+.card-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card-tool {
+  flex: none;
+  height: var(--icon-button-small);
+  padding: 0 var(--inline-gap);
+  border-radius: var(--icon-button-radius);
+  color: var(--card-path);
+  font-size: var(--text-meta);
+  -webkit-app-region: no-drag;
+}
+.card-tool:hover {
+  background: var(--hover);
+}
+.card-tool[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--card-fg);
 }
 .editor .cm-scroller {
   padding: var(--card-padding);
@@ -381,6 +324,37 @@ button {
   flex: none;
 }
 
+/* 保存冲突: a strip under the card head; the editor below stays usable. */
+.conflict {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--card-gap);
+  padding: var(--item-padding);
+  padding-inline: calc(var(--row-padding) * 2);
+  background: var(--hover);
+  border-block: 1px solid var(--line);
+  color: var(--card-fg);
+  font-size: var(--text-path);
+}
+.conflict-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.5;
+}
+.conflict-actions {
+  flex: none;
+  display: flex;
+  gap: var(--inline-gap);
+}
+.conflict-actions button {
+  padding: 0;
+  font-size: var(--text-meta);
+  font-weight: var(--weight-item);
+  text-decoration: underline;
+}
+
 .toast {
   position: fixed;
   left: 50%;
@@ -396,18 +370,7 @@ button {
   font-size: var(--text-path);
 }
 
-/* 就地搜索 (values from the design system) */
-:root {
-  --icon-button-small: 24px;
-  --icon-button-small-radius: 7px;
-  --search-height: 30px;
-  --search-radius: 9px;
-  --segment-padding: 3px;
-  --segment-radius: 10px;
-  --segment-height: 26px;
-  --text-summary: 12.5px;
-  --list-summary: color-mix(in srgb, var(--list-fg) 62%, transparent);
-}
+/* 就地搜索 */
 .icon-button {
   flex: none;
   display: grid;
@@ -467,19 +430,19 @@ button {
 }
 .segmented {
   display: flex;
-  padding: var(--segment-padding);
-  border-radius: var(--segment-radius);
+  padding: var(--segmented-padding);
+  border-radius: var(--segmented-radius);
   background: var(--hover);
   -webkit-app-region: no-drag;
 }
 .segmented button {
   flex: 1;
   min-width: 0;
-  height: var(--segment-height);
+  height: var(--segmented-height);
   display: flex;
   align-items: center;
   padding: 0 var(--row-padding);
-  border-radius: calc(var(--segment-radius) - var(--segment-padding));
+  border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
   color: var(--list-muted);
   font-size: var(--text-meta);
 }
@@ -520,4 +483,41 @@ button {
   gap: 4px;
   color: var(--list-muted);
   font-size: var(--text-meta);
+}
+
+/* 选中底板: one pill per group slides between rows (SelectionPill); the row keeps its content above it. */
+.row,
+.item {
+  position: relative;
+  isolation: isolate;
+}
+.pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: var(--pill-shadow);
+}
+.pill.side {
+  background: var(--side-pill);
+}
+.pill.list {
+  background: var(--list-pill);
+}
+
+
+/* 悬停与按压 (轻弹): hover only adds the --hover tint, never lifts; pressing shrinks, release springs back. */
+.row,
+.item,
+.side-foot,
+.primary {
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.row:active,
+.item:active,
+.side-foot:active,
+.primary:active {
+  scale: var(--press-scale);
 }

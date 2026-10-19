@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 搜索标题与正文；默认全库，可切换为当前文件夹及子文件夹
 - [x] 结果显示所属路径与匹配摘要；无结果有提示
@@ -41,3 +41,7 @@
 - 搜索框展开与收起的“展开”弹簧动效：需要任务 03 的 Motion 预设，由 03 / 23 接上。
 - 任务 04 的新建、改名、移动、删除需要在主进程调用 `noteChanged(path)`（或任务 05 的监视器覆盖），否则搜索结果会滞后。
 - 任务 07 可按实测决定是否把索引建立再推迟（例如到上次的笔记显示之后）。
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 在 macOS 与 Windows 均通过：https://github.com/zz2543/notes-lite/actions/runs/39286887236
