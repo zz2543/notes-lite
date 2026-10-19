@@ -1,0 +1,85 @@
+/* Markdown typeset in place (markdownView.ts). Values come from the variables in styles.css; spacing in
+   em follows the old editor's typesetting, scaled to each element's own size. Line rules are scoped under
+   .cm-typeset .cm-line so they outrank the editor's base line style. */
+
+.cm-typeset {
+  /* Syntax characters on the line being edited: dimmed, and hanging left of the text they mark so the
+     text stays where it was while they were hidden. */
+  & .cm-md-mark {
+    color: var(--card-muted);
+  }
+  & .cm-md-hang {
+    display: inline-block;
+    min-width: var(--hang);
+    margin-left: calc(-1 * var(--hang));
+    text-align: right;
+    white-space: pre;
+  }
+
+  /* Emphasis and inline code */
+  & .cm-md-bold {
+    font-weight: 600;
+  }
+  & .cm-md-heading .cm-md-bold {
+    font-weight: 800;
+  }
+  & .cm-md-italic {
+    font-style: italic;
+  }
+  & .cm-md-code {
+    padding: 0.1em 0.2em;
+    border-radius: 0.3em;
+    background: var(--code-bg);
+    font-family: var(--code-font);
+    font-size: var(--code-size);
+  }
+
+  & .cm-line {
+    /* Headings */
+    &.cm-md-heading {
+      --hang: var(--mark-hang);
+      font-family: var(--heading-font);
+      font-weight: var(--heading-weight);
+      line-height: 1.35;
+    }
+    &.cm-md-h1 {
+      font-size: var(--h1-size);
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+      padding: 0.88em 0 0.47em;
+    }
+    &.cm-md-h2 {
+      font-size: var(--h2-size);
+      padding: 1.29em 0 0.46em;
+    }
+    &.cm-md-h3 {
+      font-size: var(--h3-size);
+      padding: 1.22em 0 0.33em;
+    }
+    &.cm-md-h4,
+    &.cm-md-h5,
+    &.cm-md-h6 {
+      padding: 0.94em 0 0.24em;
+    }
+    &.cm-md-h4 {
+      font-size: var(--h4-size);
+    }
+    &.cm-md-h5 {
+      font-size: var(--h5-size);
+    }
+    &.cm-md-h6 {
+      font-size: var(--h6-size);
+      color: var(--card-muted);
+    }
+    &.cm-md-first {
+      padding-top: 0;
+    }
+    /* "## " in the code font, no bigger than body text however large the heading. */
+    &.cm-md-heading > .cm-md-hang {
+      font-family: var(--code-font);
+      font-size: min(0.62em, calc(var(--body-size) * 0.9));
+      font-weight: normal;
+      letter-spacing: 0;
+    }
+  }
+}

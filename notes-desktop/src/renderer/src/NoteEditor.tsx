@@ -4,6 +4,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
 import { useNoteSource } from "./ipc";
+import { markdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 
 /** The open note on its card: Markdown source edited in place, saved as it is typed. */
@@ -45,6 +46,7 @@ function Editor({ path, source }: { path: string; source: string }) {
           // Redo answers to ⌘⇧Z / Ctrl+Shift+Z everywhere, and to Ctrl+Y on Windows as usual.
           keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
+          markdownView(false),
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
