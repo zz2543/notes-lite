@@ -93,6 +93,27 @@ test("hover only tints a row; pressing shrinks it with a spring and it springs b
   await app.close();
 });
 
+test("with reduced motion nothing slides, scales or blurs", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "甲/一.md": "一", "乙/二.md": "二", "丙/三.md": "三" });
+  const { app, page } = await launchWith(scratch, root);
+  // Turned on while the app runs, as the system setting would be.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const tree = page.getByRole("tree", { name: "文件夹" });
+  const from = await top(tree.getByRole("treeitem", { name: "笔记库" }));
+  const target = tree.getByRole("treeitem", { name: "甲" });
+  const to = await top(target);
+
+  const slid = await film(page, sidePill, () => target.click());
+  expect(slid.every((f) => Math.abs(f.top - from) < 0.5 || Math.abs(f.top - to) < 0.5)).toBe(true);
+  expect(slid.every((f) => f.filter === "none")).toBe(true);
+
+  await tree.getByRole("treeitem", { name: "乙" }).hover();
+  const pressed = await film(page, '[role="tree"] [role="treeitem"]:hover', () => page.mouse.down(), 500);
+  expect(pressed.every((f) => scaleOf(f) === 1)).toBe(true);
+  await page.mouse.up();
+  await app.close();
+});
+
 // The design system's tables (docs/design-system.md), copied as written: [variable, light, dark].
 const colours: [string, string, string][] = [
   ["--side-fg", "#1d1d1f", "#f2f2f4"],
