@@ -9,8 +9,9 @@
 - [界面与动效规格](../../notes-desktop/docs/specs/ui-motion-spec.md)，取值见 [设计规范](../../notes-desktop/docs/design-system.md)。
 - [助手栏规格](../../notes-desktop/docs/specs/assistant-spec.md)：里程碑 5；测试接缝（核心库快照与还原、用假命令行 Agent 驱动的运行中应用）已与用户确认。
 
-任务尚未拆分。
+30 个任务已拆分并获用户确认，参见 [任务索引](README.md)。
 
 ## Comments
 
 - 2026-10-19：新增界面与动效规格、设计规范、助手栏规格（ADR 0005），均为 ready-for-agent。
+- 2026-10-19：按里程碑拆为 30 个任务（用户追加：设置界面层级清晰并使用滑块等可视化控件，见任务 15）。
