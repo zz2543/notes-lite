@@ -99,3 +99,45 @@ test("renaming and moving notes and folders keeps links working; a taken name is
 
   await app.close();
 });
+
+test("deleting moves a note or folder to the trash, and the last deletion can be restored", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n雨后\n", "日记/读书.md": "# 读书\n" });
+  const exists = (path: string) => readFile(join(root, path), "utf8").then(() => true, () => false);
+  const { app, page } = await launchWith(scratch, root);
+  // On CI the real system trash is used; locally, a folder stands in so test notes stay out of yours.
+  if (!process.env.CI) {
+    await app.evaluate(({ shell }, folder) => {
+      const fs = process.getBuiltinModule("node:fs");
+      const path = process.getBuiltinModule("node:path");
+      fs.mkdirSync(folder, { recursive: true });
+      shell.trashItem = async (item) => fs.renameSync(item, path.join(folder, path.basename(item)));
+    }, join(scratch, "废纸篓"));
+  }
+
+  await tree(page).getByRole("treeitem", { name: "日记" }).click();
+  await contents(page).getByRole("button", { name: "散步" }).click();
+  await contents(page).getByRole("button", { name: "散步" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "移到废纸篓" }).click();
+  await expect(contents(page).getByRole("button")).toHaveText(["读书"]);
+  await expect(page.getByRole("article")).toContainText("选择一篇笔记");
+  expect(await exists("日记/散步.md")).toBe(false);
+
+  await page.getByRole("button", { name: "恢复上次删除" }).click();
+  await expect(contents(page).getByRole("button", { name: "散步" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByLabel("笔记正文")).toHaveText("# 散步\n雨后\n", { useInnerText: true });
+  expect(await readFile(join(root, "日记/散步.md"), "utf8")).toBe("# 散步\n雨后\n");
+  await expect(page.getByRole("button", { name: "恢复上次删除" })).toBeHidden();
+
+  // A whole folder, while it is selected and one of its notes is open.
+  await tree(page).getByRole("treeitem", { name: "日记" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "移到废纸篓" }).click();
+  await expect(tree(page).getByRole("treeitem")).toHaveText(["笔记库"]);
+  await expect(tree(page).getByRole("treeitem", { name: "笔记库" })).toHaveAttribute("aria-selected", "true");
+  expect(await exists("日记/读书.md")).toBe(false);
+  await page.getByRole("button", { name: "恢复上次删除" }).click();
+  await expect(tree(page).getByRole("treeitem", { name: "日记" })).toHaveAttribute("aria-selected", "true");
+  await expect(contents(page).getByRole("button")).toHaveCount(2);
+  expect(await exists("日记/读书.md")).toBe(true);
+
+  await app.close();
+});
