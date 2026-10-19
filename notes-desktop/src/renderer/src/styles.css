@@ -112,7 +112,7 @@ button {
   padding: 4px var(--row-padding) 6px;
   color: var(--side-muted);
   font-size: var(--text-group);
-  font-weight: 600;
+  font-weight: var(--weight-group);
 }
 .tree {
   flex: 1;
