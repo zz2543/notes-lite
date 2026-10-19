@@ -1,5 +1,6 @@
 import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults } from "../core";
 import type { Appearance } from "./appearance";
+import type { Preferences } from "./preferences";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -67,6 +68,10 @@ export interface NotesApi {
   // 设置 (ticket 15).
   /** The menu's 设置… asks the page to open the settings panel. */
   onSettingsRequest(listener: () => void): () => void;
+  /** The preferences as stored when the page loaded, so its first frame already shows them. */
+  readonly preferences: Preferences;
+  /** Stores a change and applies what the main process owns (外观); answers with all preferences. */
+  setPreferences(change: Partial<Preferences>): Promise<Preferences>;
 }
 
 export interface Confirmation {
@@ -104,4 +109,6 @@ export const channels = {
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
   settingsRequest: "menu:settings",
+  preferences: "settings:preferences",
+  setPreferences: "settings:set-preferences",
 } as const;

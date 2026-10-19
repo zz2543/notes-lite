@@ -89,6 +89,7 @@
   --settings-row-height: 44px;
   --settings-label-width: 120px;
   --settings-rows-bg: var(--list-pill);
+  --settings-segmented-width: 240px;
   --inline-gap: 8px;
 
   /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */

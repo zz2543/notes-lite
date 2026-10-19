@@ -1,5 +1,8 @@
 import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import type { ColorScheme } from "../../shared/preferences";
+import { Segmented, type Choice } from "./controls";
+import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
 
@@ -43,8 +46,21 @@ export function SettingRow({ label, children }: { label: string; children: React
   );
 }
 
+const colorSchemes: Choice<ColorScheme>[] = [
+  { value: "system", label: "跟随系统" },
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" },
+];
+
 function GeneralPage() {
-  return <SettingsGroup title="外观" description="浅色或深色，默认跟随系统。">{null}</SettingsGroup>;
+  const { preferences, change } = usePreferences();
+  return (
+    <SettingsGroup title="外观" description="浅色或深色，默认跟随系统。">
+      <SettingRow label="外观">
+        <Segmented label="外观" choices={colorSchemes} value={preferences.colorScheme} onChange={(colorScheme) => change({ colorScheme })} />
+      </SettingRow>
+    </SettingsGroup>
+  );
 }
 
 function SettingsPanel({ onClose }: { onClose(): void }) {

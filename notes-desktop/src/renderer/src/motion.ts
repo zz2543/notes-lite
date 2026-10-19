@@ -1,10 +1,10 @@
 // The whole motion vocabulary from the design system (动效): four spring presets, the 专注 spring and
 // the three intensities. Components take their transitions from here and never write their own.
 import type { Transition } from "motion/react";
+import { defaultPreferences, type MotionIntensity } from "../../shared/preferences";
 
-/** 动效强度: 轻, 标准, 强. */
-export type MotionIntensity = "light" | "standard" | "strong";
-export const defaultIntensity: MotionIntensity = "strong";
+export type { MotionIntensity };
+export const defaultIntensity: MotionIntensity = defaultPreferences.motion;
 
 export interface MotionPresets {
   /** 轻弹: hover, press, switches, an icon turning from outline to fill. */

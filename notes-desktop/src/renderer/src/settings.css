@@ -99,3 +99,27 @@
   justify-content: flex-end;
   min-width: 0;
 }
+
+/* 控件 (controls.tsx) */
+
+/* 分段控件: the chosen segment's pill slides between segments. */
+.settings .segmented {
+  min-width: var(--settings-segmented-width);
+}
+.segmented [role="radio"] {
+  position: relative;
+  isolation: isolate;
+  justify-content: center;
+}
+.segmented [role="radio"][aria-checked="true"] {
+  color: var(--list-fg);
+  font-weight: 600;
+}
+.segment-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}

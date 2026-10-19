@@ -55,6 +55,9 @@ const api: NotesApi = {
     ipcRenderer.on(channels.settingsRequest, handler);
     return () => ipcRenderer.off(channels.settingsRequest, handler);
   },
+  // Asked once, synchronously, before any script runs: the answer is already in memory in the main process.
+  preferences: ipcRenderer.sendSync(channels.preferences),
+  setPreferences: (change) => ipcRenderer.invoke(channels.setPreferences, change),
 };
 
 contextBridge.exposeInMainWorld("notes", api);
