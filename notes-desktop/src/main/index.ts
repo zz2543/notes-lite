@@ -14,7 +14,13 @@ let library: Library | null = null;
 let window: BrowserWindow | null = null;
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
+// The close check in progress; the first answer (the page's, or the timeout's) consumes it.
+let closeCheck: number | null = null;
+let closeChecks = 0;
 let quitting = false;
+// File > 打开笔记库… with no window open: asked again once the new page listens.
+let openLibraryPending = false;
+const closeCheckTimeout = 5000;
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -56,30 +62,40 @@ function registerIpc() {
       await requireLibrary().saveNote(path, text, expected);
       return { ok: true };
     } catch (error) {
-      const conflict = error instanceof LibraryError && error.code === "conflict";
-      return { ok: false, conflict, message: (error as Error).message };
+      const code = error instanceof LibraryError ? error.code : "write-failed";
+      return { ok: false, code, message: (error as Error).message };
     }
   });
-  ipcMain.on(channels.closeChecked, async (_, check: CloseCheck) => {
-    if (!window) return;
-    if (!check.saved) {
-      const { response } = await dialog.showMessageBox(window, {
-        type: "warning",
-        message: "笔记还没有保存",
-        detail: `${check.message}\n关闭后，这些输入会丢失。`,
-        buttons: ["返回", "不保存，直接关闭"],
-        defaultId: 0,
-        cancelId: 0,
-      });
-      if (response === 0) {
-        quitting = false;
-        return;
-      }
-    }
-    closeAllowed = true;
-    if (quitting) app.quit();
-    else window.close();
+  ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
+  ipcMain.on(channels.openLibraryListening, (event) => {
+    if (!openLibraryPending) return;
+    openLibraryPending = false;
+    event.sender.send(channels.openLibraryRequest);
   });
+}
+
+/** Closes (or quits) once the page has answered; unsaved input is only dropped if the user says so. */
+async function finishClose(id: number | null, check: CloseCheck) {
+  const win = window;
+  if (!win || id === null || id !== closeCheck) return;
+  closeCheck = null;
+  if (!check.saved) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: "warning",
+      message: "笔记还没有保存",
+      detail: `${check.message}\n关闭后，这些输入会丢失。`,
+      buttons: ["返回", "不保存，直接关闭"],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (response === 0) {
+      quitting = false;
+      return;
+    }
+  }
+  closeAllowed = true;
+  if (quitting) app.quit();
+  else if (!win.isDestroyed()) win.close();
 }
 
 function buildMenu() {
@@ -88,8 +104,11 @@ function buildMenu() {
     accelerator: "CmdOrCtrl+O",
     // The page saves the open note first, then asks for the folder like its own switch button.
     click: () => {
-      if (!window) createWindow();
-      window?.webContents.send(channels.openLibraryRequest);
+      if (window) window.webContents.send(channels.openLibraryRequest);
+      else {
+        openLibraryPending = true;
+        createWindow();
+      }
     },
   };
   const template: MenuItemConstructorOptions[] = [
@@ -121,7 +140,12 @@ function createWindow() {
   window.on("close", (event) => {
     if (closeAllowed || !window || window.webContents.isCrashed()) return;
     event.preventDefault();
+    if (closeCheck !== null) return;
+    const id = (closeCheck = ++closeChecks);
     window.webContents.send(channels.beforeClose);
+    // A page that never answers (still loading, or hung) must not keep the window open for good.
+    const silent: CloseCheck = { saved: false, message: "页面没有响应，无法确认笔记是否已保存。" };
+    setTimeout(() => void finishClose(id, silent), closeCheckTimeout);
   });
   window.on("closed", () => (window = null));
   // The page only ever shows the app itself.

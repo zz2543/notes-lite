@@ -4,7 +4,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
 import { useNoteSource } from "./ipc";
-import { NoteSession, setActiveSession, type SaveStatus } from "./noteSession";
+import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 
 /** The open note on its card: Markdown source edited in place, saved as it is typed. */
 export function NoteEditor({ path }: { path: string | null }) {
@@ -23,44 +23,47 @@ export function NoteEditor({ path }: { path: string | null }) {
 // stray "\r" stays part of its line. Either way the text saved is exactly the text loaded plus edits.
 const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\n/.test(source) ? "\r\n" : "\n");
 
-const WORD_COUNT_DELAY = 150;
+const wordCountDelay = 150;
 
 function Editor({ path, source }: { path: string; source: string }) {
   const host = useRef<HTMLDivElement>(null);
-  const [session, setSession] = useState<NoteSession>();
+  const [draft, setDraft] = useState<NoteDraft>();
   const [words, setWords] = useState(() => countWords(source));
 
   useEffect(() => {
     let countTimer: ReturnType<typeof setTimeout> | undefined;
+    const separator = lineSeparatorOf(source);
     const view: EditorView = new EditorView({
       parent: host.current!,
       state: EditorState.create({
         doc: source,
         extensions: [
-          EditorState.lineSeparator.of(lineSeparatorOf(source)),
+          EditorState.lineSeparator.of(separator),
+          // Pasted or dropped text takes the note's own line breaks, or a CRLF note would hide "\n"s inside lines.
+          EditorView.clipboardInputFilter.of((text) => (separator === "\r\n" ? text.replace(/\r?\n/g, "\r\n") : text)),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
-            next.edited();
+            draft.edited();
             clearTimeout(countTimer);
-            countTimer = setTimeout(() => setWords(countWords(update.state.doc.toString())), WORD_COUNT_DELAY);
+            countTimer = setTimeout(() => setWords(countWords(update.state.doc.toString())), wordCountDelay);
           }),
         ],
       }),
     });
     // sliceDoc joins lines with the note's own separator; doc.toString() would always use "\n".
-    const next = new NoteSession(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }));
-    setActiveSession(next);
-    setSession(next);
+    const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }));
+    setOpenDraft(draft);
+    setDraft(draft);
     view.focus();
     return () => {
       clearTimeout(countTimer);
       // The app saves before it switches notes; this only catches an unmount nobody asked to save.
-      void next.flush();
-      setActiveSession(null);
+      void draft.flush();
+      setOpenDraft(null);
       view.destroy();
     };
   }, [path, source]);
@@ -69,7 +72,7 @@ function Editor({ path, source }: { path: string; source: string }) {
     <>
       <div className="editor" ref={host} />
       <footer className="card-foot">
-        {session && <SaveState session={session} />}
+        {draft && <SaveState draft={draft} />}
         <span className="words">{words} 字</span>
       </footer>
     </>
@@ -84,17 +87,18 @@ const labels: Record<SaveStatus, string> = {
   conflict: "保存冲突",
 };
 
-function SaveState({ session }: { session: NoteSession }) {
-  const status = useSyncExternalStore(session.subscribe, () => session.status);
+function SaveState({ draft }: { draft: NoteDraft }) {
+  const status = useSyncExternalStore(draft.subscribe, () => draft.status);
   const problem = status === "failed" || status === "conflict";
   return (
     <span className={`save ${problem ? "problem" : ""}`} role="status" aria-label="保存状态">
       {/* A long reason is clipped, never the retry button after it; the tooltip keeps it whole. */}
-      <span className="save-text" title={problem ? session.message : undefined}>
-        {problem ? `${labels[status]}：${session.message}` : labels[status]}
+      <span className="save-text" title={problem ? draft.message : undefined}>
+        {problem ? `${labels[status]}：${draft.message}` : labels[status]}
       </span>
-      {problem && (
-        <button className="retry" onClick={() => void session.flush()}>
+      {/* A conflict can't be retried away; resolving it (reload or save a copy) comes with external changes. */}
+      {status === "failed" && (
+        <button className="retry" onClick={() => void draft.flush()}>
           重试
         </button>
       )}

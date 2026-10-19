@@ -7,6 +7,8 @@ const api: NotesApi = {
   onOpenLibraryRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.openLibraryRequest, handler);
+    // A request made before the page was listening (menu used with no window open) is sent now.
+    ipcRenderer.send(channels.openLibraryListening);
     return () => ipcRenderer.off(channels.openLibraryRequest, handler);
   },
   readFolder: (path) => ipcRenderer.invoke(channels.readFolder, path),

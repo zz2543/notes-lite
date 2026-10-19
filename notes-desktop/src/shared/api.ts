@@ -1,4 +1,4 @@
-import type { FolderContents } from "../core";
+import type { FolderContents, LibraryErrorCode } from "../core";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -13,7 +13,7 @@ export type LaunchState =
   /** `missing` is the remembered library's path when it can no longer be opened. */
   | { kind: "welcome"; missing?: string };
 
-export type SaveResult = { ok: true } | { ok: false; conflict: boolean; message: string };
+export type SaveResult = { ok: true } | { ok: false; code: LibraryErrorCode; message: string };
 
 /** The page's answer when the window is about to close: everything saved, or why not. */
 export type CloseCheck = { saved: true } | { saved: false; message: string };
@@ -37,6 +37,7 @@ export const channels = {
   launchState: "library:launch-state",
   chooseLibrary: "library:choose",
   openLibraryRequest: "menu:open-library",
+  openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",
   readNote: "library:read-note",
   saveNote: "library:save-note",

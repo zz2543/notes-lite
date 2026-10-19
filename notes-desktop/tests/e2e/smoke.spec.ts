@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { answerFolderPicker, expect, launch, library, test } from "./fixtures";
+import { answerFolderPicker, expect, launch, launchWith, library, test } from "./fixtures";
 
 test("first launch opens a chosen library and browses it", async ({ scratch }) => {
   const source = "# 雨后的散步\n\n- 小路  \n- 青苔\n";
@@ -9,10 +9,7 @@ test("first launch opens a chosen library and browses it", async ({ scratch }) =
     "读书.md": "# 读书",
     ".notes/order.json": "{}",
   });
-  const { app, page } = await launch(scratch);
-
-  await answerFolderPicker(app, root);
-  await page.getByRole("button", { name: "选择笔记库…" }).click();
+  const { app, page } = await launchWith(scratch, root);
 
   const tree = page.getByRole("tree", { name: "文件夹" });
   await expect(tree.getByRole("treeitem", { name: "我的笔记库" })).toHaveAttribute("aria-selected", "true");
@@ -32,7 +29,7 @@ test("first launch opens a chosen library and browses it", async ({ scratch }) =
   await expect(tree.getByRole("treeitem")).toHaveText(["我的笔记库", "日记", "2026"]);
 
   await contents.getByRole("button", { name: "雨后的散步" }).click();
-  await expect(page.getByLabel("笔记正文").locator(".cm-line")).toHaveText(source.split("\n"));
+  await expect(page.getByLabel("笔记正文")).toHaveText(source, { useInnerText: true });
 
   await app.close();
 });

@@ -1,16 +1,16 @@
 import { CaretUpDown, HardDrives } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LaunchState, LibraryInfo } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { errorText } from "./ipc";
 import { NoteEditor } from "./NoteEditor";
-import { flushActive } from "./noteSession";
+import { saveOpenNote } from "./noteDraft";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
 
-const NOTICE_DURATION = 6000;
+const noticeDuration = 6000;
 
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "starting" });
@@ -19,14 +19,14 @@ export function App() {
   // A notice, not a dialog: it fades on its own and never blocks what is under it.
   useEffect(() => {
     if (!error) return;
-    const timer = setTimeout(() => setError(undefined), NOTICE_DURATION);
+    const timer = setTimeout(() => setError(undefined), noticeDuration);
     return () => clearTimeout(timer);
   }, [error]);
 
   // Anything unsaved reaches the disk before the open note goes away: another note, another
   // library, or the window itself.
   const saveFirst = async (): Promise<boolean> => {
-    const check = await flushActive();
+    const check = await saveOpenNote();
     if (!check.saved) setError(`${check.message}你的输入仍保留在编辑器中。`);
     return check.saved;
   };
@@ -45,7 +45,7 @@ export function App() {
   useEffect(() => {
     void window.notes.launchState().then(setPhase);
     const offMenu = window.notes.onOpenLibraryRequest(() => void choose());
-    const offClose = window.notes.onBeforeClose(flushActive);
+    const offClose = window.notes.onBeforeClose(saveOpenNote);
     return () => {
       offMenu();
       offClose();
@@ -125,8 +125,12 @@ function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
     setExpanded((now) => new Set([...now, ...ancestors(path)]));
   };
 
+  // The last note clicked wins, however long saving the current one takes.
+  const requested = useRef(note);
   const openNote = async (path: string) => {
-    if (path !== note && (await saveFirst())) setNote(path);
+    requested.current = path;
+    if (path === note || !(await saveFirst())) return;
+    if (requested.current === path) setNote(path);
   };
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;

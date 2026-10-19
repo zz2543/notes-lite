@@ -37,6 +37,7 @@
   --card-foot-height: 34px;
   --card-padding: 28px 40px;
   --icon-button-radius: 8px;
+  --inline-gap: 8px;
 
   /* 界面文字 */
   --font-ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
@@ -367,9 +368,11 @@ button {
 }
 .retry {
   flex: none;
-  margin-left: 8px;
-  color: var(--accent);
+  margin-left: var(--inline-gap);
+  color: var(--card-fg);
   font-size: var(--text-meta);
+  font-weight: var(--weight-item);
+  text-decoration: underline;
 }
 .words {
   flex: none;
