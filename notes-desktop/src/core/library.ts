@@ -1,7 +1,18 @@
 import { chmod, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, sep } from "node:path";
+import { organizer, type Organizer } from "./organize";
 
-export type LibraryErrorCode = "not-a-folder" | "outside-library" | "not-utf8" | "conflict" | "write-failed";
+export type LibraryErrorCode =
+  | "not-a-folder"
+  | "outside-library"
+  | "not-utf8"
+  | "conflict"
+  | "write-failed"
+  // 整理笔记与文件夹
+  | "invalid-name"
+  | "exists"
+  | "not-allowed"
+  | "nothing-to-restore";
 
 export class LibraryError extends Error {
   constructor(
@@ -34,7 +45,7 @@ export interface FolderContents {
   notes: NoteEntry[];
 }
 
-export interface Library {
+export interface Library extends Organizer {
   readonly root: string;
   readFolder(path?: string): Promise<FolderContents>;
   /** The note's Markdown source, verbatim. */
@@ -134,5 +145,5 @@ export async function openLibrary(root: string): Promise<Library> {
       throw new LibraryError("write-failed", `无法保存“${basename(real, ".md")}”：${reason}。`);
     }
   };
-  return { root, readFolder, readNote, saveNote };
+  return { root, readFolder, readNote, saveNote, ...organizer({ resolve }) };
 }
