@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { blockPrefixLength } from "./markdown";
 
@@ -33,6 +33,11 @@ export interface SearchOptions {
 
 export interface SearchIndex {
   search(query: string, options?: SearchOptions): Promise<SearchResults>;
+  /**
+   * Reads again whatever is at `path` now — a note, a folder of notes, or nothing any more — after
+   * the app saved it or something else changed it.
+   */
+  update(path: string): Promise<void>;
 }
 
 interface Entry {
@@ -58,16 +63,29 @@ function decode(bytes: Uint8Array): string {
 /** A library path as the index keys it: "/"-separated, whichever separator it came with. */
 const relativePath = (path: string) => path.split(/[\\/]/).filter((part) => part !== "" && part !== ".").join("/");
 
+const isNote = (name: string) => name.toLowerCase().endsWith(".md");
+
+async function readEntry(root: string, path: string): Promise<Entry> {
+  const file = join(root, path);
+  const [{ mtimeMs }, bytes] = await Promise.all([stat(file), readFile(file)]);
+  const slash = path.lastIndexOf("/");
+  const title = path.slice(slash + 1, -3).normalize("NFC");
+  return { path, title, folder: path.slice(0, Math.max(slash, 0)), modified: mtimeMs, body: decode(bytes) };
+}
+
+/**
+ * Every visible note under `folder`. Links are not followed, as in 当前目录内容; what can't be read
+ * is left out rather than stopping the rest.
+ */
 async function scan(root: string, folder: string, into: Map<string, Entry>) {
-  const entries = await readdir(join(root, folder), { withFileTypes: true });
+  const entries = await readdir(join(root, folder), { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
     const path = folder ? `${folder}/${entry.name}` : entry.name;
     if (entry.isDirectory()) await scan(root, path, into);
-    else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) {
-      const file = join(root, path);
-      const [{ mtimeMs }, bytes] = await Promise.all([stat(file), readFile(file)]);
-      into.set(path, { path, title: entry.name.slice(0, -3).normalize("NFC"), folder, modified: mtimeMs, body: decode(bytes) });
+    else if (entry.isFile() && isNote(entry.name)) {
+      const note = await readEntry(root, path).catch(() => null);
+      if (note) into.set(path, note);
     }
   }
 }
@@ -113,9 +131,24 @@ function matcher(query: string): RegExp {
 
 export function createSearchIndex(root: string): SearchIndex {
   const entries = new Map<string, Entry>();
-  const ready = scan(root, "", entries);
+  // The first pass, then each update in turn; a search sees all of them that came before it.
+  let settled: Promise<void> = scan(root, "", entries);
+
+  // Whatever is at `path` now replaces what the index held there: a note, a folder's notes, or nothing.
+  const reread = async (path: string) => {
+    if (path.split("/").some((part) => part.startsWith("."))) return;
+    for (const key of entries.keys()) if (path === "" || key === path || key.startsWith(`${path}/`)) entries.delete(key);
+    const found = await lstat(join(root, path)).catch(() => null);
+    if (found?.isDirectory()) await scan(root, path, entries);
+    else if (found?.isFile() && isNote(path)) entries.set(path, await readEntry(root, path));
+  };
+  const update = (path: string) => {
+    settled = settled.then(() => reread(relativePath(path))).catch(() => {});
+    return settled;
+  };
+
   const search = async (query: string, options: SearchOptions = {}): Promise<SearchResults> => {
-    await ready;
+    await settled;
     const pattern = matcher(query);
     const scope = relativePath(options.folder ?? "");
     const inScope = (entry: Entry) => scope === "" || entry.folder === scope || entry.folder.startsWith(`${scope}/`);
@@ -132,5 +165,5 @@ export function createSearchIndex(root: string): SearchIndex {
     });
     return { hits, total: matches.length };
   };
-  return { search };
+  return { search, update };
 }

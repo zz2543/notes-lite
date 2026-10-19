@@ -1,4 +1,4 @@
-import { symlink, utimes } from "node:fs/promises";
+import { chmod, mkdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSearchIndex, type SearchHit } from "../../src/core";
@@ -110,6 +110,50 @@ describe("搜索", () => {
     expect(all.hits.map((h) => h.title)).toEqual(["新", "中", "旧"]);
     expect(first.hits.map((h) => h.title)).toEqual(["新", "中"]);
     expect(first.total).toBe(3);
+  });
+
+  it("follows a note that was saved, added or removed once told its path", async () => {
+    const root = await library({ "日记/今天.md": "下雨", "日记/昨天.md": "晴天" });
+    const index = createSearchIndex(root);
+    const titles = async (query: string) => (await index.search(query)).hits.map((h) => h.title).sort();
+    expect(await titles("下雨")).toEqual(["今天"]);
+
+    await writeFile(join(root, "日记/今天.md"), "雨停了，出太阳");
+    await writeFile(join(root, "日记/明天.md"), "也许下雨");
+    await rm(join(root, "日记/昨天.md"));
+    await Promise.all(["日记/今天.md", "日记\\明天.md", "日记/昨天.md"].map((path) => index.update(path)));
+
+    expect(await titles("下雨")).toEqual(["明天"]);
+    expect(await titles("太阳")).toEqual(["今天"]);
+    expect(await titles("晴天")).toEqual([]);
+  });
+
+  it("follows a folder that was added, removed or renamed once told its path", async () => {
+    const root = await library({ "旅行/京都.md": "红叶", "旅行/东京.md": "红叶" });
+    const index = createSearchIndex(root);
+    const paths = async () => (await index.search("红叶")).hits.map((h) => h.path).sort();
+    expect(await paths()).toEqual(["旅行/东京.md", "旅行/京都.md"]);
+
+    await rename(join(root, "旅行"), join(root, "游记"));
+    await mkdir(join(root, "游记/秋天"));
+    await writeFile(join(root, "游记/秋天/奈良.md"), "红叶与鹿");
+    await index.update("旅行");
+    await index.update("游记");
+
+    expect(await paths()).toEqual(["游记/东京.md", "游记/京都.md", "游记/秋天/奈良.md"]);
+  });
+
+  // Windows has no unreadable-folder permission to set from here.
+  it.skipIf(process.platform === "win32")("indexes the rest of the library when a folder can't be read", async () => {
+    const root = await library({ "公开/计划.md": "目标", "私密/日记.md": "目标" });
+    await chmod(join(root, "私密"), 0o000);
+    try {
+      const { hits } = await createSearchIndex(root).search("目标");
+
+      expect(hits.map((h) => h.path)).toEqual(["公开/计划.md"]);
+    } finally {
+      await chmod(join(root, "私密"), 0o755);
+    }
   });
 
   it("never reaches outside the library through a link", async () => {
