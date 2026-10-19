@@ -42,7 +42,8 @@ test("edits reach the disk exactly as typed, with pinyin input, undo and paste",
   await page.keyboard.type(" walk");
   await page.keyboard.press("ControlOrMeta+z");
   await expect(editor).toHaveText(/青苔$/, { useInnerText: true });
-  await page.keyboard.press("ControlOrMeta+Shift+z");
+  // KeyZ, as a real keyboard sends it: with Shift held the key reads "Z", not "z".
+  await page.keyboard.press("ControlOrMeta+Shift+KeyZ");
   await expect(editor).toHaveText(/青苔 walk$/, { useInnerText: true });
   // Text copied elsewhere breaks lines with "\n"; in a CRLF note it lands as CRLF.
   await paste(page, "，苔藓\n石头");
