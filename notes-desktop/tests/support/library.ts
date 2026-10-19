@@ -5,9 +5,12 @@ import { afterEach } from "vitest";
 
 const made: string[] = [];
 
-afterEach(async () => {
+/** Removes every library and scratch folder made so far; also runs after each test. */
+export async function removeLibraries() {
   await Promise.all(made.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
+}
+
+afterEach(removeLibraries);
 
 /** A scratch folder removed after the test. */
 export async function scratchFolder(prefix = "notes-desktop-"): Promise<string> {
@@ -17,7 +20,7 @@ export async function scratchFolder(prefix = "notes-desktop-"): Promise<string> 
 }
 
 /** A real library on disk; keys ending in "/" are empty folders. */
-export async function library(files: Record<string, string>): Promise<string> {
+export async function library(files: Record<string, string | Buffer>): Promise<string> {
   const root = await scratchFolder();
   for (const [path, body] of Object.entries(files)) {
     if (path.endsWith("/")) {

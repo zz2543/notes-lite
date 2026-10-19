@@ -1,7 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
-import { LibraryError, openLibrary, type Library, type OrganizeOptions } from "../core";
+import {
+  createSearchIndex,
+  LibraryError,
+  openLibrary,
+  type Library,
+  type OrganizeOptions,
+  type Relocation,
+  type SearchIndex,
+  type SearchOptions,
+} from "../core";
 import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type Organized, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
@@ -54,15 +63,37 @@ function requireLibrary(): Library {
   return library;
 }
 
+// The open library's search index. It is built in the background once the window is up (or a
+// library is chosen), never before the first note shows, and again whenever the library changes.
+let index: { library: Library; index: SearchIndex } | null = null;
+
+function searchIndex(): SearchIndex {
+  const lib = requireLibrary();
+  if (index?.library !== lib) index = { library: lib, index: createSearchIndex(lib.root) };
+  return index.index;
+}
+
+const indexInBackground = () => void (library && searchIndex());
+
+/** A note the app saved (or otherwise changed) is searched as it is now. */
+function noteChanged(path: string) {
+  if (index && index.library === library) void index.index.update(path);
+}
+
 function registerIpc() {
   ipcMain.handle(channels.launchState, () => launch);
-  ipcMain.handle(channels.chooseLibrary, () => chooseLibrary());
+  ipcMain.handle(channels.chooseLibrary, async () => {
+    const chosen = await chooseLibrary();
+    indexInBackground();
+    return chosen;
+  });
   ipcMain.handle(channels.readFolder, (_, path: string) => requireLibrary().readFolder(path));
   ipcMain.handle(channels.readNote, (_, path: string) => requireLibrary().readNote(path));
   // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
     try {
       await requireLibrary().saveNote(path, text, expected);
+      noteChanged(path);
       return { ok: true };
     } catch (error) {
       const code = error instanceof LibraryError ? error.code : "write-failed";
@@ -79,13 +110,26 @@ function registerIpc() {
         return { ok: false, code, message: (error as Error).message };
       }
     });
-  organize(channels.createNote, (lib, folder) => lib.createNote(folder ?? ""));
+  // The search index reads again whatever an operation touched.
+  const touched = <T>(value: T, ...paths: string[]) => {
+    for (const path of paths) noteChanged(path);
+    return value;
+  };
+  const relocated = (from: string, moved: Relocation) => touched(moved, from, moved.path, ...moved.updated);
+  organize(channels.createNote, async (lib, folder) => {
+    const path = await lib.createNote(folder ?? "");
+    return touched(path, path);
+  });
   organize(channels.createFolder, (lib, parent, name) => lib.createFolder(parent ?? "", name ?? ""));
-  organize(channels.rename, (lib, path, name) => lib.rename(path ?? "", name ?? ""));
-  organize(channels.move, (lib, path, folder) => lib.move(path ?? "", folder ?? ""));
-  organize(channels.trash, async (lib, path) => (await lib.trash(path ?? ""), null));
-  organize(channels.restoreLastDeleted, (lib) => lib.restoreLastDeleted());
+  organize(channels.rename, async (lib, path = "", name = "") => relocated(path, await lib.rename(path, name)));
+  organize(channels.move, async (lib, path = "", folder = "") => relocated(path, await lib.move(path, folder)));
+  organize(channels.trash, async (lib, path = "") => (await lib.trash(path), touched(null, path)));
+  organize(channels.restoreLastDeleted, async (lib) => {
+    const path = await lib.restoreLastDeleted();
+    return touched(path, path);
+  });
   ipcMain.handle(channels.listFolders, () => requireLibrary().listFolders());
+  ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {
     if (!openLibraryPending) return;
@@ -164,7 +208,10 @@ function createWindow() {
     ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: { preload: join(__dirname, "../preload/index.js"), sandbox: true, contextIsolation: true },
   });
-  window.once("ready-to-show", () => window?.show());
+  window.once("ready-to-show", () => {
+    window?.show();
+    void launch.then(indexInBackground);
+  });
   closeAllowed = false;
   // The page saves what is still unsaved before the window goes, on close and on quit alike.
   window.on("close", (event) => {

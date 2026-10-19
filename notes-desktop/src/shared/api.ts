@@ -1,4 +1,4 @@
-import type { FolderContents, LibraryErrorCode, Relocation } from "../core";
+import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults } from "../core";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -42,6 +42,8 @@ export interface NotesApi {
   trash(path: string): Promise<Organized<null>>;
   restoreLastDeleted(): Promise<Organized<string>>;
   listFolders(): Promise<string[]>;
+  /** Titles and bodies of the open library; waits for the index the first time. */
+  search(query: string, options: SearchOptions): Promise<SearchResults>;
 }
 
 /** The outcome of creating, renaming, moving, deleting or restoring. */
@@ -65,4 +67,5 @@ export const channels = {
   trash: "library:trash",
   restoreLastDeleted: "library:restore-last-deleted",
   listFolders: "library:list-folders",
+  search: "library:search",
 } as const;

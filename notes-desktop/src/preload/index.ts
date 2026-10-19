@@ -34,6 +34,7 @@ const api: NotesApi = {
   trash: (path) => ipcRenderer.invoke(channels.trash, path),
   restoreLastDeleted: () => ipcRenderer.invoke(channels.restoreLastDeleted),
   listFolders: () => ipcRenderer.invoke(channels.listFolders),
+  search: (query, options) => ipcRenderer.invoke(channels.search, query, options),
 };
 
 contextBridge.exposeInMainWorld("notes", api);
