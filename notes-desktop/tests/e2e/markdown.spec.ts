@@ -188,3 +188,34 @@ test("switching to the Markdown source and back keeps the caret, selection, scro
   expect(await readFile(join(root, "长笔记.md"), "utf8")).toBe(source);
   await app.close();
 });
+
+test("the menu and the card's button switch the view too, mid-composition, and it stays across notes", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "一.md": "# 一\n", "二.md": "# 二\n" });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "一");
+  const toggle = page.getByRole("button", { name: "Markdown 源码" });
+  const clickMenu = () => app.evaluate(({ Menu }) => void Menu.getApplicationMenu()?.getMenuItemById("source-view")?.click());
+
+  await page.keyboard.press("ControlOrMeta+End");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: "yu", selectionStart: 2, selectionEnd: 2 });
+  await clickMenu();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await cdp.send("Input.insertText", { text: "雨" });
+  await cdp.detach();
+  await expect(editor(page)).toHaveText("# 一雨");
+
+  // The button leaves the caret in the note: typing goes on.
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.type("后");
+  await expect(page.getByRole("status", { name: "保存状态" })).toHaveText("已保存");
+  expect(await readFile(join(root, "一.md"), "utf8")).toBe("# 一\n雨后");
+
+  await clickMenu();
+  await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "二" }).click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(editor(page)).toHaveText("# 二");
+  expect((await look(page, "二")).fontFamily).toContain("monospace");
+  await app.close();
+});
