@@ -1,4 +1,4 @@
-import type { FolderContents } from "../core/library";
+import type { FolderContents } from "../core";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -7,10 +7,15 @@ export interface LibraryInfo {
   name: string;
 }
 
+/** What the window shows at launch: the remembered library, or the welcome page. */
+export type LaunchState =
+  | { kind: "open"; library: LibraryInfo }
+  /** `missing` is the remembered library's path when it can no longer be opened. */
+  | { kind: "welcome"; missing?: string };
+
 /** What the renderer may ask of the main process; exposed as `window.notes`. */
 export interface NotesApi {
-  /** The library opened at launch: the remembered one, or null on first launch or when it is gone. */
-  currentLibrary(): Promise<LibraryInfo | null>;
+  launchState(): Promise<LaunchState>;
   /** Lets the user pick a folder and opens it; null when they cancel. */
   chooseLibrary(): Promise<LibraryInfo | null>;
   /** Called when another library is opened from the app menu. */
@@ -20,7 +25,7 @@ export interface NotesApi {
 }
 
 export const channels = {
-  currentLibrary: "library:current",
+  launchState: "library:launch-state",
   chooseLibrary: "library:choose",
   libraryChanged: "library:changed",
   readFolder: "library:read-folder",

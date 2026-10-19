@@ -1,5 +1,6 @@
-import { FileText, Folder } from "@phosphor-icons/react";
-import { useFolder } from "./useFolder";
+import { Folder } from "@phosphor-icons/react";
+import { useFolder } from "./ipc";
+import { icon } from "./tokens";
 
 interface Props {
   folder: string;
@@ -9,9 +10,9 @@ interface Props {
   onOpenNote(path: string): void;
 }
 
-/** 当前目录内容: the selected folder's direct subfolders, then its direct notes. */
-export function DirectoryContents({ folder, title, openNote, onOpenFolder, onOpenNote }: Props) {
-  const { contents, error } = useFolder(folder);
+/** 当前目录内容: the selected folder's direct subfolders, then its direct notes (titles only, the 简洁 level). */
+export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOpenNote }: Props) {
+  const { value: contents, error } = useFolder(folder);
   const empty = contents && contents.folders.length === 0 && contents.notes.length === 0;
   return (
     <>
@@ -25,7 +26,7 @@ export function DirectoryContents({ folder, title, openNote, onOpenFolder, onOpe
           {contents.folders.map((f) => (
             <li key={f.path}>
               <button className="item" onClick={() => onOpenFolder(f.path)}>
-                <Folder size={16} />
+                <Folder size={icon.regular} />
                 <span className="label">{f.name}</span>
               </button>
             </li>
@@ -33,7 +34,6 @@ export function DirectoryContents({ folder, title, openNote, onOpenFolder, onOpe
           {contents.notes.map((n) => (
             <li key={n.path}>
               <button className={`item ${openNote === n.path ? "on" : ""}`} aria-current={openNote === n.path || undefined} onClick={() => onOpenNote(n.path)}>
-                <FileText size={16} weight={openNote === n.path ? "fill" : "regular"} />
                 <span className="label">{n.title}</span>
               </button>
             </li>

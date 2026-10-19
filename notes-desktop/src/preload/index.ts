@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { channels, type LibraryInfo, type NotesApi } from "../shared/api";
 
 const api: NotesApi = {
-  currentLibrary: () => ipcRenderer.invoke(channels.currentLibrary),
+  launchState: () => ipcRenderer.invoke(channels.launchState),
   chooseLibrary: () => ipcRenderer.invoke(channels.chooseLibrary),
   onLibraryChanged: (listener) => {
     const handler = (_: unknown, library: LibraryInfo) => listener(library);

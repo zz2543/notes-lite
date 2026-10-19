@@ -1,6 +1,7 @@
 import { CaretRight, Folder, FolderOpen } from "@phosphor-icons/react";
-import type { KeyboardEvent } from "react";
-import { useFolder } from "./useFolder";
+import type { CSSProperties, KeyboardEvent } from "react";
+import { useFolder } from "./ipc";
+import { icon } from "./tokens";
 
 interface TreeProps {
   libraryName: string;
@@ -16,20 +17,27 @@ export function FolderTree(props: TreeProps) {
   const root = useFolder("");
   return (
     <div className="tree" role="tree" aria-label="文件夹">
-      <TreeRow {...props} path="" name={props.libraryName} depth={0} expandable={(root.contents?.folders.length ?? 0) > 0} />
+      <TreeRow {...props} path="" name={props.libraryName} depth={0} expandable={(root.value?.folders.length ?? 0) > 0} />
       {props.expanded.has("") && <Subfolders {...props} path="" depth={1} />}
     </div>
   );
 }
 
+interface RowProps extends TreeProps {
+  path: string;
+  name: string;
+  depth: number;
+  expandable: boolean;
+}
+
 function Subfolders(props: TreeProps & { path: string; depth: number }) {
-  const { contents } = useFolder(props.path);
+  const { value: contents } = useFolder(props.path);
   return contents?.folders.map((folder) => (
     <Branch key={folder.path} {...props} path={folder.path} name={folder.name} depth={props.depth} expandable={folder.hasSubfolders} />
   ));
 }
 
-function Branch(props: TreeProps & { path: string; name: string; depth: number; expandable: boolean }) {
+function Branch(props: RowProps) {
   return (
     <>
       <TreeRow {...props} />
@@ -39,7 +47,7 @@ function Branch(props: TreeProps & { path: string; name: string; depth: number; 
 }
 
 // Rows are flat siblings carrying their level, so a row's name and hit area never include its children.
-function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate, onToggle }: TreeProps & { path: string; name: string; depth: number; expandable: boolean }) {
+function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate, onToggle }: RowProps) {
   const isSelected = selected === path;
   const isOpen = expandable && expanded.has(path);
   const Icon = isSelected ? FolderOpen : Folder;
@@ -58,7 +66,7 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
       aria-selected={isSelected}
       aria-expanded={expandable ? isOpen : undefined}
       tabIndex={isSelected ? 0 : -1}
-      style={{ paddingLeft: 10 + depth * 16 }}
+      style={{ "--depth": depth } as CSSProperties}
       onClick={() => onActivate(path)}
       onKeyDown={onKeyDown}
     >
@@ -70,9 +78,9 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
           onToggle(path);
         }}
       >
-        <CaretRight size={11} weight="bold" style={{ transform: isOpen ? "rotate(90deg)" : undefined }} />
+        <CaretRight size={icon.caret} weight="bold" style={{ transform: isOpen ? "rotate(90deg)" : undefined }} />
       </span>
-      <Icon size={17} weight={isSelected ? "fill" : "regular"} />
+      <Icon size={icon.regular} weight={isSelected ? "fill" : "regular"} />
       <span className="label">{name}</span>
     </div>
   );

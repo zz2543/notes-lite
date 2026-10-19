@@ -55,8 +55,15 @@ test("first launch opens a chosen library and browses it", async () => {
   const contents = page.getByRole("list", { name: "当前目录内容" });
   await expect(contents.getByRole("button")).toHaveText(["日记", "读书"]);
 
-  await tree.getByRole("treeitem", { name: "日记" }).click();
+  const diary = tree.getByRole("treeitem", { name: "日记" });
+  await diary.click();
   await expect(contents.getByRole("button")).toHaveText(["2026", "雨后的散步"]);
+  await expect(tree.getByRole("treeitem")).toHaveText(["我的笔记库", "日记", "2026"]);
+  // Clicking the selected, open folder folds it; once more unfolds it.
+  await diary.click();
+  await expect(tree.getByRole("treeitem")).toHaveText(["我的笔记库", "日记"]);
+  await expect(diary).toHaveAttribute("aria-selected", "true");
+  await diary.click();
   await expect(tree.getByRole("treeitem")).toHaveText(["我的笔记库", "日记", "2026"]);
 
   await contents.getByRole("button", { name: "雨后的散步" }).click();
@@ -65,7 +72,7 @@ test("first launch opens a chosen library and browses it", async () => {
   await app.close();
 });
 
-test("remembers the library across launches and can switch to another", async () => {
+test("remembers the library across launches, switches, and explains when it is gone", async () => {
   const first = await library("工作", { "周报.md": "# 周报" });
   const second = await library("生活", { "菜谱.md": "# 菜谱" });
 
@@ -87,5 +94,11 @@ test("remembers the library across launches and can switch to another", async ()
 
   ({ app, page } = await launch());
   await expect(page.getByRole("treeitem", { name: "生活" })).toBeVisible();
+  await app.close();
+
+  await rm(second, { recursive: true });
+  ({ app, page } = await launch());
+  await expect(page.getByRole("status")).toContainText(`找不到上次的笔记库“${second}”`);
+  await expect(page.getByRole("button", { name: "选择笔记库…" })).toBeVisible();
   await app.close();
 });

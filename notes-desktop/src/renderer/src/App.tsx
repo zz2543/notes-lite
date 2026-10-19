@@ -1,19 +1,20 @@
 import { CaretUpDown, HardDrives } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import type { LibraryInfo } from "../../shared/api";
-import { DirectoryContents } from "./DirectoryContents";
+import type { LaunchState, LibraryInfo } from "../../shared/api";
+import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
+import { errorText } from "./ipc";
 import { NoteView } from "./NoteView";
-import { errorText } from "./useFolder";
+import { icon } from "./tokens";
 
-type Phase = { kind: "starting" } | { kind: "welcome" } | { kind: "open"; library: LibraryInfo };
+type Phase = { kind: "starting" } | LaunchState;
 
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "starting" });
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    void window.notes.currentLibrary().then((library) => setPhase(library ? { kind: "open", library } : { kind: "welcome" }));
+    void window.notes.launchState().then(setPhase);
     return window.notes.onLibraryChanged((library) => setPhase({ kind: "open", library }));
   }, []);
 
@@ -30,7 +31,7 @@ export function App() {
   return (
     <>
       {/* Until the remembered library answers, the window shows only its own color: no spinner. */}
-      {phase.kind === "welcome" && <Welcome onChoose={choose} />}
+      {phase.kind === "welcome" && <Welcome missing={phase.missing} onChoose={choose} />}
       {phase.kind === "open" && <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} />}
       {error && (
         <div className="toast" role="alert">
@@ -41,11 +42,16 @@ export function App() {
   );
 }
 
-function Welcome({ onChoose }: { onChoose(): void }) {
+function Welcome({ missing, onChoose }: { missing?: string; onChoose(): void }) {
   return (
     <main className="welcome">
       <div className="drag" />
       <h1>打开笔记库</h1>
+      {missing && (
+        <p className="missing" role="status">
+          找不到上次的笔记库“{missing}”，它可能被移动、改名或删除了。
+        </p>
+      )}
       <p>
         选择一个本地文件夹作为笔记库，里面的 Markdown 文件就是你的笔记。
         <br />
@@ -97,13 +103,13 @@ function LibraryView({ library, onSwitch }: { library: LibraryInfo; onSwitch(): 
         <div className="side-label">文件夹</div>
         <FolderTree libraryName={library.name} selected={folder} expanded={expanded} onActivate={activate} onToggle={toggle} />
         <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
-          <HardDrives size={15} />
+          <HardDrives size={icon.small} />
           <span className="label">{library.name}</span>
-          <CaretUpDown size={13} />
+          <CaretUpDown size={icon.caret} />
         </button>
       </aside>
       <section className="list">
-        <DirectoryContents folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={setNote} />
+        <FolderContentsList folder={folder} title={title} openNote={note} onOpenFolder={openFolder} onOpenNote={setNote} />
       </section>
       <main className="card-wrap">
         <NoteView path={note} />

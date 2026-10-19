@@ -1,7 +1,8 @@
-/* Names follow the design system; the window sits on an opaque color until native materials land. */
+/* Every value comes from the design system; rules below only reference these variables. Until native
+   materials land, the window sits on the opaque --win-fallback color. */
 :root {
   color-scheme: light dark;
-  --win-bg: #f2f1f5;
+  --win-fallback: #f2f1f5;
   --side-fg: #1d1d1f;
   --side-muted: rgba(29, 29, 31, 0.48);
   --list-bg: rgba(255, 255, 255, 0.52);
@@ -10,6 +11,7 @@
   --card-bg: #ffffff;
   --card-fg: #1d1d1f;
   --card-muted: rgba(29, 29, 31, 0.42);
+  --card-path: color-mix(in srgb, var(--card-fg) 62%, transparent);
   --side-pill: rgba(255, 255, 255, 0.72);
   --list-pill: rgba(255, 255, 255, 0.85);
   --pill-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.12);
@@ -17,13 +19,47 @@
   --line: rgba(0, 0, 0, 0.08);
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 28px rgba(0, 0, 0, 0.08);
   --accent: #0a84ff;
-  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+
+  /* 尺寸与圆角 */
+  --side-width: 216px;
+  --list-width: 276px;
+  --titlebar-height: 52px;
+  --row-height: 32px;
+  --row-padding: 10px;
+  --row-radius: 9px;
+  --row-indent: 16px;
+  --item-padding: 9px 12px;
+  --item-radius: 10px;
+  --list-head-height: 52px;
+  --card-gap: 10px;
+  --card-radius: 12px;
+  --card-head-height: 46px;
+  --icon-button-radius: 8px;
+
+  /* 界面文字 */
+  --font-ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  --text-side-row: 13.5px;
+  --text-group: 11px;
+  --text-item: 14px;
+  --weight-item: 560;
+  --text-list-title: 15px;
+  --weight-list-title: 650;
+  --text-path: 13px;
+  --text-meta: 11.5px;
+
+  /* Placeholders owned by later tickets: the welcome page (empty states) and the source view (editor). */
+  --welcome-title: 22px;
+  --welcome-width: 420px;
+  --source-font: 14px/1.7 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --source-padding: 8px 40px 40px;
+
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --win-bg: #1e1e22;
+    --win-fallback: #1e1e22;
     --side-fg: #f2f2f4;
     --side-muted: rgba(242, 242, 244, 0.45);
     --list-bg: rgba(16, 16, 20, 0.38);
@@ -53,7 +89,7 @@ body,
 }
 
 body {
-  background: var(--win-bg);
+  background: var(--win-fallback);
   color: var(--side-fg);
   overflow: hidden;
   user-select: none;
@@ -67,8 +103,13 @@ button {
   cursor: default;
 }
 
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--side-muted);
+}
+
 .drag {
-  height: 52px;
+  height: var(--titlebar-height);
   flex: none;
   -webkit-app-region: drag;
 }
@@ -83,9 +124,9 @@ button {
 }
 
 .empty {
-  margin: 24px 16px;
+  margin: var(--card-gap);
   color: var(--list-muted);
-  font-size: 13px;
+  font-size: var(--text-path);
   text-align: center;
 }
 
@@ -95,26 +136,36 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
 }
+.welcome .drag {
+  position: fixed;
+  inset: 0 0 auto;
+}
 .welcome h1 {
-  margin: 22vh 0 10px;
-  font-size: 22px;
-  font-weight: 650;
+  margin: 0 0 var(--card-gap);
+  font-size: var(--welcome-title);
+  font-weight: var(--weight-list-title);
 }
 .welcome p {
-  margin: 0 0 22px;
+  max-width: var(--welcome-width);
+  margin: 0 0 var(--titlebar-height);
   color: var(--side-muted);
-  font-size: 13.5px;
+  font-size: var(--text-side-row);
   line-height: 1.6;
 }
+.welcome .missing {
+  margin-bottom: var(--card-gap);
+  color: var(--side-fg);
+}
 .primary {
-  height: 32px;
-  padding: 0 16px;
-  border-radius: 8px;
+  height: var(--row-height);
+  padding: 0 var(--row-padding);
+  border-radius: var(--icon-button-radius);
   background: var(--accent);
-  color: #fff;
-  font-weight: 560;
+  color: var(--card-bg);
+  font-weight: var(--weight-item);
 }
 
 /* Layout: sidebar, 当前目录内容, then the note card. */
@@ -124,16 +175,16 @@ button {
 }
 
 .side {
-  width: 216px;
+  width: var(--side-width);
   flex: none;
   display: flex;
   flex-direction: column;
-  padding: 0 8px;
+  padding: 0 calc(var(--row-padding) - 2px);
 }
 .side-label {
-  padding: 4px 10px 6px;
+  padding: 4px var(--row-padding) 6px;
   color: var(--side-muted);
-  font-size: 11px;
+  font-size: var(--text-group);
   font-weight: 600;
 }
 .tree {
@@ -141,14 +192,13 @@ button {
   overflow-y: auto;
 }
 .row {
-  height: 32px;
+  height: var(--row-height);
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-right: 10px;
-  border-radius: 9px;
-  font-size: 13.5px;
-  outline: none;
+  padding: 0 var(--row-padding) 0 calc(var(--row-padding) + var(--depth, 0) * var(--row-indent));
+  border-radius: var(--row-radius);
+  font-size: var(--text-side-row);
 }
 .row:hover {
   background: var(--hover);
@@ -157,9 +207,6 @@ button {
   background: var(--side-pill);
   box-shadow: var(--pill-shadow);
 }
-.row:focus-visible {
-  box-shadow: 0 0 0 2px var(--accent);
-}
 .caret {
   width: 14px;
   display: grid;
@@ -167,22 +214,22 @@ button {
   color: var(--side-muted);
 }
 .side-foot {
-  height: 40px;
+  height: var(--row-height);
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 4px 0 8px;
-  padding: 0 10px;
-  border-radius: 9px;
+  margin: 4px 0 var(--card-gap);
+  padding: 0 var(--row-padding);
+  border-radius: var(--row-radius);
   color: var(--side-muted);
-  font-size: 12.5px;
+  font-size: var(--text-meta);
 }
 .side-foot:hover {
   background: var(--hover);
 }
 
 .list {
-  width: 276px;
+  width: var(--list-width);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -191,21 +238,21 @@ button {
   border-left: 1px solid var(--line);
 }
 .list-head {
-  min-height: 52px;
+  min-height: var(--list-head-height);
   display: flex;
   align-items: center;
-  padding: 0 18px;
+  padding: 0 calc(var(--row-padding) * 2);
   -webkit-app-region: drag;
 }
 .list-head h1 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: var(--text-list-title);
+  font-weight: var(--weight-list-title);
 }
 .items {
   flex: 1;
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 0 calc(var(--row-padding) - 2px) var(--card-gap);
   list-style: none;
   overflow-y: auto;
 }
@@ -214,10 +261,10 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 560;
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
+  font-size: var(--text-item);
+  font-weight: var(--weight-item);
 }
 .item:hover {
   background: var(--hover);
@@ -230,7 +277,7 @@ button {
 .card-wrap {
   flex: 1;
   min-width: 0;
-  padding: 10px;
+  padding: var(--card-gap);
 }
 .card {
   height: 100%;
@@ -238,26 +285,26 @@ button {
   flex-direction: column;
   background: var(--card-bg);
   color: var(--card-fg);
-  border-radius: 12px;
+  border-radius: var(--card-radius);
   box-shadow: var(--card-shadow);
   overflow: hidden;
 }
 .card-head {
-  height: 46px;
+  height: var(--card-head-height);
   flex: none;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  color: color-mix(in srgb, var(--card-fg) 62%, transparent);
-  font-size: 13px;
+  padding: 0 calc(var(--row-padding) * 2);
+  color: var(--card-path);
+  font-size: var(--text-path);
   -webkit-app-region: drag;
 }
 .source {
   flex: 1;
   margin: 0;
-  padding: 8px 40px 40px;
+  padding: var(--source-padding);
   overflow: auto;
-  font: 14px/1.7 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: var(--source-font);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
@@ -266,13 +313,13 @@ button {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  bottom: calc(var(--card-gap) * 2);
   transform: translateX(-50%);
-  max-width: 480px;
-  padding: 9px 14px;
-  border-radius: 10px;
+  max-width: var(--welcome-width);
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
   background: var(--card-bg);
   color: var(--card-fg);
   box-shadow: var(--card-shadow);
-  font-size: 13px;
+  font-size: var(--text-path);
 }
