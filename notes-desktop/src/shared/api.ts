@@ -1,4 +1,4 @@
-import type { FolderContents, LibraryErrorCode } from "../core";
+import type { FolderContents, LibraryErrorCode, SearchOptions, SearchResults } from "../core";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
@@ -31,6 +31,8 @@ export interface NotesApi {
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
+  /** Titles and bodies of the open library; waits for the index the first time. */
+  search(query: string, options: SearchOptions): Promise<SearchResults>;
 }
 
 export const channels = {
@@ -43,4 +45,5 @@ export const channels = {
   saveNote: "library:save-note",
   beforeClose: "window:before-close",
   closeChecked: "window:close-checked",
+  search: "library:search",
 } as const;

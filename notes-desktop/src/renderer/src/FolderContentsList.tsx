@@ -4,7 +4,8 @@ import { icon } from "./tokens";
 
 interface Props {
   folder: string;
-  title: string;
+  /** Null while the search field stands in for the header. */
+  title: string | null;
   openNote: string | null;
   onOpenFolder(path: string): void;
   onOpenNote(path: string): void;
@@ -16,9 +17,11 @@ export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOp
   const empty = contents && contents.folders.length === 0 && contents.notes.length === 0;
   return (
     <>
-      <header className="list-head">
-        <h1>{title}</h1>
-      </header>
+      {title !== null && (
+        <header className="list-head">
+          <h1>{title}</h1>
+        </header>
+      )}
       {error && <p className="empty">{error}</p>}
       {empty && <p className="empty">这个文件夹是空的</p>}
       {contents && !empty && (

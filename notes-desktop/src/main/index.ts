@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
-import { LibraryError, openLibrary, type Library } from "../core";
+import { createSearchIndex, LibraryError, openLibrary, type Library, type SearchIndex, type SearchOptions } from "../core";
 import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
@@ -51,21 +51,44 @@ function requireLibrary(): Library {
   return library;
 }
 
+// The open library's search index. It is built in the background once the window is up (or a
+// library is chosen), never before the first note shows, and again whenever the library changes.
+let index: { library: Library; index: SearchIndex } | null = null;
+
+function searchIndex(): SearchIndex {
+  const lib = requireLibrary();
+  if (index?.library !== lib) index = { library: lib, index: createSearchIndex(lib.root) };
+  return index.index;
+}
+
+const indexInBackground = () => void (library && searchIndex());
+
+/** A note the app saved (or otherwise changed) is searched as it is now. */
+function noteChanged(path: string) {
+  if (index && index.library === library) void index.index.update(path);
+}
+
 function registerIpc() {
   ipcMain.handle(channels.launchState, () => launch);
-  ipcMain.handle(channels.chooseLibrary, () => chooseLibrary());
+  ipcMain.handle(channels.chooseLibrary, async () => {
+    const chosen = await chooseLibrary();
+    indexInBackground();
+    return chosen;
+  });
   ipcMain.handle(channels.readFolder, (_, path: string) => requireLibrary().readFolder(path));
   ipcMain.handle(channels.readNote, (_, path: string) => requireLibrary().readNote(path));
   // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
     try {
       await requireLibrary().saveNote(path, text, expected);
+      noteChanged(path);
       return { ok: true };
     } catch (error) {
       const code = error instanceof LibraryError ? error.code : "write-failed";
       return { ok: false, code, message: (error as Error).message };
     }
   });
+  ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {
     if (!openLibraryPending) return;
@@ -134,7 +157,10 @@ function createWindow() {
     ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: { preload: join(__dirname, "../preload/index.js"), sandbox: true, contextIsolation: true },
   });
-  window.once("ready-to-show", () => window?.show());
+  window.once("ready-to-show", () => {
+    window?.show();
+    void launch.then(indexInBackground);
+  });
   closeAllowed = false;
   // The page saves what is still unsaved before the window goes, on close and on quit alike.
   window.on("close", (event) => {
