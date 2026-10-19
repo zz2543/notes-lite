@@ -6,6 +6,7 @@
 
 - [术语表](docs/GLOSSARY.md)
 - [架构决定](docs/adr/)
+- [设计规范](docs/design-system.md)：颜色、材质、尺寸、排版与动效预设的定稿取值。
 - [重写规格](docs/specs/desktop-rewrite-spec.md)；其余[规格](docs/specs/)是本次重写的验收基线。
 
 尚无代码。
