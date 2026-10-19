@@ -1,5 +1,5 @@
 import { chmod, lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, posix, relative as pathFrom, sep } from "node:path";
+import { basename, dirname, join, relative as pathFrom, sep } from "node:path";
 import { LibraryError, writeFailures } from "./library";
 import { linkTargets, replaceTargets, type LinkTarget } from "./references";
 
@@ -18,6 +18,8 @@ export interface Organizer {
   createFolder(parent: string, name: string): Promise<string>;
   /** Renames a note (`name` is its title) or folder; links to it elsewhere follow, all or nothing. */
   rename(path: string, name: string): Promise<Relocation>;
+  /** Moves a note or folder into `folder`, keeping its name; links to and from it follow, all or nothing. */
+  move(path: string, folder: string): Promise<Relocation>;
 }
 
 /** What organizing needs from the library it works in. */
@@ -136,11 +138,11 @@ export function organizer({ root, resolve }: LibraryAccess): Organizer {
     const decoded = decode(link.target);
     const named = link.wiki && !isNoteFile(decoded) ? `${decoded}.md` : decoded;
     const local = await realOrNull(join(dirname(note), named));
-    if (local) return inside(local) ? { real: local, beside: true } : null;
+    if (local) return inside(local) ? { real: local, beside: named } : null;
     const rooted = await realOrNull(join(root, named));
-    if (rooted) return inside(rooted) ? { real: rooted, beside: false } : null;
+    if (rooted) return inside(rooted) ? { real: rooted } : null;
     const matches = link.wiki && !decoded.includes("/") ? titles.get(titleOf(decoded).toLowerCase()) : undefined;
-    return matches?.length === 1 ? { real: matches[0]!, beside: false } : null;
+    return matches?.length === 1 ? { real: matches[0]! } : null;
   };
 
   /** The text of a link that reaches `target` from a note at `note`, written the way `link` was. */
@@ -177,9 +179,9 @@ export function organizer({ root, resolve }: LibraryAccess): Organizer {
           const target = moved(found.real);
           // Links to what stays put only change in a note that moves, and only if written relative to it.
           if (!target && !(to !== note && found.beside)) continue;
-          const replacement = rewritten(link, target ?? found.real, to);
-          const same = link.wiki ? posix.normalize(titleOf(decode(link.target))) === replacement : posix.normalize(decode(link.target)) === decode(replacement);
-          if (!same) replacements.push({ link, target: replacement });
+          // Written relative to the note and still reaching it from where the note ends up: left as written.
+          if (found.beside && join(dirname(to), found.beside) === (target ?? found.real)) continue;
+          replacements.push({ link, target: rewritten(link, target ?? found.real, to) });
         }
         return replacements.length ? { from: note, to, before, after: replaceTargets(text, replacements) } : null;
       }),
@@ -233,5 +235,13 @@ export function organizer({ root, resolve }: LibraryAccess): Organizer {
     return relocate(real, join(dirname(real), fileName), title);
   };
 
-  return { createNote, createFolder, rename: rename_ };
+  const move = async (path: string, folder: string): Promise<Relocation> => {
+    const { real, relative } = await resolve(path);
+    if (!relative) throw notAllowed();
+    const { real: into } = await resolve(folder);
+    if (into === real || into.startsWith(real + sep)) throw new LibraryError("not-allowed", "不能把文件夹移到它自己里面。");
+    return relocate(real, join(into, basename(real)), titleOf(basename(real)));
+  };
+
+  return { createNote, createFolder, rename: rename_, move };
 }

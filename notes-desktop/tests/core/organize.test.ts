@@ -50,3 +50,52 @@ describe("改名", () => {
     });
   });
 });
+
+describe("移动", () => {
+  it("moves a note into a folder, keeping its image and the links to it working", async () => {
+    const root = await library({
+      "附件/示例.png": "png",
+      "图片笔记.md": "# 图片笔记\n![示例.png](附件/示例.png)\n",
+      "入口.md": "见 [[图片笔记]]",
+      "归档/": "",
+    });
+    const lib = await openLibrary(root);
+
+    expect(await lib.move("图片笔记.md", "归档")).toEqual({ path: "归档/图片笔记.md", updated: ["入口.md", "归档/图片笔记.md"] });
+
+    expect(await contents(root)).toEqual({
+      "附件/示例.png": "png",
+      "归档/图片笔记.md": "# 图片笔记\n![示例.png](../附件/示例.png)\n",
+      "入口.md": "见 [[归档/图片笔记]]",
+    });
+  });
+
+  it("moves a folder with its notes, so links into it, out of it and within it all still resolve", async () => {
+    const root = await library({
+      "附件/图.png": "png",
+      "阅读/v1.0.md": "![图](../附件/图.png) [同级](摘记.md#小节) [[摘记]]",
+      "阅读/摘记.md": "# 摘记",
+      "入口.md": "[[阅读/v1.0|版本]] [摘记](阅读/%E6%91%98%E8%AE%B0.md)",
+      "归档/": "",
+    });
+    const lib = await openLibrary(root);
+
+    expect(await lib.move("阅读", "归档")).toEqual({ path: "归档/阅读", updated: ["入口.md", "归档/阅读/v1.0.md"] });
+
+    expect(await contents(root)).toEqual({
+      "附件/图.png": "png",
+      "归档/阅读/v1.0.md": "![图](../../附件/图.png) [同级](摘记.md#小节) [[摘记]]",
+      "归档/阅读/摘记.md": "# 摘记",
+      "入口.md": "[[归档/阅读/v1.0|版本]] [摘记](%E5%BD%92%E6%A1%A3/%E9%98%85%E8%AF%BB/%E6%91%98%E8%AE%B0.md)",
+    });
+  });
+
+  it("refuses to move a folder into itself, and leaves an item already in place alone", async () => {
+    const lib = await openLibrary(await library({ "A/B/笔记.md": "" }));
+
+    await expect(lib.move("A", "A/B")).rejects.toMatchObject({ code: "not-allowed" });
+    await expect(lib.move("A", "A")).rejects.toMatchObject({ code: "not-allowed" });
+    expect(await lib.move("A/B/笔记.md", "A/B")).toEqual({ path: "A/B/笔记.md", updated: [] });
+    await expect(lib.move("", "A")).rejects.toMatchObject({ code: "not-allowed" });
+  });
+});
