@@ -8,12 +8,40 @@
   & .cm-md-mark {
     color: var(--card-muted);
   }
-  & .cm-md-hang {
-    display: inline-block;
-    min-width: var(--hang);
+  /* A box as wide as the room left of the text, ending where the text starts; anything wider spills
+     left rather than pushing the text. */
+  & .cm-md-hang,
+  & .cm-md-marker {
+    display: inline-flex;
+    justify-content: flex-end;
+    width: var(--hang);
     margin-left: calc(-1 * var(--hang));
-    text-align: right;
     white-space: pre;
+  }
+  & .cm-md-marker {
+    padding-right: 0.45em;
+    color: var(--card-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  /* A task's box; ticked, it fills and the item's text recedes. */
+  & .cm-md-marker-task::before {
+    content: "";
+    align-self: center;
+    width: 0.8em;
+    height: 0.8em;
+    border: 1.5px solid var(--card-muted);
+    border-radius: 0.24em;
+  }
+  & .cm-md-marker-task.cm-md-done::before {
+    content: "✓";
+    display: grid;
+    place-items: center;
+    border-color: transparent;
+    background: var(--card-muted);
+    color: var(--card-bg);
+    font-size: 0.8em;
+    font-weight: 700;
+    line-height: 1;
   }
 
   /* Emphasis and inline code */
@@ -74,6 +102,64 @@
     &.cm-md-first {
       padding-top: 0;
     }
+
+    /* Quotes: one bar per level, the text muted beside them. */
+    &.cm-md-quote {
+      --hang: calc(var(--quote-indent) * (var(--depth) + 1));
+      padding: 0 0 var(--para-gap) var(--hang);
+      color: var(--card-muted);
+      background: repeating-linear-gradient(to right, var(--line) 0 var(--quote-bar), transparent var(--quote-bar) var(--quote-indent))
+        left top / var(--hang) 100% no-repeat;
+    }
+    &.cm-md-quote-end {
+      background-size: var(--hang) calc(100% - var(--para-gap));
+    }
+
+    /* Paragraphs, and the blank lines between them, keep 段距 after them, so typing on a blank line
+       does not move the text below it. */
+    &.cm-md-p,
+    &.cm-md-empty,
+    &.cm-md-hr {
+      padding-bottom: var(--para-gap);
+    }
+
+    /* Lists: each level indents one step; the marker hangs in the step before the text. */
+    &.cm-md-list {
+      --hang: var(--list-indent);
+      padding: 0 0 0.12em calc(var(--list-indent) * (var(--depth) + 1));
+    }
+    /* Fenced code (and $$ math, until it is rendered): the code font on its own rounded ground. */
+    &.cm-md-codeblock {
+      padding: 0 var(--code-inset);
+      background: var(--code-bg);
+      font-family: var(--code-font);
+      font-size: var(--code-size);
+      line-height: var(--code-leading);
+    }
+    &.cm-md-codeblock-first {
+      padding-top: 0.5em;
+      border-top-left-radius: var(--code-radius);
+      border-top-right-radius: var(--code-radius);
+    }
+    &.cm-md-codeblock-last {
+      padding-bottom: 0.5em;
+      border-bottom-left-radius: var(--code-radius);
+      border-bottom-right-radius: var(--code-radius);
+    }
+    &.cm-md-fence {
+      color: var(--card-muted);
+    }
+    &.cm-md-frontmatter {
+      color: var(--card-muted);
+      font-family: var(--code-font);
+      font-size: var(--code-size);
+      line-height: var(--code-leading);
+    }
+
+    &.cm-md-task-done {
+      color: var(--card-muted);
+      text-decoration: line-through;
+    }
     /* "## " in the code font, no bigger than body text however large the heading. */
     &.cm-md-heading > .cm-md-hang {
       font-family: var(--code-font);
@@ -81,5 +167,30 @@
       font-weight: normal;
       letter-spacing: 0;
     }
+  }
+
+  & .cm-code-keyword {
+    color: var(--code-keyword);
+  }
+  & .cm-code-string {
+    color: var(--code-string);
+  }
+  & .cm-code-comment {
+    color: var(--code-comment);
+  }
+  & .cm-code-number {
+    color: var(--code-number);
+  }
+  & .cm-code-type {
+    color: var(--code-type);
+  }
+  & .cm-code-literal {
+    color: var(--code-literal);
+  }
+  & .cm-code-tag {
+    color: var(--code-tag);
+  }
+  & .cm-code-attribute {
+    color: var(--code-attribute);
   }
 }
