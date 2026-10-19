@@ -35,6 +35,13 @@ const api: NotesApi = {
   restoreLastDeleted: () => ipcRenderer.invoke(channels.restoreLastDeleted),
   listFolders: () => ipcRenderer.invoke(channels.listFolders),
   search: (query, options) => ipcRenderer.invoke(channels.search, query, options),
+  onLibraryChanged: (listener) => {
+    const handler = (_: unknown, paths: string[]) => listener(paths);
+    ipcRenderer.on(channels.libraryChanged, handler);
+    return () => ipcRenderer.off(channels.libraryChanged, handler);
+  },
+  saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
+  confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

@@ -5,13 +5,24 @@ import {
   createSearchIndex,
   LibraryError,
   openLibrary,
+  watchLibrary,
   type Library,
+  type LibraryWatcher,
   type OrganizeOptions,
   type Relocation,
   type SearchIndex,
   type SearchOptions,
 } from "../core";
-import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type Organized, type SaveResult } from "../shared/api";
+import {
+  channels,
+  type CloseCheck,
+  type Confirmation,
+  type CopyResult,
+  type LaunchState,
+  type LibraryInfo,
+  type Organized,
+  type SaveResult,
+} from "../shared/api";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -36,11 +47,29 @@ const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: base
 // Deleting goes to the system trash. Looked up on each call, so tests can stand in for the trash.
 const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path) };
 
+let watcher: LibraryWatcher | null = null;
+
+/** Passes every change in the open library, made here or by another program, on to the page. */
+function watch(lib: Library) {
+  watcher?.close();
+  try {
+    watcher = watchLibrary(lib.root, (paths) => {
+      // Search finds notes as they are now, whoever changed them.
+      for (const path of paths) if (!path.split("/").some((part) => part.startsWith("."))) noteChanged(path);
+      if (window && !window.isDestroyed()) window.webContents.send(channels.libraryChanged, paths);
+    });
+  } catch {
+    // A folder the system will not watch still opens; it just won't follow changes made elsewhere.
+    watcher = null;
+  }
+}
+
 // Starts while the window loads, so the remembered library is ready by the time the page asks.
 const launch: Promise<LaunchState> = (async () => {
   const { libraryPath } = await settings.read();
   if (!libraryPath) return { kind: "welcome" };
   library = await openLibrary(libraryPath, libraryOptions).catch(() => null);
+  if (library) watch(library);
   return library ? { kind: "open", library: libraryInfo(library) } : { kind: "welcome", missing: libraryPath };
 })();
 
@@ -54,6 +83,7 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   const path = picked.filePaths[0];
   if (picked.canceled || !path) return null;
   library = await openLibrary(path, libraryOptions);
+  watch(library);
   await settings.update({ libraryPath: path });
   return libraryInfo(library);
 }
@@ -129,6 +159,19 @@ function registerIpc() {
     return touched(path, path);
   });
   ipcMain.handle(channels.listFolders, () => requireLibrary().listFolders());
+  ipcMain.handle(channels.saveCopy, async (_, path: string, text: string): Promise<CopyResult> => {
+    try {
+      return { ok: true, path: await requireLibrary().saveCopy(path, text) };
+    } catch (error) {
+      const code = error instanceof LibraryError ? error.code : "write-failed";
+      return { ok: false, code, message: (error as Error).message };
+    }
+  });
+  ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
+    const options = { type: "warning" as const, message, detail, buttons: ["取消", action], defaultId: 0, cancelId: 0 };
+    const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
+    return response === 1;
+  });
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {

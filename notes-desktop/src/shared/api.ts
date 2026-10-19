@@ -15,6 +15,9 @@ export type LaunchState =
 
 export type SaveResult = { ok: true } | { ok: false; code: LibraryErrorCode; message: string };
 
+/** A copy saved, with the new note's path, or why not. */
+export type CopyResult = { ok: true; path: string } | { ok: false; code: LibraryErrorCode; message: string };
+
 /** The page's answer when the window is about to close: everything saved, or why not. */
 export type CloseCheck = { saved: true } | { saved: false; message: string };
 
@@ -44,6 +47,22 @@ export interface NotesApi {
   listFolders(): Promise<string[]>;
   /** Titles and bodies of the open library; waits for the index the first time. */
   search(query: string, options: SearchOptions): Promise<SearchResults>;
+  /**
+   * Something in the open library changed, by this app or any other program: library-relative
+   * paths, hidden ones included; "" when anything may have changed.
+   */
+  onLibraryChanged(listener: (paths: string[]) => void): () => void;
+  /** Writes `text` as a new note “<title> 副本” beside the note at `path`, which is left alone. */
+  saveCopy(path: string, text: string): Promise<CopyResult>;
+  /** Asks before something the user cannot take back; true when they go ahead. */
+  confirm(question: Confirmation): Promise<boolean>;
+}
+
+export interface Confirmation {
+  message: string;
+  detail: string;
+  /** The button that goes ahead; the other one cancels. */
+  action: string;
 }
 
 /** The outcome of creating, renaming, moving, deleting or restoring. */
@@ -68,4 +87,7 @@ export const channels = {
   restoreLastDeleted: "library:restore-last-deleted",
   listFolders: "library:list-folders",
   search: "library:search",
+  libraryChanged: "library:changed",
+  saveCopy: "library:save-copy",
+  confirm: "window:confirm",
 } as const;

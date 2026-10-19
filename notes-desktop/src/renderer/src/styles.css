@@ -381,6 +381,37 @@ button {
   flex: none;
 }
 
+/* 保存冲突: a strip under the card head; the editor below stays usable. */
+.conflict {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--card-gap);
+  padding: var(--item-padding);
+  padding-inline: calc(var(--row-padding) * 2);
+  background: var(--hover);
+  border-block: 1px solid var(--line);
+  color: var(--card-fg);
+  font-size: var(--text-path);
+}
+.conflict-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.5;
+}
+.conflict-actions {
+  flex: none;
+  display: flex;
+  gap: var(--inline-gap);
+}
+.conflict-actions button {
+  padding: 0;
+  font-size: var(--text-meta);
+  font-weight: var(--weight-item);
+  text-decoration: underline;
+}
+
 .toast {
   position: fixed;
   left: 50%;

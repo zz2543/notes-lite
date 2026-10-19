@@ -3,21 +3,29 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
+import { ConflictNotice } from "./ConflictNotice";
 import { useNoteSource } from "./ipc";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
+
+interface Choices {
+  /** The input was saved as a new note at `path`: open it in place of this one. */
+  onOpenCopy(path: string): void;
+  /** The note can no longer be shown and nothing unsaved holds it: close it, saying why. */
+  onLetGo(reason: string): void;
+}
 
 /**
  * The open note on its card: Markdown source edited in place, saved as it is typed. A `fresh` note
  * (just created) opens with the caret after its title, ready to type.
  */
-export function NoteEditor({ path, fresh = false }: { path: string | null; fresh?: boolean }) {
+export function NoteEditor({ path, fresh = false, ...choices }: { path: string | null; fresh?: boolean } & Choices) {
   const { value: source, error } = useNoteSource(path);
   return (
     <article className="card">
       <header className="card-head">{path?.split("/").join(" / ")}</header>
       {!path && <p className="empty">选择一篇笔记</p>}
       {error && <p className="empty">{error}</p>}
-      {path && source !== undefined && <Editor key={path} path={path} source={source} fresh={fresh} />}
+      {path && source !== undefined && <Editor key={path} path={path} source={source} fresh={fresh} {...choices} />}
     </article>
   );
 }
@@ -28,18 +36,18 @@ const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\
 
 const wordCountDelay = 150;
 
-function Editor({ path, source, fresh }: { path: string; source: string; fresh: boolean }) {
+function Editor({ path, source, fresh, onOpenCopy, onLetGo }: { path: string; source: string; fresh: boolean } & Choices) {
   const host = useRef<HTMLDivElement>(null);
+  const editor = useRef<EditorView>(null);
   const [draft, setDraft] = useState<NoteDraft>();
   const [words, setWords] = useState(() => countWords(source));
 
   useEffect(() => {
     let countTimer: ReturnType<typeof setTimeout> | undefined;
-    const separator = lineSeparatorOf(source);
-    const view: EditorView = new EditorView({
-      parent: host.current!,
-      state: EditorState.create({
-        doc: source,
+    const stateFor = (doc: string) => {
+      const separator = lineSeparatorOf(doc);
+      return EditorState.create({
+        doc,
         extensions: [
           EditorState.lineSeparator.of(separator),
           // Pasted or dropped text takes the note's own line breaks, or a CRLF note would hide "\n"s inside lines.
@@ -56,10 +64,22 @@ function Editor({ path, source, fresh }: { path: string; source: string; fresh: 
             countTimer = setTimeout(() => setWords(countWords(update.state.doc.toString())), wordCountDelay);
           }),
         ],
-      }),
-    });
+      });
+    };
+    const view: EditorView = new EditorView({ parent: host.current!, state: stateFor(source) });
+    editor.current = view;
+    // The version on disk starts afresh, with its own undo history, the caret and scroll kept in place.
+    const showDisk = (text: string) => {
+      const { scrollTop } = view.scrollDOM;
+      const head = view.state.selection.main.head;
+      const next = stateFor(text);
+      view.setState(next.update({ selection: { anchor: Math.min(head, next.doc.length) } }).state);
+      view.scrollDOM.scrollTop = scrollTop;
+      clearTimeout(countTimer);
+      setWords(countWords(text));
+    };
     // sliceDoc joins lines with the note's own separator; doc.toString() would always use "\n".
-    const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }));
+    const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }), showDisk);
     setOpenDraft(draft);
     setDraft(draft);
     if (fresh) view.dispatch({ selection: { anchor: view.state.doc.length } });
@@ -75,6 +95,7 @@ function Editor({ path, source, fresh }: { path: string; source: string; fresh: 
 
   return (
     <>
+      {draft && <ConflictNotice draft={draft} onKeep={() => editor.current?.focus()} onOpenCopy={onOpenCopy} onLetGo={onLetGo} />}
       <div className="editor" ref={host} />
       <footer className="card-foot">
         {draft && <SaveState draft={draft} />}
@@ -101,8 +122,8 @@ function SaveState({ draft }: { draft: NoteDraft }) {
       <span className="save-text" title={problem ? draft.message : undefined}>
         {problem ? `${labels[status]}：${draft.message}` : labels[status]}
       </span>
-      {/* A conflict can't be retried away; resolving it (reload or save a copy) comes with external changes. */}
-      {status === "failed" && (
+      {/* Retrying a conflict succeeds once the disk is back to the version the input started from. */}
+      {problem && (
         <button className="retry" onClick={() => void draft.flush()}>
           重试
         </button>
