@@ -1,4 +1,6 @@
-import { chmod, lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, relative as pathFrom, sep } from "node:path";
 import { LibraryError, writeFailures } from "./library";
 import { linkTargets, replaceTargets, type LinkTarget } from "./references";
@@ -20,10 +22,19 @@ export interface Organizer {
   rename(path: string, name: string): Promise<Relocation>;
   /** Moves a note or folder into `folder`, keeping its name; links to and from it follow, all or nothing. */
   move(path: string, folder: string): Promise<Relocation>;
+  /** Moves a note or folder to the system trash; the last one can be restored while the library stays open. */
+  trash(path: string): Promise<void>;
+  /** Puts the last item moved to the trash back where it was; returns its path. */
+  restoreLastDeleted(): Promise<string>;
+}
+
+export interface OrganizeOptions {
+  /** Moves a file or folder, by real location, to the system trash. The app passes Electron's `shell.trashItem`. */
+  trash?(path: string): Promise<void>;
 }
 
 /** What organizing needs from the library it works in. */
-export interface LibraryAccess {
+export interface LibraryAccess extends OrganizeOptions {
   /** The library folder's real location. */
   root: string;
   /** A library-relative path checked to exist inside the library, and its real location. */
@@ -89,6 +100,21 @@ const breaksLink = /[%\s()[\]#?<>]/g;
 const outsidePath = /[^A-Za-z0-9\-._~!$&'*+,;=:@/]/gu;
 const percentEncode = (char: string) => [...new TextEncoder().encode(char)].map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`).join("");
 
+// Copies keep times (so a restored note sorts where it did), links as written, and share storage
+// with the original where the disk can clone.
+const copying = { recursive: true, preserveTimestamps: true, verbatimSymlinks: true, errorOnExist: true, force: false, mode: constants.COPYFILE_FICLONE };
+
+/** Moves `from` to `to`, copying when they are on different disks. */
+async function moveAcross(from: string, to: string) {
+  try {
+    await rename(from, to);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+    await cp(from, to, copying);
+    await rm(from, { recursive: true, force: true });
+  }
+}
+
 /** One note whose links change when an item moves. */
 interface Change {
   /** The note's real location before and after the move. */
@@ -98,7 +124,7 @@ interface Change {
   after: string;
 }
 
-export function organizer({ root, resolve }: LibraryAccess): Organizer {
+export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess): Organizer {
   const relativeOf = (real: string) => pathFrom(root, real).split(sep).join("/");
   const inside = (real: string) => real.startsWith(root + sep);
   const realOrNull = (path: string) => realpath(path).catch(() => null);
@@ -186,7 +212,8 @@ export function organizer({ root, resolve }: LibraryAccess): Organizer {
         return replacements.length ? { from: note, to, before, after: replaceTargets(text, replacements) } : null;
       }),
     );
-    return changes.filter((change) => change !== null);
+    // In a fixed order, so a failure part way is undone the same way everywhere.
+    return changes.filter((change) => change !== null).sort((a, b) => (a.from < b.from ? -1 : 1));
   };
 
   /** Moves `source` to `destination` and rewrites the links that point at it, undoing everything on failure. */
@@ -243,5 +270,53 @@ export function organizer({ root, resolve }: LibraryAccess): Organizer {
     return relocate(real, join(into, basename(real)), titleOf(basename(real)));
   };
 
-  return { createNote, createFolder, rename: rename_, move };
+  // The system trash can't be asked for an item back the same way on every platform, so what gets
+  // restored is a copy taken just before the item went to the trash. The trash keeps its own.
+  let lastDeleted: { path: string; copy: string } | null = null;
+  const forget = async (deleted: typeof lastDeleted) => {
+    if (deleted) await rm(dirname(deleted.copy), { recursive: true, force: true });
+  };
+
+  const trash = async (path: string) => {
+    const { real, relative } = await resolve(path);
+    if (!relative) throw notAllowed();
+    const keep = await mkdtemp(join(tmpdir(), "notes-desktop-deleted-"));
+    const copy = join(keep, basename(real));
+    try {
+      if (!sendToTrash) throw new Error("没有可用的废纸篓");
+      await cp(real, copy, copying);
+      await sendToTrash(real);
+    } catch (error) {
+      await rm(keep, { recursive: true, force: true });
+      throw new LibraryError("write-failed", `无法移到废纸篓：${reasonOf(error)}。`);
+    }
+    const previous = lastDeleted;
+    lastDeleted = { path: relative, copy };
+    await forget(previous);
+  };
+
+  const restoreLastDeleted = async () => {
+    if (!lastDeleted) throw new LibraryError("nothing-to-restore", "没有可以恢复的删除。");
+    const { path, copy } = lastDeleted;
+    const parts = path.split("/");
+    const name = parts.pop()!;
+    try {
+      // Its folder may have gone since; then that comes back too.
+      await mkdir(join(root, ...parts), { recursive: true });
+      const { real: folder } = await resolve(parts.join("/"));
+      const destination = join(folder, name);
+      if (await lstat(destination).catch(() => null)) {
+        throw new LibraryError("exists", `已经存在“${titleOf(name)}”，请先把它改名或移走，再恢复。`);
+      }
+      await moveAcross(copy, destination);
+    } catch (error) {
+      if (error instanceof LibraryError) throw error;
+      throw new LibraryError("write-failed", `无法恢复“${titleOf(name)}”：${reasonOf(error)}。`);
+    }
+    await forget(lastDeleted);
+    lastDeleted = null;
+    return path;
+  };
+
+  return { createNote, createFolder, rename: rename_, move, trash, restoreLastDeleted };
 }

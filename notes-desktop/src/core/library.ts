@@ -1,6 +1,6 @@
 import { chmod, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, sep } from "node:path";
-import { organizer, type Organizer } from "./organize";
+import { organizer, type OrganizeOptions, type Organizer } from "./organize";
 
 export type LibraryErrorCode =
   | "not-a-folder"
@@ -72,7 +72,7 @@ const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
 
-export async function openLibrary(root: string): Promise<Library> {
+export async function openLibrary(root: string, options: OrganizeOptions = {}): Promise<Library> {
   const notFolder = new LibraryError("not-a-folder", `找不到笔记库文件夹：${root}`);
   const realRoot = await realpath(root).catch(() => {
     throw notFolder;
@@ -145,5 +145,5 @@ export async function openLibrary(root: string): Promise<Library> {
       throw new LibraryError("write-failed", `无法保存“${basename(real, ".md")}”：${reason}。`);
     }
   };
-  return { root, readFolder, readNote, saveNote, ...organizer({ root: realRoot, resolve }) };
+  return { root, readFolder, readNote, saveNote, ...organizer({ ...options, root: realRoot, resolve }) };
 }
