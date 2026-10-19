@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -42,7 +42,8 @@ function Editor({ path, source }: { path: string; source: string }) {
           // Pasted or dropped text takes the note's own line breaks, or a CRLF note would hide "\n"s inside lines.
           EditorView.clipboardInputFilter.of((text) => (separator === "\r\n" ? text.replace(/\r?\n/g, "\r\n") : text)),
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          // Redo answers to ⌘⇧Z / Ctrl+Shift+Z everywhere, and to Ctrl+Y on Windows as usual.
+          keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {

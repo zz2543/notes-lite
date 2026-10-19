@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 const appDir = join(__dirname, "../..");
+// Apps a test launched; any still running when it ends are closed before its scratch folder goes,
+// since Windows will not delete files an app holds open.
+const running = new Set<ElectronApplication>();
 
 /** Each test gets a scratch folder for its libraries and the app's settings. */
 export const test = base.extend<{ scratch: string }>({
@@ -11,7 +14,9 @@ export const test = base.extend<{ scratch: string }>({
   scratch: async ({}, use) => {
     const dir = await mkdtemp(join(tmpdir(), "notes-desktop-e2e-"));
     await use(dir);
-    await rm(dir, { recursive: true, force: true });
+    await Promise.all([...running].map((app) => app.close().catch(() => {})));
+    running.clear();
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   },
 });
 
@@ -29,6 +34,8 @@ export async function library(scratch: string, name: string, files: Record<strin
 /** Launches the built app with its settings kept in the scratch folder. */
 export async function launch(scratch: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({ args: [appDir], env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile") } });
+  running.add(app);
+  app.on("close", () => running.delete(app));
   return { app, page: await app.firstWindow() };
 }
 
