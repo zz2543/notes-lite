@@ -1,8 +1,9 @@
-import { mkdtemp, mkdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { openLibrary } from "../../src/core";
+import { refuseWrites } from "../support/disk";
 
 const made: string[] = [];
 
@@ -118,5 +119,45 @@ describe("打开笔记库", () => {
 
     await expect(openLibrary(join(root, "不存在"))).rejects.toMatchObject({ code: "not-a-folder" });
     await expect(openLibrary(join(root, "读书.md"))).rejects.toMatchObject({ code: "not-a-folder" });
+  });
+});
+
+describe("保存笔记", () => {
+  it("writes the note exactly as typed", async () => {
+    const before = "# 散步\r\n\r\n雨后\r\n";
+    const typed = "# 散步\r\n\r\n雨后，青苔  \r\n- 小路\t\r\n";
+    const root = await library({ "日记/散步.md": before });
+    const lib = await openLibrary(root);
+
+    await lib.saveNote("日记/散步.md", typed, before);
+
+    expect(await readFile(join(root, "日记/散步.md"), "utf8")).toBe(typed);
+  });
+
+  it("refuses to overwrite a note that changed on disk since it was read", async () => {
+    const root = await library({ "读书.md": "# 读书\n" });
+    const lib = await openLibrary(root);
+    await writeFile(join(root, "读书.md"), "# 读书\n\n同步工具写入的一段\n");
+
+    await expect(lib.saveNote("读书.md", "# 读书\n\n我的输入\n", "# 读书\n")).rejects.toMatchObject({ code: "conflict" });
+    expect(await readFile(join(root, "读书.md"), "utf8")).toBe("# 读书\n\n同步工具写入的一段\n");
+  });
+
+  it("leaves the note untouched when the disk refuses the write, and saves on retry", async () => {
+    const root = await library({ "日记/散步.md": "# 散步\n" });
+    const note = join(root, "日记/散步.md");
+    const lib = await openLibrary(root);
+
+    await refuseWrites(note, true);
+    await expect(lib.saveNote("日记/散步.md", "# 散步\n\n雨后\n", "# 散步\n")).rejects.toMatchObject({
+      code: "write-failed",
+      message: "无法保存“散步”：没有写入权限。",
+    });
+    await refuseWrites(note, false);
+
+    expect(await readFile(note, "utf8")).toBe("# 散步\n");
+    expect(await readdir(join(root, "日记"))).toEqual(["散步.md"]);
+    await lib.saveNote("日记/散步.md", "# 散步\n\n雨后\n", "# 散步\n");
+    expect(await readFile(note, "utf8")).toBe("# 散步\n\n雨后\n");
   });
 });

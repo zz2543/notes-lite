@@ -1,7 +1,7 @@
-import { readFile, readdir, realpath, stat } from "node:fs/promises";
-import { isAbsolute, join, sep } from "node:path";
+import { readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, sep } from "node:path";
 
-export type LibraryErrorCode = "not-a-folder" | "outside-library";
+export type LibraryErrorCode = "not-a-folder" | "outside-library" | "conflict" | "write-failed";
 
 export class LibraryError extends Error {
   constructor(
@@ -39,7 +39,22 @@ export interface Library {
   readFolder(path?: string): Promise<FolderContents>;
   /** The note's Markdown source, verbatim. */
   readNote(path: string): Promise<string>;
+  /**
+   * Writes `text` exactly. `expected` is the source the caller last read or saved; if the file on
+   * disk no longer matches it, nothing is written.
+   */
+  saveNote(path: string, text: string, expected: string): Promise<void>;
 }
+
+/** Why the disk refused a write, in the words shown to the user. */
+const writeFailures: Record<string, string> = {
+  EACCES: "没有写入权限",
+  EPERM: "没有写入权限",
+  EROFS: "所在磁盘是只读的",
+  ENOSPC: "磁盘空间不足",
+  ENOENT: "找不到这篇笔记或它所在的文件夹",
+  EBUSY: "文件正被其他程序占用",
+};
 
 const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
 
@@ -88,5 +103,22 @@ export async function openLibrary(root: string): Promise<Library> {
     return { folders, notes };
   };
   const readNote = async (path: string) => readFile((await resolve(path)).real, "utf8");
-  return { root, readFolder, readNote };
+  const saveNote = async (path: string, text: string, expected: string) => {
+    const { real } = await resolve(path);
+    // Write beside the note and swap it in, so a failed write never leaves half a note behind.
+    const temp = join(dirname(real), `.${basename(real)}.${process.pid}.saving`);
+    try {
+      if ((await readFile(real, "utf8")) !== expected) {
+        throw new LibraryError("conflict", "文件已被外部修改。你的输入仍保留，请选择重新载入或另存副本。");
+      }
+      await writeFile(temp, text, "utf8");
+      await rename(temp, real);
+    } catch (error) {
+      await rm(temp, { force: true });
+      if (error instanceof LibraryError) throw error;
+      const reason = writeFailures[(error as NodeJS.ErrnoException).code ?? ""] ?? (error as Error).message;
+      throw new LibraryError("write-failed", `无法保存“${basename(real, ".md")}”：${reason}。`);
+    }
+  };
+  return { root, readFolder, readNote, saveNote };
 }
