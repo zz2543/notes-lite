@@ -1,0 +1,55 @@
+name: notes-desktop
+
+on:
+  push:
+    paths: ["notes-desktop/**", ".github/workflows/notes-desktop.yml"]
+  pull_request:
+    paths: ["notes-desktop/**", ".github/workflows/notes-desktop.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: notes-desktop
+    env:
+      # The lockfile was resolved against a mirror; fetch everything from the runner's registry instead.
+      npm_config_replace_registry_host: always
+      # Installers stay unsigned for now.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: notes-desktop/package-lock.json
+      - run: npm ci
+      - name: Download Electron
+        run: node node_modules/electron/install.js
+      - run: npm run typecheck
+      - name: Core library (seam A)
+        run: npm test
+      - name: Running app (seam B)
+        run: npm run test:e2e
+      - name: Package
+        run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes-desktop-${{ runner.os }}
+          path: |
+            notes-desktop/dist/*.dmg
+            notes-desktop/dist/*.exe
+          if-no-files-found: error
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ runner.os }}
+          path: notes-desktop/test-results
+          if-no-files-found: ignore
