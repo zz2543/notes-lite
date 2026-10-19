@@ -1,2 +1,2 @@
 export * from "./library";
-export * from "./text";
+export * from "./markdown";

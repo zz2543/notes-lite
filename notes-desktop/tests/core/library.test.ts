@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -95,6 +95,16 @@ describe("笔记原文", () => {
 
     expect(await lib.readNote("日记/散步.md")).toBe(source);
   });
+
+  it("refuses to open a note that is not UTF-8, so a save can never mangle it", async () => {
+    const root = await library({});
+    await writeFile(join(root, "旧文.md"), Buffer.from([0xd3, 0xea, 0xba, 0xf3])); // "雨后" in GBK
+    const lib = await openLibrary(root);
+
+    await expect(lib.readNote("旧文.md")).rejects.toMatchObject({ code: "not-utf8" });
+    await expect(lib.saveNote("旧文.md", "雨后", "\ufffd\ufffd")).rejects.toMatchObject({ code: "conflict" });
+    expect(await readFile(join(root, "旧文.md"))).toEqual(Buffer.from([0xd3, 0xea, 0xba, 0xf3]));
+  });
 });
 
 describe("库内路径", () => {
@@ -132,6 +142,16 @@ describe("保存笔记", () => {
     await lib.saveNote("日记/散步.md", typed, before);
 
     expect(await readFile(join(root, "日记/散步.md"), "utf8")).toBe(typed);
+  });
+
+  it.skipIf(process.platform === "win32")("keeps the note's permissions", async () => {
+    const root = await library({ "私密.md": "# 私密\n" });
+    await chmod(join(root, "私密.md"), 0o600);
+    const lib = await openLibrary(root);
+
+    await lib.saveNote("私密.md", "# 私密\n\n只有我能读\n", "# 私密\n");
+
+    expect((await stat(join(root, "私密.md"))).mode & 0o777).toBe(0o600);
   });
 
   it("refuses to overwrite a note that changed on disk since it was read", async () => {

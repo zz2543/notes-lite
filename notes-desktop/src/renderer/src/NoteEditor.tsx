@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { countWords } from "../../core/text";
+import { countWords } from "../../core/markdown";
 import { useNoteSource } from "./ipc";
 import { NoteSession, setActiveSession, type SaveStatus } from "./noteSession";
 
