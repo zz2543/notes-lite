@@ -56,6 +56,29 @@ test("appearance can be fixed to light or dark; it is kept with the app, not in 
   expect(await readdir(root, { recursive: true })).toEqual(before);
 });
 
+/** The spring CSS transitions use for 浮现, as `<duration> linear(…)`. */
+const emergeSpring = (page: Page) => page.evaluate(() => document.documentElement.style.getPropertyValue("--spring-emerge"));
+
+test("motion intensity is 强 by default and 轻 or 标准 calm every spring at once", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "一.md": "一" });
+  const first = await launchWith(scratch, root);
+  const strong = await emergeSpring(first.page);
+  const intensity = (await openSettings(first.page, "动画")).getByRole("radiogroup", { name: "动效强度" });
+  await expect(intensity.getByRole("radio")).toHaveText(["轻", "标准", "强"]);
+  await expect(intensity.getByRole("radio", { name: "强" })).toHaveAttribute("aria-checked", "true");
+
+  await intensity.getByRole("radio", { name: "轻" }).click();
+  await expect.poll(() => emergeSpring(first.page)).not.toBe(strong);
+  const light = await emergeSpring(first.page);
+  // 浮现 at 轻 settles sooner: 0.36s against 0.55s.
+  expect(parseFloat(light)).toBeLessThan(parseFloat(strong));
+  await first.app.close();
+
+  const again = await launch(scratch);
+  await expect.poll(() => emergeSpring(again.page)).toBe(light);
+  await again.app.close();
+});
+
 /** The colour the page uses as its accent (the caret, switches, primary buttons), as rgb(…). */
 const accent = (page: Page) =>
   page.evaluate(() => {

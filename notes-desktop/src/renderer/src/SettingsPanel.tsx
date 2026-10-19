@@ -1,6 +1,6 @@
 import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import type { AccentChoice, ColorScheme } from "../../shared/preferences";
+import type { AccentChoice, ColorScheme, MotionIntensity } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { Segmented, Swatches, type Choice, type Swatch } from "./controls";
 import { usePreferences } from "./preferences";
@@ -21,7 +21,7 @@ interface SettingsPage {
 const pages: SettingsPage[] = [
   { id: "general", label: "通用", icon: FadersHorizontal, content: () => <GeneralPage /> },
   { id: "list", label: "笔记列表", icon: ListBullets, content: () => null },
-  { id: "motion", label: "动画", icon: Sparkle, content: () => null },
+  { id: "motion", label: "动画", icon: Sparkle, content: () => <MotionPage /> },
 ];
 
 export function SettingsGroup({ title, description, children }: { title: string; description: string; children: ReactNode }) {
@@ -72,6 +72,24 @@ function GeneralPage() {
       </SettingRow>
       <SettingRow label="强调色">
         <Swatches label="强调色" choices={accents} value={preferences.accent} onChange={(accent) => change({ accent })} />
+      </SettingRow>
+    </SettingsGroup>
+  );
+}
+
+const intensities: Choice<MotionIntensity>[] = [
+  { value: "light", label: "轻" },
+  { value: "standard", label: "标准" },
+  { value: "strong", label: "强" },
+];
+
+/** 动画. The 光标动画 and 输入动画 switches (tickets 10 and 11) join this page as their own group. */
+function MotionPage() {
+  const { preferences, change } = usePreferences();
+  return (
+    <SettingsGroup title="动效强度" description="“强”最生动；“轻”让面板、菜单和展开更快落定。系统开启“减弱动态效果”时，动效一律降为淡入淡出。">
+      <SettingRow label="强度">
+        <Segmented label="动效强度" choices={intensities} value={preferences.motion} onChange={(motion) => change({ motion })} />
       </SettingRow>
     </SettingsGroup>
   );
