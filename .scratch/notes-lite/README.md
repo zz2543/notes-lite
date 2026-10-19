@@ -4,6 +4,8 @@
 
 规格来源：[独立笔记软件规格](../../design/notes-lite/spec.md)。术语和架构决定以同一设计上下文为准。
 
+2026-10-19 增量：15–18 来自用户录屏反馈，规格见 [退出列表与空行插入光标规格](../../design/notes-lite/list-exit-caret-spec.md)；16 依赖 15，其余可直接开始。
+
 ## 执行约定
 
 每项任务完成其端到端验收后才算完成。`ready-for-agent` 表示任务描述可供执行，不表示阻塞依赖已完成；有未完成阻塞项的任务不可开始。
@@ -30,6 +32,10 @@
 | [12：连贯动效：面板与专注转场](issues/12-fluid-transitions.md) | 10、11 |
 | [13：保存异常与外部修改：保护未保存内容](issues/13-save-and-conflicts.md) | 01 |
 | [14：完整交付验收与原型归档](issues/14-verify-and-deliver.md) | 05、06、09、12、13 |
+| [15：列表与段落之间的空行压矮显示](issues/15-collapse-list-paragraph-gap.md) | 无 |
+| [16：最外层空项退出列表不换行](issues/16-list-exit-without-newline.md) | 15 |
+| [17：嵌套空列表项逐级退出](issues/17-nested-list-outdent.md) | 无 |
+| [18：空行插入光标对齐](issues/18-empty-line-caret.md) | 无 |
 
 ## 问题跟踪配置
 
