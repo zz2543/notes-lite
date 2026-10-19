@@ -29,4 +29,6 @@ Electron 本体在第一次运行时下载；国内网络可先设置 `ELECTRON_
 - `src/preload`、`src/shared`：进程间接口（`window.notes`）及其类型。
 - `src/renderer`：界面（React）。界面用到的库都打进渲染进程的包里，因此放在 `devDependencies`，安装包不再附带它们。
 
+安装包不签名：macOS 版只有 ad-hoc 签名，第一次打开需在 Finder 中右键选“打开”，或在“系统设置 › 隐私与安全性”中允许；Windows 版安装时 SmartScreen 会提示，选“仍要运行”。
+
 测试用 `NOTES_DESKTOP_USER_DATA` 环境变量把应用设置放到临时目录，与日常使用的设置隔开。

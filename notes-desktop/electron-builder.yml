@@ -1,6 +1,6 @@
-# Unsigned installers for the first releases: no signing, notarization or auto-update yet.
+# First releases are unsigned: no certificate, notarization or auto-update. The product name comes
+# from package.json.
 appId: dev.notes-desktop.app
-productName: notes-desktop
 directories:
   output: dist
 files:
@@ -9,7 +9,10 @@ files:
 mac:
   target: dmg
   category: public.app-category.productivity
-  identity: null
+  # Ad-hoc signature: needs no certificate, but keeps the bundle's seal intact so a downloaded copy
+  # opens as an unidentified developer's app instead of a "damaged" one on Apple Silicon.
+  identity: "-"
+  hardenedRuntime: false
 win:
   target: nsis
 nsis:
