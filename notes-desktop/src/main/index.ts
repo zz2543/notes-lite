@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, systemPreferences } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { release } from "node:os";
 import { basename, join } from "node:path";
@@ -25,7 +25,18 @@ let quitting = false;
 let openLibraryPending = false;
 const closeCheckTimeout = 5000;
 // Windows keeps its system frame (and so the fallback colour) until the app draws its own title bar there.
-const appearance: Appearance = { material: windowMaterial({ platform: process.platform, release: release(), frameless: false }) };
+const material = windowMaterial({ platform: process.platform, release: release(), frameless: false });
+
+/** The look the page needs before its first frame; the accent is read again for each new window. */
+function systemAppearance(): Appearance {
+  let accent: string | null = null;
+  if (mac || process.platform === "win32") {
+    // RGBA hex; the design system's blue stands in when the system does not say.
+    const rgba = systemPreferences.getAccentColor();
+    if (/^[0-9a-f]{6}/i.test(rgba)) accent = `#${rgba.slice(0, 6)}`;
+  }
+  return { material, accent };
+}
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -134,13 +145,13 @@ function createWindow() {
     minHeight: 480,
     // Shown once the first frame is ready, over the window's own material or color: no white flash.
     show: false,
-    ...materialWindowOptions(appearance.material, nativeTheme.shouldUseDarkColors),
+    ...materialWindowOptions(material, nativeTheme.shouldUseDarkColors),
     ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,
       contextIsolation: true,
-      additionalArguments: appearanceArguments(appearance),
+      additionalArguments: appearanceArguments(systemAppearance()),
     },
   });
   window.once("ready-to-show", () => window?.show());

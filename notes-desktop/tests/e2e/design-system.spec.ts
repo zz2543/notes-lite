@@ -6,14 +6,14 @@ const windowColor = (page: Page) => page.evaluate(() => getComputedStyle(documen
 /** What the page computes for `property: value`, so a variable and a literal compare as the browser sees them. */
 const computed = (page: Page, property: string, value: string) =>
   page.evaluate(
-    ([property, value]) => {
+    ({ property, value }) => {
       const probe = document.body.appendChild(document.createElement("div"));
       probe.style.setProperty(property, value);
       const result = getComputedStyle(probe).getPropertyValue(property);
       probe.remove();
       return result;
     },
-    [property, value],
+    { property, value },
   );
 
 // The design system's tables (docs/design-system.md), copied as written: [variable, light, dark].
@@ -85,6 +85,18 @@ const sizes: [string, string][] = [
   ["--settings-radius", "20px"],
   ["--settings-nav-width", "190px"],
 ];
+
+test("the accent follows the system accent colour", async ({ scratch }) => {
+  const { app, page } = await launch(scratch);
+  const choose = page.getByRole("button", { name: "选择笔记库…" });
+  await expect(choose).toBeVisible();
+  // RGBA hex, as the system reports it.
+  const system = await app.evaluate(({ systemPreferences }) => systemPreferences.getAccentColor());
+  const accent = await computed(page, "color", `#${system.slice(0, 6)}`);
+  expect(await computed(page, "color", "var(--accent)")).toBe(accent);
+  await expect(choose).toHaveCSS("background-color", accent);
+  await app.close();
+});
 
 test("design-system values resolve as variables, with a separate set for dark", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "散步.md": "# 散步" });
