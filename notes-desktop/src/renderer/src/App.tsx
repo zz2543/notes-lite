@@ -11,6 +11,7 @@ import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
+import { useSettingsPanel } from "./SettingsPanel";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
@@ -20,6 +21,7 @@ const noticeDuration = 6000;
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "starting" });
   const [error, setError] = useState<string>();
+  const settings = useSettingsPanel();
 
   // A notice, not a dialog: it fades on its own and never blocks what is under it.
   useEffect(() => {
@@ -66,6 +68,7 @@ export function App() {
       {phase.kind === "open" && (
         <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
       )}
+      {settings}
       {error && (
         <div className="toast" role="alert">
           {error}

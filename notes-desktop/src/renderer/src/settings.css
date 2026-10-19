@@ -1,0 +1,101 @@
+/* 设置: a design-system 浮层 (in-app blur over the window). Values are the variables in tokens.css. */
+
+.settings {
+  width: min(var(--settings-width), calc(100vw - var(--settings-margin) * 2));
+  height: min(var(--settings-height), calc(100vh - var(--settings-margin) * 2));
+  display: flex;
+  overflow: hidden;
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--settings-radius);
+  background: var(--glass);
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: var(--overlay-blur);
+  color: var(--side-fg);
+  font-size: var(--text-side-row);
+}
+
+.settings-nav {
+  width: var(--settings-nav-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--settings-padding) var(--row-padding);
+  border-right: 1px solid var(--line);
+}
+.settings-nav h2 {
+  margin: 0 0 var(--inline-gap);
+  padding: 0 var(--row-padding);
+  font-size: var(--text-list-title);
+  font-weight: var(--weight-list-title);
+}
+.settings-tab {
+  position: relative;
+  isolation: isolate;
+  height: var(--row-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 var(--row-padding);
+  border-radius: var(--row-radius);
+  text-align: left;
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.settings-tab:hover {
+  background: var(--hover);
+}
+.settings-tab:active {
+  scale: var(--press-scale);
+}
+
+.settings-page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--settings-padding) calc(var(--settings-padding) * 1.5);
+}
+.settings-page > h2 {
+  margin: 0 0 var(--settings-group-gap);
+  font-size: var(--text-list-title);
+  font-weight: var(--weight-list-title);
+}
+
+.settings-group + .settings-group {
+  margin-top: var(--settings-group-gap);
+}
+.settings-group h3 {
+  margin: 0;
+  font-size: var(--text-item);
+  font-weight: var(--weight-item);
+}
+.settings-description {
+  margin: 2px 0 var(--card-gap);
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+}
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--item-radius);
+  background: var(--settings-rows-bg);
+  box-shadow: var(--pill-shadow);
+}
+.settings-row {
+  min-height: var(--settings-row-height);
+  display: grid;
+  grid-template-columns: var(--settings-label-width) 1fr;
+  align-items: center;
+  gap: var(--card-gap);
+  padding: var(--item-padding);
+}
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+.settings-control {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}

@@ -50,6 +50,11 @@ const api: NotesApi = {
   },
   saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
   confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
+  onSettingsRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.settingsRequest, handler);
+    return () => ipcRenderer.off(channels.settingsRequest, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("notes", api);

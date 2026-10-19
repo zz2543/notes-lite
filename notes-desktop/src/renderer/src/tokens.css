@@ -82,6 +82,13 @@
   --settings-height: 600px;
   --settings-radius: 20px;
   --settings-nav-width: 190px;
+  /* Inside the settings panel; the design system gives only its outer size, so these follow its rows. */
+  --settings-margin: 24px;
+  --settings-padding: 20px;
+  --settings-group-gap: 24px;
+  --settings-row-height: 44px;
+  --settings-label-width: 120px;
+  --settings-rows-bg: var(--list-pill);
   --inline-gap: 8px;
 
   /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */

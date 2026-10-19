@@ -256,11 +256,35 @@ function buildMenu() {
     accelerator: "CmdOrCtrl+N",
     click: () => window?.webContents.send(channels.newNoteRequest),
   };
+  // The page handles ⌘, / Ctrl+, itself (the welcome page opens the panel too); the menu only shows it.
+  const settingsItem: MenuItemConstructorOptions = {
+    label: "设置…",
+    accelerator: "CmdOrCtrl+,",
+    registerAccelerator: false,
+    click: () => window?.webContents.send(channels.settingsRequest),
+  };
+  const appMenu: MenuItemConstructorOptions = {
+    role: "appMenu",
+    submenu: [
+      { role: "about" },
+      { type: "separator" },
+      settingsItem,
+      { type: "separator" },
+      { role: "services" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  };
+  const fileItems: MenuItemConstructorOptions[] = [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }];
   const template: MenuItemConstructorOptions[] = [
-    ...(mac ? [{ role: "appMenu" } as const] : []),
+    ...(mac ? [appMenu] : []),
     {
       label: "文件",
-      submenu: [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }],
+      submenu: mac ? [...fileItems, { role: "close" }] : [...fileItems, settingsItem, { type: "separator" }, { role: "quit" }],
     },
     { role: "editMenu" },
     { label: "笔记", submenu: [sourceViewToggle] },

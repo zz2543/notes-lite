@@ -63,6 +63,10 @@ export interface NotesApi {
   saveCopy(path: string, text: string): Promise<CopyResult>;
   /** Asks before something the user cannot take back; true when they go ahead. */
   confirm(question: Confirmation): Promise<boolean>;
+
+  // 设置 (ticket 15).
+  /** The menu's 设置… asks the page to open the settings panel. */
+  onSettingsRequest(listener: () => void): () => void;
 }
 
 export interface Confirmation {
@@ -99,4 +103,5 @@ export const channels = {
   libraryChanged: "library:changed",
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
+  settingsRequest: "menu:settings",
 } as const;
