@@ -32,11 +32,10 @@ function Editor({ path, source }: { path: string; source: string }) {
 
   useEffect(() => {
     let countTimer: ReturnType<typeof setTimeout> | undefined;
-    const separator = lineSeparatorOf(source);
-    const view: EditorView = new EditorView({
-      parent: host.current!,
-      state: EditorState.create({
-        doc: source,
+    const stateFor = (doc: string) => {
+      const separator = lineSeparatorOf(doc);
+      return EditorState.create({
+        doc,
         extensions: [
           EditorState.lineSeparator.of(separator),
           // Pasted or dropped text takes the note's own line breaks, or a CRLF note would hide "\n"s inside lines.
@@ -53,10 +52,21 @@ function Editor({ path, source }: { path: string; source: string }) {
             countTimer = setTimeout(() => setWords(countWords(update.state.doc.toString())), wordCountDelay);
           }),
         ],
-      }),
-    });
+      });
+    };
+    const view: EditorView = new EditorView({ parent: host.current!, state: stateFor(source) });
+    // The version on disk starts afresh, with its own undo history, the caret and scroll kept in place.
+    const showDisk = (text: string) => {
+      const { scrollTop } = view.scrollDOM;
+      const head = view.state.selection.main.head;
+      const fresh = stateFor(text);
+      view.setState(fresh.update({ selection: { anchor: Math.min(head, fresh.doc.length) } }).state);
+      view.scrollDOM.scrollTop = scrollTop;
+      clearTimeout(countTimer);
+      setWords(countWords(text));
+    };
     // sliceDoc joins lines with the note's own separator; doc.toString() would always use "\n".
-    const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }));
+    const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }), showDisk);
     setOpenDraft(draft);
     setDraft(draft);
     view.focus();

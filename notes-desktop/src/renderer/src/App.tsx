@@ -6,7 +6,7 @@ import { FolderTree } from "./FolderTree";
 import { errorText } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
 import { NoteEditor } from "./NoteEditor";
-import { saveOpenNote } from "./noteDraft";
+import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
@@ -57,7 +57,9 @@ export function App() {
     <>
       {/* Until the remembered library answers, the window shows only its own color: no spinner. */}
       {phase.kind === "welcome" && <Welcome missing={phase.missing} onChoose={choose} />}
-      {phase.kind === "open" && <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} />}
+      {phase.kind === "open" && (
+        <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
+      )}
       {error && (
         <div className="toast" role="alert">
           {error}
@@ -99,13 +101,20 @@ interface LibraryViewProps {
   onSwitch(): void;
   /** Saves the open note; false when it could not, so the note must stay open. */
   saveFirst(): Promise<boolean>;
+  /** Shows a passing notice. */
+  notify(message: string): void;
 }
 
-function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
+function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps) {
   const [folder, setFolder] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([""]));
   const [note, setNote] = useState<string | null>(null);
+  // Other programs may move, delete or rewrite what is shown.
   useFolderFallback(folder, setFolder);
+  useOpenNoteFollowsDisk(note, (reason) => {
+    setNote(null);
+    notify(reason);
+  });
 
   const toggle = (path: string) =>
     setExpanded((now) => {

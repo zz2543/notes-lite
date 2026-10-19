@@ -1,8 +1,17 @@
-import { mkdir, rename, rm, utimes, writeFile } from "node:fs/promises";
+import type { Page } from "@playwright/test";
+import { mkdir, readFile, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, launchWith, library, test } from "./fixtures";
 
 // Changes made by other programs — a sync tool, another editor, an agent — while the app is open.
+
+const saveState = (page: Page) => page.getByRole("status", { name: "保存状态" });
+
+async function openNote(page: Page, folder: string, title: string) {
+  await page.getByRole("treeitem", { name: folder }).click();
+  await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: title }).click();
+  await expect(page.getByLabel("笔记正文")).toBeFocused();
+}
 
 test("notes and folders added, edited, moved or deleted elsewhere show up in the tree and list", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n", "日记/读书.md": "# 读书\n" });
@@ -35,5 +44,29 @@ test("notes and folders added, edited, moved or deleted elsewhere show up in the
   await expect(page.getByRole("treeitem", { name: "学习" })).toHaveCount(0);
   await expect(page.getByRole("treeitem", { name: "笔记库" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { name: "笔记库" })).toBeVisible();
+  await app.close();
+});
+
+test("an open note with nothing unsaved follows the disk, and is let go when deleted elsewhere", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步\n", "日记/读书.md": "# 读书\n" });
+  const walk = join(root, "日记/散步.md");
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "日记", "散步");
+  const editor = page.getByLabel("笔记正文");
+
+  await writeFile(walk, "# 散步\n\n同步来的一段\n");
+  await expect(editor).toContainText("同步来的一段");
+  await expect(editor).toBeFocused();
+
+  // Typing goes on from the version now on disk, with nothing to resolve.
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("雨后");
+  await expect(saveState(page)).toHaveText("已保存");
+  expect(await readFile(walk, "utf8")).toBe("# 散步\n\n同步来的一段\n雨后");
+
+  await rm(walk);
+  await expect(page.getByRole("alert")).toContainText("找不到“散步”，它可能已在别处移动或删除。");
+  await expect(page.getByText("选择一篇笔记")).toBeVisible();
+  await expect(page.getByRole("list", { name: "当前目录内容" }).getByRole("button")).toHaveText(["读书"]);
   await app.close();
 });
