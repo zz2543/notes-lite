@@ -70,7 +70,7 @@ export const writeFailures: Record<string, string> = {
 // Strict, and keeping a byte-order mark as text, so that decoding and re-encoding is lossless.
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
-const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
+export const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
 
 export async function openLibrary(root: string, options: OrganizeOptions = {}): Promise<Library> {
   const notFolder = new LibraryError("not-a-folder", `找不到笔记库文件夹：${root}`);

@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative as pathFrom, sep } from "node:path";
-import { LibraryError, writeFailures } from "./library";
+import { collator, LibraryError, writeFailures } from "./library";
 import { linkTargets, replaceTargets, type LinkTarget } from "./references";
 
 /** Where a renamed or moved item went, and which notes had their links to it rewritten. */
@@ -26,6 +26,8 @@ export interface Organizer {
   trash(path: string): Promise<void>;
   /** Puts the last item moved to the trash back where it was; returns its path. */
   restoreLastDeleted(): Promise<string>;
+  /** Every folder in the library except the root, in folder-tree order: where things can move to. */
+  listFolders(): Promise<string[]>;
 }
 
 export interface OrganizeOptions {
@@ -318,5 +320,14 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
     return path;
   };
 
-  return { createNote, createFolder, rename: rename_, move, trash, restoreLastDeleted };
+  const listFolders = async (folder = root): Promise<string[]> => {
+    const entries = await readdir(folder, { withFileTypes: true }).catch(() => []);
+    const names = entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name);
+    const nested = await Promise.all(
+      names.sort(collator.compare).map(async (name) => [relativeOf(join(folder, name)), ...(await listFolders(join(folder, name)))]),
+    );
+    return nested.flat();
+  };
+
+  return { createNote, createFolder, rename: rename_, move, trash, restoreLastDeleted, listFolders: () => listFolders() };
 }

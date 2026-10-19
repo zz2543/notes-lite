@@ -18,6 +18,17 @@ describe("新建", () => {
     expect(await readFile(join(root, "日记/日记 2.md"), "utf8")).toBe("# 日记 2\n\n");
     expect((await lib.readFolder("日记")).notes.map((n) => n.title).sort()).toEqual(["日记", "日记 2", "未命名笔记", "未命名笔记 2"]);
   });
+
+  it("creates, saves and reopens a note without touching the old app's data", async () => {
+    const root = await library({ ".twain/history.json": "legacy" });
+    const lib = await openLibrary(root);
+
+    const path = await lib.createNote("", "中文笔记");
+    await lib.saveNote(path, "# 中文笔记\n\n保存这段内容。", await lib.readNote(path));
+
+    expect(await (await openLibrary(root)).readNote("中文笔记.md")).toBe("# 中文笔记\n\n保存这段内容。");
+    expect(await readFile(join(root, ".twain/history.json"), "utf8")).toBe("legacy");
+  });
 });
 
 describe("新建文件夹", () => {
@@ -49,6 +60,15 @@ describe("改名", () => {
       "新目标.md": "# 目标\n",
       "说明.md": "链接 [[新目标]]\n\n`[[目标]]`\n\n```text\n[[目标]]\n```\n",
     });
+  });
+
+  it("renames a note whose title has dots, keeping the alias and section of links to it", async () => {
+    const root = await library({ "阅读/v1.0.md": "# v1.0", "入口.md": "[[阅读/v1.0#变化|旧版]] [说明](阅读/v1.0.md)" });
+    const lib = await openLibrary(root);
+
+    expect(await lib.rename("阅读/v1.0.md", "v2.0")).toEqual({ path: "阅读/v2.0.md", updated: ["入口.md"] });
+
+    expect(await contents(root)).toEqual({ "阅读/v2.0.md": "# v1.0", "入口.md": "[[阅读/v2.0#变化|旧版]] [说明](阅读/v2.0.md)" });
   });
 
   it("never overwrites: a taken name or an unusable one changes nothing", async () => {
@@ -128,6 +148,12 @@ describe("移动", () => {
       "归档/阅读/摘记.md": "# 摘记",
       "入口.md": "[[归档/阅读/v1.0|版本]] [摘记](%E5%BD%92%E6%A1%A3/%E9%98%85%E8%AF%BB/%E6%91%98%E8%AE%B0.md)",
     });
+  });
+
+  it("lists every folder a note could move to, in tree order", async () => {
+    const lib = await openLibrary(await library({ "学习/英语/单词.md": "", "学习/数学/": "", "日记/今天.md": "", ".notes/spaces/": "", "读书.md": "" }));
+
+    expect(await lib.listFolders()).toEqual(["日记", "学习", "学习/数学", "学习/英语"]);
   });
 
   it("refuses to move a folder into itself, and leaves an item already in place alone", async () => {
