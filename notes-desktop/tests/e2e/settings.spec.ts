@@ -55,3 +55,41 @@ test("appearance can be fixed to light or dark; it is kept with the app, not in 
   await again.app.close();
   expect(await readdir(root, { recursive: true })).toEqual(before);
 });
+
+/** The colour the page uses as its accent (the caret, switches, primary buttons), as rgb(…). */
+const accent = (page: Page) =>
+  page.evaluate(() => {
+    const probe = document.body.appendChild(document.createElement("div"));
+    probe.style.color = "var(--accent)";
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+
+test("the accent follows the system as it changes, or is one of the presets", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "一.md": "一" });
+  const { app, page } = await launchWith(scratch, root);
+  const accents = (await openSettings(page)).getByRole("radiogroup", { name: "强调色" });
+  await expect(accents.getByRole("radio")).toHaveCount(6);
+  expect(await accents.getByRole("radio").evaluateAll((swatches) => swatches.map((s) => s.getAttribute("aria-label")))).toEqual([
+    "跟随系统",
+    "蓝",
+    "紫",
+    "粉",
+    "橙",
+    "绿",
+  ]);
+  await expect(accents.getByRole("radio", { name: "跟随系统" })).toHaveAttribute("aria-checked", "true");
+
+  await accents.getByRole("radio", { name: "紫" }).click();
+  await expect.poll(() => accent(page)).toBe("rgb(142, 92, 247)");
+
+  await accents.getByRole("radio", { name: "跟随系统" }).click();
+  // The system's accent changes while the app runs.
+  await app.evaluate(({ systemPreferences }) => {
+    systemPreferences.getAccentColor = () => "ff9f0aff";
+    systemPreferences.emit("accent-color-changed", {}, "ff9f0aff");
+  });
+  await expect.poll(() => accent(page)).toBe("rgb(255, 159, 10)");
+  await app.close();
+});

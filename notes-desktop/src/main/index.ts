@@ -361,9 +361,19 @@ function createWindow() {
   else void window.loadFile(join(__dirname, "../renderer/index.html"));
 }
 
+/** 强调色 follows the system while the app runs. */
+function followSystemAccent() {
+  const changed = () => {
+    if (window && !window.isDestroyed()) window.webContents.send(channels.systemAccentChanged, systemAppearance().accent);
+  };
+  systemPreferences.on("accent-color-changed", changed);
+  if (mac) systemPreferences.subscribeNotification("AppleColorPreferencesChangedNotification", changed);
+}
+
 void app.whenReady().then(async () => {
   registerIpc();
   buildMenu();
+  followSystemAccent();
   // The first frame is drawn in the chosen light or dark.
   await preferencesReady;
   applyPreferences();

@@ -1,7 +1,8 @@
 import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import type { ColorScheme } from "../../shared/preferences";
-import { Segmented, type Choice } from "./controls";
+import type { AccentChoice, ColorScheme } from "../../shared/preferences";
+import { useSystemAccent } from "./appearance";
+import { Segmented, Swatches, type Choice, type Swatch } from "./controls";
 import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
@@ -52,12 +53,25 @@ const colorSchemes: Choice<ColorScheme>[] = [
   { value: "dark", label: "深色" },
 ];
 
+const presets: Swatch<AccentChoice>[] = [
+  { value: "blue", label: "蓝", color: "var(--accent-blue)" },
+  { value: "purple", label: "紫", color: "var(--accent-purple)" },
+  { value: "pink", label: "粉", color: "var(--accent-pink)" },
+  { value: "orange", label: "橙", color: "var(--accent-orange)" },
+  { value: "green", label: "绿", color: "var(--accent-green)" },
+];
+
 function GeneralPage() {
   const { preferences, change } = usePreferences();
+  const system = useSystemAccent();
+  const accents: Swatch<AccentChoice>[] = [{ value: "system", label: "跟随系统", color: system ?? "var(--accent-blue)" }, ...presets];
   return (
-    <SettingsGroup title="外观" description="浅色或深色，默认跟随系统。">
+    <SettingsGroup title="外观" description="浅色或深色、强调色，默认都跟随系统。强调色只用在插入光标、选区、开关和主要按钮上。">
       <SettingRow label="外观">
         <Segmented label="外观" choices={colorSchemes} value={preferences.colorScheme} onChange={(colorScheme) => change({ colorScheme })} />
+      </SettingRow>
+      <SettingRow label="强调色">
+        <Swatches label="强调色" choices={accents} value={preferences.accent} onChange={(accent) => change({ accent })} />
       </SettingRow>
     </SettingsGroup>
   );

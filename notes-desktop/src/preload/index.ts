@@ -58,6 +58,11 @@ const api: NotesApi = {
   // Asked once, synchronously, before any script runs: the answer is already in memory in the main process.
   preferences: ipcRenderer.sendSync(channels.preferences),
   setPreferences: (change) => ipcRenderer.invoke(channels.setPreferences, change),
+  onSystemAccentChanged: (listener) => {
+    const handler = (_: unknown, accent: string | null) => listener(accent);
+    ipcRenderer.on(channels.systemAccentChanged, handler);
+    return () => ipcRenderer.off(channels.systemAccentChanged, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("notes", api);

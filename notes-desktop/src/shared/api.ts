@@ -72,6 +72,8 @@ export interface NotesApi {
   readonly preferences: Preferences;
   /** Stores a change and applies what the main process owns (外观); answers with all preferences. */
   setPreferences(change: Partial<Preferences>): Promise<Preferences>;
+  /** The system accent colour changed while the app runs (#rrggbb, or null when the system does not say). */
+  onSystemAccentChanged(listener: (accent: string | null) => void): () => void;
 }
 
 export interface Confirmation {
@@ -111,4 +113,5 @@ export const channels = {
   settingsRequest: "menu:settings",
   preferences: "settings:preferences",
   setPreferences: "settings:set-preferences",
+  systemAccentChanged: "system:accent-changed",
 } as const;

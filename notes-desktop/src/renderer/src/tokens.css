@@ -90,6 +90,10 @@
   --settings-label-width: 120px;
   --settings-rows-bg: var(--list-pill);
   --settings-segmented-width: 240px;
+  --swatch-size: 20px;
+  --swatch-gap: 10px;
+  --swatch-ring: 2px;
+  --swatch-ring-gap: 2px;
   --inline-gap: 8px;
 
   /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */

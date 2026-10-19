@@ -115,6 +115,27 @@
   color: var(--list-fg);
   font-weight: 600;
 }
+/* 色板: the chosen colour is ringed, with a gap of the panel between ring and dot. */
+.swatches {
+  display: flex;
+  gap: var(--swatch-gap);
+}
+.swatch {
+  width: var(--swatch-size);
+  height: var(--swatch-size);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px var(--line);
+  transition: scale var(--spring-pop);
+}
+.swatch:active {
+  scale: var(--press-scale-icon);
+}
+.swatch[aria-checked="true"] {
+  box-shadow:
+    0 0 0 var(--swatch-ring-gap) var(--card-bg),
+    0 0 0 calc(var(--swatch-ring-gap) + var(--swatch-ring)) var(--side-fg);
+}
+
 .segment-pill {
   position: absolute;
   inset: 0;

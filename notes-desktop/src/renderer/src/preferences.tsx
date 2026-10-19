@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { Preferences } from "../../shared/preferences";
+import { useAccent } from "./appearance";
 
 interface PreferencesState {
   preferences: Preferences;
@@ -18,6 +19,8 @@ export function usePreferences(): PreferencesState {
 
 export function PreferencesProvider({ children }: { children(preferences: Preferences): ReactNode }) {
   const [preferences, setPreferences] = useState(window.notes.preferences);
+  // The look the page draws itself; light or dark is the main process's (nativeTheme).
+  useAccent(preferences.accent);
   const change = (change: Partial<Preferences>) => {
     setPreferences((now) => ({ ...now, ...change }));
     void window.notes.setPreferences(change);
