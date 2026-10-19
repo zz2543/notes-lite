@@ -8,8 +8,11 @@ import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 import { setShowSource, useShowSource } from "./sourceView";
 
-/** The open note on its card: Markdown source edited in place, saved as it is typed. */
-export function NoteEditor({ path }: { path: string | null }) {
+/**
+ * The open note on its card: Markdown source edited in place, saved as it is typed. A `fresh` note
+ * (just created) opens with the caret after its title, ready to type.
+ */
+export function NoteEditor({ path, fresh = false }: { path: string | null; fresh?: boolean }) {
   const { value: source, error } = useNoteSource(path);
   const showSource = useShowSource();
   return (
@@ -29,7 +32,7 @@ export function NoteEditor({ path }: { path: string | null }) {
       </header>
       {!path && <p className="empty">选择一篇笔记</p>}
       {error && <p className="empty">{error}</p>}
-      {path && source !== undefined && <Editor key={path} path={path} source={source} showSource={showSource} />}
+      {path && source !== undefined && <Editor key={path} path={path} source={source} fresh={fresh} showSource={showSource} />}
     </article>
   );
 }
@@ -40,7 +43,7 @@ const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\
 
 const wordCountDelay = 150;
 
-function Editor({ path, source, showSource }: { path: string; source: string; showSource: boolean }) {
+function Editor({ path, source, fresh, showSource }: { path: string; source: string; fresh: boolean; showSource: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>(null);
   const shown = useRef(showSource);
@@ -78,6 +81,7 @@ function Editor({ path, source, showSource }: { path: string; source: string; sh
     setOpenDraft(draft);
     setDraft(draft);
     viewRef.current = view;
+    if (fresh) view.dispatch({ selection: { anchor: view.state.doc.length } });
     view.focus();
     return () => {
       clearTimeout(countTimer);

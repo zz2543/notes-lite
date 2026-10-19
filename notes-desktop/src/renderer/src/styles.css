@@ -37,7 +37,6 @@
   --card-foot-height: 34px;
   --card-padding: 28px 40px;
   --icon-button-radius: 8px;
-  --icon-button-small: 24px;
   --inline-gap: 8px;
 
   /* 界面文字 */
@@ -191,7 +190,10 @@ button {
   padding: 0 calc(var(--row-padding) - 2px);
 }
 .side-label {
-  padding: 4px var(--row-padding) 6px;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 2px 2px var(--row-padding);
   color: var(--side-muted);
   font-size: var(--text-group);
   font-weight: 600;
@@ -473,4 +475,130 @@ button {
     --code-tag: #5dd8ff;
     --code-attribute: #fd8f3f;
   }
+}
+
+/* 就地搜索 (values from the design system) */
+:root {
+  --icon-button-small: 24px;
+  --icon-button-small-radius: 7px;
+  --search-height: 30px;
+  --search-radius: 9px;
+  --segment-padding: 3px;
+  --segment-radius: 10px;
+  --segment-height: 26px;
+  --text-summary: 12.5px;
+  --list-summary: color-mix(in srgb, var(--list-fg) 62%, transparent);
+}
+.icon-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  -webkit-app-region: no-drag;
+}
+.icon-button.small {
+  width: var(--icon-button-small);
+  height: var(--icon-button-small);
+  border-radius: var(--icon-button-small-radius);
+}
+.icon-button:hover {
+  background: var(--hover);
+}
+.search-head {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--inline-gap);
+  padding-block: calc((var(--list-head-height) - var(--search-height)) / 2);
+}
+.search-box {
+  height: var(--search-height);
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 calc(var(--search-height) - var(--icon-button-small)) 0 var(--row-padding);
+  border-radius: var(--search-radius);
+  background: var(--card-bg);
+  box-shadow: var(--pill-shadow);
+  color: var(--card-muted);
+  -webkit-app-region: no-drag;
+}
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--card-fg);
+  font: inherit;
+  font-size: var(--text-side-row);
+  user-select: text;
+}
+/* The box itself is the field; the input inside draws no ring of its own. */
+.search-box input:focus-visible {
+  box-shadow: none;
+}
+.search-box input::placeholder {
+  color: var(--card-muted);
+}
+.search-box input::-webkit-search-cancel-button {
+  display: none;
+}
+.search-box .icon-button {
+  color: var(--card-fg);
+}
+.segmented {
+  display: flex;
+  padding: var(--segment-padding);
+  border-radius: var(--segment-radius);
+  background: var(--hover);
+  -webkit-app-region: no-drag;
+}
+.segmented button {
+  flex: 1;
+  min-width: 0;
+  height: var(--segment-height);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--row-padding);
+  border-radius: calc(var(--segment-radius) - var(--segment-padding));
+  color: var(--list-muted);
+  font-size: var(--text-meta);
+}
+.segmented button .label {
+  text-align: center;
+}
+.segmented button[aria-pressed="true"] {
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+  color: var(--list-fg);
+  font-weight: 600;
+}
+.item.result {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+.item.result .snippet,
+.item.result .where {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-weight: 400;
+}
+.item.result .snippet {
+  color: var(--list-summary);
+  font-size: var(--text-summary);
+}
+.item.result mark {
+  background: none;
+  color: var(--list-fg);
+  font-weight: 600;
+}
+.item.result .where {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--list-muted);
+  font-size: var(--text-meta);
 }
