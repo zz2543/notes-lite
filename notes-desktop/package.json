@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
+    "measure:startup": "electron-vite build && playwright test tests/e2e/startup.spec.ts -g budget --reporter=list",
     "dist": "electron-vite build && electron-builder --publish never"
   },
   "devDependencies": {

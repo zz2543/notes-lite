@@ -45,7 +45,8 @@ test("reopens the last note in its folder, ready to type", async ({ scratch }) =
 // 启动性能 (desktop-rewrite-spec): with about ten thousand notes, a cold launch is ready to type in
 // the last note within 1 s, and a window closed and opened again within 0.3 s, on an Apple M4.
 // Other machines (CI, Windows) only record their numbers. STARTUP_RUNS sets how many launches are
-// measured; the median counts. Times run from asking for the app to a typed mark showing in the note.
+// measured; the median counts (`STARTUP_RUNS=10 npm run measure:startup`). Times run from asking
+// for the app to a typed mark showing in the note, so they include Playwright's own launch.
 const coldBudget = 1000;
 const reopenBudget = 300;
 const runs = Number(process.env.STARTUP_RUNS ?? 3);
