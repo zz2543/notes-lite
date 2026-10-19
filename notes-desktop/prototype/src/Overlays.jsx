@@ -106,7 +106,7 @@ export function Settings({ close, tab, setTab, s, set, typo, setTypo, note, inte
                   </div>
                   <div className="field"><div className="fl">导航模式</div>
                     <Chips id="nav" value={s.nav} onChange={(v) => set({ nav: v })} options={[["double", "双栏：文件夹与目录内容"], ["single", "单栏：文件夹与笔记树"]]} />
-                    <div className="hint">原型只实现了双栏导航。</div>
+                    <div className="hint">打开助手栏且窗口较窄时，会自动临时切到单栏，更窄时收成图标栏。</div>
                   </div>
                 </>
               )}

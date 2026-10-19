@@ -26,6 +26,10 @@ export function presets(intensity) {
     out[name] = { type: "spring", visualDuration: p.visualDuration * d, bounce: Math.min(0.72, p.bounce * k) };
   }
   out.amp = s.amp;
+  // Opening or closing the assistant column reflows the note, so it moves quickly and never bounces.
+  out.栏宽 = { type: "spring", visualDuration: 0.26, bounce: 0 };
+  // Focus mode expands the whole card, so even at 强 it glides with only a hint of bounce.
+  out.专注 = { type: "spring", visualDuration: 0.42 * Math.min(s.duration, 1.1), bounce: Math.min(0.12, 0.08 * s.bounce) };
   out.blur = { duration: 0.28 * s.duration, ease: [0.2, 0.8, 0.2, 1] };
   return out;
 }

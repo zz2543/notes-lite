@@ -2,6 +2,7 @@ import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Paperclip, TextAa, Code, ArrowsOut, ArrowsIn, Plus } from "@phosphor-icons/react";
 import { Doc } from "./Doc.jsx";
+import { Figure } from "./Figure.jsx";
 import { pathOf, spaces } from "./data.js";
 import { useSpring } from "./motion.js";
 
@@ -9,7 +10,7 @@ function words(note) {
   return note ? (note.title + note.blocks.map((b) => b[1]).join("")).replace(/\s/g, "").length : 0;
 }
 
-export function EditorCard({ note, dir, typo, source, setSource, focus, setFocus, openTypography }) {
+export function EditorCard({ note, dir, typo, source, setSource, focus, setFocus, openTypography, assistant }) {
   const spring = useSpring();
   const [hover, setHover] = React.useState(false);
   const [typing, setTyping] = React.useState(false);
@@ -24,6 +25,7 @@ export function EditorCard({ note, dir, typo, source, setSource, focus, setFocus
         onMouseMove={() => typing && setTyping(false)}
       >
         {!focus && <span>{note ? `${pathOf(note)} / ${note.title}.md` : ""}</span>}
+        <div className="card-right">
         <AnimatePresence>
           {showTools && !focus && (
             <motion.div
@@ -46,6 +48,18 @@ export function EditorCard({ note, dir, typo, source, setSource, focus, setFocus
             </motion.div>
           )}
         </AnimatePresence>
+        {assistant && !assistant.open && (
+          <motion.button
+            className="icon-btn figure-btn"
+            title={assistant.open ? "收起助手栏 ⌘J" : "打开助手栏 ⌘J"}
+            onClick={assistant.toggle}
+            whileTap={{ scale: 0.85 }}
+            transition={spring.轻弹}
+          >
+            <Figure state={assistant.state} size={22} {...assistant.look} reduced={assistant.reduced} detail="small" />
+          </motion.button>
+        )}
+        </div>
       </div>
       {focus && (
         <motion.button

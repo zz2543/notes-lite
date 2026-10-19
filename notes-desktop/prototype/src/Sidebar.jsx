@@ -1,7 +1,7 @@
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  MagnifyingGlass, NotePencil, Folder, FolderOpen, CaretRight, HardDrives, CaretUpDown,
+  MagnifyingGlass, NotePencil, Folder, FileText, House, Books, SquaresFour, SidebarSimple, FolderOpen, CaretRight, HardDrives, CaretUpDown,
 } from "@phosphor-icons/react";
 import { folders, spaces } from "./data.js";
 import { useSpring } from "./motion.js";
@@ -79,16 +79,18 @@ function FolderRow({ f, depth, isOn, isOpen, setSel, toggle, newIn }) {
   );
 }
 
-function Tree({ nodes, depth, sel, setSel, open, toggle, newIn }) {
+function Tree({ nodes, depth, sel, setSel, open, toggle, newIn, single }) {
   const spring = useSpring();
   return nodes.map((f) => {
-    const isOn = sel === f.id;
+    const own = single ? single.notes.filter((n) => n.folder === f.id) : [];
+    // In the single column the highlighted row is the open note, so folders only fill their icon.
+    const isOn = single ? false : sel === f.id;
     const isOpen = open.has(f.id);
     return (
       <div key={f.id}>
-        <FolderRow f={f} depth={depth} isOn={isOn} isOpen={isOpen} setSel={setSel} toggle={toggle} newIn={newIn} />
+        <FolderRow f={{ ...f, children: single ? [...f.children, ...own] : f.children }} depth={depth} isOn={isOn} isOpen={isOpen} setSel={setSel} toggle={toggle} newIn={newIn} />
         <AnimatePresence initial={false}>
-          {isOpen && f.children.length > 0 && (
+          {isOpen && (f.children.length > 0 || own.length > 0) && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
@@ -96,7 +98,19 @@ function Tree({ nodes, depth, sel, setSel, open, toggle, newIn }) {
               transition={spring.展开}
               style={{ overflow: "hidden" }}
             >
-              <Tree nodes={f.children} depth={depth + 1} sel={sel} setSel={setSel} open={open} toggle={toggle} newIn={newIn} />
+              <Tree nodes={f.children} depth={depth + 1} sel={sel} setSel={setSel} open={open} toggle={toggle} newIn={newIn} single={single} />
+              {own.map((n) => (
+                <Row
+                  key={n.id}
+                  on={single.current === n.id}
+                  pillId="sidePill"
+                  depth={depth + 1}
+                  onClick={() => single.openNote(n)}
+                  caret={<span className="caret" />}
+                  icon={<FileText size={16} weight={single.current === n.id ? "fill" : "regular"} />}
+                  label={n.title}
+                />
+              ))}
             </motion.div>
           )}
         </AnimatePresence>
@@ -105,7 +119,7 @@ function Tree({ nodes, depth, sel, setSel, open, toggle, newIn }) {
   });
 }
 
-export function Sidebar({ view, setView, sel, setSel, space, setSpace, openSearch, newIn }) {
+export function Sidebar({ view, setView, sel, setSel, space, setSpace, openSearch, newIn, single, searchSlot, spaceFiles, onCollapse }) {
   const spring = useSpring();
   const [open, setOpen] = React.useState(new Set(["daily"]));
   const toggle = (id) => setOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -115,6 +129,11 @@ export function Sidebar({ view, setView, sel, setSel, space, setSpace, openSearc
     <div className="side">
       <div className="side-top">
         <div className="lights"><i /><i /><i /></div>
+        {onCollapse && (
+          <motion.button className="icon-btn sm" style={{ marginLeft: "auto" }} title="收起导航" onClick={onCollapse} whileTap={{ scale: 0.88 }} transition={spring.轻弹}>
+            <SidebarSimple size={16} />
+          </motion.button>
+        )}
       </div>
 
       <div className="seg">
@@ -128,6 +147,11 @@ export function Sidebar({ view, setView, sel, setSel, space, setSpace, openSearc
 
       <div className="side-body">
         <AnimatePresence initial={false} custom={dir}>
+          {searchSlot ? (
+            <motion.div key="search" className="side-pane search-pane" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.1 } }} transition={spring.滑移}>
+              {searchSlot}
+            </motion.div>
+          ) : (
           <motion.div
             key={view}
             className="side-pane"
@@ -150,17 +174,27 @@ export function Sidebar({ view, setView, sel, setSel, space, setSpace, openSearc
                     <MagnifyingGlass size={15} />
                   </motion.button>
                 </div>
-                <Tree nodes={folders} depth={0} sel={sel} setSel={setSel} open={open} toggle={toggle} newIn={newIn} />
+                <Tree nodes={folders} depth={0} sel={sel} setSel={setSel} open={open} toggle={toggle} newIn={newIn} single={single} />
               </>
             ) : (
               <>
                 <div className="side-label">空间</div>
                 {spaces.map((s) => (
-                  <Row key={s.id} on={space === s.id} pillId="spacePill" onClick={() => setSpace(s.id)} icon={<span style={{ width: 17, textAlign: "center" }}>{s.icon}</span>} label={s.name} />
+                  <Row key={s.id} on={space === s.id && !spaceFiles} pillId="spacePill" onClick={() => setSpace(s.id)} icon={<span style={{ width: 17, textAlign: "center" }}>{s.icon}</span>} label={s.name} />
                 ))}
+                {spaceFiles && (
+                  <>
+                    <div className="side-label" style={{ marginTop: 10 }}>文件</div>
+                    <Row on={spaceFiles.current === "home"} pillId="spacePill" onClick={() => spaceFiles.select("home")} caret={<span className="caret" />} icon={<House size={16} weight={spaceFiles.current === "home" ? "fill" : "regular"} />} label="主页" />
+                    {spaceFiles.items.map((n) => (
+                      <Row key={n.id} on={spaceFiles.current === n.id} pillId="spacePill" onClick={() => spaceFiles.select(n.id)} caret={<span className="caret" />} icon={<FileText size={16} weight={spaceFiles.current === n.id ? "fill" : "regular"} />} label={n.title} />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -169,6 +203,28 @@ export function Sidebar({ view, setView, sel, setSel, space, setSpace, openSearc
         <span>我的笔记库</span>
         <CaretUpDown size={13} style={{ marginLeft: "auto" }} />
       </div>
+    </div>
+  );
+}
+
+// The narrowest tier: the navigation folds into a rail of icons, and widening it brings back the
+// single column, which then shares the width with the note card instead of floating over it.
+export function Rail({ view, setView, openSearch, expand }) {
+  const spring = useSpring();
+  const btn = (on, title, onClick, I) => (
+    <motion.button className={`icon-btn rail-btn ${on ? "on" : ""}`} title={title} onClick={onClick} whileTap={{ scale: 0.88 }} transition={spring.轻弹}>
+      {on && <motion.span layoutId="railPill" className="rail-pill" transition={spring.滑移} />}
+      <I size={18} weight={on ? "fill" : "regular"} />
+    </motion.button>
+  );
+  return (
+    <div className="rail">
+      <div className="lights vertical"><i /><i /><i /></div>
+      {btn(view === "library", "资料库", () => { setView("library"); expand(); }, Books)}
+      {btn(view === "spaces", "空间", () => { setView("spaces"); expand(); }, SquaresFour)}
+      {btn(false, "搜索 ⌘K", () => { expand(); openSearch(); }, MagnifyingGlass)}
+      <div style={{ flex: 1 }} />
+      {btn(false, "展开导航", expand, SidebarSimple)}
     </div>
   );
 }
