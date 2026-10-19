@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress（代码与本地验证已完成；等 CI 在 macOS 与 Windows 上跑通后记 completed）
+**Progress:** completed（2026-10-19，证据见 Comments）
 
 - [x] CodeMirror 6 直接编辑 Markdown 源文本，保存后文件内容与输入逐字一致
 - [x] 自动保存，卡片底部显示保存状态与字数
@@ -42,4 +42,13 @@
 留给后续任务：
 - 保存冲突的处理入口（重新载入、另存副本）在任务 05 实现。在此之前，冲突状态不提供“重试”，也会阻止切换笔记。
 - 插入光标和选区的强调色只是临时样式，由任务 10/11 重做。
+
+### 2026-10-19 CI 验证
+
+首次运行 [39224045926](https://github.com/zz2543/notes-lite/actions/runs/39224045926) 在 Windows 上失败，原因有两处：
+
+- 重做快捷键：CodeMirror 在 Windows 上只把 Ctrl+Y 绑为重做。已改为各平台都可用 Ctrl/⌘+Shift+Z（`c4db431`）。
+- 测试按键：Playwright 的 `Shift+z` 在 Windows 上发出小写 `z`，被当作撤销；改为按 `KeyZ`，与真实键盘一致（`dd047a4`）。
+
+运行 [39225037014](https://github.com/zz2543/notes-lite/actions/runs/39225037014)（提交 `dd047a4`）在 `macos-latest` 与 `windows-latest` 上全部通过：类型检查、接缝 A、接缝 B、打包。全部验收标准满足，记为 completed。
 
