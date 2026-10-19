@@ -1,7 +1,7 @@
 import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
-import type { LaunchState, LibraryInfo } from "../../shared/api";
+import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
@@ -60,7 +60,7 @@ export function App() {
       {/* Until the remembered library answers, the window shows only its own color: no spinner. */}
       {phase.kind === "welcome" && <Welcome missing={phase.missing} onChoose={choose} />}
       {phase.kind === "open" && (
-        <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
+        <LibraryView key={phase.library.root} library={phase.library} place={phase.place} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
       )}
       {error && (
         <div className="toast" role="alert">
@@ -100,6 +100,8 @@ function ancestors(path: string): string[] {
 
 interface LibraryViewProps {
   library: LibraryInfo;
+  /** Where the user last was in this library; the root with no note open when absent. */
+  place?: Place;
   onSwitch(): void;
   /** Saves the open note; false when it could not, so the note must stay open. */
   saveFirst(): Promise<boolean>;
@@ -107,10 +109,13 @@ interface LibraryViewProps {
   notify(message: string): void;
 }
 
-function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps) {
-  const [folder, setFolder] = useState("");
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([""]));
-  const [note, setNote] = useState<string | null>(null);
+function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryViewProps) {
+  const [folder, setFolder] = useState(place?.folder ?? "");
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(ancestors(place?.folder ?? "")));
+  const [note, setNote] = useState<string | null>(place?.note ?? null);
+
+  // The next launch reopens this folder and note.
+  useEffect(() => window.notes.rememberPlace({ folder, note }), [folder, note]);
 
   const toggle = (path: string) =>
     setExpanded((now) => {
@@ -143,7 +148,8 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
   };
 
   // 整理笔记与文件夹: a new note opens ready to type; a note rewritten on disk is read again.
-  const [fresh, setFresh] = useState<string | null>(null);
+  // The note reopened at launch also waits with the caret at its end, ready to carry on typing.
+  const [fresh, setFresh] = useState<string | null>(place?.note ?? null);
   const [reloads, setReloads] = useState(0);
   const showNote = (path: string | null, how: { fresh?: boolean; reload?: boolean } = {}) => {
     requested.current = path;

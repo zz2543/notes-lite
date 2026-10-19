@@ -4,6 +4,7 @@ import { channels, type CloseCheck, type NotesApi } from "../shared/api";
 const api: NotesApi = {
   launchState: () => ipcRenderer.invoke(channels.launchState),
   chooseLibrary: () => ipcRenderer.invoke(channels.chooseLibrary),
+  rememberPlace: (place) => ipcRenderer.send(channels.rememberPlace, place),
   onOpenLibraryRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.openLibraryRequest, handler);

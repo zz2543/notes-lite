@@ -7,9 +7,16 @@ export interface LibraryInfo {
   name: string;
 }
 
+/** The current folder and open note, library-relative; `note` is null when none is open. */
+export interface Place {
+  folder: string;
+  note: string | null;
+}
+
 /** What the window shows at launch: the remembered library, or the welcome page. */
 export type LaunchState =
-  | { kind: "open"; library: LibraryInfo }
+  /** `place` is where the user last was in this library, when it is still there. */
+  | { kind: "open"; library: LibraryInfo; place?: Place }
   /** `missing` is the remembered library's path when it can no longer be opened. */
   | { kind: "welcome"; missing?: string };
 
@@ -23,6 +30,8 @@ export interface NotesApi {
   launchState(): Promise<LaunchState>;
   /** Lets the user pick a folder and opens it; null when they cancel. */
   chooseLibrary(): Promise<LibraryInfo | null>;
+  /** Remembers the current folder and open note, to reopen them at the next launch. */
+  rememberPlace(place: Place): void;
   /** File > 打开笔记库… asks the page, which saves first and then lets the user choose. */
   onOpenLibraryRequest(listener: () => void): () => void;
   readFolder(path: string): Promise<FolderContents>;
@@ -52,6 +61,7 @@ export type Organized<T> = { ok: true; value: T } | { ok: false; code: LibraryEr
 export const channels = {
   launchState: "library:launch-state",
   chooseLibrary: "library:choose",
+  rememberPlace: "library:remember-place",
   openLibraryRequest: "menu:open-library",
   openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
+import { stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   createSearchIndex,
@@ -11,7 +12,7 @@ import {
   type SearchIndex,
   type SearchOptions,
 } from "../core";
-import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type Organized, type SaveResult } from "../shared/api";
+import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type Organized, type Place, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -38,11 +39,21 @@ const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path)
 
 // Starts while the window loads, so the remembered library is ready by the time the page asks.
 const launch: Promise<LaunchState> = (async () => {
-  const { libraryPath } = await settings.read();
+  const { libraryPath, place } = await settings.read();
   if (!libraryPath) return { kind: "welcome" };
   library = await openLibrary(libraryPath, libraryOptions).catch(() => null);
-  return library ? { kind: "open", library: libraryInfo(library) } : { kind: "welcome", missing: libraryPath };
+  if (!library) return { kind: "welcome", missing: libraryPath };
+  return { kind: "open", library: libraryInfo(library), place: place && (await stillThere(library, place)) };
 })();
+
+/** The part of a remembered place the library still has: a gone note is dropped, a gone folder too. */
+async function stillThere(lib: Library, place: Place): Promise<Place | undefined> {
+  const is = (path: string, kind: "file" | "folder") =>
+    stat(join(lib.root, path)).then((found) => (kind === "file" ? found.isFile() : found.isDirectory()), () => false);
+  if (typeof place.folder !== "string" || !(await is(place.folder, "folder"))) return undefined;
+  const note = typeof place.note === "string" && (await is(place.note, "file")) ? place.note : null;
+  return { folder: place.folder, note };
+}
 
 async function chooseLibrary(): Promise<LibraryInfo | null> {
   const options: OpenDialogOptions = {
@@ -54,7 +65,8 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   const path = picked.filePaths[0];
   if (picked.canceled || !path) return null;
   library = await openLibrary(path, libraryOptions);
-  await settings.update({ libraryPath: path });
+  // A new library starts at its root; the place remembered belonged to the old one.
+  await settings.update({ libraryPath: path, place: undefined });
   return libraryInfo(library);
 }
 
@@ -87,6 +99,7 @@ function registerIpc() {
     indexInBackground();
     return chosen;
   });
+  ipcMain.on(channels.rememberPlace, (_, place: Place) => void settings.update({ place }).catch(() => {}));
   ipcMain.handle(channels.readFolder, (_, path: string) => requireLibrary().readFolder(path));
   ipcMain.handle(channels.readNote, (_, path: string) => requireLibrary().readNote(path));
   // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
