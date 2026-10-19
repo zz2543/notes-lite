@@ -32,6 +32,8 @@ export interface NotesApi {
   chooseLibrary(): Promise<LibraryInfo | null>;
   /** Remembers the current folder and open note, to reopen them at the next launch. */
   rememberPlace(place: Place): void;
+  /** The page shows where the user left off (or the welcome page); background work may start. */
+  shown(): void;
   /** File > 打开笔记库… asks the page, which saves first and then lets the user choose. */
   onOpenLibraryRequest(listener: () => void): () => void;
   readFolder(path: string): Promise<FolderContents>;
@@ -62,6 +64,7 @@ export const channels = {
   launchState: "library:launch-state",
   chooseLibrary: "library:choose",
   rememberPlace: "library:remember-place",
+  pageShown: "window:page-shown",
   openLibraryRequest: "menu:open-library",
   openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",

@@ -5,6 +5,7 @@ const api: NotesApi = {
   launchState: () => ipcRenderer.invoke(channels.launchState),
   chooseLibrary: () => ipcRenderer.invoke(channels.chooseLibrary),
   rememberPlace: (place) => ipcRenderer.send(channels.rememberPlace, place),
+  shown: () => ipcRenderer.send(channels.pageShown),
   onOpenLibraryRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.openLibraryRequest, handler);

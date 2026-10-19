@@ -46,6 +46,19 @@ export function libraryChanged() {
   for (const listener of revisionListeners) listener();
 }
 
+let shownSent = false;
+
+/**
+ * Once the window first shows where the user left off (the reopened note, the library with no
+ * note open, or the welcome page), tells the main process after that frame is painted, so that
+ * work reading the whole library (the search index) starts only then. Later calls do nothing.
+ */
+export function pageShown() {
+  if (shownSent) return;
+  shownSent = true;
+  requestAnimationFrame(() => setTimeout(() => window.notes.shown()));
+}
+
 // Module-level readers keep a stable identity for useRead's effect.
 const readFolder = (path: string) => window.notes.readFolder(path);
 const readNote = (path: string) => window.notes.readNote(path);

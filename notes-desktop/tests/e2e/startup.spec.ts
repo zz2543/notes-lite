@@ -34,6 +34,11 @@ test("reopens the last note in its folder, ready to type", async ({ scratch }) =
   await page.keyboard.type("，青苔");
   await expect(page.getByRole("status", { name: "保存状态" })).toHaveText("已保存");
   expect(await readFile(join(root, "日记/散步.md"), "utf8")).toBe("# 散步\n\n雨后，青苔");
+
+  // The search index is built after the note shows, in the background; it is there when asked.
+  await page.keyboard.press("ControlOrMeta+KeyK");
+  await page.getByRole("searchbox", { name: "搜索笔记" }).fill("周报");
+  await expect(page.getByRole("list", { name: "搜索结果" }).getByRole("button")).toHaveText([/周报/]);
   await app.close();
 });
 

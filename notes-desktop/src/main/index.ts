@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
-import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
+import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
@@ -31,6 +31,8 @@ let quitting = false;
 // File > 打开笔记库… with no window open: asked again once the new page listens.
 let openLibraryPending = false;
 const closeCheckTimeout = 5000;
+const showFallback = 500;
+const backgroundWorkFallback = 3000;
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -43,8 +45,31 @@ const launch: Promise<LaunchState> = (async () => {
   if (!libraryPath) return { kind: "welcome" };
   library = await openLibrary(libraryPath, libraryOptions).catch(() => null);
   if (!library) return { kind: "welcome", missing: libraryPath };
-  return { kind: "open", library: libraryInfo(library), place: place && (await stillThere(library, place)) };
+  const found = place && (await stillThere(library, place));
+  if (found) readAhead(library, found);
+  return { kind: "open", library: libraryInfo(library), place: found };
 })();
+
+// What the page reads first at launch (the reopened folder with the folders above it, and the
+// note), read while the page itself is still loading. Each answers the page's first ask once.
+const readsAhead = new Map<string, Promise<unknown>>();
+
+function readAhead(lib: Library, place: Place) {
+  const parts = place.folder ? place.folder.split("/") : [];
+  for (const folder of ["", ...parts.map((_, i) => parts.slice(0, i + 1).join("/"))]) {
+    readsAhead.set(`folder:${folder}`, lib.readFolder(folder));
+  }
+  if (place.note) readsAhead.set(`note:${place.note}`, lib.readNote(place.note));
+  // An answer nobody asks for is no error worth reporting; the page reads again if it needs to.
+  for (const read of readsAhead.values()) read.catch(() => {});
+}
+
+/** The answer read ahead for `key`, the first time it is asked for; otherwise reads now. */
+function readOnce<T>(key: string, read: () => Promise<T>): Promise<T> {
+  const ahead = readsAhead.get(key) as Promise<T> | undefined;
+  readsAhead.delete(key);
+  return ahead ?? read();
+}
 
 /** The part of a remembered place the library still has: a gone note is dropped, a gone folder too. */
 async function stillThere(lib: Library, place: Place): Promise<Place | undefined> {
@@ -65,6 +90,7 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   const path = picked.filePaths[0];
   if (picked.canceled || !path) return null;
   library = await openLibrary(path, libraryOptions);
+  readsAhead.clear();
   // A new library starts at its root; the place remembered belonged to the old one.
   await settings.update({ libraryPath: path, place: undefined });
   return libraryInfo(library);
@@ -100,8 +126,8 @@ function registerIpc() {
     return chosen;
   });
   ipcMain.on(channels.rememberPlace, (_, place: Place) => void settings.update({ place }).catch(() => {}));
-  ipcMain.handle(channels.readFolder, (_, path: string) => requireLibrary().readFolder(path));
-  ipcMain.handle(channels.readNote, (_, path: string) => requireLibrary().readNote(path));
+  ipcMain.handle(channels.readFolder, (_, path: string) => readOnce(`folder:${path}`, () => requireLibrary().readFolder(path)));
+  ipcMain.handle(channels.readNote, (_, path: string) => readOnce(`note:${path}`, () => requireLibrary().readNote(path)));
   // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
     try {
@@ -170,9 +196,23 @@ async function finishClose(id: number | null, check: CloseCheck) {
       return;
     }
   }
+  // On macOS the app stays when its window closes. A window whose notes are all saved is only
+  // hidden, so the Dock icon brings it back at once, just as it was (启动性能: reopen in 0.3 s).
+  // Input the user chose to drop goes with a window that really closes.
+  if (mac && !quitting && check.saved) {
+    win.hide();
+    return;
+  }
   closeAllowed = true;
   if (quitting) app.quit();
   else if (!win.isDestroyed()) win.close();
+}
+
+/** The window, brought forward; false when there is none to bring. */
+function reveal(): boolean {
+  if (!window || window.isDestroyed()) return false;
+  window.show();
+  return true;
 }
 
 function buildMenu() {
@@ -181,7 +221,7 @@ function buildMenu() {
     accelerator: "CmdOrCtrl+O",
     // The page saves the open note first, then asks for the folder like its own switch button.
     click: () => {
-      if (window) window.webContents.send(channels.openLibraryRequest);
+      if (reveal()) window?.webContents.send(channels.openLibraryRequest);
       else {
         openLibraryPending = true;
         createWindow();
@@ -193,7 +233,7 @@ function buildMenu() {
     id: "new-note",
     label: "新建笔记",
     accelerator: "CmdOrCtrl+N",
-    click: () => window?.webContents.send(channels.newNoteRequest),
+    click: () => reveal() && window?.webContents.send(channels.newNoteRequest),
   };
   const template: MenuItemConstructorOptions[] = [
     ...(mac ? [{ role: "appMenu" } as const] : []),
@@ -209,7 +249,7 @@ function buildMenu() {
 }
 
 function createWindow() {
-  window = new BrowserWindow({
+  const win = (window = new BrowserWindow({
     width: 1200,
     height: 780,
     minWidth: 760,
@@ -220,11 +260,30 @@ function createWindow() {
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1e22" : "#f2f1f5",
     ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: { preload: join(__dirname, "../preload/index.js"), sandbox: true, contextIsolation: true },
+  }));
+  // The window appears once its page shows where the user left off (or the welcome page): never
+  // blank, never a spinner. A page that is slow to say so is shown anyway once it has painted.
+  const pageShown = new Promise<void>((resolve) => {
+    const listener = (event: IpcMainEvent) => {
+      if (event.sender !== win.webContents) return;
+      ipcMain.off(channels.pageShown, listener);
+      resolve();
+    };
+    ipcMain.on(channels.pageShown, listener);
+    win.once("closed", () => ipcMain.off(channels.pageShown, listener));
   });
-  window.once("ready-to-show", () => {
-    window?.show();
-    void launch.then(indexInBackground);
-  });
+  let shownOnce = false;
+  const showFirst = () => {
+    if (shownOnce || win.isDestroyed()) return;
+    shownOnce = true;
+    win.show();
+  };
+  void pageShown.then(showFirst);
+  win.once("ready-to-show", () => setTimeout(showFirst, showFallback));
+  // Anything that reads the whole library (the search index, and later the file watcher) waits
+  // until then too, so it never competes with the first note for the disk.
+  const settled = Promise.race([pageShown, new Promise<void>((resolve) => setTimeout(resolve, backgroundWorkFallback))]);
+  void Promise.all([launch, settled]).then(indexInBackground);
   closeAllowed = false;
   // The page saves what is still unsaved before the window goes, on close and on quit alike.
   window.on("close", (event) => {
@@ -251,7 +310,7 @@ void app.whenReady().then(() => {
   buildMenu();
   createWindow();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!reveal()) createWindow();
   });
 });
 

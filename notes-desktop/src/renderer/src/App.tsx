@@ -5,7 +5,7 @@ import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
-import { errorText } from "./ipc";
+import { errorText, pageShown } from "./ipc";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote } from "./noteDraft";
 import { useOrganize } from "./Organize";
@@ -72,6 +72,7 @@ export function App() {
 }
 
 function Welcome({ missing, onChoose }: { missing?: string; onChoose(): void }) {
+  useEffect(pageShown, []);
   return (
     <main className="welcome">
       <div className="drag" />
