@@ -20,6 +20,8 @@ struct NativeEditor: NSViewRepresentable {
         let c = context.coordinator
         textView.coordinator = c; textView.delegate = c; storage.delegate = c
         textView.setUpInsertionCaret()
+        // The layout manager draws the selection, hugging the text; selected text keeps its colors.
+        textView.selectedTextAttributes = [:]
         textView.isRichText = false; textView.importsGraphics = false; textView.allowsUndo = true
         textView.isVerticallyResizable = true; textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
@@ -197,10 +199,14 @@ final class NoteTextView: NSTextView {
         super.viewDidMoveToWindow()
         windowObservers.forEach { NotificationCenter.default.removeObserver($0) }
         windowObservers = []
+        // The selection follows the accent color.
+        windowObservers.append(NotificationCenter.default.addObserver(forName: NSColor.systemColorsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.needsDisplay = true }
+        })
         if let window {
             for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
                 windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.updateInsertionCaret(animated: false) }
+                    MainActor.assumeIsolated { self?.needsDisplay = true; self?.updateInsertionCaret(animated: false) }
                 })
             }
         }
@@ -316,8 +322,13 @@ final class NoteTextView: NSTextView {
             coordinator?.scheduleStyle()
         }
     }
-    override func becomeFirstResponder() -> Bool { let result = super.becomeFirstResponder(); coordinator?.scheduleStyle(); updateInsertionCaret(animated: false); return result }
-    override func resignFirstResponder() -> Bool { let result = super.resignFirstResponder(); coordinator?.scheduleStyle(); updateInsertionCaret(animated: false); return result }
+    override func becomeFirstResponder() -> Bool { let result = super.becomeFirstResponder(); coordinator?.scheduleStyle(); needsDisplay = true; updateInsertionCaret(animated: false); return result }
+    override func resignFirstResponder() -> Bool { let result = super.resignFirstResponder(); coordinator?.scheduleStyle(); needsDisplay = true; updateInsertionCaret(animated: false); return result }
+    /// Where the selection is highlighted, in view coordinates.
+    func selectionHighlightRects() -> [CGRect] {
+        guard let lm = layoutManager as? NotesLayoutManager else { return [] }
+        return selectedRanges.flatMap { lm.selectionShapes(for: $0.rangeValue, origin: textContainerOrigin).map(\.rect) }
+    }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); coordinator?.styler.reset(); coordinator?.scheduleStyle(); updateInsertionCaret(animated: false) }
     override func mouseDown(with event: NSEvent) {
         listExitCaret = nil

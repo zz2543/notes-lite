@@ -385,6 +385,92 @@ import NotesCore
 
     }
 
+    func testTextSelectionHugsSelectedTextInsteadOfThePage() throws {
+        _ = NSApplication.shared
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = Workspace()
+        try workspace.open(root)
+        try workspace.createNote(title: "选区验证")
+        let long = String(repeating: "这是一段需要换行的正文。", count: 9)
+        workspace.edit("开头\n\n\(long)\n\n短行\n\n\n\n---\n\n末段文字\n")
+        let host = NSHostingView(rootView: NativeEditor(workspace: workspace))
+        let window = NSWindow(contentRect: NSRect(x: 120, y: 120, width: 900, height: 800), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        settle(host)
+        let editor = try XCTUnwrap(findEditor(host) as? NoteTextView)
+        window.makeFirstResponder(editor)
+        let text = editor.string as NSString
+        let start = text.range(of: long).location + 3
+        let end = text.range(of: "末段文字").location + 2
+        editor.setSelectedRange(NSRange(location: start, length: end - start))
+        settle(host)
+
+        for source in [false, true] {
+            workspace.source = source
+            settle(host)
+            editor.setSelectedRange(NSRange(location: start, length: end - start))
+            settle(host)
+            let mode = source ? "source" : "styled"
+            let rects = editor.selectionHighlightRects()
+            XCTAssertFalse(rects.isEmpty, mode)
+            let tc = try XCTUnwrap(editor.textContainer)
+            let column = (editor.textContainerOrigin.x, editor.textContainerOrigin.x + tc.size.width)
+            for r in rects {
+                XCTAssertGreaterThanOrEqual(r.minX, column.0 - 0.5, "\(mode): never spills into the page margin")
+                XCTAssertLessThanOrEqual(r.maxX, column.1 + 0.5, "\(mode): never spills into the page margin")
+            }
+            func local(_ range: NSRange) -> CGRect {
+                editor.convert(window.convertFromScreen(editor.firstRect(forCharacterRange: range, actualRange: nil)), from: nil)
+            }
+            let font = try XCTUnwrap(editor.textStorage?.attribute(.font, at: text.range(of: "短行").location, effectiveRange: nil) as? NSFont)
+            let short = local(text.range(of: "短行"))
+            let shortRect = try XCTUnwrap(rects.first { $0.contains(CGPoint(x: short.midX, y: short.midY)) }, "\(mode): the short line is highlighted")
+            XCTAssertLessThanOrEqual(shortRect.maxX, short.maxX + font.pointSize * 0.5 + 1, "\(mode): a short line's highlight stops at its last character")
+            XCTAssertEqual(shortRect.minX, short.minX, accuracy: 1, "\(mode): and starts at its first")
+            let lm = try XCTUnwrap(editor.layoutManager)
+            let shortLine = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: text.range(of: "短行").location), effectiveRange: nil)
+                .offsetBy(dx: editor.textContainerOrigin.x, dy: editor.textContainerOrigin.y)
+            XCTAssertTrue(shortLine.contains(shortRect), "\(mode): a line's highlight stays inside its line, which AppKit redraws")
+
+            // The wrapped paragraph is one unbroken band; the gap after it stays blank.
+            let paragraph = rects.filter { $0.maxY <= shortRect.minY && $0.width > font.pointSize * 2 }.sorted { $0.minY < $1.minY }
+            XCTAssertGreaterThanOrEqual(paragraph.count, 2, "\(mode): the long paragraph wraps")
+            for (a, b) in zip(paragraph, paragraph.dropFirst()) {
+                XCTAssertEqual(b.minY, a.maxY, accuracy: 0.5, "\(mode): lines of one paragraph join without stripes")
+            }
+            let lastLine = try XCTUnwrap(paragraph.last)
+            XCTAssertGreaterThan(shortRect.minY - lastLine.maxY, 4, "\(mode): spacing between paragraphs is not highlighted")
+            let gapMid = CGPoint(x: (column.0 + column.1) / 2, y: (shortRect.minY + lastLine.maxY) / 2)
+            XCTAssertFalse(rects.contains { $0.contains(gapMid) }, "\(mode): spacing between paragraphs is not highlighted")
+
+            // Selected empty lines show a narrow marker, not a full-width bar.
+            let markers = rects.filter { $0.minY > shortRect.maxY && $0.width <= font.pointSize * 0.5 + 1 }
+            XCTAssertFalse(markers.isEmpty, "\(mode): selected empty lines show a marker")
+            for m in markers { XCTAssertEqual(m.minX, short.minX, accuracy: 1, "\(mode): the marker sits where the line starts") }
+            XCTAssertFalse(rects.contains { $0.width > tc.size.width - 1 }, "\(mode): no full-width bars")
+        }
+
+        // In styled mode the rule is a block: only a slim box around the drawn line is tinted.
+        workspace.source = false
+        settle(host)
+        editor.setSelectedRange(NSRange(location: start, length: end - start))
+        settle(host)
+        let rules = editor.selectionHighlightRects().filter { $0.height < 20 && $0.width > 200 }
+        XCTAssertEqual(rules.count, 1, "The rule is tinted as one slim box")
+        let lm = try XCTUnwrap(editor.layoutManager)
+        let ruleGlyph = lm.glyphIndexForCharacter(at: text.range(of: "---").location + 3)
+        let ruleLine = lm.lineFragmentRect(forGlyphAt: ruleGlyph, effectiveRange: nil).offsetBy(dx: editor.textContainerOrigin.x, dy: editor.textContainerOrigin.y)
+        if let rule = rules.first {
+            XCTAssertLessThan(rule.height, ruleLine.height, "Not the rule's whole line")
+            XCTAssertTrue(ruleLine.contains(CGPoint(x: rule.midX, y: rule.midY)))
+        }
+    }
+
     func testReturnAtBottomOfLongNoteKeepsInsertionVisibleAndUndoable() throws {
         _ = NSApplication.shared
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

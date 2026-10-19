@@ -51,16 +51,35 @@ final class BlockDeco: NSObject {
         defer { if alpha < 1 { ctx?.endTransparencyLayer(); ctx?.setAlpha(1) } }
         switch content {
         case let .table(t):
-            let r = CGRect(x: frame.minX, y: frame.minY, width: t.width, height: t.height)
+            let r = rect(in: frame)
             t.draw(in: r)
             return r
         case let .note(n):
-            let r = CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: height)
+            let r = rect(in: frame)
             n.draw(in: r)
             return r
         case let .picture(r, kind):
             return Self.drawPicture(r, kind: kind, in: CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: height))
         }
+    }
+
+    /// The rect `draw(in:)` uses for this block, without drawing it.
+    func rect(in frame: CGRect) -> CGRect {
+        let column = CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: height)
+        switch content {
+        case let .table(t): return CGRect(x: frame.minX, y: frame.minY, width: t.width, height: t.height)
+        case .note: return column
+        case let .picture(r, kind): return Self.pictureRect(r, kind: kind, in: column)
+        }
+    }
+
+    private static func pictureRect(_ r: Rendered?, kind: RenderKind, in frame: CGRect) -> CGRect {
+        guard let r, r.image != nil else { return frame }
+        let scale = min(1, frame.width / max(1, r.size.width))
+        let size = CGSize(width: r.size.width * scale, height: r.size.height * scale)
+        // Formulas and diagrams sit in the middle of the column, as they do when published.
+        let x = kind == .block || kind == .diagram ? frame.minX + (frame.width - size.width) / 2 : frame.minX
+        return CGRect(x: x.rounded(), y: frame.minY, width: size.width, height: size.height)
     }
 
     private static func drawPicture(_ r: Rendered?, kind: RenderKind, in frame: CGRect) -> CGRect {
@@ -74,11 +93,7 @@ final class BlockDeco: NSObject {
             s.draw(with: box.insetBy(dx: 12, dy: 6), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
             return box
         }
-        let scale = min(1, frame.width / max(1, r.size.width))
-        let size = CGSize(width: r.size.width * scale, height: r.size.height * scale)
-        // Formulas and diagrams sit in the middle of the column, as they do when published.
-        let x = kind == .block || kind == .diagram ? frame.minX + (frame.width - size.width) / 2 : frame.minX
-        let rect = CGRect(x: x.rounded(), y: frame.minY, width: size.width, height: size.height)
+        let rect = pictureRect(r, kind: kind, in: frame)
         img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
         return rect
     }

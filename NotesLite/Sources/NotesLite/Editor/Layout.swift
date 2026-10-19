@@ -64,8 +64,6 @@ final class NotesLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     var highlights: [(range: NSRange, color: NSColor, selected: Bool)] = []
 
     /// Inline code and highlights: a rounded box around the glyphs instead of the whole line height.
-    /// The selection comes through here too, as one tall rect for all its middle lines; it is
-    /// left to the default fill (it is not the run's own background color).
     override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int,
                                           forCharacterRange charRange: NSRange, color: NSColor) {
         guard let storage = textStorage, charRange.location < storage.length,
@@ -133,17 +131,118 @@ final class NotesLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             let fraction = (storage.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor)?.alphaComponent ?? 1
             img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: min(1, fraction), respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
         }
+        drawSelection(in: paras, origin: origin)
+    }
+
+    // MARK: - Selection
+
+    /// The text view leaves the selection to this (it has no selected-text attributes): drawn
+    /// over block backgrounds and pictures, under the glyphs.
+    private func drawSelection(in paras: NSRange, origin: NSPoint) {
+        guard let tv = firstTextView else { return }
+        let active = tv.window?.isKeyWindow == true && tv.window?.firstResponder === tv
+        let color: NSColor = active ? .selectedTextBackgroundColor : .unemphasizedSelectedTextBackgroundColor
+        for value in tv.selectedRanges {
+            for shape in selectionShapes(for: NSIntersectionRange(value.rangeValue, paras), origin: origin) {
+                (shape.block ? color.withAlphaComponent(0.45) : color).setFill()
+                NSBezierPath(roundedRect: shape.rect, xRadius: 3, yRadius: 3).fill()
+            }
+        }
+    }
+
+    /// Where the selection is highlighted, in view coordinates: each line from its first to its
+    /// last selected character, joined within a paragraph but not across the spacing between
+    /// paragraphs; a narrow mark for a selected line break; and, for a block drawn in place of
+    /// its source, the drawing itself (`block`). Every shape stays inside its line fragment, so
+    /// AppKit's redraw of the lines a selection change touches is enough.
+    func selectionShapes(for selection: NSRange, origin: NSPoint) -> [(rect: CGRect, block: Bool)] {
+        guard let storage = textStorage, let container = textContainers.first else { return [] }
+        let sel = NSIntersectionRange(selection, NSRange(location: 0, length: storage.length))
+        guard sel.length > 0 else { return [] }
+        let ns = storage.string as NSString
+        let width = container.size.width
+        var out: [(rect: CGRect, block: Bool)] = []
+        // Lines that only make room for a drawing (their text is invisible) get no text shape.
+        var drawnInPlace: [NSRange] = []
+        let paras = ns.paragraphRange(for: sel)
+        storage.enumerateAttribute(.notesliteBlock, in: paras) { value, range, _ in
+            guard let b = value as? BlockDeco, NSIntersectionRange(range, sel).length > 0, let frame = frame(of: b, range: range, origin: origin, width: width) else { return }
+            out.append((b.rect(in: frame), true))
+            if !b.revealed { drawnInPlace.append(range) }
+        }
+        storage.enumerateAttribute(.notesliteEmbed, in: paras) { value, range, _ in
+            guard let e = value as? EmbedDeco, NSIntersectionRange(range, sel).length > 0, let frame = frame(of: e, range: range, origin: origin) else { return }
+            out.append((frame, true))
+            if !e.revealed { drawnInPlace.append(range) }
+        }
+        storage.enumerateAttribute(.notesliteDeco, in: paras) { value, range, _ in
+            guard let deco = value as? Deco, case .hr = deco.kind, NSIntersectionRange(range, sel).length > 0,
+                  let y = ruleY(range, storage: storage, origin: origin) else { return }
+            let x = origin.x + deco.contentX
+            out.append((CGRect(x: x, y: y - 6, width: origin.x + width - MarkdownStyler.gutter - x, height: 13), true))
+        }
+        let glyphs = glyphRange(forCharacterRange: sel, actualCharacterRange: nil)
+        enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, line, _ in
+            guard rect.height >= 1 else { return }
+            let g = NSIntersectionRange(line, glyphs)
+            var first: Int?, last: Int?, newline: Int?
+            for gi in g.location..<NSMaxRange(g) where self.propertyForGlyph(at: gi) != .null {
+                let c = ns.character(at: self.characterIndexForGlyph(at: gi))
+                if c == 0x0A || c == 0x0D || c == 0x2028 || c == 0x2029 { newline = gi; continue }
+                if first == nil { first = gi }
+                last = gi
+            }
+            guard let anchor = first ?? newline else { return }
+            let ci = self.characterIndexForGlyph(at: anchor)
+            guard !drawnInPlace.contains(where: { NSLocationInRange(ci, $0) }) else { return }
+            let para = ns.paragraphRange(for: NSRange(location: ci, length: 0))
+            let font = (storage.attribute(.font, at: ci, effectiveRange: nil) as? NSFont) ?? .systemFont(ofSize: 17)
+            let mark = (font.pointSize / 2).rounded()
+            var x0: CGFloat, x1: CGFloat
+            if let first, let last {
+                let b = self.boundingRect(forGlyphRange: NSRange(location: first, length: last - first + 1), in: container)
+                x0 = b.minX; x1 = b.maxX + (newline == nil ? 0 : mark)
+            } else if ns.substring(with: para).trimmingCharacters(in: .newlines).isEmpty, let newline {
+                // An empty line; a line of hidden syntax (a fence, a rule's source) gets no mark.
+                x0 = rect.minX + self.location(forGlyphAt: newline).x; x1 = x0 + mark
+            } else { return }
+            // From the top of a paragraph's first line to the text bottom of its last: the line
+            // spacing between its lines is covered, the spacing around the paragraph is not.
+            let style = storage.attribute(.paragraphStyle, at: ci, effectiveRange: nil) as? NSParagraphStyle
+            var start = self.glyphIndexForCharacter(at: para.location)
+            while start < NSMaxRange(line) - 1, self.propertyForGlyph(at: start) == .null { start += 1 }
+            let isFirst = NSLocationInRange(start, line)
+            let isLast = self.glyphIndexForCharacter(at: NSMaxRange(para) - 1) < NSMaxRange(line)
+            let top = rect.minY + (isFirst ? style?.paragraphSpacingBefore ?? 0 : 0)
+            let bottom = rect.maxY - (isLast ? (style?.paragraphSpacing ?? 0) + (style?.lineSpacing ?? 0) : 0)
+            x1 = min(x1, width + min(0, style?.tailIndent ?? 0))
+            guard x1 > x0, bottom > top else { return }
+            out.append((CGRect(x: origin.x + x0, y: origin.y + top, width: x1 - x0, height: bottom - top), false))
+        }
+        return out
     }
 
     private func draw(_ b: BlockDeco, range: NSRange, origin: NSPoint, width: CGFloat) {
+        guard let frame = frame(of: b, range: range, origin: origin, width: width) else { return }
+        let drawn = b.draw(in: frame)
+        blockHitRects.append((drawn, b, range.location))
+    }
+
+    /// The column at the block's top: below its source while that is shown, else in its place.
+    private func frame(of b: BlockDeco, range: NSRange, origin: NSPoint, width: CGFloat) -> CGRect? {
         let fs = frags(range)
-        guard let first = fs.first, let last = fs.last else { return }
+        guard let first = fs.first, let last = fs.last else { return nil }
         let para = textStorage?.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
         let y = b.revealed ? origin.y + last.used.maxY + 14 : origin.y + first.rect.minY + (para?.paragraphSpacingBefore ?? 0)
         let gutter = MarkdownStyler.gutter
-        let frame = CGRect(x: origin.x + gutter, y: y, width: max(40, width - 2 * gutter), height: b.height)
-        let drawn = b.draw(in: frame)
-        blockHitRects.append((drawn, b, range.location))
+        return CGRect(x: origin.x + gutter, y: y, width: max(40, width - 2 * gutter), height: b.height)
+    }
+
+    /// The vertical middle of a rule's line, without the spacing after it.
+    private func ruleY(_ range: NSRange, storage: NSTextStorage, origin: NSPoint) -> CGFloat? {
+        guard let f = frags(range).first else { return nil }
+        let para = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
+        return origin.y + f.rect.minY + (f.rect.height - (para?.paragraphSpacing ?? 0)) / 2
     }
 
     /// Line fragments of a paragraph. Hidden glyphs at a line's start sit in the previous
@@ -240,9 +339,7 @@ final class NotesLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             let s = NSAttributedString(string: label, attributes: [.font: font.monospacedDigits, .foregroundColor: Theme.NS.accent])
             s.draw(at: NSPoint(x: x0 - 8 - s.size().width, y: l.baseline - font.ascender))
         case .hr:
-            guard let f = frags(range).first else { return }
-            let para = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
-            let y = origin.y + f.rect.minY + (f.rect.height - (para?.paragraphSpacing ?? 0)) / 2
+            guard let y = ruleY(range, storage: storage, origin: origin) else { return }
             Theme.NS.hr.setFill()
             CGRect(x: x0, y: y, width: width - deco.contentX - MarkdownStyler.gutter, height: 1).fill()
         case let .code(top, bottom):
@@ -316,13 +413,17 @@ final class NotesLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         foldHitRects.append((c.insetBy(dx: -6, dy: -6), head.key))
     }
 
-    private func draw(_ e: EmbedDeco, range: NSRange, origin: NSPoint) {
+    private func frame(of e: EmbedDeco, range: NSRange, origin: NSPoint) -> CGRect? {
         let fs = frags(range)
-        guard let first = fs.first, let last = fs.last else { return }
+        guard let first = fs.first, let last = fs.last else { return nil }
         let x = origin.x + MarkdownStyler.gutter
         let y = e.revealed ? origin.y + last.used.maxY + 8 : origin.y + first.rect.minY
         let available = (textContainers.first?.size.width ?? 600) - 2 * MarkdownStyler.gutter
-        let frame = e.embed.drawRect(in: CGRect(x: x, y: y, width: available, height: e.height))
+        return e.embed.drawRect(in: CGRect(x: x, y: y, width: available, height: e.height))
+    }
+
+    private func draw(_ e: EmbedDeco, range: NSRange, origin: NSPoint) {
+        guard let frame = frame(of: e, range: range, origin: origin) else { return }
         embedHitRects.append((frame, e.embed))
         let clip = NSBezierPath(roundedRect: frame, xRadius: 8, yRadius: 8)
         if let img = e.embed.image {
