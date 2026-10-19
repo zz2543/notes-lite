@@ -31,6 +31,11 @@ export interface NotesApi {
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
+  /**
+   * Something in the open library changed, by this app or any other program: library-relative
+   * paths, hidden ones included; "" when anything may have changed.
+   */
+  onLibraryChanged(listener: (paths: string[]) => void): () => void;
 }
 
 export const channels = {
@@ -43,4 +48,5 @@ export const channels = {
   saveNote: "library:save-note",
   beforeClose: "window:before-close",
   closeChecked: "window:close-checked",
+  libraryChanged: "library:changed",
 } as const;

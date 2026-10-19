@@ -4,6 +4,7 @@ import type { LaunchState, LibraryInfo } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { errorText } from "./ipc";
+import { useFolderFallback } from "./libraryChanges";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote } from "./noteDraft";
 import { icon } from "./tokens";
@@ -104,6 +105,7 @@ function LibraryView({ library, onSwitch, saveFirst }: LibraryViewProps) {
   const [folder, setFolder] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([""]));
   const [note, setNote] = useState<string | null>(null);
+  useFolderFallback(folder, setFolder);
 
   const toggle = (path: string) =>
     setExpanded((now) => {

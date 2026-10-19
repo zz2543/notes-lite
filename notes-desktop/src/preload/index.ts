@@ -22,6 +22,11 @@ const api: NotesApi = {
     ipcRenderer.on(channels.beforeClose, handler);
     return () => ipcRenderer.off(channels.beforeClose, handler);
   },
+  onLibraryChanged: (listener) => {
+    const handler = (_: unknown, paths: string[]) => listener(paths);
+    ipcRenderer.on(channels.libraryChanged, handler);
+    return () => ipcRenderer.off(channels.libraryChanged, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("notes", api);

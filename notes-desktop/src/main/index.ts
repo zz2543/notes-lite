@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from "electron";
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { basename, join } from "node:path";
-import { LibraryError, openLibrary, type Library } from "../core";
+import { LibraryError, openLibrary, watchLibrary, type Library, type LibraryWatcher } from "../core";
 import { channels, type CloseCheck, type LaunchState, type LibraryInfo, type SaveResult } from "../shared/api";
 import { settingsStore } from "./settings";
 
@@ -24,11 +24,27 @@ const closeCheckTimeout = 5000;
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
+let watcher: LibraryWatcher | null = null;
+
+/** Passes every change in the open library, made here or by another program, on to the page. */
+function watch(lib: Library) {
+  watcher?.close();
+  try {
+    watcher = watchLibrary(lib.root, (paths) => {
+      if (window && !window.isDestroyed()) window.webContents.send(channels.libraryChanged, paths);
+    });
+  } catch {
+    // A folder the system will not watch still opens; it just won't follow changes made elsewhere.
+    watcher = null;
+  }
+}
+
 // Starts while the window loads, so the remembered library is ready by the time the page asks.
 const launch: Promise<LaunchState> = (async () => {
   const { libraryPath } = await settings.read();
   if (!libraryPath) return { kind: "welcome" };
   library = await openLibrary(libraryPath).catch(() => null);
+  if (library) watch(library);
   return library ? { kind: "open", library: libraryInfo(library) } : { kind: "welcome", missing: libraryPath };
 })();
 
@@ -42,6 +58,7 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   const path = picked.filePaths[0];
   if (picked.canceled || !path) return null;
   library = await openLibrary(path);
+  watch(library);
   await settings.update({ libraryPath: path });
   return libraryInfo(library);
 }
