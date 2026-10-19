@@ -1,6 +1,6 @@
 # 17: 嵌套空列表项逐级退出
 
-**What to build:** 在嵌套的空列表项上回车时退回上一层级，而不是直接结束整个列表；缩进与标记跟随父项。完整决定见 [退出列表与空行插入光标规格](../../../design/notes-lite/list-exit-caret-spec.md)。
+**What to build:** 在嵌套的空列表项上回车时退回上一层级，而不是直接结束整个列表；缩进与标记跟随父项。完整决定见 [退出列表与空行插入光标规格](../../../notes-desktop/docs/specs/list-exit-caret-spec.md)。
 
 **Blocked by:** None (can start immediately)
 

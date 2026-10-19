@@ -1,6 +1,6 @@
 # 16: 最外层空项退出列表不换行
 
-**What to build:** 在最外层空列表项上回车只退出列表、不另起新行；在这一行开始输入正文时自动补分隔空行，使保存的 Markdown 在其他编辑器中依然正确，并且输入时文字零位移。完整决定见 [退出列表与空行插入光标规格](../../../design/notes-lite/list-exit-caret-spec.md)。
+**What to build:** 在最外层空列表项上回车只退出列表、不另起新行；在这一行开始输入正文时自动补分隔空行，使保存的 Markdown 在其他编辑器中依然正确，并且输入时文字零位移。完整决定见 [退出列表与空行插入光标规格](../../../notes-desktop/docs/specs/list-exit-caret-spec.md)。
 
 **Blocked by:** 15：列表与段落之间的空行压矮显示
 

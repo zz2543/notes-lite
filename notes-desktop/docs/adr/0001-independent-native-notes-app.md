@@ -1,6 +1,6 @@
 # 保留原产品，独立构建原生笔记应用
 
-状态：已确认，部分被 [0002](0002-space-pages-written-by-external-agents.md) 修订。日期：2026-10-16。
+状态：已确认，部分被 [0002](0002-space-pages-written-by-external-agents.md) 修订，平台与技术栈部分被 [0004](0004-cross-platform-desktop-rewrite.md) 取代。日期：2026-10-16。
 
 用户明确拒绝直接将原产品削减为纯笔记软件，要求保留当前版本并构建独立产品。因此，新软件使用独立应用身份和配置空间，原产品既有 Agent 平台方向及未提交修改继续保留。新软件仅接纳纯笔记能力，不继承 Agent 运行和控制接口。
 

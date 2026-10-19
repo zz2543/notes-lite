@@ -1,6 +1,6 @@
 # 15: 列表与段落之间的空行压矮显示
 
-**What to build:** 打开或编辑任何笔记时，紧接在列表项之后、又紧挨着普通段落的那一个空行以极小行高显示，仅保留段落已有的间距，使列表与随后正文在视觉上不被多出的一行隔开。源码保持不变。完整决定见 [退出列表与空行插入光标规格](../../../design/notes-lite/list-exit-caret-spec.md)。
+**What to build:** 打开或编辑任何笔记时，紧接在列表项之后、又紧挨着普通段落的那一个空行以极小行高显示，仅保留段落已有的间距，使列表与随后正文在视觉上不被多出的一行隔开。源码保持不变。完整决定见 [退出列表与空行插入光标规格](../../../notes-desktop/docs/specs/list-exit-caret-spec.md)。
 
 **Blocked by:** None (can start immediately)
 

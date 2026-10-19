@@ -1,6 +1,6 @@
 # 18: 空行插入光标对齐
 
-**What to build:** 空行上的插入光标与在该行打出第一个字之后的位置和高度完全一致，开始输入时光标零位移。完整决定见 [退出列表与空行插入光标规格](../../../design/notes-lite/list-exit-caret-spec.md)。
+**What to build:** 空行上的插入光标与在该行打出第一个字之后的位置和高度完全一致，开始输入时光标零位移。完整决定见 [退出列表与空行插入光标规格](../../../notes-desktop/docs/specs/list-exit-caret-spec.md)。
 
 **Blocked by:** None (can start immediately)
 

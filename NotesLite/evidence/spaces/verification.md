@@ -1,6 +1,6 @@
 # 留白「空间」实测记录
 
-日期：2026-10-18。机器：Apple M4，macOS 27.0.1。工具链：Swift 6.2（`swift test`）。规格：[空间规格](../../../design/notes-lite/spaces-spec.md)；任务：[任务索引](../../../.scratch/notes-lite-spaces/README.md)。
+日期：2026-10-18。机器：Apple M4，macOS 27.0.1。工具链：Swift 6.2（`swift test`）。规格：[空间规格](../../../notes-desktop/docs/specs/spaces-spec.md)；任务：[任务索引](../../../.scratch/notes-lite-spaces/README.md)。
 
 ## 自动化测试
 

@@ -1,6 +1,6 @@
 # 独立笔记软件规格入口
 
-正式规格：[独立 macOS 笔记软件规格](../../design/notes-lite/spec.md)。
+正式规格：[独立 macOS 笔记软件规格](../../notes-desktop/docs/specs/spec.md)。
 
 此文件仅作为本地问题跟踪入口，不复制规格正文。更新规格时编辑上述正式文档。
 

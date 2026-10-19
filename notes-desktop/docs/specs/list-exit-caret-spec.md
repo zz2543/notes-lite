@@ -1,6 +1,6 @@
 # 退出列表与空行插入光标规格
 
-日期：2026-10-19。适用产品为留白（`NotesLite/`）。决策来源：2026-10-19 用户录屏反馈后的设计追问，全部决定已获用户确认。术语见 [术语表](GLOSSARY.md)。
+日期：2026-10-19。适用产品为留白（`NotesLite/`）。决策来源：2026-10-19 用户录屏反馈后的设计追问，全部决定已获用户确认。术语见 [术语表](../GLOSSARY.md)。
 
 ## Problem Statement
 
@@ -81,4 +81,4 @@
 ## Further Notes
 
 - 选择“延迟补空行 + 压矮显示”而非“直接写两个换行”，是为了同时满足“只取消、不换行”的操作感和 Markdown 在其他编辑器中的保真（标准 Markdown 中，紧贴列表项、无空行分隔的文字会被视为该项的续行）。
-- 任务拆分：[15：列表与段落之间的空行压矮显示](../../.scratch/notes-lite/issues/15-collapse-list-paragraph-gap.md)、[16：最外层空项退出列表不换行](../../.scratch/notes-lite/issues/16-list-exit-without-newline.md)（依赖 15）、[17：嵌套空列表项逐级退出](../../.scratch/notes-lite/issues/17-nested-list-outdent.md)、[18：空行插入光标对齐](../../.scratch/notes-lite/issues/18-empty-line-caret.md)。
+- 任务拆分：[15：列表与段落之间的空行压矮显示](../../../.scratch/notes-lite/issues/15-collapse-list-paragraph-gap.md)、[16：最外层空项退出列表不换行](../../../.scratch/notes-lite/issues/16-list-exit-without-newline.md)（依赖 15）、[17：嵌套空列表项逐级退出](../../../.scratch/notes-lite/issues/17-nested-list-outdent.md)、[18：空行插入光标对齐](../../../.scratch/notes-lite/issues/18-empty-line-caret.md)。

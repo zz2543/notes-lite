@@ -1,6 +1,6 @@
 # 独立 macOS 笔记软件：三栏资料库、整页专注编辑与 Metal 流动动效
 
-日期：2026-10-16。状态：产品方向和完整验收范围已由用户确认；规格已进入本地 Markdown 跟踪；NotesLite 已实现首个可运行版本，完整验收仍在进行，见 `../../NotesLite/evidence/verification.md`。
+日期：2026-10-16。状态：产品方向和完整验收范围已由用户确认；规格已进入本地 Markdown 跟踪；NotesLite 已实现首个可运行版本，完整验收仍在进行，见 `../../../NotesLite/evidence/verification.md`。
 
 ## Problem Statement
 

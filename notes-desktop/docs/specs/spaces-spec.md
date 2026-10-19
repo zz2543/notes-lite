@@ -1,7 +1,7 @@
 # 留白「空间」：由外部 Agent 编写的主题空间主页
 
-日期：2026-10-18。状态：设计已与用户逐条确认；首版已实现（`feat/ai-native`），实测见 `../../NotesLite/evidence/spaces/verification.md`。适用产品：留白（NotesLite，`feat/ai-native` 分支），不涉及原产品共笔。
-相关决定：[ADR 0002](docs/adr/0002-space-pages-written-by-external-agents.md)、[ADR 0003](docs/adr/0003-space-pages-full-access-within-scope.md)；术语见 [GLOSSARY](GLOSSARY.md)。
+日期：2026-10-18。状态：设计已与用户逐条确认；首版已实现（`feat/ai-native`），实测见 `../../../NotesLite/evidence/spaces/verification.md`。适用产品：留白（NotesLite，`feat/ai-native` 分支），不涉及原产品共笔。
+相关决定：[ADR 0002](../adr/0002-space-pages-written-by-external-agents.md)、[ADR 0003](../adr/0003-space-pages-full-access-within-scope.md)；术语见 [GLOSSARY](../GLOSSARY.md)。
 
 ## Problem Statement
 
