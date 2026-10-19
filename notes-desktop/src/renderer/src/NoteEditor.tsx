@@ -4,18 +4,32 @@ import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
 import { useNoteSource } from "./ipc";
-import { markdownView } from "./markdownView";
+import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
+import { setShowSource, useShowSource } from "./sourceView";
 
 /** The open note on its card: Markdown source edited in place, saved as it is typed. */
 export function NoteEditor({ path }: { path: string | null }) {
   const { value: source, error } = useNoteSource(path);
+  const showSource = useShowSource();
   return (
     <article className="card">
-      <header className="card-head">{path?.split("/").join(" / ")}</header>
+      <header className="card-head">
+        <span className="card-path">{path?.split("/").join(" / ")}</span>
+        <button
+          className="card-tool"
+          aria-pressed={showSource}
+          title="切换源码与原地排版"
+          // The editor keeps focus, so typing goes on where it was.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setShowSource(!showSource)}
+        >
+          Markdown 源码
+        </button>
+      </header>
       {!path && <p className="empty">选择一篇笔记</p>}
       {error && <p className="empty">{error}</p>}
-      {path && source !== undefined && <Editor key={path} path={path} source={source} />}
+      {path && source !== undefined && <Editor key={path} path={path} source={source} showSource={showSource} />}
     </article>
   );
 }
@@ -26,8 +40,10 @@ const lineSeparatorOf = (source: string) => (/\r\n/.test(source) && !/(^|[^\r])\
 
 const wordCountDelay = 150;
 
-function Editor({ path, source }: { path: string; source: string }) {
+function Editor({ path, source, showSource }: { path: string; source: string; showSource: boolean }) {
   const host = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView>(null);
+  const shown = useRef(showSource);
   const [draft, setDraft] = useState<NoteDraft>();
   const [words, setWords] = useState(() => countWords(source));
 
@@ -46,7 +62,7 @@ function Editor({ path, source }: { path: string; source: string }) {
           // Redo answers to ⌘⇧Z / Ctrl+Shift+Z everywhere, and to Ctrl+Y on Windows as usual.
           keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
-          markdownView(false),
+          markdownDisplay(shown.current),
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
@@ -61,15 +77,24 @@ function Editor({ path, source }: { path: string; source: string }) {
     const draft = new NoteDraft(path, source, () => ({ text: view.state.sliceDoc(), composing: view.composing }));
     setOpenDraft(draft);
     setDraft(draft);
+    viewRef.current = view;
     view.focus();
     return () => {
       clearTimeout(countTimer);
       // The app saves before it switches notes; this only catches an unmount nobody asked to save.
       void draft.flush();
       setOpenDraft(null);
+      viewRef.current = null;
       view.destroy();
     };
   }, [path, source]);
+
+  // The same document shown another way: the state (text, selection, undo, composition) stays.
+  useEffect(() => {
+    if (shown.current === showSource || !viewRef.current) return;
+    shown.current = showSource;
+    switchMarkdownView(viewRef.current, showSource);
+  }, [showSource]);
 
   return (
     <>

@@ -1,6 +1,6 @@
 // How the editor shows a note: typeset in place (the default) or as its Markdown source. Both are
 // views of the same document; typesetting only adds decorations, so the text never changes.
-import { StateField, type Extension, type Range as Decorated } from "@codemirror/state";
+import { Compartment, StateField, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { codeTokens, type CodeToken } from "../../core/codeHighlight";
 import { blockPrefixLength, blockType, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../core/markdown";
@@ -178,4 +178,34 @@ export const typesetView: Extension = [literal, typesetter, EditorView.editorAtt
 /** The note as its Markdown source, every character shown as it is saved. */
 export const sourceView: Extension = EditorView.editorAttributes.of({ class: "cm-source" });
 
-export const markdownView = (showSource: boolean): Extension => (showSource ? sourceView : typesetView);
+const display = new Compartment();
+const viewFor = (showSource: boolean) => (showSource ? sourceView : typesetView);
+
+/** The editor's display, typeset or source, switchable later with `switchMarkdownView`. */
+export const markdownDisplay = (showSource: boolean): Extension => display.of(viewFor(showSource));
+
+/** Shows the note the other way without rebuilding it. The line being edited stays where it is on
+ *  screen when it is in view; otherwise the text at the top of the view stays. */
+export function switchMarkdownView(view: EditorView, showSource: boolean) {
+  const head = view.state.selection.main.head;
+  const frame = view.scrollDOM.getBoundingClientRect();
+  const caret = view.coordsAtPos(head);
+  if (caret === null || caret.top < frame.top || caret.bottom > frame.bottom) {
+    view.dispatch({ effects: [display.reconfigure(viewFor(showSource)), view.scrollSnapshot()] });
+    return;
+  }
+  const margin = caret.top - frame.top;
+  view.dispatch({ effects: [display.reconfigure(viewFor(showSource)), EditorView.scrollIntoView(head, { y: "start", yMargin: margin })] });
+  // Lines above change height with the view, and their new heights are only known once drawn: check
+  // where the caret landed and scroll again while it is off.
+  const settle = (tries: number) =>
+    view.requestMeasure({
+      read: (v) => v.coordsAtPos(head)?.top,
+      write: (top, v) => {
+        if (top === undefined || Math.abs(top - caret.top) < 0.5 || tries === 0) return;
+        v.dispatch({ effects: EditorView.scrollIntoView(head, { y: "start", yMargin: margin }) });
+        settle(tries - 1);
+      },
+    });
+  settle(3);
+}

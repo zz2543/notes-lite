@@ -6,6 +6,7 @@ import { FolderTree } from "./FolderTree";
 import { errorText } from "./ipc";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote } from "./noteDraft";
+import { listenForSourceView } from "./sourceView";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
@@ -46,7 +47,9 @@ export function App() {
     void window.notes.launchState().then(setPhase);
     const offMenu = window.notes.onOpenLibraryRequest(() => void choose());
     const offClose = window.notes.onBeforeClose(saveOpenNote);
+    const offSourceView = listenForSourceView();
     return () => {
+      offSourceView();
       offMenu();
       offClose();
     };

@@ -37,6 +37,7 @@
   --card-foot-height: 34px;
   --card-padding: 28px 40px;
   --icon-button-radius: 8px;
+  --icon-button-small: 24px;
   --inline-gap: 8px;
 
   /* 界面文字 */
@@ -317,6 +318,38 @@ button {
 }
 .editor .cm-editor.cm-focused {
   outline: none;
+}
+/* The caret shows where focus is; the text column needs no focus ring. */
+.editor .cm-content:focus-visible {
+  box-shadow: none;
+}
+/* Markdown 源码: every character as saved, in the code font. */
+.editor .cm-source .cm-content {
+  font-family: var(--code-font);
+  font-size: var(--code-size);
+}
+.card-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card-tool {
+  flex: none;
+  height: var(--icon-button-small);
+  padding: 0 var(--inline-gap);
+  border-radius: var(--icon-button-radius);
+  color: var(--card-path);
+  font-size: var(--text-meta);
+  -webkit-app-region: no-drag;
+}
+.card-tool:hover {
+  background: var(--hover);
+}
+.card-tool[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--card-fg);
 }
 .editor .cm-scroller {
   padding: var(--card-padding);

@@ -146,3 +146,45 @@ test("a fenced code block is set in the code font and coloured by its language",
   expect((await look(page, "路线")).fontFamily).not.toContain("monospace");
   await app.close();
 });
+
+test("switching to the Markdown source and back keeps the caret, selection, scroll and undo", async ({ scratch }) => {
+  const paragraphs = Array.from({ length: 60 }, (_, i) => `第 ${i + 1} 段，**粗体**与 *斜体*。`);
+  const source = `# 长笔记\n\n${paragraphs.join("\n\n")}\n`;
+  const root = await library(scratch, "笔记库", { "长笔记.md": source });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "长笔记");
+  const toggle = page.getByRole("button", { name: "Markdown 源码" });
+  const sourceMenuChecked = () => app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("source-view")?.checked);
+
+  // Select "第 N" of a paragraph well down the note.
+  await page.keyboard.press("ControlOrMeta+Home");
+  for (let i = 0; i < 60; i++) await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+ArrowRight");
+  const selected = await page.evaluate(() => document.getSelection()!.toString());
+  expect(selected).toMatch(/^第 \d\d$/);
+  const line = `${selected.slice(2)} 段，`;
+  const typeset = await look(page, line);
+  expect(typeset.y).toBeGreaterThan(0);
+
+  await page.keyboard.press("ControlOrMeta+Shift+KeyM");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  expect(await sourceMenuChecked()).toBe(true);
+  await expect(editor(page)).toContainText("第 31 段，**粗体**与 *斜体*。");
+  // The line being edited stays where it was on screen.
+  await expect.poll(async () => Math.round((await look(page, line).catch(() => ({ y: NaN }))).y - typeset.y)).toBe(0);
+  expect((await look(page, line)).fontFamily).toContain("monospace");
+
+  // Typing replaces the selection made before the switch; undo reaches back across it.
+  await page.keyboard.type("第三十");
+  await page.keyboard.press("ControlOrMeta+Shift+KeyM");
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  expect(await sourceMenuChecked()).toBe(false);
+  await expect.poll(async () => Math.round((await look(page, "三十 段，").catch(() => ({ y: NaN }))).y - typeset.y)).toBe(0);
+  await expect(page.getByRole("status", { name: "保存状态" })).toHaveText("已保存");
+  expect(await readFile(join(root, "长笔记.md"), "utf8")).toBe(source.replace(`${selected} 段`, "第三十 段"));
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.getByRole("status", { name: "保存状态" })).toHaveText("已保存");
+  expect(await readFile(join(root, "长笔记.md"), "utf8")).toBe(source);
+  await app.close();
+});

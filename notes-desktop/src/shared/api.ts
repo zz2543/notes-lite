@@ -29,6 +29,10 @@ export interface NotesApi {
   readNote(path: string): Promise<string>;
   /** `expected` is the source last read or saved; a note changed on disk since then is not overwritten. */
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
+  /** 笔记 › Markdown 源码 in the menu asks the page to show the source (true) or the typeset note. */
+  onSourceViewRequest(listener: (showSource: boolean) => void): () => void;
+  /** The page tells the menu which view the editor shows, so its check mark follows the card's button. */
+  sourceViewChanged(showSource: boolean): void;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
 }
@@ -43,4 +47,6 @@ export const channels = {
   saveNote: "library:save-note",
   beforeClose: "window:before-close",
   closeChecked: "window:close-checked",
+  sourceViewRequest: "menu:source-view",
+  sourceViewChanged: "editor:source-view-changed",
 } as const;

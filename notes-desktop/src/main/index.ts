@@ -21,6 +21,7 @@ let quitting = false;
 // File > 打开笔记库… with no window open: asked again once the new page listens.
 let openLibraryPending = false;
 const closeCheckTimeout = 5000;
+const sourceViewItem = "source-view";
 
 const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
 
@@ -65,6 +66,10 @@ function registerIpc() {
       const code = error instanceof LibraryError ? error.code : "write-failed";
       return { ok: false, code, message: (error as Error).message };
     }
+  });
+  ipcMain.on(channels.sourceViewChanged, (_, showSource: boolean) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(sourceViewItem);
+    if (item) item.checked = showSource;
   });
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {
@@ -111,10 +116,20 @@ function buildMenu() {
       }
     },
   };
+  const sourceViewToggle: MenuItemConstructorOptions = {
+    id: sourceViewItem,
+    label: "Markdown 源码",
+    type: "checkbox",
+    accelerator: "CmdOrCtrl+Shift+M",
+    // The page handles the shortcut itself, so it works however the menu is shown; the menu only shows it.
+    registerAccelerator: false,
+    click: (item) => window?.webContents.send(channels.sourceViewRequest, item.checked),
+  };
   const template: MenuItemConstructorOptions[] = [
     ...(mac ? [{ role: "appMenu" } as const] : []),
     { label: "文件", submenu: [openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }] },
     { role: "editMenu" },
+    { label: "笔记", submenu: [sourceViewToggle] },
     { role: "viewMenu" },
     { role: "windowMenu" },
   ];
