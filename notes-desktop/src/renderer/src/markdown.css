@@ -1,6 +1,7 @@
-/* Markdown typeset in place (markdownView.ts). Values come from the variables in styles.css; spacing in
-   em follows the old editor's typesetting, scaled to each element's own size. Line rules are scoped under
-   .cm-typeset .cm-line so they outrank the editor's base line style. */
+/* Markdown typeset in place (markdownView.ts). Values come from the variables in styles.css. Spacing in
+   em follows the old editor, scaled to each element's own size, with half its space above headings since
+   a blank line (with its 段距) already precedes them. Line rules are scoped under .cm-typeset .cm-line so
+   they outrank the editor's base line style. */
 
 .cm-typeset {
   /* Syntax characters on the line being edited: dimmed, and hanging left of the text they mark so the
@@ -22,6 +23,11 @@
     padding-right: 0.45em;
     color: var(--card-muted);
     font-variant-numeric: tabular-nums;
+  }
+  /* Bullets drawn a little larger than the text's own "•". */
+  & .cm-md-marker-li .cm-md-glyph {
+    display: inline-block;
+    transform: scale(1.4);
   }
   /* A task's box; ticked, it fills and the item's text recedes. */
   & .cm-md-marker-task::before {
@@ -74,20 +80,20 @@
       font-size: var(--h1-size);
       line-height: 1.25;
       letter-spacing: -0.01em;
-      padding: 0.88em 0 0.47em;
+      padding: 0.44em 0 0.47em;
     }
     &.cm-md-h2 {
       font-size: var(--h2-size);
-      padding: 1.29em 0 0.46em;
+      padding: 0.64em 0 0.46em;
     }
     &.cm-md-h3 {
       font-size: var(--h3-size);
-      padding: 1.22em 0 0.33em;
+      padding: 0.6em 0 0.33em;
     }
     &.cm-md-h4,
     &.cm-md-h5,
     &.cm-md-h6 {
-      padding: 0.94em 0 0.24em;
+      padding: 0.47em 0 0.24em;
     }
     &.cm-md-h4 {
       font-size: var(--h4-size);
@@ -121,6 +127,11 @@
     &.cm-md-empty,
     &.cm-md-hr {
       padding-bottom: var(--para-gap);
+    }
+
+    /* A thematic break: a hairline across the column. */
+    &.cm-md-hr {
+      background: linear-gradient(var(--line), var(--line)) left calc(50% - var(--para-gap) / 2) / 100% 1px no-repeat;
     }
 
     /* Lists: each level indents one step; the marker hangs in the step before the text. */

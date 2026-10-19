@@ -126,6 +126,18 @@ test("lists show bullets and numbers in place of their markers, nesting by inden
   await app.close();
 });
 
+test("a thematic break shows as a rule, and as written while edited", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "散步.md": "上\n\n---\n\n下" });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "散步");
+  await page.keyboard.press("ControlOrMeta+End");
+  await expect(editor(page)).toHaveText("上下");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(editor(page)).toHaveText("上---下");
+  await app.close();
+});
+
 test("a fenced code block is set in the code font and coloured by its language", async ({ scratch }) => {
   const source = '路线：\n\n```js\nconst 路 = "长"; // 注释\nlet **不是粗体** = 1;\n```\n\n```\nconst 无语言\n```\n';
   const root = await library(scratch, "笔记库", { "散步.md": source });

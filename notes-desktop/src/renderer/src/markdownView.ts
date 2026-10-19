@@ -58,7 +58,7 @@ class ListMarker extends WidgetType {
     marker.className = `cm-md-marker cm-md-marker-${this.kind}`;
     marker.setAttribute("aria-hidden", "true");
     if (this.kind === "task") marker.classList.toggle("cm-md-done", this.label === "x");
-    else marker.textContent = this.label;
+    else marker.append(Object.assign(document.createElement("span"), { className: "cm-md-glyph", textContent: this.label }));
     return marker;
   }
   // A click on the marker places the caret like a click on text.
@@ -120,6 +120,10 @@ function typeset(view: EditorView): DecorationSet {
             type === "ol" ? `${parseInt(line.text.slice(indent), 10)}.` : type === "li" ? bullets[markup.depth % 3]! : isTaskDone(line.text) ? "x" : "";
           out.push(Decoration.replace({ widget: new ListMarker(type, label) }).range(line.from, end));
         }
+      } else if (type === "hr") {
+        out.push(lineClass("cm-md-hr").range(line.from));
+        // A rule in place of "---"; on its own line the dashes come back to be edited.
+        out.push((isEdited ? syntax : hidden).range(line.from, line.to));
       } else {
         out.push(lineClass(`cm-md-${type}`).range(line.from));
       }
