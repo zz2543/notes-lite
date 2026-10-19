@@ -90,12 +90,6 @@ async function scan(root: string, folder: string, into: Map<string, Entry>) {
   }
 }
 
-/** How the note begins: its first line with text, without the block marker. */
-function opening(body: string): Snippet {
-  const line = body.split("\n").find((l) => l.trim() !== "") ?? "";
-  return { text: line.slice(blockPrefixLength(line)).trim() };
-}
-
 // A list row shows one line of snippet (about 18 CJK characters): a match within the first
 // `inView` characters shows the line from its start; one further along keeps `contextBefore`.
 const inView = 16;
@@ -104,6 +98,14 @@ const contextAfter = 80;
 
 /** Moves `at` off the second half of a surrogate pair, so a cut never splits a character. */
 const charBoundary = (text: string, at: number) => (/[\udc00-\udfff]/.test(text[at] ?? "") ? at - 1 : at);
+
+/** How the note begins: its first line with text, without the block marker. */
+function opening(body: string): Snippet {
+  const line = /^.*\S.*$/m.exec(body)?.[0] ?? "";
+  const text = line.slice(blockPrefixLength(line)).trim();
+  const end = charBoundary(text, inView + contextAfter);
+  return { text: end < text.length ? `${text.slice(0, end)}…` : text };
+}
 
 /** The line holding the match, without its block marker or line ending, cut to keep the match in view. */
 function snippetAt(body: string, at: number, length: number): Snippet {

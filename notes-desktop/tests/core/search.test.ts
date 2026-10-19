@@ -49,7 +49,11 @@ describe("搜索", () => {
 
   it("shows how a note begins when only its title matches", async () => {
     const index = createSearchIndex(
-      await library({ "工作/周报.md": "\n\n- 本周完成了三件事\n- 下周计划\n", "工作/空的周报.md": "" }),
+      await library({
+        "工作/周报.md": "\r\n\r\n- 本周完成了三件事\r\n- 下周计划\r\n",
+        "工作/空的周报.md": "",
+        "工作/长周报.md": `${"丙".repeat(200)}\n`,
+      }),
     );
 
     const { hits } = await index.search("周报");
@@ -57,6 +61,7 @@ describe("搜索", () => {
     expect(hits.map((h) => [h.title, shown(h)]).sort()).toEqual([
       ["周报", "本周完成了三件事"],
       ["空的周报", ""],
+      ["长周报", `${"丙".repeat(96)}…`],
     ]);
   });
 
