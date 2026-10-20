@@ -1,0 +1,2 @@
+# Licence texts ship byte for byte as their packages publish them; no line-ending conversion on checkout.
+resources/licenses/** -text
