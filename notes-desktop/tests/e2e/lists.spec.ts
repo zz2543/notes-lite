@@ -43,3 +43,69 @@ test("Return after a list item continues the list with the same kind of marker",
   }
   await app.close();
 });
+
+test("Return on an empty outermost item removes only its marker, adding no line", async ({ scratch }) => {
+  const cases = [
+    ["- 项目\n- ", "- 项目\n"],
+    ["1. 项目\n2. ", "1. 项目\n"],
+    ["- [ ] 项目\n- [ ] ", "- [ ] 项目\n"],
+    ["* 项目\n* ", "* 项目\n"],
+  ] as const;
+  const { app, page, open, saved } = await openLibrary(scratch, cases.map((c) => c[0]));
+  for (const [i, [, kept]] of cases.entries()) {
+    await open(i + 1);
+    await page.keyboard.press("Enter");
+    // Nothing typed: no blank line is added.
+    await expect.poll(saved(i + 1)).toBe(kept);
+  }
+  await app.close();
+});
+
+test("Return on an empty nested item steps out one level, taking its parent's marker", async ({ scratch }) => {
+  const cases = [
+    ["- 父\n  - 子\n  - ", "- 父\n  - 子\n- "],
+    ["1. 父\n2. 父二\n   1. 子\n   2. ", "1. 父\n2. 父二\n   1. 子\n3. "],
+    ["1) 父\n   - 子\n   - ", "1) 父\n   - 子\n2) "],
+    ["- [x] 父\n  - [ ] 子\n  - [ ] ", "- [x] 父\n  - [ ] 子\n- [ ] "],
+    ["- 父\n  1. 子\n  2. ", "- 父\n  1. 子\n- "],
+  ] as const;
+  const { app, page, open, saved } = await openLibrary(scratch, [...cases.map((c) => c[0]), "- 一\n  - 二\n    - 三\n    - "]);
+  for (const [i, [, stepped]] of cases.entries()) {
+    await open(i + 1);
+    await page.keyboard.press("Enter");
+    // The caret ends after the new marker.
+    await page.keyboard.type("新");
+    await expect.poll(saved(i + 1)).toBe(`${stepped}新`);
+  }
+
+  // One level at a time; at the outermost level the list ends. Undo steps back the same way.
+  const deep = cases.length + 1;
+  const steps = ["    - ", "  - ", "- ", ""].map((last) => `- 一\n  - 二\n    - 三\n${last}`);
+  await open(deep);
+  for (const step of steps.slice(1)) {
+    await page.keyboard.press("Enter");
+    await expect.poll(saved(deep)).toBe(step);
+  }
+  for (const step of steps.slice(0, -1).reverse()) {
+    await page.keyboard.press("ControlOrMeta+KeyZ");
+    await expect.poll(saved(deep)).toBe(step);
+  }
+  await app.close();
+});
+
+test("stepping out of a numbered list leaves later numbers alone, and code is left alone", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["1. 甲\n   1. 乙\n   2. \n2. 丙", "```\n- 项目\n- \n```"]);
+  await open(1);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(1)).toBe("1. 甲\n   1. 乙\n2. \n2. 丙");
+
+  // Inside code Return is just a new line.
+  await open(2);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(2)).toBe("```\n- 项目\n- \n\n```");
+  await app.close();
+});
