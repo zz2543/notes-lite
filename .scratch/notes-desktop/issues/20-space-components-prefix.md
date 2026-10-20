@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 统计、图表、日历、快速录入、记录列表五个组件，入场使用动效预设，字体跟随排版设置
 - [x] 样式变量跟随深浅色与外观
@@ -31,3 +31,7 @@
 - 组件报错目前只写 console；错误条与“复制错误给 agent”、组件在 `space.on("change")` 推送后重绘（快速录入后统计、记录列表刷新）→ 任务 21。
 - 设计规范未列出的新变量：`--space-*` 全部、`--space-card`（卡片上的卡片，页面色混 2.5% 文字色）、`--space-chart-6`（蓝绿混色）→ 任务 23 核对。
 - 任务 16 未勾的“空间主页通过样式变量使用同样的字体字号”由本任务完成（16 的勾选由编排者处理）。
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过（macOS 首轮一个助手栏安装指引用例偶发失败，重跑通过）：https://github.com/zz2543/notes-lite/actions/runs/39388082390
