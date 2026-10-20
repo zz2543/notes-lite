@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 三种来源的修改都触发页面刷新
 - [x] JS 错误与资源加载失败显示错误条，可复制给 Agent；写入后显示提示条
@@ -29,3 +29,7 @@
 - 新增设计变量 `--space-problem`（取 `--accent-orange`，错误条底色 9%、描边 22% 混色）不在设计规范里 → 任务 23 核对；错误条与写入提示的入场用“展开”（高度+不透明度）。
 - 刷新延迟未测量（规格不设门槛）；监视器 80 ms 汇集一次。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39390616033 （此前 28 单独合并的一轮 macOS 上排版设置的“已安装字体”用例偶发为空，同代码这一轮通过）。

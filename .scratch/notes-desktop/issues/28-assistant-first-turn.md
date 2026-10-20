@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] Agent 适配层；Claude Code 以完全权限模式启动，不出现授权询问
 - [x] 工作目录：选中笔记时为其文件夹并附上该笔记；选中文件夹时为该文件夹；对话开始时固定
@@ -32,3 +32,7 @@
 
 留给后续：审查卡片、“直接保留”与逐篇撤回（任务 29，`Reply.changes` 已有改动清单，目前只显示“改动了 N 个文件，可在操作记录中撤销”）；其余 Agent 的适配层与对话历史列表（任务 30，对话已按 id 存盘，`startTurn` 可按 id 继续）；回复目前按纯文本显示，未渲染 Markdown。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39390616033 （此前 28 单独合并的一轮 macOS 上排版设置的“已安装字体”用例偶发为空，同代码这一轮通过）。
