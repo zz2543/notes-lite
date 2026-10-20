@@ -1,5 +1,5 @@
 // 设置: what the user chose in the settings panel. Kept with the app (settings.json in its profile),
-// never inside a library. Later settings (排版 ticket 16, 导航模式 ticket 17) add a field, its choices
+// never inside a library. Later settings (排版 ticket 16) add a field, its choices
 // and its default here; anything missing or unknown on disk reads as the default.
 
 /** 外观: 跟随系统, 浅色, 深色. */
@@ -10,12 +10,15 @@ export type AccentChoice = "system" | "blue" | "purple" | "pink" | "orange" | "g
 export type ListDetail = "compact" | "standard" | "detailed";
 /** 动效强度: 轻, 标准, 强. */
 export type MotionIntensity = "light" | "standard" | "strong";
+/** 导航模式: 双栏导航 (folder tree, then 当前目录内容) or 单栏导航 (folders and notes in one tree). */
+export type Navigation = "double" | "single";
 
 export interface Preferences {
   colorScheme: ColorScheme;
   accent: AccentChoice;
   listDetail: ListDetail;
   motion: MotionIntensity;
+  navigation: Navigation;
 }
 
 export const choices: { readonly [K in keyof Preferences]: readonly Preferences[K][] } = {
@@ -23,9 +26,10 @@ export const choices: { readonly [K in keyof Preferences]: readonly Preferences[
   accent: ["system", "blue", "purple", "pink", "orange", "green"],
   listDetail: ["compact", "standard", "detailed"],
   motion: ["light", "standard", "strong"],
+  navigation: ["double", "single"],
 };
 
-export const defaultPreferences: Preferences = { colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong" };
+export const defaultPreferences: Preferences = { colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong", navigation: "double" };
 
 /** Whatever was stored (or sent), as preferences: known keys with known values, the rest defaults. */
 export function readPreferences(stored: unknown, base: Preferences = defaultPreferences): Preferences {

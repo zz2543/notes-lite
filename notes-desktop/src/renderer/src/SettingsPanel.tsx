@@ -1,7 +1,7 @@
 import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity } from "../../shared/preferences";
+import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
@@ -56,6 +56,11 @@ const colorSchemes: Choice<ColorScheme>[] = [
   { value: "dark", label: "深色" },
 ];
 
+const navigations: Choice<Navigation>[] = [
+  { value: "double", label: "双栏" },
+  { value: "single", label: "单栏" },
+];
+
 const presets: Swatch<AccentChoice>[] = [
   { value: "blue", label: "蓝", color: "var(--accent-blue)" },
   { value: "purple", label: "紫", color: "var(--accent-purple)" },
@@ -69,14 +74,21 @@ function GeneralPage() {
   const system = useSystemAccent();
   const accents: Swatch<AccentChoice>[] = [{ value: "system", label: "跟随系统", color: system ?? "var(--accent-blue)" }, ...presets];
   return (
-    <SettingsGroup title="外观" description="浅色或深色、强调色，默认都跟随系统。强调色只用在插入光标、选区、开关和主要按钮上。">
-      <SettingRow label="外观">
-        <Segmented label="外观" choices={colorSchemes} value={preferences.colorScheme} onChange={(colorScheme) => change({ colorScheme })} />
-      </SettingRow>
-      <SettingRow label="强调色">
-        <Swatches label="强调色" choices={accents} value={preferences.accent} onChange={(accent) => change({ accent })} />
-      </SettingRow>
-    </SettingsGroup>
+    <>
+      <SettingsGroup title="外观" description="浅色或深色、强调色，默认都跟随系统。强调色只用在插入光标、选区、开关和主要按钮上。">
+        <SettingRow label="外观">
+          <Segmented label="外观" choices={colorSchemes} value={preferences.colorScheme} onChange={(colorScheme) => change({ colorScheme })} />
+        </SettingRow>
+        <SettingRow label="强调色">
+          <Swatches label="强调色" choices={accents} value={preferences.accent} onChange={(accent) => change({ accent })} />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="导航" description="双栏：文件夹树旁边是当前目录内容；单栏：文件夹与笔记在同一棵树里。切换时打开的笔记和浏览的目录都不变。">
+        <SettingRow label="导航模式">
+          <Segmented label="导航模式" choices={navigations} value={preferences.navigation} onChange={(navigation) => change({ navigation })} />
+        </SettingRow>
+      </SettingsGroup>
+    </>
   );
 }
 
