@@ -1,5 +1,5 @@
 import { House, ListChecks } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { LogItem, SpaceInfo, SpaceNote } from "../../shared/api";
 import { Dialog, useOverlayOpen } from "./Organize";
 import { SelectionPill } from "./SelectionPill";
@@ -47,23 +47,34 @@ function useSpaceNotes(name: string): SpaceNote[] | undefined {
 
 interface SpaceContentsProps {
   space: SpaceInfo;
+  /** The list column (双栏导航), or under the spaces in the side panel (单栏导航). */
+  place: "list" | "side";
   showingHome: boolean;
   openNote: string | null;
   onHome(): void;
   onOpenNote(path: string): void;
 }
 
-/** The middle column for an open space: 主页, then every note in its scope. */
-export function SpaceContents({ space, showingHome, openNote, onHome, onOpenNote }: SpaceContentsProps) {
+/** An open space's contents: 主页, then every note in its scope. */
+export function SpaceContents({ space, place, showingHome, openNote, onHome, onOpenNote }: SpaceContentsProps) {
   const notes = useSpaceNotes(space.name);
+  const name = (
+    <>
+      {space.icon && <span aria-hidden>{space.icon} </span>}
+      {space.name}
+    </>
+  );
   return (
     <>
-      <header className="list-head">
-        <h1>
-          {space.icon && <span aria-hidden>{space.icon} </span>}
-          {space.name}
-        </h1>
-      </header>
+      {place === "list" ? (
+        <header className="list-head">
+          <h1>{name}</h1>
+        </header>
+      ) : (
+        <div className="side-label">
+          <span className="label">{name}</span>
+        </div>
+      )}
       <ul className="items" aria-label="空间内容">
         <li>
           <button className={`item ${showingHome ? "on" : ""}`} aria-current={showingHome || undefined} onClick={onHome}>
@@ -92,10 +103,12 @@ export function SpaceContents({ space, showingHome, openNote, onHome, onOpenNote
 interface SpaceHomeProps {
   space: SpaceInfo;
   notify(message: string): void;
+  /** At the head's right end, as on a note's card. */
+  headEnd?: ReactNode;
 }
 
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
-export function SpaceHome({ space, notify }: SpaceHomeProps) {
+export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
   const [logOpen, setLogOpen] = useState(false);
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
@@ -109,6 +122,7 @@ export function SpaceHome({ space, notify }: SpaceHomeProps) {
           <ListChecks size={icon.small} />
           操作记录
         </button>
+        {headEnd}
       </header>
       {space.hasPage ? (
         <PageSlot name={space.name} />

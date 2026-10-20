@@ -1,0 +1,306 @@
+// 列表延续与退出列表 (list-exit-caret-spec.md), ported from the old ListEditingTests: Return in a list, the
+// 分隔空行 put in when text starts below a list and its display, all through the running app.
+import type { Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { expect, launchWith, library, test } from "./fixtures";
+
+const editor = (page: Page) => page.getByLabel("笔记正文");
+
+/** A library of notes named 1, 2, 3… holding `sources`, opened in the app. */
+async function openLibrary(scratch: string, sources: string[]) {
+  const files = Object.fromEntries(sources.map((source, i) => [`${i + 1}.md`, source]));
+  const root = await library(scratch, "笔记库", files);
+  const { app, page } = await launchWith(scratch, root);
+  return {
+    app,
+    page,
+    /** Opens note `n` with the caret at its end. */
+    async open(n: number) {
+      await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: String(n), exact: true }).click();
+      await expect(editor(page)).toBeFocused();
+      await page.keyboard.press("ControlOrMeta+End");
+    },
+    /** Note `n` as saved on disk. */
+    saved: (n: number) => () => readFile(join(root, `${n}.md`), "utf8"),
+  };
+}
+
+test("Return after a list item continues the list with the same kind of marker", async ({ scratch }) => {
+  const cases = [
+    ["- 苔藓", "蕨", "- 苔藓\n- 蕨"],
+    ["  * 子", "孙", "  * 子\n  * 孙"],
+    ["1. 第一站", "第二站", "1. 第一站\n2. 第二站"],
+    ["9) 九", "十", "9) 九\n10) 十"],
+    ["- [x] 买伞", "带相机", "- [x] 买伞\n- [ ] 带相机"],
+  ] as const;
+  const { app, page, open, saved } = await openLibrary(scratch, cases.map((c) => c[0]));
+  for (const [i, [, typed, expected]] of cases.entries()) {
+    await open(i + 1);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(typed);
+    await expect.poll(saved(i + 1)).toBe(expected);
+  }
+  await app.close();
+});
+
+test("Return on an empty outermost item removes only its marker, adding no line", async ({ scratch }) => {
+  const cases = [
+    ["- 项目\n- ", "- 项目\n"],
+    ["1. 项目\n2. ", "1. 项目\n"],
+    ["- [ ] 项目\n- [ ] ", "- [ ] 项目\n"],
+    ["* 项目\n* ", "* 项目\n"],
+  ] as const;
+  const { app, page, open, saved } = await openLibrary(scratch, cases.map((c) => c[0]));
+  for (const [i, [, kept]] of cases.entries()) {
+    await open(i + 1);
+    await page.keyboard.press("Enter");
+    // Nothing typed: no blank line is added.
+    await expect.poll(saved(i + 1)).toBe(kept);
+  }
+  await app.close();
+});
+
+test("Return on an empty nested item steps out one level, taking its parent's marker", async ({ scratch }) => {
+  const cases = [
+    ["- 父\n  - 子\n  - ", "- 父\n  - 子\n- "],
+    ["1. 父\n2. 父二\n   1. 子\n   2. ", "1. 父\n2. 父二\n   1. 子\n3. "],
+    ["1) 父\n   - 子\n   - ", "1) 父\n   - 子\n2) "],
+    ["- [x] 父\n  - [ ] 子\n  - [ ] ", "- [x] 父\n  - [ ] 子\n- [ ] "],
+    ["- 父\n  1. 子\n  2. ", "- 父\n  1. 子\n- "],
+  ] as const;
+  const { app, page, open, saved } = await openLibrary(scratch, [...cases.map((c) => c[0]), "- 一\n  - 二\n    - 三\n    - "]);
+  for (const [i, [, stepped]] of cases.entries()) {
+    await open(i + 1);
+    await page.keyboard.press("Enter");
+    // The caret ends after the new marker.
+    await page.keyboard.type("新");
+    await expect.poll(saved(i + 1)).toBe(`${stepped}新`);
+  }
+
+  // One level at a time; at the outermost level the list ends. Undo steps back the same way.
+  const deep = cases.length + 1;
+  const steps = ["    - ", "  - ", "- ", ""].map((last) => `- 一\n  - 二\n    - 三\n${last}`);
+  await open(deep);
+  for (const step of steps.slice(1)) {
+    await page.keyboard.press("Enter");
+    await expect.poll(saved(deep)).toBe(step);
+  }
+  for (const step of steps.slice(0, -1).reverse()) {
+    await page.keyboard.press("ControlOrMeta+KeyZ");
+    await expect.poll(saved(deep)).toBe(step);
+  }
+  await app.close();
+});
+
+test("text typed after exiting a list is separated from it by a blank line, undone with it", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正文");
+  // Markdown needs the blank line to end the list.
+  await expect.poll(saved(1)).toBe("- 项目\n\n正文");
+
+  // Undo steps back to the exited list without the blank line ever standing alone.
+  const states: string[] = [];
+  for (let text = await saved(1)(); text !== "- 项目\n- " && states.length < 6; ) {
+    await page.keyboard.press("ControlOrMeta+KeyZ");
+    const before = text;
+    await expect.poll(async () => (text = await saved(1)())).not.toBe(before);
+    states.push(text);
+  }
+  expect(states.at(-1)).toBe("- 项目\n- ");
+  expect(states).not.toContain("- 项目\n\n");
+  await app.close();
+});
+
+test("composing or pasting after exiting a list also separates it", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  // Composition starting counts as input. Nothing is saved mid-composition: read the source view.
+  await page.keyboard.press("ControlOrMeta+Shift+KeyM");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: "zhong", selectionStart: 5, selectionEnd: 5 });
+  await expect.poll(() => editor(page).evaluate((root) => [...root.children].map((line) => line.textContent).join("\n"))).toBe(
+    "- 项目\n\nzhong",
+  );
+  await cdp.send("Input.insertText", { text: "中" });
+  await cdp.detach();
+  await expect.poll(saved(1)).toBe("- 项目\n\n中");
+
+  await open(2);
+  await page.keyboard.press("Enter");
+  await app.evaluate(({ clipboard }) => clipboard.writeText("粘贴"));
+  await page.keyboard.press("ControlOrMeta+KeyV");
+  await expect.poll(saved(2)).toBe("- 项目\n\n粘贴");
+  await app.close();
+});
+
+test("the blank line goes again when the line is a list item again or empty", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("-");
+  // A dash alone may start a paragraph.
+  await expect.poll(saved(1)).toBe("- 项目\n\n-");
+  await page.keyboard.type(" 新项");
+  // A complete marker joins the list above, the caret after it.
+  await expect.poll(saved(1)).toBe("- 项目\n- 新项");
+
+  await open(2);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正");
+  await expect.poll(saved(2)).toBe("- 项目\n\n正");
+  await page.keyboard.press("Backspace");
+  await expect.poll(saved(2)).toBe("- 项目\n");
+  await page.keyboard.type("再");
+  await expect.poll(saved(2)).toBe("- 项目\n\n再");
+  await app.close();
+});
+
+test("Return, undo, typing elsewhere and other notes keep the blank line honest", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- ", "- 项目\n- \n\n后文", "- 项目\n- "]);
+  // Return is a new line, not text that needs a separator.
+  await open(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(1)).toBe("- 项目\n\n");
+
+  // Undo takes the text and its separator together; typing after it separates again.
+  await open(2);
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(2)).toBe("- 项目\n");
+  await page.keyboard.type("正");
+  await expect.poll(saved(2)).toBe("- 项目\n\n正");
+  await page.keyboard.press("ControlOrMeta+KeyZ");
+  await expect.poll(saved(2)).toBe("- 项目\n");
+  await page.keyboard.type("再");
+  await expect.poll(saved(2)).toBe("- 项目\n\n再");
+
+  // Leaving the exited line empty and typing elsewhere adds nothing.
+  await open(3);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(3)).toBe("- 项目\n\n\n后文");
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("！");
+  await expect.poll(saved(3)).toBe("- 项目\n\n\n后文！");
+
+  // Another note gets no stray blank line.
+  await open(4);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正");
+  await expect.poll(saved(4)).toBe("- 项目\n\n正");
+  await open(1);
+  await page.keyboard.press("ControlOrMeta+Home");
+  await page.keyboard.type("新");
+  await expect.poll(saved(1)).toBe("新- 项目\n\n");
+  await app.close();
+});
+
+/** Where the last occurrence of `text` in the note is drawn, from the top of the page. */
+function topOf(page: Page, text: string) {
+  return editor(page).evaluate((root, wanted) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let found: Range | null = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent!.lastIndexOf(wanted);
+      if (at < 0) continue;
+      found = document.createRange();
+      found.setStart(node, at);
+      found.setEnd(node, at + wanted.length);
+    }
+    if (!found) throw new Error(`“${wanted}” is not in the note`);
+    return found.getBoundingClientRect().top;
+  }, text);
+}
+
+/** The top of the line the caret is on, empty or not. */
+function caretLineTop(page: Page) {
+  return editor(page).evaluate((root) => {
+    let node = document.getSelection()!.focusNode!;
+    while (node.parentNode !== root) node = node.parentNode!;
+    return (node as Element).getBoundingClientRect().top;
+  });
+}
+
+test("a single blank line between a list and a paragraph takes no room, unless the caret is on it", async ({ scratch }) => {
+  const sources = [
+    "- 项目\n正文",
+    "- 项目\n\n正文",
+    "1. 项目\n\n正文",
+    "- [ ] 项目\n\n正文",
+    "- 项目\n\n\n正文",
+    "- 项目\n\n- 另一项",
+    "- 项目\n- 另一项",
+    "段落\n\n正文",
+    "段落\n正文",
+  ];
+  const { app, page, open, saved } = await openLibrary(scratch, sources);
+  const top = async (n: number, text: string) => {
+    await open(n);
+    return topOf(page, text);
+  };
+  const tight = await top(1, "正文");
+  for (const n of [2, 3, 4]) {
+    expect(await top(n, "正文")).toBeCloseTo(tight, 0);
+    // Display only: the source keeps its blank line.
+    expect(await saved(n)()).toBe(sources[n - 1]);
+  }
+  // The arrow keys stop on it, and with the caret there the blank line opens.
+  await open(2);
+  await page.keyboard.press("ArrowUp");
+  expect((await topOf(page, "正文")) - tight).toBeGreaterThan(20);
+  await page.keyboard.press("ArrowUp");
+  expect(await topOf(page, "正文")).toBeCloseTo(tight, 0);
+  await page.keyboard.press("ArrowDown");
+  expect((await topOf(page, "正文")) - tight).toBeGreaterThan(20);
+  // Two blank lines, and blank lines between list items or paragraphs, show as they are.
+  expect((await top(5, "正文")) - tight).toBeGreaterThan(20);
+  expect((await top(6, "另一项")) - (await top(7, "另一项"))).toBeGreaterThan(20);
+  expect((await top(8, "正文")) - (await top(9, "正文"))).toBeGreaterThan(20);
+  await app.close();
+});
+
+test("typing or composing after exiting a list leaves the line where it was", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  const line = await caretLineTop(page);
+  await page.keyboard.type("正");
+  await expect.poll(saved(1)).toBe("- 项目\n\n正");
+  expect(await caretLineTop(page)).toBeCloseTo(line, 0);
+
+  await open(2);
+  await page.keyboard.press("Enter");
+  const exited = await caretLineTop(page);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: "zhong", selectionStart: 5, selectionEnd: 5 });
+  expect(await topOf(page, "zhong")).toBeGreaterThanOrEqual(exited);
+  expect(await caretLineTop(page)).toBeCloseTo(exited, 0);
+  await cdp.send("Input.insertText", { text: "中" });
+  await cdp.detach();
+  expect(await caretLineTop(page)).toBeCloseTo(exited, 0);
+  await expect.poll(saved(2)).toBe("- 项目\n\n中");
+  await app.close();
+});
+
+test("stepping out of a numbered list leaves later numbers alone, and code is left alone", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["1. 甲\n   1. 乙\n   2. \n2. 丙", "```\n- 项目\n- \n```"]);
+  await open(1);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(1)).toBe("1. 甲\n   1. 乙\n2. \n2. 丙");
+
+  // Inside code Return is just a new line.
+  await open(2);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(2)).toBe("```\n- 项目\n- \n\n```");
+  await app.close();
+});

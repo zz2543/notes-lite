@@ -16,6 +16,7 @@ const api: NotesApi = {
     return () => ipcRenderer.off(channels.openLibraryRequest, handler);
   },
   readFolder: (path) => ipcRenderer.invoke(channels.readFolder, path),
+  readSummaries: (path) => ipcRenderer.invoke(channels.readSummaries, path),
   readNote: (path) => ipcRenderer.invoke(channels.readNote, path),
   saveNote: (path, text, expected) => ipcRenderer.invoke(channels.saveNote, path, text, expected),
   onSourceViewRequest: (listener) => {
@@ -57,6 +58,19 @@ const api: NotesApi = {
   },
   saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
   confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
+  onSettingsRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.settingsRequest, handler);
+    return () => ipcRenderer.off(channels.settingsRequest, handler);
+  },
+  // Asked once, synchronously, before any script runs: the answer is already in memory in the main process.
+  preferences: ipcRenderer.sendSync(channels.preferences),
+  setPreferences: (change) => ipcRenderer.invoke(channels.setPreferences, change),
+  onSystemAccentChanged: (listener) => {
+    const handler = (_: unknown, accent: string | null) => listener(accent);
+    ipcRenderer.on(channels.systemAccentChanged, handler);
+    return () => ipcRenderer.off(channels.systemAccentChanged, handler);
+  },
   listSpaces: () => ipcRenderer.invoke(channels.listSpaces),
   createSpace: (draft) => ipcRenderer.invoke(channels.createSpace, draft),
   updateSpace: (name, draft) => ipcRenderer.invoke(channels.updateSpace, name, draft),
@@ -68,6 +82,7 @@ const api: NotesApi = {
   hideSpacePage: () => ipcRenderer.send(channels.hideSpacePage),
   operationLog: () => ipcRenderer.invoke(channels.operationLog),
   undoOperation: (id) => ipcRenderer.invoke(channels.undoOperation, id),
+  detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

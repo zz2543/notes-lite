@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 在 Apple M4、约一万篇笔记的笔记库上：冷启动到可输入 ≤ 1 秒；关闭窗口后再次打开 ≤ 0.3 秒
 - [x] 启动不做全库扫描或建索引，先显示上次的笔记与当前目录
@@ -37,3 +37,7 @@
 - 渲染进程包开启压缩（`electron.vite.config.ts`）。
 
 留给后续任务：真正冷盘（重启后首次启动）未测；Windows 实测数字留给任务 22 / 25 记录。
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39355440325 。CI 记录的启动时间（一万篇笔记，中位数）：Windows（AMD EPYC 虚拟机）冷启动到可输入 570 ms；macOS（M1 虚拟机）冷启动 1112 ms、重开 27 ms。CI 只记录不判定；macOS 虚拟机冷启动略超 1 s 预算，本机 M4 为 479 ms，验收以真机为准。

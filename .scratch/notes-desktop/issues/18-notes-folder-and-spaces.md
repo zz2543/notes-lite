@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 首次打开自动搬迁空间主页、编写说明与操作记录；中途失败保留原目录并提示；用户 Markdown 不变
 - [x] “资料库 | 空间”分段切换，侧栏内容横向平移
@@ -41,3 +41,7 @@ Branch `ticket/18-notes-folder-and-spaces` (merged with `feat/notes-desktop` aft
   delete, external space file appears). Full: typecheck, `npm test` 87 passed, `npm run test:e2e` 35 passed. Two earlier
   full e2e runs each had one different timing test fail under machine load (load avg ~8); each passed in isolation and
   on the third full run.
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39355707927 （启动时间与合并前持平）。

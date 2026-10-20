@@ -86,6 +86,33 @@ describe("当前目录内容", () => {
       ["学习", true],
     ]);
   });
+
+  it("tells which subfolders hold notes of their own, for 单栏导航's tree", async () => {
+    const lib = await openLibrary(
+      await library({ "学习/英语/单词.md": "", "日记/今天.md": "", "附件/图.png": "", "附件/.notes/隐藏.md": "" }),
+    );
+
+    const { folders } = await lib.readFolder();
+
+    expect(folders.map((f) => [f.name, f.hasNotes])).toEqual([
+      ["附件", false],
+      ["日记", true],
+      ["学习", false],
+    ]);
+  });
+});
+
+describe("摘要", () => {
+  it("summarises the folder's direct notes from their opening text, skipping what it cannot read", async () => {
+    const root = await library({
+      "日记/雨后.md": "# 雨后\n\n小路上**青苔**很滑。",
+      "日记/空白.md": "# 只有标题",
+      "日记/深层/不算.md": "不在这一层",
+    });
+    await writeFile(join(root, "日记/旧编码.md"), Buffer.from([0xc4, 0xe3, 0xba, 0xc3]));
+    const lib = await openLibrary(root);
+    expect(await lib.readSummaries("日记")).toEqual({ "日记/雨后.md": "小路上青苔很滑。", "日记/空白.md": "", "日记/旧编码.md": "" });
+  });
 });
 
 describe("笔记原文", () => {

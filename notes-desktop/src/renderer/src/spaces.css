@@ -48,6 +48,13 @@
   flex: 1;
   overflow-y: auto;
 }
+/* 单栏导航: an open space's 主页 and notes sit under the spaces, sharing the panel's height. */
+.space-files {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: var(--card-gap);
+}
 .space-list {
   margin: 0;
   padding: 0;

@@ -129,6 +129,15 @@
       padding-bottom: var(--para-gap);
     }
 
+    /* The one blank line between a list and the paragraph after it (分隔空行) takes no room: the
+       paragraph sits where it would without it, so text typed after a list does not move. With the
+       caret on it, it is an ordinary blank line again. */
+    &.cm-md-list-gap {
+      height: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
     /* A thematic break: a hairline across the column. */
     &.cm-md-hr {
       background: linear-gradient(var(--line), var(--line)) left calc(50% - var(--para-gap) / 2) / 100% 1px no-repeat;

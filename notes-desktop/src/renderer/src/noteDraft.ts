@@ -166,6 +166,9 @@ export class NoteDraft {
   }
 
   private conflict(message: string, unavailable: boolean, raise: boolean) {
+    // A save still scheduled (put off while an input method composed) would only meet the same conflict
+    // and raise the notice again after the user set it aside; the conflict waits for their choice.
+    clearTimeout(this.timer);
     this.unavailable = unavailable;
     if (raise) this.notice = true;
     this.set("conflict", message);

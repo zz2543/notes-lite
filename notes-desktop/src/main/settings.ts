@@ -1,10 +1,13 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { Preferences } from "../shared/preferences";
 import type { Place } from "../shared/api";
 
 /** App-wide settings, stored with the app and never inside a library. */
 export interface Settings {
   libraryPath?: string;
+  /** What the settings panel shows; read through `readPreferences`, since it may be partial or old. */
+  preferences?: Partial<Preferences>;
   /** Where the user was in that library: reopened at launch. */
   place?: Place;
 }

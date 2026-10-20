@@ -8,7 +8,7 @@ import { expect, launchWith, library, test } from "./fixtures";
 // reach the Markdown on disk and the operation log, and can be undone one by one.
 
 const sideTab = (page: Page, name: "资料库" | "空间") => page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name });
-const spaceList = (page: Page) => page.getByRole("list", { name: "空间" });
+const spaceList = (page: Page) => page.getByRole("list", { name: "空间", exact: true });
 
 const training = "# 训练记录\n\n## 卧推\n| 日期 | 动作 | 重量 |\n|---|---|---|\n| 2026-10-12 | 卧推 | 55 |\n| 2026-10-14 | 卧推 | 57.5 |\n| 2026-10-16 | 卧推 | 60 |\n";
 
@@ -183,5 +183,41 @@ test("a note in the space opens in the editor, and 主页 brings the same page b
   await expect.poll(() => shownPages(app)).toBe(1);
   await sideTab(page, "资料库").click();
   await expect.poll(() => shownPages(app)).toBe(0);
+  await app.close();
+});
+
+test("in 单栏导航 an open space shows 主页 and its notes under the spaces", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", {
+    "健身/训练记录.md": training,
+    "健身/计划.md": "# 计划\n",
+    ".notes/空间/健身.html": homepage,
+  });
+  const { app, page } = await launchWith(scratch, root);
+  await sideTab(page, "空间").click();
+  await spaceList(page).getByRole("button", { name: "健身" }).click();
+  const home = await spacePage(app, "健身");
+  await expect(home.getByText("训练 3 次")).toBeVisible();
+  await expect.poll(() => shownPages(app)).toBe(1);
+
+  // 设置 floats over the homepage too, so the homepage steps aside while it is open.
+  await page.keyboard.press("ControlOrMeta+Comma");
+  const settings = page.getByRole("dialog", { name: "设置" });
+  await expect(settings).toBeVisible();
+  await expect.poll(() => shownPages(app)).toBe(0);
+  await settings.getByRole("radiogroup", { name: "导航模式" }).getByRole("radio", { name: "单栏" }).click();
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+  await expect(page.locator("section.list")).toHaveCount(0);
+
+  const contents = page.getByRole("complementary").getByRole("list", { name: "空间内容" });
+  await expect(contents.getByRole("button")).toHaveText(["主页", "计划", "训练记录"]);
+  await expect.poll(() => shownPages(app)).toBe(1);
+  await expect(home.getByText("训练 3 次")).toBeVisible();
+
+  await contents.getByRole("button", { name: "计划" }).click();
+  await expect(page.getByRole("textbox", { name: "笔记正文" })).toContainText("计划");
+  await expect.poll(() => shownPages(app)).toBe(0);
+  await contents.getByRole("button", { name: "主页" }).click();
+  await expect.poll(() => shownPages(app)).toBe(1);
   await app.close();
 });

@@ -1,10 +1,11 @@
 import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { countWords } from "../../core/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
+import { listEditing } from "./listEditing";
 import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 import { setShowSource, useShowSource } from "./sourceView";
@@ -20,7 +21,17 @@ interface Choices {
  * The open note on its card: Markdown source edited in place, saved as it is typed. A `fresh` note
  * (just created) opens with the caret after its title, ready to type.
  */
-export function NoteEditor({ path, fresh = false, ...choices }: { path: string | null; fresh?: boolean } & Choices) {
+export function NoteEditor({
+  path,
+  fresh = false,
+  headEnd,
+  ...choices
+}: {
+  path: string | null;
+  fresh?: boolean;
+  /** At the head's right end, after the card's own tools: the 助手栏 toggle while the column is closed. */
+  headEnd?: ReactNode;
+} & Choices) {
   const { value: source, error } = useNoteSource(path);
   const showSource = useShowSource();
   useEffect(() => {
@@ -40,6 +51,7 @@ export function NoteEditor({ path, fresh = false, ...choices }: { path: string |
         >
           Markdown 源码
         </button>
+        {headEnd}
       </header>
       {!path && <p className="empty">选择一篇笔记</p>}
       {error && <p className="empty">{error}</p>}
@@ -85,6 +97,7 @@ function Editor({
           keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
           markdownDisplay(shown.current),
+          listEditing,
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;

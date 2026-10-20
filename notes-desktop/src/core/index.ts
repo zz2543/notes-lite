@@ -10,3 +10,4 @@ export * from "./spaceRequests";
 export * from "./recordTables";
 export * from "./operationLog";
 export { serialized } from "./serialized";
+export * from "./agents";

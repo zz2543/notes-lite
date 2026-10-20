@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, launchWith, library, test } from "./fixtures";
 
 const tree = (page: Page) => page.getByRole("tree", { name: "文件夹" });
-const spaceList = (page: Page) => page.getByRole("list", { name: "空间" });
+const spaceList = (page: Page) => page.getByRole("list", { name: "空间", exact: true });
 const sideTab = (page: Page, name: "资料库" | "空间") => page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name });
 const exists = (path: string) => readFile(path).then(() => true, () => false);
 

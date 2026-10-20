@@ -4,7 +4,7 @@
 
 **Blocked by:** 15, 23
 
-**Status:** ready-for-agent
+**Status:** ready-for-agent（2026-10-20 用户要求移到最后，届时再问是否做）
 
 - [ ] 重新设计浅色与深色两套取值，不照搬原型
 - [ ] 所有界面与空间主页在新风格下检查

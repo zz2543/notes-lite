@@ -31,9 +31,16 @@ export async function library(scratch: string, name: string, files: Record<strin
   return root;
 }
 
-/** Launches the built app with its settings kept in the scratch folder. */
-export async function launch(scratch: string): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({ args: [appDir], env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile") } });
+/**
+ * Launches the built app with its settings kept in the scratch folder. The command-line agents it finds
+ * are those in `scratch/agents` (none unless a test installs one), never the ones on this computer.
+ */
+export async function launch(scratch: string, env: Record<string, string> = {}): Promise<{ app: ElectronApplication; page: Page }> {
+  // A window the runner covers or leaves in the background still draws every frame, so motion can be filmed.
+  const app = await electron.launch({
+    args: [appDir, "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows"],
+    env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile"), NOTES_DESKTOP_AGENT_PATH: join(scratch, "agents"), ...env },
+  });
   running.add(app);
   app.on("close", () => running.delete(app));
   const page = await app.firstWindow();
@@ -53,8 +60,8 @@ export async function answerFolderPicker(app: ElectronApplication, folder: strin
 }
 
 /** Launches and opens `root` from the welcome page. */
-export async function launchWith(scratch: string, root: string) {
-  const launched = await launch(scratch);
+export async function launchWith(scratch: string, root: string, env?: Record<string, string>) {
+  const launched = await launch(scratch, env);
   await answerFolderPicker(launched.app, root);
   await launched.page.getByRole("button", { name: "选择笔记库…" }).click();
   return launched;
