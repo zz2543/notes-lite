@@ -180,6 +180,40 @@ const exists = (path: string) => access(path).then(
 
 const taken = (name: string) => new SpaceError("exists", `已经有名为“${name}”的空间。`);
 
+// --- paths that follow a rename or move ---------------------------------------------------
+
+// A quoted string that may be a path: no quotes, line breaks or tags inside.
+const quotedRe = /(["'`])([^"'`\n<>]+)\1/g;
+
+/** The space file with its scope and quoted paths following a note or folder from `from` to `to`. */
+function movedPaths(space: Space, from: string, to: string): string {
+  const note = /\.md$/i.test(from);
+  // Record table sources may leave out `.md`; those follow the note too.
+  const fromStem = note ? from.slice(0, -3) : from;
+  const toStem = note && /\.md$/i.test(to) ? to.slice(0, -3) : to;
+  const moved = (path: string): string | undefined => {
+    if (path === from) return to;
+    if (note && path === fromStem) return toStem;
+    if (path.startsWith(`${from}/`)) return to + path.slice(from.length);
+    return undefined;
+  };
+  let html = space.html;
+  if (!space.scope.library) {
+    const before = space.scope.folders;
+    const folders = before.map((folder) => moved(folder) ?? folder);
+    if (folders.some((folder, i) => folder !== before[i])) {
+      html = settingMeta(html, spaceMeta.scope, scopeMeta({ library: false, folders }));
+    }
+  }
+  return html.replace(quotedRe, (whole, quote: string, inner: string) => {
+    const hash = inner.indexOf("#");
+    const path = hash < 0 ? inner : inner.slice(0, hash);
+    // A bare folder name is too common a string to rewrite; only paths inside it move.
+    const target = note || path !== from ? moved(path) : undefined;
+    return target === undefined ? whole : quote + target + (hash < 0 ? "" : inner.slice(hash)) + quote;
+  });
+}
+
 // --- the library of spaces -----------------------------------------------------------------
 
 export interface SpaceLibrary {
@@ -204,6 +238,11 @@ export interface SpaceLibrary {
   recordTables(scope: SpaceScope): Promise<{ source: string; header: string[] }[]>;
   /** What the user pastes to an external agent so it can write the homepage; installs the guide. */
   prompt(space: Space): Promise<string>;
+  /**
+   * A note or folder moved from `from` to `to` (library paths): every space's scope and the quoted
+   * paths in its page (component `source`/`target`, script literals) follow it.
+   */
+  syncPaths(from: string, to: string): Promise<void>;
 }
 
 export interface SpaceLibraryOptions {
@@ -333,5 +372,13 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
     ].join("\n");
   };
 
-  return { folder, guidePath, spaces, space, create, update, delete: delete_, reorder, installGuide, recordTables: tablesIn, prompt };
+  const syncPaths = async (from: string, to: string) => {
+    if (!from || from === to) return;
+    for (const space of await spaces()) {
+      const html = movedPaths(space, from, to);
+      if (html !== space.html) await writeAtomic(fileOf(space.name), html);
+    }
+  };
+
+  return { folder, guidePath, spaces, space, create, update, delete: delete_, reorder, installGuide, recordTables: tablesIn, prompt, syncPaths };
 }

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative as pathFrom, sep } from "node:path";
 import { collator, LibraryError, writeFailures } from "./library";
 import { linkTargets, replaceTargets, type LinkTarget } from "./references";
+import { spaceLibrary } from "./spaces";
 
 /** Where a renamed or moved item went, and which notes had their links to it rewritten. */
 export interface Relocation {
@@ -266,6 +267,9 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
       if (error instanceof LibraryError) throw error;
       throw new LibraryError("write-failed", `无法更新指向“${titleOf(basename(source))}”的链接：${reasonOf(error)}。没有改动任何笔记。`);
     }
+    // Space scopes and component paths follow too. The move itself stands even if a space file
+    // can't be written: that space shows its error, the notes are where the user put them.
+    await spaceLibrary(root).syncPaths(relativeOf(source), relativeOf(destination)).catch(() => undefined);
     return { path: relativeOf(destination), updated: changes.map((change) => relativeOf(change.to)).sort() };
   };
 

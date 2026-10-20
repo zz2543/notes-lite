@@ -164,4 +164,35 @@ describe("空间库", () => {
     const root = await library({ ".notes/空间/双.html": '<meta name="lb-scope" content="旧">\n<meta name="space-scope" content="新">\n' });
     expect((await spaceLibrary(root).space("双")).scope).toEqual({ library: false, folders: ["新"] });
   });
+
+  it("renaming notes and folders updates scopes and component paths in every space file", async () => {
+    const root = await library({});
+    const spaces = spaceLibrary(root);
+    await spaces.create({ name: "健身", icon: "", scope: { library: false, folders: ["健身", "健身房", "日记"] } });
+    const page =
+      (await read(root, ".notes/空间/健身.html")) +
+      `<space-chart source="健身/训练记录.md#卧推" x="日期"></space-chart>
+<lb-quick-add target='健身/训练记录.md'></lb-quick-add>
+<lb-stat source="健身房/训练记录.md"></lb-stat>
+<lb-records source="健身/训练记录#卧推"></lb-records>
+<script>space.query("健身/训练记录.md#深蹲"); lb.query("健身/训练记录.md.bak");</script>
+`;
+    await writeFile(join(root, ".notes/空间/健身.html"), page);
+
+    await spaces.syncPaths("健身/训练记录.md", "健身/力量.md");
+    let html = await read(root, ".notes/空间/健身.html");
+    expect(html).toContain('source="健身/力量.md#卧推"');
+    expect(html).toContain("target='健身/力量.md'");
+    expect(html, "exact path literals in scripts follow too").toContain('space.query("健身/力量.md#深蹲")');
+    expect(html, "other strings are left alone").toContain('lb.query("健身/训练记录.md.bak")');
+    expect(html).toContain('source="健身房/训练记录.md"');
+    expect(html, "sources written without .md follow too").toContain('source="健身/力量#卧推"');
+
+    await spaces.syncPaths("健身", "运动/健身");
+    html = await read(root, ".notes/空间/健身.html");
+    expect((await spaces.space("健身")).scope).toEqual({ library: false, folders: ["运动/健身", "健身房", "日记"] });
+    expect(html).toContain('source="运动/健身/力量.md#卧推"');
+    expect(html, "a sibling folder sharing the prefix is untouched").toContain('source="健身房/训练记录.md"');
+    expect(html, "the meta keeps its name").toContain('<meta name="space-scope" content="运动/健身, 健身房, 日记">');
+  });
 });

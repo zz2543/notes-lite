@@ -54,6 +54,18 @@ describe("空间请求：管理笔记", () => {
     expect(await lib.read("日记/今天.md")).toBe("见 [[训练记录]] 和 [卧推](../健身/训练记录.md#卧推)");
   });
 
+  it("a homepage's rename moves the paths in space files, and undoing it moves them back", async () => {
+    const lib = await fitnessLibrary();
+    const spaceFile = ".notes/空间/健身.html";
+    await writeFile(join(lib.root, spaceFile), (await lib.read(spaceFile)) + '<space-records source="健身/训练记录.md#卧推"></space-records>\n');
+    result(await lib.call("rename", "健身/训练记录.md", "力量训练"));
+    expect(await lib.read(spaceFile)).toContain('source="健身/力量训练.md#卧推"');
+
+    const log = operationLog(lib.root, lib.options);
+    await log.undo((await log.entries())[0]!.id);
+    expect(await lib.read(spaceFile)).toContain('source="健身/训练记录.md#卧推"');
+  });
+
   it("trash sends the note to the trash, and undo brings it back", async () => {
     const lib = await fitnessLibrary();
     const reply = await lib.call("trash", "日记/2026-10.md");
