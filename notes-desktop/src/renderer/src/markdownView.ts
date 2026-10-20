@@ -1,13 +1,13 @@
 // How the editor shows a note: typeset in place (the default) or as its Markdown source. Both are
 // views of the same document; typesetting only adds decorations, so the text never changes.
-import { Compartment, StateField, type Extension, type Range as Decorated } from "@codemirror/state";
+import { Compartment, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { codeTokens, type CodeToken } from "../../core/codeHighlight";
 import { blockPrefixLength, blockType, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../core/markdown";
 import "./markdown.css";
 
 /** The note's literal blocks (code, math, front matter), kept current as it changes. */
-const literal = StateField.define<LiteralBlock[]>({
+export const literal = StateField.define<LiteralBlock[]>({
   create: (state) => literalBlocks(state.doc.iterLines()),
   update: (blocks, tr) => (tr.docChanged ? literalBlocks(tr.state.doc.iterLines()) : blocks),
 });
@@ -25,6 +25,9 @@ function blockAt(blocks: readonly LiteralBlock[], index: number): LiteralBlock |
   }
   return undefined;
 }
+
+/** Whether line `number` (1-based) is inside code, math or front matter. */
+export const inLiteralBlock = (state: EditorState, number: number) => blockAt(state.field(literal), number - 1) !== undefined;
 
 /** Lines holding part of the selection: their syntax shows, dimmed, while elsewhere it hides. */
 function editedLines(view: EditorView): Set<number> {
