@@ -1,8 +1,8 @@
 name: notes-desktop
 
+# Day to day the tests run on the developer's Mac; this macOS + Windows run is started by hand at each
+# milestone (gh workflow run notes-desktop.yml --ref <branch>) and on pull requests.
 on:
-  push:
-    paths: ["notes-desktop/**", ".github/workflows/notes-desktop.yml"]
   pull_request:
     paths: ["notes-desktop/**", ".github/workflows/notes-desktop.yml"]
   workflow_dispatch:
