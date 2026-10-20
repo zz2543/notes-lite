@@ -14,3 +14,5 @@ export * from "./agents";
 export * from "./snapshots";
 export * from "./agentStream";
 export * from "./turns";
+export * from "./conversation";
+export * from "./conversations";

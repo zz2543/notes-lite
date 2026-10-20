@@ -92,7 +92,11 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
       });
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk: string) => (stderr = (stderr + chunk).slice(-2000)));
-      const stop = () => child.kill();
+      // On Windows the shim's shell would go and leave the agent running; the whole tree goes there.
+      const stop = () =>
+        process.platform === "win32" && child.pid
+          ? spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }).on("error", () => child.kill())
+          : child.kill();
       request.signal?.addEventListener("abort", stop, { once: true });
       child.on("error", (error) => done(`无法启动 Agent：${error.message}`));
       child.on("close", (code) => {
