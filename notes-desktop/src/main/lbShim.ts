@@ -1,0 +1,74 @@
+// The `lb` object every space homepage sees, defined in the page before its own scripts run. It
+// only shapes requests and replies; the space page's preload carries them to main, and the core
+// library checks and does everything. Ported from the old app's lb.js.
+export const lbShim = `(() => {
+  "use strict";
+  const bridge = window.__notesSpace;
+  const call = (method, ...args) => {
+    if (!bridge) return Promise.reject(Object.assign(new Error("lb 接口不可用。"), { code: "failed" }));
+    return bridge.call(method, args.map((a) => (a === undefined ? null : a))).then((reply) => {
+      if (reply && reply.ok) return reply.result;
+      const info = (reply && reply.error) || { code: "failed", message: "未知错误" };
+      throw Object.assign(new Error(info.message), { code: info.code });
+    });
+  };
+  const plain = (value) => (value && typeof value === "object" ? JSON.parse(JSON.stringify(value)) : value);
+  const listeners = new Set();
+
+  const lb = {
+    scope: () => call("scope"),
+    notes: (folder) => call("notes", folder),
+    read: (path) => call("read", path),
+    tables: (path) => call("tables", path),
+    async query(source, options = {}) {
+      const fn = typeof options.filter === "function" ? options.filter : null;
+      const request = { ...options };
+      if (fn) { delete request.filter; delete request.limit; }
+      const result = await call("query", source, plain(request));
+      let rows = result.records.map((record) => {
+        const { _row, ...fields } = record;
+        Object.defineProperty(fields, "_row", { value: _row, enumerable: false });
+        return fields;
+      });
+      if (fn) {
+        rows = rows.filter(fn);
+        if (options.limit != null) rows = rows.slice(0, options.limit);
+      }
+      Object.defineProperty(rows, "fields", { value: result.fields, enumerable: false });
+      return rows;
+    },
+    append(target, records, options) {
+      // A new table takes its header from the fields in the order the page wrote them.
+      const request = { ...(options || {}) };
+      if (!request.header) {
+        const header = [];
+        for (const record of Array.isArray(records) ? records : [records]) {
+          for (const key of Object.keys(record || {})) if (!header.includes(key)) header.push(key);
+        }
+        request.header = header;
+      }
+      return call("append", target, plain(records), plain(request));
+    },
+    update: (target, match, changes) => call("update", target, plain(match), plain(changes)),
+    remove: (target, match) => call("remove", target, plain(match)),
+    create: (path, content) => call("create", path, content == null ? "" : String(content)),
+    write: (path, content) => call("write", path, content == null ? "" : String(content)),
+    rename: (path, title) => call("rename", path, title),
+    move: (path, folder) => call("move", path, folder),
+    trash: (path) => call("trash", path),
+    page: () => call("page"),
+    writePage: (html) => call("writePage", String(html)),
+    on(event, handler) {
+      if (event !== "change" || typeof handler !== "function") throw Object.assign(new Error('只支持 lb.on("change", 函数)。'), { code: "invalid" });
+      listeners.add(handler);
+      return () => listeners.delete(handler);
+    },
+    /** Today's date as YYYY-MM-DD, in local time. */
+    today() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    },
+  };
+  if (bridge) bridge.onChange((paths) => { for (const handler of listeners) { try { handler(paths); } catch (e) { setTimeout(() => { throw e; }); } } });
+  Object.defineProperty(window, "lb", { value: Object.freeze(lb), enumerable: true });
+})();`;

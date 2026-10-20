@@ -48,6 +48,13 @@
   flex: 1;
   overflow-y: auto;
 }
+/* 单栏导航: an open space's 主页 and notes sit under the spaces, sharing the panel's height. */
+.space-files {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: var(--card-gap);
+}
 .space-list {
   margin: 0;
   padding: 0;
@@ -115,4 +122,62 @@
 .space-check input {
   margin: 0;
   accent-color: var(--accent);
+}
+
+/* 空间主页 on the card: main lays the homepage's own sandboxed view over the slot, which keeps the
+   card's rounded foot clear. */
+.card-tool svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.space-page-slot {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: var(--card-radius);
+}
+.space-no-page {
+  flex: 1;
+  justify-content: center;
+  color: var(--card-muted);
+}
+
+/* 操作记录 */
+.log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: var(--inline-gap);
+}
+.log-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--inline-gap);
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
+  background: var(--hover);
+}
+.log-item.undone {
+  opacity: 0.6;
+}
+.log-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.log-summary {
+  font-size: var(--text-path);
+  overflow-wrap: anywhere;
+}
+.log-meta {
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+}
+.log-changes {
+  margin: 0;
+  overflow-x: auto;
+  color: var(--side-muted);
+  font-family: var(--code-font);
+  font-size: var(--text-meta);
 }

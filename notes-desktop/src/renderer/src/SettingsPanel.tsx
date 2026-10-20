@@ -6,6 +6,7 @@ import { useSystemAccent } from "./appearance";
 import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
 import { useMotion } from "./MotionProvider";
+import { useOverlay } from "./Organize";
 import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
@@ -143,6 +144,7 @@ function MotionPage() {
 }
 
 function SettingsPanel({ onClose }: { onClose(): void }) {
+  useOverlay();
   const [page, setPage] = useState(pages[0]!.id);
   const panel = useRef<HTMLDivElement>(null);
   const current = pages.find((p) => p.id === page) ?? pages[0]!;

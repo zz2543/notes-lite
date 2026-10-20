@@ -77,6 +77,11 @@ const api: NotesApi = {
   deleteSpace: (name) => ipcRenderer.invoke(channels.deleteSpace, name),
   reorderSpaces: (names) => ipcRenderer.invoke(channels.reorderSpaces, names),
   copySpacePrompt: (name) => ipcRenderer.invoke(channels.copySpacePrompt, name),
+  spaceNotes: (name) => ipcRenderer.invoke(channels.spaceNotes, name),
+  showSpacePage: (name, bounds) => ipcRenderer.send(channels.showSpacePage, name, bounds),
+  hideSpacePage: () => ipcRenderer.send(channels.hideSpacePage),
+  operationLog: () => ipcRenderer.invoke(channels.operationLog),
+  undoOperation: (id) => ipcRenderer.invoke(channels.undoOperation, id),
   detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
 };
 
