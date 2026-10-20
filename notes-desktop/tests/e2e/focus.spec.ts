@@ -72,3 +72,35 @@ test("the card's button goes in and out, keeping the text, the selection and whe
   await expect(editor).toContainText("首雨后的石阶。");
   await app.close();
 });
+
+test("in 专注模式 the 助手栏 stays docked right and the card fills the rest of the window", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记" });
+  const { app, page } = await launchWith(scratch, root);
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]!;
+    window.setContentSize(1240, window.getContentSize()[1]!);
+  });
+  await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(1240);
+  await openNote(page, "随记");
+  const column = page.getByRole("complementary", { name: "助手栏" });
+  const card = page.locator(".card");
+
+  await page.keyboard.press(focusShortcut);
+  // ⌘J still opens the column in 专注模式.
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await expect(column).toBeVisible();
+  await expect.poll(async () => (await column.boundingBox())!.width).toBe(340);
+  const docked = (await column.boundingBox())!;
+  expect(docked.x + docked.width).toBe(1240);
+  await expect.poll(async () => (await card.boundingBox())!.x).toBeLessThanOrEqual(12);
+  const box = (await card.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(docked.x);
+  expect(box.x + box.width).toBeGreaterThan(docked.x - 24);
+  await expect(page.getByLabel("笔记正文")).toBeVisible();
+
+  // Leaving 专注模式 keeps the column open.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("list", { name: "当前目录内容" })).toBeVisible();
+  await expect(column).toBeVisible();
+  await app.close();
+});
