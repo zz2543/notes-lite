@@ -549,3 +549,8 @@ button {
 .primary:active {
   scale: var(--press-scale);
 }
+
+/* 单栏导航: one wider side panel browses folders and notes; there is no list column. */
+.side.single {
+  width: var(--single-nav-width);
+}

@@ -11,6 +11,7 @@ import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
+import { usePreferences } from "./preferences";
 import { useSettingsPanel } from "./SettingsPanel";
 import { SidePages, SideSwitch, SpacePanel, type SideMode } from "./Spaces";
 import { icon } from "./tokens";
@@ -112,6 +113,9 @@ function Welcome({ missing, onChoose }: { missing?: string; onChoose(): void }) 
   );
 }
 
+/** The folder a note (or folder) lies in; "" for the library root. */
+const parentOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
+
 function ancestors(path: string): string[] {
   const parts = path ? path.split("/") : [];
   return ["", ...parts.map((_, i) => parts.slice(0, i + 1).join("/"))];
@@ -200,8 +204,19 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
 
   // The input saved as a copy beside its note: shown where it lies, and opened.
   const openCopy = (path: string) => {
-    openFolder(path.slice(0, Math.max(0, path.lastIndexOf("/"))));
+    openFolder(parentOf(path));
     void openNote(path);
+  };
+
+  // 导航模式. 单栏导航 browses folders and notes in one tree; a note opened there makes its folder the one
+  // browsed, so 双栏导航 shows the same place. Switching keeps the open note (and where its caret is)
+  // and the folder, and the tree unfolds down to them.
+  const single = usePreferences().preferences.navigation === "single";
+  useEffect(() => {
+    if (single) setExpanded((now) => new Set([...now, ...ancestors(folder), ...(note === null ? [] : ancestors(parentOf(note)))]));
+  }, [single]);
+  const openTreeNote = async (path: string) => {
+    if (await openNote(path)) openFolder(parentOf(path));
   };
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
@@ -242,29 +257,58 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   };
   const firstHit = answer?.query === search?.query ? answer?.results?.hits[0] : undefined;
 
+  // 就地搜索 takes the place of whatever browses the library: the list's header and rows in 双栏导航,
+  // the side panel's label and tree in 单栏导航.
+  const searchHead = search && (
+    <SearchHead
+      state={search}
+      folderName={title}
+      focusRequest={focusRequest}
+      onChange={setSearch}
+      onSubmit={() => firstHit && void openResult(firstHit)}
+      onClose={() => setSearch(null)}
+    />
+  );
+  const searchResults = search?.query ? (
+    <SearchResultsList answer={answer} libraryName={library.name} openNote={note} onOpen={(hit) => void openResult(hit)} />
+  ) : null;
+
   return (
     <div className="app">
-      <aside className="side">
+      <aside className={`side ${single ? "single" : ""}`} onKeyDown={single ? closeOnEscape : undefined}>
         <div className="drag" />
         <SideSwitch mode={sideMode} onChange={setSideMode} />
         <SidePages mode={sideMode}>
           {sideMode === "library" ? (
             <>
-              <div className="side-label">
-                <span className="label">文件夹</span>
-                <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
-                  <MagnifyingGlass size={icon.small} />
-                </button>
-              </div>
-              <FolderTree
-                libraryName={library.name}
-                selected={folder}
-                expanded={expanded}
-                onActivate={activate}
-                onToggle={toggle}
-                onNewNote={(path) => void organize.newNote(path)}
-                onMenu={organize.folderMenu}
-              />
+              {(single && searchHead) || (
+                <div className="side-label">
+                  <span className="label">{single ? "笔记" : "文件夹"}</span>
+                  <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+                    <MagnifyingGlass size={icon.small} />
+                  </button>
+                </div>
+              )}
+              {(single && searchResults) || (
+                <FolderTree
+                  libraryName={library.name}
+                  selected={folder}
+                  expanded={expanded}
+                  onActivate={activate}
+                  onToggle={toggle}
+                  onNewNote={(path) => void organize.newNote(path)}
+                  onMenu={organize.folderMenu}
+                  notes={
+                    single
+                      ? {
+                          open: note,
+                          onOpen: (path) => void openTreeNote(path),
+                          onMenu: (path, name, event) => organize.itemMenu({ path, name, kind: "note" }, event),
+                        }
+                      : undefined
+                  }
+                />
+              )}
               {lastDeletedName !== undefined && (
                 <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
                   <ArrowCounterClockwise size={icon.small} />
@@ -282,30 +326,21 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
           <CaretUpDown size={icon.caret} />
         </button>
       </aside>
-      <section className="list" onKeyDown={closeOnEscape}>
-        {search && (
-          <SearchHead
-            state={search}
-            folderName={title}
-            focusRequest={focusRequest}
-            onChange={setSearch}
-            onSubmit={() => firstHit && void openResult(firstHit)}
-            onClose={() => setSearch(null)}
-          />
-        )}
-        {search?.query ? (
-          <SearchResultsList answer={answer} libraryName={library.name} openNote={note} onOpen={(hit) => void openResult(hit)} />
-        ) : (
-          <FolderContentsList
-            folder={folder}
-            title={search ? null : title}
-            openNote={note}
-            onOpenFolder={openFolder}
-            onOpenNote={(path) => void openNote(path)}
-            onMenu={organize.itemMenu}
-          />
-        )}
-      </section>
+      {!single && (
+        <section className="list" onKeyDown={closeOnEscape}>
+          {searchHead}
+          {searchResults ?? (
+            <FolderContentsList
+              folder={folder}
+              title={search ? null : title}
+              openNote={note}
+              onOpenFolder={openFolder}
+              onOpenNote={(path) => void openNote(path)}
+              onMenu={organize.itemMenu}
+            />
+          )}
+        </section>
+      )}
       <main className="card-wrap">
         <NoteEditor key={reloads} path={note} fresh={note !== null && note === fresh} onOpenCopy={openCopy} onLetGo={letGo} />
       </main>
