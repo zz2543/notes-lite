@@ -48,9 +48,11 @@ test("the card's button goes in and out, keeping the text, the selection and whe
   const { app, page } = await launchWith(scratch, root);
   await openNote(page, "长文");
   const editor = page.getByLabel("笔记正文");
-  // Down to the 60th paragraph, the note scrolling along with the caret.
+  // Down to the 60th paragraph, the note scrolling along with the caret. ↓ until the caret's line is that
+  // paragraph, since how many presses it takes depends on where the platform's fonts wrap lines.
   await page.keyboard.press("ControlOrMeta+Home");
-  for (let i = 0; i < 2 * 59 - 2; i++) await page.keyboard.press("ArrowDown");
+  const caretLine = () => page.evaluate(() => getSelection()?.focusNode?.textContent ?? "");
+  for (let i = 0; i < 300 && !(await caretLine()).startsWith("第60行"); i++) await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Home");
   for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
   expect(await selected(page)).toBe("第60行，");
