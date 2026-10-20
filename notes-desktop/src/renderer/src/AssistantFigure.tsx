@@ -153,8 +153,8 @@ function draw(ctx: CanvasRenderingContext2D, g: FigureGeometry, particles: Parti
     for (let i = 0; i < g.orbiters.count; i++) {
       const a = (i / g.orbiters.count) * Math.PI * 2 + t * 0.35 * (i % 2 ? 1 : 0.8);
       const tilt = 0.45;
-      const ox = Math.cos(a) * R * 1.3;
-      const oy = Math.sin(a) * R * 1.3 * tilt;
+      const ox = Math.cos(a) * R * 1.2;
+      const oy = Math.sin(a) * R * 1.2 * tilt;
       ctx.globalAlpha = 0.35 + 0.3 * ((Math.sin(a) + 1) / 2);
       ctx.beginPath();
       ctx.arc(cx + ox, cy + oy, g.orbiters.radius, 0, Math.PI * 2);

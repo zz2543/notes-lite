@@ -155,6 +155,40 @@ test("with the 助手栏 open the navigation narrows with the window: 双栏, �
   await app.close();
 });
 
+/** The figure's pixels, to tell whether it moves; and the colour at a point inside the entity's body. */
+const figurePixels = (page: Page) =>
+  page.getByRole("img", { name: /^助手形象/ }).evaluate((canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext("2d")!;
+    const all = Array.from(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+    // Below the mouth, inside the circle (radius 36% of the canvas).
+    const [r, g, b, a] = ctx.getImageData(Math.round(canvas.width / 2), Math.round(canvas.height * 0.72), 1, 1).data;
+    return { all: all.join(","), body: [r, g, b, a] };
+  });
+
+test("the 助手形象 stands as a flat ink entity and keeps moving; under 减弱动态效果 it is a still frame and the column does not slide", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记" });
+  const { app, page } = await launchWith(scratch, root);
+  await page.emulateMedia({ colorScheme: "light" });
+  const column = page.getByRole("complementary", { name: "助手栏" });
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await expect(column.getByRole("img", { name: "助手形象：待命" })).toBeVisible();
+  // 待命 is the entity: #1d1d1f in light mode, fully opaque once fused.
+  await expect.poll(async () => (await figurePixels(page)).body).toEqual([0x1d, 0x1d, 0x1f, 255]);
+  const before = (await figurePixels(page)).all;
+  await expect.poll(async () => (await figurePixels(page)).all !== before).toBe(true);
+
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await column.getByRole("button", { name: "关闭助手栏" }).click();
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await expect(column).toBeVisible();
+  expect(await column.evaluate((el) => el.getAnimations().length)).toBe(0);
+  await expect.poll(async () => (await figurePixels(page)).body).toEqual([0x1d, 0x1d, 0x1f, 255]);
+  const still = (await figurePixels(page)).all;
+  await page.waitForTimeout(400);
+  expect((await figurePixels(page)).all).toBe(still);
+  await app.close();
+});
+
 test("with 单栏导航 chosen in 设置, the open 助手栏 never brings back 双栏", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "随记.md": "随记" });
   const { app, page } = await launchWith(scratch, root);
