@@ -24,6 +24,7 @@ import {
   SpaceError,
   spaceErrorReport,
   spaceLibrary,
+  spaceStorage,
   watchLibrary,
   type Library,
   type LibraryWatcher,
@@ -67,6 +68,8 @@ const settings = settingsStore(app.getPath("userData"));
 const mac = process.platform === "darwin";
 let library: Library | null = null;
 let window: BrowserWindow | null = null;
+// Each homepage's own storage, kept with the app (spaces-spec #51).
+const homepageStorage = spaceStorage(join(app.getPath("userData"), "space-storage.json"));
 // Space homepages, each in its own sandbox laid over the card.
 // A homepage takes the app's 排版, 强调色 and 动效 (spaceKit), and follows them when they change.
 const pages = spacePages(
@@ -75,6 +78,7 @@ const pages = spacePages(
   () => spacePageSettings(preferences, systemAppearance().accent),
   (event) => window && !window.isDestroyed() && window.webContents.send(channels.spacePageEvent, event),
   (paths) => changedHere(paths),
+  homepageStorage,
 );
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
@@ -459,8 +463,21 @@ function registerIpc() {
     await copyPrompt(created);
     return info(created);
   });
-  space(channels.updateSpace, async (name: string, draft: SpaceDraft) => info(await spaces().update(name, draft)));
-  space(channels.deleteSpace, async (name: string) => (await spaces().delete(name), null));
+  // A homepage's own storage goes with its space when renamed, and a deleted space's is let go.
+  space(channels.updateSpace, async (name: string, draft: SpaceDraft) => {
+    const updated = await spaces().update(name, draft);
+    if (updated.name !== name) {
+      pages.close(name);
+      await homepageStorage.renamed(requireLibrary().root, name, updated.name);
+    }
+    return info(updated);
+  });
+  space(channels.deleteSpace, async (name: string) => {
+    await spaces().delete(name);
+    pages.close(name);
+    await homepageStorage.deleted(requireLibrary().root, name);
+    return null;
+  });
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
   // 空间主页 and its operation log.

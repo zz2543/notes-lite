@@ -16,3 +16,4 @@ export * from "./agentStream";
 export * from "./turns";
 export * from "./conversation";
 export * from "./conversations";
+export * from "./spaceStorage";

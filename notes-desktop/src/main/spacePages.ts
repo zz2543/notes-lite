@@ -2,10 +2,9 @@
 // card, never in the app's page (ADR 0003). It has no Node, its own persistent storage, and the
 // network; it reaches the notes only through `space` (or its old name `lb`), whose requests main hands
 // to the core library. Nothing here decides what a request may do.
-import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { ipcMain, protocol, session, shell, WebContentsView, type BrowserWindow, type Rectangle, type Session } from "electron";
-import { spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope } from "../core";
+import { spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope, type SpaceStorage } from "../core";
 import type { SpacePageEvent, SpacePageProblem } from "../shared/api";
 import { spacePageChannels } from "../shared/spacePage";
 import { kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
@@ -66,8 +65,8 @@ function problemOf(raw: RawProblem, offset: number): SpacePageProblem {
   return { message: text(raw.message, 2000) || "未知错误", location, stack: text(raw.stack, 8000) };
 }
 
-/** Stable per library and space, so a space keeps its preferences and never sees another's. */
-const partitionOf = (root: string, name: string) => `persist:space-${createHash("sha256").update(`${root}\u0000${name}`).digest("hex").slice(0, 32)}`;
+/** Stable per library and space (and across a rename), so a space keeps its preferences and never sees another's. */
+const partitionOf = async (storage: SpaceStorage, root: string, name: string) => `persist:space-${await storage.key(root, name)}`;
 
 interface Hosted {
   name: string;
@@ -85,6 +84,8 @@ export interface SpacePages {
   hide(): void;
   /** Closes every homepage, as when another library opens. */
   closeAll(): void;
+  /** Closes the homepage of `name`, as when its space was renamed or deleted. */
+  close(name: string): void;
   /** Sends the page settings (排版, 强调色, 动效) again to every open homepage, after they changed. */
   settingsChanged(): void;
   /**
@@ -105,21 +106,25 @@ export function spacePages(
   emit: (event: SpacePageEvent) => void,
   /** Told of every path a homepage wrote (see SpaceRequestOptions.wrote). */
   wrote: (paths: string[]) => Promise<void>,
+  storage: SpaceStorage,
 ): SpacePages {
   let hosted: Hosted[] = [];
   // How many lines come before each space file in the page last served for it.
   const offsets = new Map<string, number>();
   let shown: Hosted | null = null;
   let hostedRoot: string | null = null;
-  const handled = new WeakSet<Session>();
+  // Which space each session serves now: a renamed space keeps its session under its new name.
+  const served = new WeakMap<Session, { library: string; name: string }>();
 
   const trash = (path: string) => shell.trashItem(path);
 
   /** Each space's session answers its own address with its own page, read from disk at each load. */
   const serve = (ses: Session, library: string, name: string) => {
-    if (handled.has(ses)) return;
-    handled.add(ses);
+    const handled = served.has(ses);
+    served.set(ses, { library, name });
+    if (handled) return;
     ses.protocol.handle(spaceScheme, async () => {
+      const { library, name } = served.get(ses)!;
       const space = await spaceLibrary(library).space(name).catch(() => null);
       const { page, offset } = documentFor(name, space?.html ?? "", settings());
       offsets.set(name, offset);
@@ -136,8 +141,7 @@ export function spacePages(
     page.view.webContents.reload();
   };
 
-  const create = (library: string, name: string, html: string, scope: SpaceScope): Hosted => {
-    const partition = partitionOf(library, name);
+  const create = (library: string, name: string, html: string, scope: SpaceScope, partition: string): Hosted => {
     const ses = session.fromPartition(partition);
     serve(ses, library, name);
     const view = new WebContentsView({
@@ -184,6 +188,14 @@ export function spacePages(
     hosted = [];
   };
 
+  const close = (name: string) => {
+    const page = hosted.find((h) => h.name === name);
+    if (!page) return;
+    if (shown === page) hide();
+    hosted = hosted.filter((h) => h !== page);
+    if (!page.view.webContents.isDestroyed()) page.view.webContents.close();
+  };
+
   const hide = () => {
     const win = window();
     if (shown && win && !win.isDestroyed()) win.contentView.removeChildView(shown.view);
@@ -200,13 +212,14 @@ export function spacePages(
     }
     const space = await spaceLibrary(library).space(name).catch(() => null);
     if (!space) return hide();
+    const partition = await partitionOf(storage, library, name);
     let page = hosted.find((h) => h.name === name);
     if (page && page.view.webContents.isDestroyed()) {
       hosted = hosted.filter((h) => h !== page);
       page = undefined;
     }
     if (!page) {
-      page = create(library, name, space.html, space.scope);
+      page = create(library, name, space.html, space.scope, partition);
       hosted.push(page);
     } else if (page.html !== space.html) {
       // Rewritten since it was loaded (by an agent, say): shown as it is now.
@@ -274,5 +287,5 @@ export function spacePages(
     for (const { view } of hosted) if (!view.webContents.isDestroyed()) view.webContents.send(spacePageChannels.settings, css);
   };
 
-  return { show, hide, closeAll, settingsChanged, libraryChanged };
+  return { show, hide, closeAll, close, settingsChanged, libraryChanged };
 }
