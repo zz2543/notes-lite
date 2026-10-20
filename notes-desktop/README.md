@@ -15,7 +15,7 @@
 npm install
 npm run dev          # 带热更新运行
 npm run typecheck
-npm test             # 接缝 A：核心库对临时笔记库的 Vitest 用例
+npm test             # Vitest：接缝 A（tests/core，核心库对临时笔记库）与纯逻辑单元测试（tests/unit）
 npm run test:e2e     # 接缝 B：构建后用 Playwright 驱动 Electron
 npm run dist         # 产出不签名的安装包到 dist/
 ```
@@ -31,5 +31,7 @@ Electron 本体在第一次运行时下载；国内网络可先设置 `ELECTRON_
 - `src/renderer`：界面（React）。运行时代码只引用 `src/shared`；`src/core` 只能用 `import type` 引用类型（编译后不留痕迹）。界面用到的库都打进渲染进程的包里，因此放在 `devDependencies`，安装包不再附带它们。
 
 安装包不签名：macOS 版只有 ad-hoc 签名，第一次打开需在 Finder 中右键选“打开”，或在“系统设置 › 隐私与安全性”中允许；Windows 版安装时 SmartScreen 会提示，选“仍要运行”。
+
+测试分三处：`tests/core` 是接缝 A，用 Vitest 对真实的临时笔记库调用核心库的公开接口；`tests/unit` 是不碰磁盘的纯逻辑单元测试（`src/shared` 的规则、界面的模型等）；`tests/e2e` 是接缝 B，用 Playwright 驱动构建好的应用，按角色和无障碍名称找界面元素。
 
 测试用 `NOTES_DESKTOP_USER_DATA` 环境变量把应用设置放到临时目录，与日常使用的设置隔开。
