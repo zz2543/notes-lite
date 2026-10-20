@@ -10,6 +10,8 @@ import {
   createSearchIndex,
   detectAgents,
   LibraryError,
+  type LibraryErrorCode,
+  type SpaceErrorCode,
   entryChanges,
   entrySummary,
   migrateLegacyFolder,
@@ -322,6 +324,20 @@ async function changedHere(paths: string[]) {
   if (library) await snapshots.library(library.root).appWrote(paths).catch(() => undefined);
 }
 
+type Failure<C> = { ok: false; code: C; message: string };
+
+/**
+ * Errors cross IPC as plain messages, so a refusal reaches the page as a result it can act on: the
+ * core library's own code where it gave one (with `spaces`, a space's or the operation log's too),
+ * otherwise write-failed.
+ */
+function failure(error: unknown): Failure<LibraryErrorCode>;
+function failure(error: unknown, spaces: "spaces"): Failure<LibraryErrorCode | SpaceErrorCode>;
+function failure(error: unknown, spaces?: "spaces"): Failure<LibraryErrorCode | SpaceErrorCode> {
+  const coded = error instanceof LibraryError || (spaces && (error instanceof SpaceError || error instanceof OperationLogError));
+  return { ok: false, code: coded ? (error as LibraryError | SpaceError).code : "write-failed", message: (error as Error).message };
+}
+
 function registerIpc() {
   ipcMain.handle(channels.launchState, () => launch);
   ipcMain.handle(channels.chooseLibrary, async () => {
@@ -333,15 +349,13 @@ function registerIpc() {
   ipcMain.on(channels.rememberPlace, (_, place: Place) => void settings.update({ place }).catch(() => {}));
   ipcMain.handle(channels.readFolder, (_, path: string) => readOnce(`folder:${path}`, () => requireLibrary().readFolder(path)));
   ipcMain.handle(channels.readNote, (_, path: string) => readOnce(`note:${path}`, () => requireLibrary().readNote(path)));
-  // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
     try {
       await requireLibrary().saveNote(path, text, expected);
       await changedHere([path]);
       return { ok: true };
     } catch (error) {
-      const code = error instanceof LibraryError ? error.code : "write-failed";
-      return { ok: false, code, message: (error as Error).message };
+      return failure(error);
     }
   });
   ipcMain.on(channels.sourceViewChanged, (_, showSource: boolean) => {
@@ -354,8 +368,7 @@ function registerIpc() {
       try {
         return { ok: true, value: await run(requireLibrary(), ...args) };
       } catch (error) {
-        const code = error instanceof LibraryError ? error.code : "write-failed";
-        return { ok: false, code, message: (error as Error).message };
+        return failure(error);
       }
     });
   // The search index reads again whatever an operation touched.
@@ -383,8 +396,7 @@ function registerIpc() {
       await changedHere([copy]);
       return { ok: true, path: copy };
     } catch (error) {
-      const code = error instanceof LibraryError ? error.code : "write-failed";
-      return { ok: false, code, message: (error as Error).message };
+      return failure(error);
     }
   });
   ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
@@ -400,8 +412,7 @@ function registerIpc() {
       try {
         return { ok: true, value: await run(...(args as A)) };
       } catch (error) {
-        const code = error instanceof SpaceError || error instanceof LibraryError || error instanceof OperationLogError ? error.code : "write-failed";
-        return { ok: false, code, message: (error as Error).message };
+        return failure(error, "spaces");
       }
     });
   const copyPrompt = async (chosen: Space) => clipboard.writeText(await spaces().prompt(chosen));
