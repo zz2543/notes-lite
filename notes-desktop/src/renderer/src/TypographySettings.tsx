@@ -46,7 +46,12 @@ function listInstalledFamilies(): Promise<string[]> {
   installedFamilies ??= (queryLocalFonts?.() ?? Promise.resolve([]))
     .then((fonts) => [...new Set(fonts.map((font) => font.family))].sort((a, b) => a.localeCompare(b)))
     .catch(() => []);
-  return installedFamilies;
+  // Chromium answers only when the request comes with a click or key press; an empty or refused answer is
+  // not kept, so the next opening of the menu asks again.
+  return installedFamilies.then((families) => {
+    if (families.length === 0) installedFamilies = undefined;
+    return families;
+  });
 }
 
 function useInstalledFamilies(): [string[], () => void] {

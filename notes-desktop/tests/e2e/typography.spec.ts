@@ -51,8 +51,14 @@ test("body and heading fonts come from presets, the bundled serifs, or the fonts
 
   // Any installed font: the menu lists this computer's fonts.
   const installed = panel.getByRole("combobox", { name: "正文字体：系统已安装字体" });
-  await installed.focus();
-  await expect.poll(() => installed.locator("option:not([disabled])").count()).toBeGreaterThan(0);
+  // Chromium may refuse the font list the first time; the menu asks again each time it is focused.
+  await expect
+    .poll(async () => {
+      await installed.blur();
+      await installed.focus();
+      return installed.locator("option:not([disabled])").count();
+    })
+    .toBeGreaterThan(0);
   const family = (await installed.locator("option:not([disabled])").first().getAttribute("value"))!;
   await installed.selectOption(family);
   await expect.poll(() => style(preview, ".cm-content", "font-family")).toContain(family);
