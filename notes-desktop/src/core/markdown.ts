@@ -321,3 +321,40 @@ export function countWords(text: string): number {
   }
   return count;
 }
+
+/** The line is nothing but one embed (`![[a.png]]`) or image (`![](a.png)`). */
+function isAttachmentLine(line: string, spans: InlineSpan[]): boolean {
+  const [only] = spans;
+  if (spans.length !== 1 || !only || (only.kind !== "embed" && only.kind !== "image")) return false;
+  const ends = [only.content, ...only.marks];
+  const from = Math.min(...ends.map((r) => r.from));
+  const to = Math.max(...ends.map((r) => r.to));
+  return line.slice(from, to) === line.trim();
+}
+
+const summaryLength = { enough: 100, max: 110 };
+const skippedInSummary = new Set<BlockType>(["h1", "h2", "h3", "h4", "h5", "h6", "empty", "hr", "table", "fence"]);
+
+/**
+ * 摘要: the one line of prose the 详细 list shows under a title. Headings, code, math, front matter,
+ * tables, rules and lines that are only an attachment are left out; Markdown syntax is removed.
+ */
+export function noteSummary(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const literal = new Set(literalBlocks(lines).flatMap((b) => Array.from({ length: b.last - b.first + 1 }, (_, i) => b.first + i)));
+  const parts: string[] = [];
+  for (const [i, line] of lines.entries()) {
+    if (literal.has(i)) continue;
+    const type = blockType(line);
+    if (skippedInSummary.has(type)) continue;
+    const { prefix, spans } = parseLine(line, type);
+    if (isAttachmentLine(line, spans)) continue;
+    const marks = [prefix, ...spans.flatMap((s) => s.marks)].sort((a, b) => b.from - a.from);
+    let clean = line;
+    for (const mark of marks) clean = clean.slice(0, mark.from) + clean.slice(mark.to);
+    clean = clean.trim();
+    if (clean) parts.push(clean);
+    if (parts.join(" ").length >= summaryLength.enough) break;
+  }
+  return parts.join(" ").slice(0, summaryLength.max);
+}

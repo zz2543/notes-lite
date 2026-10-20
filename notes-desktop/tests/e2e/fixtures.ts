@@ -33,7 +33,11 @@ export async function library(scratch: string, name: string, files: Record<strin
 
 /** Launches the built app with its settings kept in the scratch folder. */
 export async function launch(scratch: string): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({ args: [appDir], env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile") } });
+  // A window the runner covers or leaves in the background still draws every frame, so motion can be filmed.
+  const app = await electron.launch({
+    args: [appDir, "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows"],
+    env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile") },
+  });
   running.add(app);
   app.on("close", () => running.delete(app));
   const page = await app.firstWindow();

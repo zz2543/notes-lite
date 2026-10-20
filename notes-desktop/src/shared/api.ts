@@ -1,11 +1,14 @@
-import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults } from "../core";
+import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
 import type { Appearance } from "./appearance";
+import type { Preferences } from "./preferences";
 
 export interface LibraryInfo {
   /** Absolute path of the library folder. */
   root: string;
   /** The folder's own name, shown as the root of the folder tree. */
   name: string;
+  /** Something to tell the user once it opens, such as why the old app's spaces could not be moved in. */
+  notice?: string;
 }
 
 /** The current folder and open note, library-relative; `note` is null when none is open. */
@@ -43,6 +46,8 @@ export interface NotesApi {
   /** File > 打开笔记库… asks the page, which saves first and then lets the user choose. */
   onOpenLibraryRequest(listener: () => void): () => void;
   readFolder(path: string): Promise<FolderContents>;
+  /** 摘要 of a folder's direct notes, by path, for the 详细 list. */
+  readSummaries(path: string): Promise<Record<string, string>>;
   readNote(path: string): Promise<string>;
   /** `expected` is the source last read or saved; a note changed on disk since then is not overwritten. */
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
@@ -76,7 +81,38 @@ export interface NotesApi {
   saveCopy(path: string, text: string): Promise<CopyResult>;
   /** Asks before something the user cannot take back; true when they go ahead. */
   confirm(question: Confirmation): Promise<boolean>;
+
+  // 设置 (ticket 15).
+  /** The menu's 设置… asks the page to open the settings panel. */
+  onSettingsRequest(listener: () => void): () => void;
+  /** The preferences as stored when the page loaded, so its first frame already shows them. */
+  readonly preferences: Preferences;
+  /** Stores a change and applies what the main process owns (外观); answers with all preferences. */
+  setPreferences(change: Partial<Preferences>): Promise<Preferences>;
+  /** The system accent colour changed while the app runs (#rrggbb, or null when the system does not say). */
+  onSystemAccentChanged(listener: (accent: string | null) => void): () => void;
+  // 空间 (ticket 18). The space files live in the library's `.notes/空间/`.
+  /** The open library's spaces, in the user's order. */
+  listSpaces(): Promise<SpaceInfo[]>;
+  /** Creates the space and copies the prompt for an external agent to the clipboard. */
+  createSpace(draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  updateSpace(name: string, draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  /** Moves only the space file to the trash. */
+  deleteSpace(name: string): Promise<SpaceDone<null>>;
+  reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
+  /** Copies the prompt for an external agent to the clipboard. */
+  copySpacePrompt(name: string): Promise<SpaceDone<null>>;
 }
+
+/** A space as the side panel shows it. */
+export interface SpaceInfo {
+  name: string;
+  icon: string;
+  scope: SpaceScope;
+  hasPage: boolean;
+}
+
+export type SpaceDone<T> = { ok: true; value: T } | { ok: false; code: SpaceErrorCode | LibraryErrorCode; message: string };
 
 export interface Confirmation {
   message: string;
@@ -96,6 +132,7 @@ export const channels = {
   openLibraryRequest: "menu:open-library",
   openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",
+  readSummaries: "library:read-summaries",
   readNote: "library:read-note",
   saveNote: "library:save-note",
   beforeClose: "window:before-close",
@@ -115,4 +152,14 @@ export const channels = {
   shownAgain: "window:shown-again",
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
+  settingsRequest: "menu:settings",
+  preferences: "settings:preferences",
+  setPreferences: "settings:set-preferences",
+  systemAccentChanged: "system:accent-changed",
+  listSpaces: "spaces:list",
+  createSpace: "spaces:create",
+  updateSpace: "spaces:update",
+  deleteSpace: "spaces:delete",
+  reorderSpaces: "spaces:reorder",
+  copySpacePrompt: "spaces:copy-prompt",
 } as const;

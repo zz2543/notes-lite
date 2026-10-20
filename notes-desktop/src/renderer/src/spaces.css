@@ -1,0 +1,118 @@
+/* 空间 in the side panel: the “资料库 | 空间” switch, the space list and the space form. Values are the
+   variables in tokens.css. */
+
+/* 分段控件: the pill slides (滑移) between the two halves. */
+.side-switch {
+  display: flex;
+  flex: none;
+  margin: 0 2px var(--card-gap);
+  padding: var(--segmented-padding);
+  border-radius: var(--segmented-radius);
+  background: var(--hover);
+  -webkit-app-region: no-drag;
+}
+.side-switch button {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  height: var(--segmented-height);
+  border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+}
+.side-switch button[aria-selected="true"] {
+  color: var(--side-fg);
+  font-weight: var(--weight-group);
+}
+.side-switch .pill {
+  background: var(--side-pill);
+}
+
+/* The two side pages share one place; the one leaving is lifted out while it slides away. */
+.side-pages {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.side-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.space-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+.space-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.space-item {
+  position: relative;
+}
+.space-row {
+  width: 100%;
+  text-align: left;
+}
+.row.space-row .label {
+  font-weight: inherit;
+}
+.pill.space {
+  background: var(--side-pill);
+}
+.space-icon {
+  width: var(--icon-button-small);
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--side-muted);
+}
+.space-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: var(--card-gap) var(--row-padding);
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+.space-empty p {
+  margin: 0;
+}
+
+.space-name {
+  display: flex;
+  gap: var(--inline-gap);
+}
+.space-name .dialog-input:last-child {
+  flex: 1;
+  min-width: 0;
+}
+.space-emoji {
+  width: var(--list-head-height);
+  text-align: center;
+}
+.space-check {
+  height: var(--row-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 var(--row-padding) 0 calc(var(--row-padding) + var(--depth, 0) * var(--row-indent));
+  border-radius: var(--row-radius);
+  font-size: var(--text-side-row);
+}
+.space-check:hover {
+  background: var(--hover);
+}
+.space-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
