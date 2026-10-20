@@ -72,6 +72,11 @@ const skipped = (path: string) => {
 export interface TurnSnapshots {
   /** Snapshots the library before a turn; answers the turn's id. */
   begin(): Promise<string>;
+  /**
+   * Snapshots the library ahead of any turn (in the background, when the 助手栏 opens), so a turn's own
+   * start only looks at what changed since. On Windows this is where attachments are first copied.
+   */
+  baseline(): Promise<void>;
   /** Snapshots it again once the turn is over; answers what the turn changed. */
   finish(id: string): Promise<Turn>;
   /**
@@ -351,6 +356,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
 
   return {
     begin: queued(begin),
+    baseline: queued(async () => void (await snapshot())),
     finish: queued(finish),
     revert: queued(revert),
     turn: queued(turn),
@@ -384,7 +390,7 @@ export function snapshotStore(base: string, options: SnapshotOptions = {}): Snap
       const inner = turnSnapshots(folder, root, options);
       // The folder says which library it belongs to, so it can be cleaned while another is open.
       const named = () => mkdir(folder, { recursive: true }).then(() => writeFile(join(folder, nameFile), root));
-      snapshots = { ...inner, begin: () => named().then(inner.begin) };
+      snapshots = { ...inner, begin: () => named().then(inner.begin), baseline: () => named().then(inner.baseline) };
       opened.set(folder, snapshots);
     }
     return snapshots;

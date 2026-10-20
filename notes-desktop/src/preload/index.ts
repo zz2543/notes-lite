@@ -83,6 +83,9 @@ const api: NotesApi = {
   operationLog: () => ipcRenderer.invoke(channels.operationLog),
   undoOperation: (id) => ipcRenderer.invoke(channels.undoOperation, id),
   detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
+  prepareSnapshots: () => ipcRenderer.send(channels.prepareSnapshots),
+  snapshotUsage: () => ipcRenderer.invoke(channels.snapshotUsage),
+  clearSnapshots: () => ipcRenderer.invoke(channels.clearSnapshots),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

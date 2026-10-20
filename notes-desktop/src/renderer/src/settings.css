@@ -218,3 +218,24 @@
   background: var(--list-pill);
   box-shadow: var(--pill-shadow);
 }
+
+/* 设置 › 助手 */
+.settings-action {
+  height: var(--row-height);
+  padding: 0 var(--row-padding);
+  border-radius: var(--icon-button-radius);
+  box-shadow: var(--pill-shadow);
+  transition: background-color var(--spring-pop);
+}
+.settings-action:hover:not(:disabled) {
+  background: var(--hover);
+}
+.settings-action:disabled {
+  color: var(--side-muted);
+}
+.settings-warning {
+  display: block;
+  margin: 0;
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+}
