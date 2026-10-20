@@ -28,7 +28,7 @@
 | [20: 空间组件、样式包与新接口前缀](issues/20-space-components-prefix.md) | 19 |
 | [21: 空间的刷新、错误条与引用同步](issues/21-space-refresh-errors.md) | 19 |
 | [22: Windows 适配](issues/22-windows-adaptation.md) | 14, 15, 16, 17 |
-| [23: 动效专项审查与打磨](issues/23-motion-review.md) | 14, 16, 17, 21 |
+| [23: 动效专项审查与打磨](issues/23-motion-review.md) | 14, 16, 17, 21, 26, 29, 30 |
 | [24: 大胆高饱和外观风格](issues/24-bold-appearance.md) | 15, 23（移到最后，届时问用户） |
 | [25: 完整验收并取代旧版](issues/25-acceptance-replace-old.md) | 07, 09, 12, 13, 20, 22, 23 |
 | [26: 助手栏布局与助手形象](issues/26-assistant-layout-figure.md) | 03, 17 |
@@ -38,3 +38,5 @@
 | [30: 其余 Agent 与对话历史](issues/30-more-agents-history.md) | 28 |
 
 进度：01–09、15、18 已完成（CI 两平台通过）；19 进行中。10、11、24 按用户要求移到最后，届时再问是否做。
+
+优先顺序（2026-10-20 用户要求）：17 完成后优先做助手栏 26–30（27 等 19），再做其余界面任务；动效审查 23 放在助手栏之后并覆盖它。
