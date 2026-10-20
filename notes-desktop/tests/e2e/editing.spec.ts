@@ -39,6 +39,9 @@ test("edits reach the disk exactly as typed, with pinyin input, undo and paste",
   await page.keyboard.press("ControlOrMeta+End");
   await compose(page, "qingtai", "青苔");
   await expect(saveState(page)).toHaveText("已保存");
+  // Edits less than 500 ms apart join one undo step (CodeMirror's history grouping); a slow runner can save
+  // within that, so the pause keeps " walk" its own step, as it is for anyone who stops to look.
+  await page.waitForTimeout(600);
   await page.keyboard.type(" walk");
   await page.keyboard.press("ControlOrMeta+z");
   await expect(editor).toHaveText(/青苔$/, { useInnerText: true });

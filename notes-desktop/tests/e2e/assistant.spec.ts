@@ -58,10 +58,19 @@ test("⌘J docks the 助手栏 right of the card, which narrows; one 助手形�
 
   await page.keyboard.press("ControlOrMeta+KeyJ");
   await expect(column).toBeVisible();
-  // The width moves on a quick transition without a bounce, not at once.
-  const transition = await column.evaluate((el) =>
-    el.getAnimations().map((a) => [(a as CSSTransition).transitionProperty, a.effect!.getTiming().duration, a.effect!.getTiming().easing]),
-  );
+  // The width moves on a quick transition without a bounce, not at once. Read from what the column declares,
+  // since a slow runner may finish the running transition before the test looks.
+  const transition = await column.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const split = (list: string) => list.split(/,(?![^(]*\))/).map((item) => item.trim());
+    const durations = split(style.transitionDuration);
+    const curves = split(style.transitionTimingFunction);
+    return split(style.transitionProperty).map((property, i) => [
+      property,
+      parseFloat(durations[i % durations.length]!) * 1000,
+      curves[i % curves.length],
+    ]);
+  });
   expect(transition).toContainEqual(["width", 260, expect.stringMatching(/^cubic-bezier/)]);
   // Docked, not floating: once settled the column is 340px at the window's right edge and the card ends where it starts.
   await expect.poll(async () => (await column.boundingBox())!.width).toBe(340);
