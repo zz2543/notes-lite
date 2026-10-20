@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
 import type { AgentId } from "../../shared/agentKinds";
-import { addEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
+import { withEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
 import type { TurnEvent } from "../../shared/conversation";
 import type { FigureState } from "./figureModel";
 import { icon } from "./tokens";
@@ -29,13 +29,7 @@ export function useAssistant() {
   // Events can come before the answer that says which conversation they belong to; they wait for it.
   const early = useRef<Array<[string, TurnEvent]>>([]);
   const apply = (event: TurnEvent) => {
-    setConversation((now) => {
-      if (!now) return now;
-      const messages = [...now.messages];
-      const reply = messages.at(-1);
-      if (reply?.role === "assistant") messages[messages.length - 1] = addEvent(reply, event);
-      return { ...now, messages, ...(event.kind === "session" ? { session: event.id } : {}) };
-    });
+    setConversation((now) => now && withEvent(now, event));
     if (event.kind === "tool") setFigure(event.activity);
     else if (event.kind === "text" || event.kind === "toolDone") setFigure("thinking");
     else if (event.kind === "end") setFigure(event.failed && event.failed !== stopped ? "error" : "done");

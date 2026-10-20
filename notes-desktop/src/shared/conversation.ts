@@ -100,3 +100,15 @@ export function addEvent(reply: Reply, event: TurnEvent): Reply {
       return reply;
   }
 }
+
+/**
+ * The conversation with one more event of its running turn: the reply at its end grows, and the
+ * agent's session id is kept to continue it. The one rule main keeps a conversation by and the
+ * 助手栏 shows it by.
+ */
+export function withEvent(conversation: Conversation, event: TurnEvent): Conversation {
+  const messages = [...conversation.messages];
+  const reply = messages.at(-1);
+  if (reply?.role === "assistant") messages[messages.length - 1] = addEvent(reply, event);
+  return { ...conversation, messages, ...(event.kind === "session" ? { session: event.id } : {}) };
+}

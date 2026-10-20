@@ -1,4 +1,4 @@
-import type { AgentId, Conversation, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+import type { AgentId, Conversation, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
 
 export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
@@ -122,7 +122,7 @@ export interface NotesApi {
    * Starts a turn (ticket 28): in the conversation given, or in a new one with this agent and working
    * directory. Answers at once with the conversation as it now stands; the turn's events follow.
    */
-  startTurn(request: TurnStart): Promise<{ ok: true; conversation: Conversation } | { ok: false; message: string }>;
+  startTurn(request: TurnStart): Promise<TurnStarted>;
   /** Stops the conversation's running turn. */
   stopTurn(conversation: string): void;
   /** An event of a running turn, by conversation. */
@@ -154,16 +154,7 @@ export type SpacePageEvent =
   /** The page wrote through `space`: `changes` operation-log entries, `records` of them records. */
   | { space: string; kind: "wrote"; changes: number; records: number };
 
-export interface TurnStart {
-  /** The conversation to continue; null begins one. */
-  conversation: string | null;
-  /** For a new conversation: its agent and its working directory (library-relative). */
-  agent: AgentId;
-  folder: string;
-  text: string;
-  /** Notes put in the context, library-relative. */
-  notes: string[];
-}
+export type { TurnStart } from "../core";
 
 export interface SpaceNote {
   path: string;

@@ -5,13 +5,10 @@ import { homedir, release } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { execFile } from "node:child_process";
 import {
-  addEvent,
+  assistantTurns,
   conversationStore,
   createSearchIndex,
   detectAgents,
-  emptyReply,
-  runTurn,
-  type Conversation,
   LibraryError,
   entryChanges,
   entrySummary,
@@ -35,7 +32,6 @@ import {
   type Space,
   type SpaceDraft,
   type SpacePageProblem,
-  type TurnEvent,
 } from "../core";
 import {
   channels,
@@ -163,63 +159,14 @@ const snapshots = snapshotStore(join(app.getPath("userData"), "snapshots"), {
   ...(copyLimit ? { attachments: "copy" as const, copyLimit } : {}),
 });
 
-// 对话记录, kept with the app; the conversations of this run stay in memory too.
-const conversations = conversationStore(join(app.getPath("userData"), "conversations"));
-const conversationsOpen = new Map<string, Conversation>();
-const running = new Map<string, AbortController>();
-
-type Started = { ok: true; conversation: Conversation } | { ok: false; message: string };
-
-/** Begins (or continues) a conversation's turn and passes its events to the page as they come. */
-async function startTurn(page: WebContents, request: TurnStart): Promise<Started> {
-  const lib = library;
-  if (!lib) return { ok: false, message: "请先打开笔记库。" };
-  const known = request.conversation
-    ? (conversationsOpen.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined)))
-    : undefined;
-  const conversation = known ?? conversations.start({ agent: request.agent, root: lib.root, folder: request.folder });
-  if (conversation.root !== lib.root) return { ok: false, message: "这个对话属于另一个笔记库。" };
-  if (running.has(conversation.id)) return { ok: false, message: "上一轮还没有结束。" };
-  const installed = await detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT });
-  const agent = installed.find((a) => a.id === conversation.agent);
-  if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
-  conversation.messages.push({ role: "user", text: request.text, notes: request.notes }, emptyReply());
-  conversationsOpen.set(conversation.id, conversation);
-  await conversations.save(conversation);
-  const stop = new AbortController();
-  running.set(conversation.id, stop);
-  const replyAt = conversation.messages.length - 1;
-  const pass = (event: TurnEvent) => {
-    if (event.kind === "session") conversation.session = event.id;
-    const reply = conversation.messages[replyAt];
-    if (reply?.role === "assistant") conversation.messages[replyAt] = addEvent(reply, event);
-    if (!page.isDestroyed()) page.send(channels.turnEvent, conversation.id, event);
-  };
-  const turns = snapshots.library(lib.root);
-  void runTurn({
-    agent,
-    root: lib.root,
-    folder: conversation.folder,
-    text: request.text,
-    notes: request.notes,
-    session: conversation.session,
-    snapshots: turns,
-    log: operationLog(lib.root, { ...libraryOptions, turns }),
-    env: await agentEnvironment(),
-    signal: stop.signal,
-    onEvent: pass,
-  })
-    .catch((error: Error) => {
-      // The snapshots themselves failed: the turn ends saying why.
-      const reply = conversation.messages[replyAt];
-      if (reply?.role === "assistant" && !reply.done) pass({ kind: "end", changes: [], failed: error.message });
-    })
-    .finally(() => {
-      running.delete(conversation.id);
-      void conversations.save(conversation).catch(() => undefined);
-    });
-  return { ok: true, conversation };
-}
+// 助手栏 turns, their conversations (对话记录) kept with the app.
+const turns = assistantTurns({
+  conversations: conversationStore(join(app.getPath("userData"), "conversations")),
+  snapshots,
+  log: (root) => operationLog(root, { ...libraryOptions, turns: snapshots.library(root) }),
+  agents: async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }),
+  env: agentEnvironment,
+});
 
 /**
  * Readies a library just opened: the old app's `.留白/` moves into `.notes/` (and then to the trash) the first time, and the
@@ -520,8 +467,10 @@ function registerIpc() {
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
   ipcMain.handle(channels.detectAgents, async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }));
-  ipcMain.handle(channels.startTurn, (event, request: TurnStart) => startTurn(event.sender, request));
-  ipcMain.on(channels.stopTurn, (_, id: string) => running.get(id)?.abort());
+  ipcMain.handle(channels.startTurn, ({ sender }, request: TurnStart) =>
+    turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
+  );
+  ipcMain.on(channels.stopTurn, (_, id: string) => turns.stop(id));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
@@ -735,7 +684,7 @@ void app.whenReady().then(async () => {
 
 app.on("before-quit", () => (quitting = true));
 // An agent still running stops with the app.
-app.on("will-quit", () => running.forEach((turn) => turn.abort()));
+app.on("will-quit", () => turns.stopAll());
 
 app.on("window-all-closed", () => {
   if (!mac) app.quit();
