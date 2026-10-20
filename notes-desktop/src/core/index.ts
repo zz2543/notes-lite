@@ -12,3 +12,5 @@ export * from "./operationLog";
 export { serialized } from "./serialized";
 export * from "./agents";
 export * from "./snapshots";
+export * from "./agentStream";
+export * from "./turns";
