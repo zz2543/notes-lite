@@ -1,0 +1,147 @@
+/* 空间主页样式包. The app's own design tokens (tokens.css) come in ahead of this file, and the page's
+   settings (排版, 强调色, the motion presets at the chosen 动效强度) after it, so the page follows 外观,
+   light and dark, exactly as the app does. Every --space-* variable is one of those values; the old
+   app's --lb-* names stay as aliases for good. */
+:root {
+  --space-bg: var(--card-bg);
+  --space-text: var(--card-fg);
+  --space-muted: var(--card-muted);
+  --space-line: var(--line);
+  --space-hover: var(--hover);
+  /* A card on the page: the page colour with a trace of the text colour, as the old kit had. */
+  --space-card: color-mix(in srgb, var(--card-fg) 2.5%, var(--card-bg));
+  --space-shadow: var(--pill-shadow);
+  --space-radius: var(--card-radius);
+  --space-control-radius: var(--icon-button-radius);
+  --space-accent: var(--accent);
+  --space-on-accent: var(--on-accent);
+  --space-accent-soft: color-mix(in srgb, var(--space-accent) 14%, transparent);
+  --space-good: var(--accent-green);
+  --space-warn: var(--accent-orange);
+  --space-bad: var(--figure-error);
+  --space-chart-1: var(--accent-blue);
+  --space-chart-2: var(--accent-green);
+  --space-chart-3: var(--accent-orange);
+  --space-chart-4: var(--accent-pink);
+  --space-chart-5: var(--accent-purple);
+  --space-chart-6: color-mix(in srgb, var(--accent-blue) 50%, var(--accent-green));
+  /* 排版: the note's typography, so a homepage reads like the notes it summarises. */
+  --space-font: var(--body-font);
+  --space-heading-font: var(--heading-font);
+  --space-mono: var(--code-font);
+  --space-font-size: var(--body-size);
+  --space-leading: var(--body-leading);
+  --space-disabled-opacity: var(--disabled-opacity);
+  --space-press-scale: var(--press-scale);
+
+  /* The old app's names. */
+  --lb-bg: var(--space-bg);
+  --lb-card: var(--space-card);
+  --lb-text: var(--space-text);
+  --lb-muted: var(--space-muted);
+  --lb-line: var(--space-line);
+  --lb-accent: var(--space-accent);
+  --lb-accent-soft: var(--space-accent-soft);
+  --lb-good: var(--space-good);
+  --lb-warn: var(--space-warn);
+  --lb-bad: var(--space-bad);
+  --lb-radius: var(--space-radius);
+  --lb-font: var(--space-font);
+  --lb-mono: var(--space-mono);
+  --lb-chart-1: var(--space-chart-1);
+  --lb-chart-2: var(--space-chart-2);
+  --lb-chart-3: var(--space-chart-3);
+  --lb-chart-4: var(--space-chart-4);
+  --lb-chart-5: var(--space-chart-5);
+  --lb-chart-6: var(--space-chart-6);
+  --lb-shadow: var(--space-shadow);
+  --lb-spring: var(--space-pop-easing);
+  --lb-ease: var(--space-ease);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--space-bg); color: var(--space-text); }
+body.space-page {
+  font-family: var(--space-font);
+  font-size: var(--space-font-size);
+  line-height: var(--space-leading);
+  text-autospace: var(--text-autospace);
+  padding: var(--card-padding);
+  margin: 0 auto;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: var(--space-heading-font); font-weight: var(--heading-weight); letter-spacing: -0.01em; margin: 0 0 0.6em; }
+h1 { font-size: 1.6em; } h2 { font-size: 1.15em; } h3 { font-size: 1em; }
+p { margin: 0 0 0.6em; }
+a { color: var(--space-accent); }
+code { font-family: var(--space-mono); font-size: var(--code-size); }
+
+.space-card, .lb-card {
+  background: var(--space-card);
+  border: 1px solid var(--space-line);
+  border-radius: var(--space-radius);
+  box-shadow: var(--space-shadow);
+  padding: 1.1em 1.25em;
+  margin: 0 0 1em;
+}
+.space-grid, .lb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10em, 1fr));
+  gap: 1em;
+  margin: 0 0 1em;
+}
+.space-grid > .space-card, .space-grid > .lb-card, .lb-grid > .space-card, .lb-grid > .lb-card { margin: 0; }
+.space-row, .lb-row { display: flex; gap: 0.75em; align-items: center; flex-wrap: wrap; }
+.space-muted, .lb-muted { color: var(--space-muted); }
+
+.space-button, .lb-button {
+  font: inherit; font-weight: 500;
+  color: var(--space-on-accent); background: var(--space-accent);
+  border: 0; border-radius: var(--space-control-radius); padding: 0.4em 1em; cursor: pointer;
+  transition: transform var(--space-pop-duration) var(--space-pop-easing), opacity var(--space-pop-duration) var(--space-ease);
+}
+.space-button:hover, .lb-button:hover { opacity: 0.88; }
+.space-button:active, .lb-button:active { transform: scale(var(--space-press-scale)); }
+.space-button:disabled, .lb-button:disabled { opacity: var(--space-disabled-opacity); cursor: default; transform: none; }
+.space-button.space-secondary, .lb-button.lb-secondary { color: var(--space-text); background: var(--space-accent-soft); }
+
+.space-input, .lb-input,
+:is(.space-card, .lb-card) :is(input, select, textarea) {
+  font: inherit; color: var(--space-text);
+  background: var(--space-bg);
+  border: 1px solid var(--space-line); border-radius: var(--space-control-radius);
+  padding: 0.4em 0.6em; outline: none;
+  transition: border-color var(--space-pop-duration) var(--space-ease), box-shadow var(--space-pop-duration) var(--space-ease);
+}
+:is(.space-input, .lb-input, .space-card input, .space-card select, .space-card textarea, .lb-card input, .lb-card select, .lb-card textarea):focus {
+  border-color: color-mix(in srgb, var(--space-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px var(--space-accent-soft);
+}
+
+/* 空间主页卡片入场 (设计规范 · 动效): cards rise from below, scaled down and blurred, one after another on
+   the 浮现 spring; the blur eases on its own so a bounce never swings it below zero. Nothing stays applied
+   once they have arrived (fill backwards), and nothing loops. */
+@keyframes space-rise { from { opacity: 0; transform: translateY(var(--space-enter-rise)) scale(var(--space-enter-scale)); } }
+@keyframes space-unblur { from { filter: blur(var(--space-enter-blur)); } }
+@keyframes space-fade { from { opacity: 0; } }
+body.space-page > :not(script, style, meta, link, template),
+:is(.space-grid, .lb-grid) > * {
+  --space-order: 0;
+  animation:
+    space-rise var(--space-emerge-duration) var(--space-emerge-easing) calc(var(--space-order) * var(--space-stagger)) backwards,
+    space-unblur var(--space-blur-duration) var(--space-ease) calc(var(--space-order) * var(--space-stagger)) backwards;
+}
+body.space-page > :nth-child(2 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(2) { --space-order: 1; }
+body.space-page > :nth-child(3 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(3) { --space-order: 2; }
+body.space-page > :nth-child(4 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(4) { --space-order: 3; }
+body.space-page > :nth-child(5 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(5) { --space-order: 4; }
+body.space-page > :nth-child(6 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(6) { --space-order: 5; }
+body.space-page > :nth-child(7 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(7) { --space-order: 6; }
+body.space-page > :nth-child(n + 8 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(n + 8) { --space-order: 7; }
+/* 减弱动态效果: nothing moves, scales or blurs; the cards still fade in. */
+@media (prefers-reduced-motion: reduce) {
+  body.space-page > :not(script, style, meta, link, template),
+  :is(.space-grid, .lb-grid) > * {
+    animation: space-fade var(--space-emerge-visual) var(--space-ease) calc(var(--space-order) * var(--space-stagger)) backwards;
+  }
+}

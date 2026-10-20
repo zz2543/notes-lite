@@ -1,11 +1,12 @@
-// The `lb` object every space homepage sees, defined in the page before its own scripts run. It
-// only shapes requests and replies; the space page's preload carries them to main, and the core
-// library checks and does everything. Ported from the old app's lb.js.
-export const lbShim = `(() => {
+// The `space` object every space homepage sees, defined in the page before its own scripts run, and
+// the same object under the old app's name `lb`, kept for good. It only shapes requests and replies;
+// the space page's preload carries them to main, and the core library checks and does everything.
+// Ported from the old app's lb.js.
+export const spaceShim = `(() => {
   "use strict";
   const bridge = window.__notesSpace;
   const call = (method, ...args) => {
-    if (!bridge) return Promise.reject(Object.assign(new Error("lb 接口不可用。"), { code: "failed" }));
+    if (!bridge) return Promise.reject(Object.assign(new Error("space 接口不可用。"), { code: "failed" }));
     return bridge.call(method, args.map((a) => (a === undefined ? null : a))).then((reply) => {
       if (reply && reply.ok) return reply.result;
       const info = (reply && reply.error) || { code: "failed", message: "未知错误" };
@@ -15,7 +16,7 @@ export const lbShim = `(() => {
   const plain = (value) => (value && typeof value === "object" ? JSON.parse(JSON.stringify(value)) : value);
   const listeners = new Set();
 
-  const lb = {
+  const space = {
     scope: () => call("scope"),
     notes: (folder) => call("notes", folder),
     read: (path) => call("read", path),
@@ -59,7 +60,7 @@ export const lbShim = `(() => {
     page: () => call("page"),
     writePage: (html) => call("writePage", String(html)),
     on(event, handler) {
-      if (event !== "change" || typeof handler !== "function") throw Object.assign(new Error('只支持 lb.on("change", 函数)。'), { code: "invalid" });
+      if (event !== "change" || typeof handler !== "function") throw Object.assign(new Error('只支持 space.on("change", 函数)。'), { code: "invalid" });
       listeners.add(handler);
       return () => listeners.delete(handler);
     },
@@ -70,5 +71,7 @@ export const lbShim = `(() => {
     },
   };
   if (bridge) bridge.onChange((paths) => { for (const handler of listeners) { try { handler(paths); } catch (e) { setTimeout(() => { throw e; }); } } });
-  Object.defineProperty(window, "lb", { value: Object.freeze(lb), enumerable: true });
+  Object.freeze(space);
+  Object.defineProperty(window, "space", { value: space, enumerable: true });
+  Object.defineProperty(window, "lb", { value: space, enumerable: true });
 })();`;
