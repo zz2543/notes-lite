@@ -17,6 +17,7 @@ import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
 import { usePreferences } from "./preferences";
 import { useSettingsPanel } from "./SettingsPanel";
+import { SpaceContents, SpaceHome, useSpace } from "./SpacePage";
 import { SidePages, SideSwitch, SpacePanel, type SideMode } from "./Spaces";
 import { icon } from "./tokens";
 
@@ -246,9 +247,23 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
-  // “资料库 | 空间”. Opening a space (its page and scoped tree) comes with ticket 19.
+  // “资料库 | 空间”. An open space shows its notes in the middle and its homepage on the card,
+  // until one of its notes is chosen; 主页 brings the homepage back.
   const [sideMode, setSideMode] = useState<SideMode>("library");
   const [space, setSpace] = useState<string | null>(null);
+  const [showingHome, setShowingHome] = useState(true);
+  const openSpace = useSpace(space);
+  const inSpace = sideMode === "spaces" && openSpace ? openSpace : null;
+  const goHome = async () => {
+    if (await saveFirst()) setShowingHome(true);
+  };
+  const selectSpace = (name: string | null) => {
+    setSpace(name);
+    if (name !== null) void goHome();
+  };
+  const openSpaceNote = async (path: string) => {
+    if (await openNote(path)) setShowingHome(false);
+  };
   // Said once the library opens, such as the old app's spaces failing to move into `.notes/`.
   useEffect(() => {
     if (library.notice) notify(library.notice);
@@ -297,6 +312,13 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   const searchResults = search?.query ? (
     <SearchResultsList answer={answer} libraryName={library.name} openNote={note} onOpen={(hit) => void openResult(hit)} />
   ) : null;
+
+  const cardHeadEnd = (
+    <>
+      <FocusToggle focused={focused} onChange={setFocused} />
+      {!assistantOpen && <AssistantToggle state={figureState} onOpen={() => setAssistantOpen(true)} />}
+    </>
+  );
 
   return (
     <div className={`app ${narrow ? "narrow" : ""} ${focused ? "focused" : ""}`}>
@@ -365,7 +387,21 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
                 )}
               </>
             ) : (
-              <SpacePanel libraryName={library.name} selected={space} onSelect={setSpace} notify={notify} />
+              <>
+                <SpacePanel libraryName={library.name} selected={space} onSelect={selectSpace} notify={notify} />
+                {single && inSpace && (
+                  <div className="space-files">
+                    <SpaceContents
+                      space={inSpace}
+                      place="side"
+                      showingHome={showingHome}
+                      openNote={note}
+                      onHome={() => void goHome()}
+                      onOpenNote={(path) => void openSpaceNote(path)}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </SidePages>
           <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
@@ -377,33 +413,45 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
       )}
       {tier === "double" && (
         <section className="list" onKeyDown={closeOnEscape}>
-          {searchHead}
-          {searchResults ?? (
-            <FolderContentsList
-              folder={folder}
-              title={search ? null : title}
+          {inSpace ? (
+            <SpaceContents
+              space={inSpace}
+              place="list"
+              showingHome={showingHome}
               openNote={note}
-              onOpenFolder={openFolder}
-              onOpenNote={(path) => void openNote(path)}
-              onMenu={organize.itemMenu}
+              onHome={() => void goHome()}
+              onOpenNote={(path) => void openSpaceNote(path)}
             />
+          ) : (
+            <>
+              {searchHead}
+              {searchResults ?? (
+                <FolderContentsList
+                  folder={folder}
+                  title={search ? null : title}
+                  openNote={note}
+                  onOpenFolder={openFolder}
+                  onOpenNote={(path) => void openNote(path)}
+                  onMenu={organize.itemMenu}
+                />
+              )}
+            </>
           )}
         </section>
       )}
       <main className="card-wrap" ref={cardWrap}>
-        <NoteEditor
-          key={reloads}
-          path={note}
-          fresh={note !== null && note === fresh}
-          onOpenCopy={openCopy}
-          onLetGo={letGo}
-          headEnd={
-            <>
-              <FocusToggle focused={focused} onChange={setFocused} />
-              {!assistantOpen && <AssistantToggle state={figureState} onOpen={() => setAssistantOpen(true)} />}
-            </>
-          }
-        />
+        {inSpace && showingHome ? (
+          <SpaceHome space={inSpace} notify={notify} headEnd={cardHeadEnd} />
+        ) : (
+          <NoteEditor
+            key={reloads}
+            path={note}
+            fresh={note !== null && note === fresh}
+            onOpenCopy={openCopy}
+            onLetGo={letGo}
+            headEnd={cardHeadEnd}
+          />
+        )}
       </main>
       <AssistantColumn open={assistantOpen} state={figureState} onClose={() => setAssistantOpen(false)} />
       {organize.overlay}

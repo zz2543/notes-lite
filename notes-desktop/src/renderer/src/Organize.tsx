@@ -1,5 +1,5 @@
 import { Check, Folder } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { ListedItem } from "./FolderContentsList";
 import { libraryChanged } from "./ipc";
 import "./organize.css";
@@ -189,10 +189,37 @@ export function useOrganize(view: OrganizeView) {
   return { newNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
 }
 
+// Menus and dialogs float over the whole window. A space homepage is laid over the card by main,
+// above anything this page draws, so it steps aside while one is open.
+let overlays = 0;
+const overlayListeners = new Set<() => void>();
+const subscribeOverlays = (listener: () => void) => {
+  overlayListeners.add(listener);
+  return () => overlayListeners.delete(listener);
+};
+
+/** Marks a menu or dialog open for as long as the calling component is shown. */
+export function useOverlay() {
+  useLayoutEffect(() => {
+    overlays += 1;
+    overlayListeners.forEach((listener) => listener());
+    return () => {
+      overlays -= 1;
+      overlayListeners.forEach((listener) => listener());
+    };
+  }, []);
+}
+
+/** Whether a menu or dialog is open anywhere in the window. */
+export function useOverlayOpen(): boolean {
+  return useSyncExternalStore(subscribeOverlays, () => overlays > 0);
+}
+
 const menuItemSelector = "[role=menuitem], [role=menuitemradio]";
 
 /** A menu at a point: the right-click menus, and the list's “…” menu. */
 export function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
+  useOverlay();
   const ref = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState({ left: x, top: y });
 
@@ -255,6 +282,7 @@ interface DialogProps {
 
 /** A floating panel over a dimmed window: Esc or a click outside closes it. */
 export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
+  useOverlay();
   return (
     <div className="scrim" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
       <form
