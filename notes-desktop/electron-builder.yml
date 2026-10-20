@@ -6,6 +6,10 @@ directories:
 files:
   - out/**
   - package.json
+# Licences of what ships inside the app, such as the bundled fonts (OFL), beside it in its resources.
+extraResources:
+  - from: resources/licenses
+    to: licenses
 mac:
   target: dmg
   category: public.app-category.productivity

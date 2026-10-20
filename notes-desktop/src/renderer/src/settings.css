@@ -219,6 +219,71 @@
   box-shadow: var(--pill-shadow);
 }
 
+/* 滑块: an accent fill up to the thumb, the value beside the track. */
+.slider {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+}
+.slider input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  height: var(--slider-thumb);
+  margin: 0;
+  appearance: none;
+  background: transparent;
+}
+.slider input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--slider-track);
+  border-radius: var(--slider-track);
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--line) var(--fill));
+}
+.slider input[type="range"]::-webkit-slider-thumb {
+  width: var(--slider-thumb);
+  height: var(--slider-thumb);
+  margin-top: calc((var(--slider-track) - var(--slider-thumb)) / 2);
+  appearance: none;
+  border-radius: 50%;
+  background: var(--card-bg);
+  box-shadow: var(--pill-shadow);
+  transition: scale var(--spring-pop);
+}
+.slider input[type="range"]:active::-webkit-slider-thumb {
+  scale: var(--press-scale-icon);
+}
+.slider-value {
+  width: var(--slider-value-width);
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--side-muted);
+}
+
+/* 开关: accent when on; the knob slides across (轻弹). */
+.switch {
+  width: var(--switch-width);
+  height: var(--switch-height);
+  flex: none;
+  display: flex;
+  padding: var(--switch-inset);
+  border-radius: var(--switch-height);
+  background: var(--line);
+  transition: background-color var(--spring-pop);
+}
+.switch[aria-checked="true"] {
+  justify-content: flex-end;
+  background: var(--accent);
+}
+.switch .knob {
+  width: calc(var(--switch-height) - var(--switch-inset) * 2);
+  height: calc(var(--switch-height) - var(--switch-inset) * 2);
+  border-radius: 50%;
+  background: var(--card-bg);
+  box-shadow: var(--pill-shadow);
+}
+
 /* 设置 › 助手 */
 .settings-action {
   height: var(--row-height);
