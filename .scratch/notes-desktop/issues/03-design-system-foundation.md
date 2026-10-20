@@ -45,3 +45,7 @@
 ### 2026-10-20 完成
 
 合并进 `feat/notes-desktop` 后 CI 在 macOS 与 Windows 均通过：https://github.com/zz2543/notes-lite/actions/runs/39291544784 。CI 上两个依赖帧时序的用例改为检查正在运行的过渡与 1px 内的位置（提交 979f5b4、bae9c12）。
+
+### 2026-10-20 里程碑代码审查
+
+`.primary` 文字改用 `--on-accent`，箭头宽度与图标间距改为变量，设计规范写明 @ 提及列表算作菜单：`dd74676`。

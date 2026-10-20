@@ -43,3 +43,7 @@
 ### 2026-10-20 完成
 
 合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39386345223 。合并后修过的 CI 问题：慢机器上的撤销分组与助手栏宽度过渡用例、字体许可证在 Windows 检出时被改成 CRLF（加 `.gitattributes`）。
+
+### 2026-10-20 里程碑代码审查
+
+一轮进行中应用自己的写入（自动保存、整理、空间主页写入）不再算进这一轮，撤销一轮不会撤掉用户的输入：`TurnSnapshots.appWrote`，`6cca1de`。

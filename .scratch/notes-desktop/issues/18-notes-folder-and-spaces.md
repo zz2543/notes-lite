@@ -45,3 +45,7 @@ Branch `ticket/18-notes-folder-and-spaces` (merged with `feat/notes-desktop` aft
 ### 2026-10-20 完成
 
 合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39355707927 （启动时间与合并前持平）。
+
+### 2026-10-20 里程碑代码审查
+
+`.留白/` 搬迁只在 `.留白/` 存在且 `.notes/` 不存在时进行，搬完把 `.留白/` 送进系统废纸篓（没有废纸篓函数时保留），不再直接删除：`4272385`。空间右键菜单补上「显示源文件」（spaces-spec #11，在访达/资源管理器中显示 HTML）：`5204043`。笔记标题与隐藏路径的规则收进 `shared/paths`，空间笔记列表由核心库 `spaceNotes` 给出：`a1b49b4`。

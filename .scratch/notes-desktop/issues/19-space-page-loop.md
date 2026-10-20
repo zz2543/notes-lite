@@ -31,3 +31,7 @@
 ### 2026-10-20 完成
 
 合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39386345223 。合并后修过的 CI 问题：慢机器上的撤销分组与助手栏宽度过渡用例、字体许可证在 Windows 检出时被改成 CRLF（加 `.gitattributes`）。
+
+### 2026-10-20 里程碑代码审查
+
+空间改名后主页的本地存储不再丢失（spaces-spec #51）：存储键由核心库 `spaceStorage` 记在应用数据目录，改名随空间走，删除或改名后同名新空间从空开始：`ef3a307`。操作记录对话框移到 `OperationLog.tsx`，提示文字涵盖助手的每一轮：`4b7290f`。
