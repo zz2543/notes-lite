@@ -9,7 +9,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, utimes, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { logPath } from "./operationLog";
 import { serialized } from "./serialized";
 
@@ -357,5 +357,60 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     usage: queued(usage),
     clean: queued(expire),
     clear: queued(clear),
+  };
+}
+
+export interface SnapshotStore {
+  /** The snapshots of the library at `root`, kept in a folder of their own. */
+  library(root: string): TurnSnapshots;
+  /** All libraries' snapshots together, for 设置. */
+  usage(): Promise<SnapshotUsage>;
+  /** Lets every library's turns go after 30 days, however long since the library was opened. */
+  clean(): Promise<void>;
+  /** Lets every snapshot of every library go now. */
+  clear(): Promise<void>;
+}
+
+/** Every library's snapshots, under `base` in the app's own data folder: never inside a library. */
+export function snapshotStore(base: string, options: SnapshotOptions = {}): SnapshotStore {
+  const opened = new Map<string, TurnSnapshots>();
+  const folderOf = (root: string) => join(base, createHash("sha256").update(resolve(root)).digest("hex").slice(0, 16));
+  const nameFile = "library.txt";
+
+  const library = (root: string) => {
+    const folder = folderOf(root);
+    let snapshots = opened.get(folder);
+    if (!snapshots) {
+      const inner = turnSnapshots(folder, root, options);
+      // The folder says which library it belongs to, so it can be cleaned while another is open.
+      const named = () => mkdir(folder, { recursive: true }).then(() => writeFile(join(folder, nameFile), root));
+      snapshots = { ...inner, begin: () => named().then(inner.begin) };
+      opened.set(folder, snapshots);
+    }
+    return snapshots;
+  };
+
+  const all = async () => {
+    const found: TurnSnapshots[] = [];
+    for (const entry of await readdir(base, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory()) continue;
+      const root = await readFile(join(base, entry.name, nameFile), "utf8").catch(() => null);
+      if (root !== null) found.push(library(root));
+    }
+    return found;
+  };
+
+  return {
+    library,
+    usage: async () => {
+      const each = await Promise.all((await all()).map((snapshots) => snapshots.usage()));
+      return { bytes: each.reduce((sum, u) => sum + u.bytes, 0), attachmentsKept: each.every((u) => u.attachmentsKept) };
+    },
+    clean: async () => {
+      for (const snapshots of await all()) await snapshots.clean();
+    },
+    clear: async () => {
+      for (const snapshots of await all()) await snapshots.clear();
+    },
   };
 }

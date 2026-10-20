@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { entryChanges, entrySummary, logPath, operationLog, turnEntry, turnSnapshots } from "../../src/core";
+import { entryChanges, entrySummary, logPath, operationLog, snapshotStore, turnEntry, turnSnapshots } from "../../src/core";
 import { contents, fakeTrash, library, scratchFolder } from "../support/library";
 
 // 快照 (assistant-spec): before each 一轮 the whole library is snapshotted, so everything the
@@ -177,6 +177,37 @@ describe("按轮快照", () => {
     await lib.write("a.md", "用户又改了，长一点\n");
     await expect(log.undo(entry!.id)).rejects.toMatchObject({ code: "conflict" });
     expect((await log.entries())[0]?.undone).toBe(false);
+  });
+
+  it("keeps each library's snapshots apart in the app's folder, and adds them up for 设置", async () => {
+    const base = await scratchFolder();
+    let today = new Date("2026-10-01T09:00:00Z");
+    const store = snapshotStore(base, { now: () => today });
+    const one = await library({ "a.md": "一".repeat(10_000) });
+    const two = await library({ "a.md": "二".repeat(20_000) });
+    const first = await store.library(one).begin();
+    await store.library(one).finish(first);
+    await store.library(two).finish(await store.library(two).begin());
+    expect(await contents(one), "nothing is written into the library").toEqual({ "a.md": "一".repeat(10_000) });
+    const both = await store.usage();
+    expect(both.bytes).toBeGreaterThan(90_000);
+    expect(both.attachmentsKept).toBe(true);
+
+    today = new Date("2026-11-15T09:00:00Z");
+    await writeFile(join(two, "a.md"), "短");
+    await store.library(two).begin();
+    expect((await store.library(one).turn(first)).id).toBe(first);
+    await store.clean();
+    await expect(store.library(one).turn(first), "cleaned however long since the library was opened").rejects.toMatchObject({ code: "not-found" });
+    expect((await store.usage()).bytes, "a library not opened for weeks keeps only its newest snapshot").toBeLessThan(both.bytes);
+
+    await store.clear();
+    expect((await store.usage()).bytes).toBe(0);
+    const next = await store.library(one).begin();
+    await writeFile(join(one, "a.md"), "改");
+    await store.library(one).finish(next);
+    await store.library(one).revert(next);
+    expect(await contents(one)).toEqual({ "a.md": "一".repeat(10_000) });
   });
 
   it("refuses to take back a file changed again since the turn, and leaves the turn alone", async () => {
