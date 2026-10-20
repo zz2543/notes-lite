@@ -101,7 +101,7 @@ button {
   height: 100%;
 }
 
-.side {
+aside.side {
   width: var(--side-width);
   flex: none;
   display: flex;
@@ -551,6 +551,11 @@ button {
 }
 
 /* 单栏导航: one wider side panel browses folders and notes; there is no list column. */
-.side.single {
+aside.side.single {
   width: var(--single-nav-width);
+}
+/* 就地搜索 in 单栏导航: the field and results line up with the tree rows they stand in for. */
+aside.side .search-head,
+aside.side .items {
+  padding-inline: 0;
 }

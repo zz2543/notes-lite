@@ -39,6 +39,37 @@ test("单栏导航 shows folders and notes in one tree: subfolders first, the op
   await expect(open).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(sidePill)).toHaveCount(1);
   await expect(open.getByTestId("selection-pill")).toHaveCount(1);
+  // Once it settles, the pill covers its row exactly, in the wider 单栏 side panel too.
+  const widths = () => open.evaluate((row) => [row.getBoundingClientRect().width, row.querySelector("[data-testid=selection-pill]")!.getBoundingClientRect().width]);
+  await expect.poll(async () => ((w) => w[0] === w[1])(await widths())).toBe(true);
+  await app.close();
+});
+
+test("单栏导航 searches in place: the field and results stand in for the tree until Esc, and a result unfolds to its note", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", {
+    "日记/雨后的散步.md": "# 雨后的散步\n\n小路上长满了青苔。\n",
+    "清单.md": "# 清单\n\n牛奶\n",
+  });
+  const { app, page } = await launchWith(scratch, root);
+  await chooseNavigation(page, "单栏");
+  const side = page.getByRole("complementary");
+  const tree = page.getByRole("tree", { name: "文件夹与笔记" });
+
+  await side.getByRole("button", { name: "搜索" }).click();
+  const field = side.getByRole("searchbox", { name: "搜索笔记" });
+  await expect(field).toBeFocused();
+  await field.fill("牛奶");
+  await expect(side.getByRole("list", { name: "搜索结果" }).getByRole("button")).toHaveText([/清单/]);
+  await expect(tree).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(field).toBeHidden();
+  await expect(tree.getByRole("treeitem")).toHaveText(["笔记库", "日记", "清单"]);
+
+  await page.keyboard.press("ControlOrMeta+KeyK");
+  await side.getByRole("searchbox", { name: "搜索笔记" }).fill("青苔");
+  await side.getByRole("list", { name: "搜索结果" }).getByRole("button", { name: /雨后的散步/ }).click();
+  await expect(page.getByLabel("笔记正文")).toContainText("小路上长满了青苔。");
+  await expect(tree.getByRole("treeitem", { name: "雨后的散步" })).toHaveAttribute("aria-selected", "true");
   await app.close();
 });
 
