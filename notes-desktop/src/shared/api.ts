@@ -90,6 +90,41 @@ export interface NotesApi {
   reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
   /** Copies the prompt for an external agent to the clipboard. */
   copySpacePrompt(name: string): Promise<SpaceDone<null>>;
+
+  // 空间主页 (ticket 19). The homepage runs in a sandbox main lays over the card.
+  /** The notes inside a space's scope, by path. */
+  spaceNotes(name: string): Promise<SpaceDone<SpaceNote[]>>;
+  /** Lays the space's homepage over `bounds` (window coordinates, CSS pixels). */
+  showSpacePage(name: string, bounds: Bounds): void;
+  /** Takes the homepage off the window; it keeps its state for when it comes back. */
+  hideSpacePage(): void;
+  /** The operation log, newest first. */
+  operationLog(): Promise<SpaceDone<LogItem[]>>;
+  /** Takes one entry back; refused, with why, when what it wrote has changed since. */
+  undoOperation(id: string): Promise<SpaceDone<null>>;
+}
+
+export interface SpaceNote {
+  path: string;
+  title: string;
+}
+
+export interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** An operation-log entry as the log panel shows it. */
+export interface LogItem {
+  id: string;
+  /** ISO 8601. */
+  date: string;
+  space: string;
+  summary: string;
+  changes: Array<{ sign: "-" | "+"; text: string }>;
+  undone: boolean;
 }
 
 /** A space as the side panel shows it. */
@@ -145,4 +180,9 @@ export const channels = {
   deleteSpace: "spaces:delete",
   reorderSpaces: "spaces:reorder",
   copySpacePrompt: "spaces:copy-prompt",
+  spaceNotes: "spaces:notes",
+  showSpacePage: "spaces:show-page",
+  hideSpacePage: "spaces:hide-page",
+  operationLog: "spaces:operation-log",
+  undoOperation: "spaces:undo",
 } as const;

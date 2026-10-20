@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences, type Rectangle } from "electron";
 import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { stat } from "node:fs/promises";
 import { release } from "node:os";
@@ -6,8 +6,13 @@ import { basename, join } from "node:path";
 import {
   createSearchIndex,
   LibraryError,
+  entryChanges,
+  entrySummary,
   migrateLegacyFolder,
+  notesInScope,
   openLibrary,
+  operationLog,
+  OperationLogError,
   SpaceError,
   spaceLibrary,
   watchLibrary,
@@ -27,23 +32,29 @@ import {
   type CopyResult,
   type LaunchState,
   type LibraryInfo,
+  type LogItem,
   type Organized,
   type Place,
   type SaveResult,
   type SpaceDone,
   type SpaceInfo,
+  type SpaceNote,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
+import { registerSpaceScheme, spacePages } from "./spacePages";
 
 // A separate profile, for tests and for running beside an installed copy.
 if (process.env.NOTES_DESKTOP_USER_DATA) app.setPath("userData", process.env.NOTES_DESKTOP_USER_DATA);
+registerSpaceScheme();
 
 const settings = settingsStore(app.getPath("userData"));
 const mac = process.platform === "darwin";
 let library: Library | null = null;
 let window: BrowserWindow | null = null;
+// Space homepages, each in its own sandbox laid over the card.
+const pages = spacePages(() => window, () => library?.root ?? null);
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
 // The close check in progress; the first answer (the page's, or the timeout's) consumes it.
@@ -158,6 +169,7 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   const path = picked.filePaths[0];
   if (picked.canceled || !path) return null;
   library = await openLibrary(path, libraryOptions);
+  pages.closeAll();
   readsAhead.clear();
   const notice = await prepare(library);
   watch(library);
@@ -270,7 +282,7 @@ function registerIpc() {
       try {
         return { ok: true, value: await run(...(args as A)) };
       } catch (error) {
-        const code = error instanceof SpaceError || error instanceof LibraryError ? error.code : "write-failed";
+        const code = error instanceof SpaceError || error instanceof LibraryError || error instanceof OperationLogError ? error.code : "write-failed";
         return { ok: false, code, message: (error as Error).message };
       }
     });
@@ -285,6 +297,25 @@ function registerIpc() {
   space(channels.deleteSpace, async (name: string) => (await spaces().delete(name), null));
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
+  // 空间主页 and its operation log.
+  space(channels.spaceNotes, async (name: string): Promise<SpaceNote[]> => {
+    const notes = await notesInScope(requireLibrary().root, (await spaces().space(name)).scope);
+    return notes.map((path) => ({ path, title: path.split("/").pop()!.replace(/\.md$/i, "") }));
+  });
+  ipcMain.on(channels.showSpacePage, (_, name: string, bounds: Rectangle) => void pages.show(name, bounds).catch(() => pages.hide()));
+  ipcMain.on(channels.hideSpacePage, () => pages.hide());
+  const log = () => operationLog(requireLibrary().root, libraryOptions);
+  space(channels.operationLog, async (): Promise<LogItem[]> =>
+    (await log().entries()).map((entry) => ({
+      id: entry.id,
+      date: entry.date,
+      space: entry.space,
+      summary: entrySummary(entry),
+      changes: entryChanges(entry),
+      undone: entry.undone,
+    })),
+  );
+  space(channels.undoOperation, async (id: string) => (await log().undo(id), null));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {
@@ -429,7 +460,10 @@ function createWindow() {
     const silent: CloseCheck = { saved: false, message: "页面没有响应，无法确认笔记是否已保存。" };
     setTimeout(() => void finishClose(id, silent), closeCheckTimeout);
   });
-  window.on("closed", () => (window = null));
+  window.on("closed", () => {
+    pages.closeAll();
+    window = null;
+  });
   // The page only ever shows the app itself.
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
