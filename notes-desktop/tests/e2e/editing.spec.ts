@@ -76,7 +76,8 @@ test("switching notes, closing the window and quitting keep what was just typed"
   // Switching to another library saves first, too.
   const other = await library(scratch, "另一个库", { "空.md": "" });
   ({ app, page } = await launch(scratch));
-  await openNote(page, "日记", "二");
+  // The launch reopens 二, the note last open.
+  await expect(page.getByLabel("笔记正文")).toBeFocused();
   await page.keyboard.press("ControlOrMeta+End");
   await page.keyboard.type("！");
   await answerFolderPicker(app, other);

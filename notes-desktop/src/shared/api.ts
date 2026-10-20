@@ -8,9 +8,16 @@ export interface LibraryInfo {
   name: string;
 }
 
+/** The current folder and open note, library-relative; `note` is null when none is open. */
+export interface Place {
+  folder: string;
+  note: string | null;
+}
+
 /** What the window shows at launch: the remembered library, or the welcome page. */
 export type LaunchState =
-  | { kind: "open"; library: LibraryInfo }
+  /** `place` is where the user last was in this library, when it is still there. */
+  | { kind: "open"; library: LibraryInfo; place?: Place }
   /** `missing` is the remembered library's path when it can no longer be opened. */
   | { kind: "welcome"; missing?: string };
 
@@ -29,6 +36,10 @@ export interface NotesApi {
   launchState(): Promise<LaunchState>;
   /** Lets the user pick a folder and opens it; null when they cancel. */
   chooseLibrary(): Promise<LibraryInfo | null>;
+  /** Remembers the current folder and open note, to reopen them at the next launch. */
+  rememberPlace(place: Place): void;
+  /** The page shows where the user left off (or the welcome page); background work may start. */
+  shown(): void;
   /** File > 打开笔记库… asks the page, which saves first and then lets the user choose. */
   onOpenLibraryRequest(listener: () => void): () => void;
   readFolder(path: string): Promise<FolderContents>;
@@ -41,6 +52,8 @@ export interface NotesApi {
   sourceViewChanged(showSource: boolean): void;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
+  /** A window closed on macOS (only hidden) is shown again, as it was. */
+  onShownAgain(listener: () => void): () => void;
 
   // 整理笔记与文件夹 (ticket 04). Each answers with a result, so the page can show why it failed.
   /** File > 新建笔记 (⌘N / Ctrl+N): the page creates a note in the current folder. */
@@ -78,6 +91,8 @@ export type Organized<T> = { ok: true; value: T } | { ok: false; code: LibraryEr
 export const channels = {
   launchState: "library:launch-state",
   chooseLibrary: "library:choose",
+  rememberPlace: "library:remember-place",
+  pageShown: "window:page-shown",
   openLibraryRequest: "menu:open-library",
   openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",
@@ -97,6 +112,7 @@ export const channels = {
   listFolders: "library:list-folders",
   search: "library:search",
   libraryChanged: "library:changed",
+  shownAgain: "window:shown-again",
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
 } as const;
