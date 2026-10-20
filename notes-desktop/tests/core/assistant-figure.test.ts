@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featureOpacity, figureGeometry, figureStates, formOf, settleFusion, stepFusion, type FigureState } from "../../src/renderer/src/assistantFigure";
+import { featureOpacity, figureGeometry, figureStates, formOf, settleFusion, stepFusion, type FigureState } from "../../src/renderer/src/figureModel";
 
 // 助手形象. Expected values are the design system's (docs/design-system.md, 助手形象) and the assistant
 // spec's state table, not recomputed here.

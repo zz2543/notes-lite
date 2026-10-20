@@ -4,30 +4,15 @@
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { delimiter, join } from "node:path";
+import { agents, type AgentKind } from "./agentKinds";
 
-export type AgentId = "claude" | "codex" | "dsh" | "pi";
-
-export interface AgentKind {
-  id: AgentId;
-  /** As the switch and the install guide name it. */
-  name: string;
-  /** The command a terminal runs it by. */
-  command: string;
-}
+export * from "./agentKinds";
 
 /** An agent found on this computer. */
 export interface InstalledAgent extends AgentKind {
   /** The file the command runs. */
   path: string;
 }
-
-/** The four agents, in the order the switch and the install guide show them. */
-export const agents: readonly AgentKind[] = [
-  { id: "claude", name: "Claude Code", command: "claude" },
-  { id: "codex", name: "Codex", command: "codex" },
-  { id: "dsh", name: "DeepSeek Harness", command: "dsh" },
-  { id: "pi", name: "Pi", command: "pi" },
-];
 
 export interface SearchPath {
   /** Folders joined by the platform's delimiter, as in PATH. */
