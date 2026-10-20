@@ -1,7 +1,7 @@
 // How the editor shows a note: typeset in place (the default) or as its Markdown source. Both are
 // views of the same document; typesetting only adds decorations, so the text never changes.
-import { Compartment, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { Compartment, Prec, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { codeTokens, type CodeToken } from "../../core/codeHighlight";
 import { blockPrefixLength, blockType, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../core/markdown";
 import "./markdown.css";
@@ -82,6 +82,16 @@ const hangingSyntax = mark("cm-md-mark cm-md-hang");
 const lineClass = (className: string, depth?: number) =>
   Decoration.line(depth === undefined ? { class: className } : { class: className, attributes: { style: `--depth: ${depth}` } });
 
+/** Whether the blank line `number` (1-based) sits right between a list item and a paragraph: the one
+ *  blank line Markdown needs to end the list, shown taking no room (the 分隔空行). */
+function separatesListFromParagraph(state: EditorState, blocks: readonly LiteralBlock[], number: number): boolean {
+  if (number === 1 || number === state.doc.lines) return false;
+  const ordinary = (n: number) => blockAt(blocks, n - 1) === undefined;
+  const above = blockType(state.doc.line(number - 1).text);
+  const below = blockType(state.doc.line(number + 1).text);
+  return (above === "li" || above === "ol" || above === "task") && below === "p" && ordinary(number - 1) && ordinary(number + 1);
+}
+
 function typeset(view: EditorView): DecorationSet {
   const { state } = view;
   const blocks = state.field(literal);
@@ -127,6 +137,8 @@ function typeset(view: EditorView): DecorationSet {
         out.push(lineClass("cm-md-hr").range(line.from));
         // A rule in place of "---"; on its own line the dashes come back to be edited.
         out.push((isEdited ? syntax : hidden).range(line.from, line.to));
+      } else if (type === "empty" && !isEdited && separatesListFromParagraph(state, blocks, line.number)) {
+        out.push(lineClass("cm-md-empty cm-md-list-gap").range(line.from));
       } else {
         out.push(lineClass(`cm-md-${type}`).range(line.from));
       }
@@ -164,6 +176,22 @@ const inlineStyles: Partial<Record<SpanKind, Decoration>> = {
   code: mark("cm-md-code"),
 };
 
+/** ↑ and ↓ stop on a 分隔空行 rather than passing over it for taking no room; there it opens. */
+function stepOntoListGap(forward: boolean) {
+  return (view: EditorView): boolean => {
+    const { state } = view;
+    const range = state.selection.main;
+    if (state.selection.ranges.length > 1 || !range.empty) return false;
+    const from = state.doc.lineAt(range.head).number;
+    const to = state.doc.lineAt(view.moveVertically(range, forward).head).number;
+    const gap = forward ? from + 1 : from - 1;
+    if (Math.abs(to - from) < 2 || state.doc.line(gap).length > 0) return false;
+    if (!separatesListFromParagraph(state, state.field(literal), gap)) return false;
+    view.dispatch({ selection: { anchor: state.doc.line(gap).from }, scrollIntoView: true, userEvent: "select" });
+    return true;
+  };
+}
+
 const typesetter = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -180,7 +208,15 @@ const typesetter = ViewPlugin.fromClass(
 );
 
 /** The note typeset in place: headings, emphasis, quotes, lists and code, with their syntax hidden. */
-export const typesetView: Extension = [literal, typesetter, EditorView.editorAttributes.of({ class: "cm-typeset" })];
+export const typesetView: Extension = [
+  literal,
+  typesetter,
+  Prec.high(keymap.of([
+    { key: "ArrowUp", run: stepOntoListGap(false) },
+    { key: "ArrowDown", run: stepOntoListGap(true) },
+  ])),
+  EditorView.editorAttributes.of({ class: "cm-typeset" }),
+];
 
 /** The note as its Markdown source, every character shown as it is saved. */
 export const sourceView: Extension = EditorView.editorAttributes.of({ class: "cm-source" });

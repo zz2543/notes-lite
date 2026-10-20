@@ -201,6 +201,93 @@ test("Return, undo, typing elsewhere and other notes keep the blank line honest"
   await app.close();
 });
 
+/** Where the last occurrence of `text` in the note is drawn, from the top of the page. */
+function topOf(page: Page, text: string) {
+  return editor(page).evaluate((root, wanted) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let found: Range | null = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent!.lastIndexOf(wanted);
+      if (at < 0) continue;
+      found = document.createRange();
+      found.setStart(node, at);
+      found.setEnd(node, at + wanted.length);
+    }
+    if (!found) throw new Error(`“${wanted}” is not in the note`);
+    return found.getBoundingClientRect().top;
+  }, text);
+}
+
+/** The top of the line the caret is on, empty or not. */
+function caretLineTop(page: Page) {
+  return editor(page).evaluate((root) => {
+    let node = document.getSelection()!.focusNode!;
+    while (node.parentNode !== root) node = node.parentNode!;
+    return (node as Element).getBoundingClientRect().top;
+  });
+}
+
+test("a single blank line between a list and a paragraph takes no room, unless the caret is on it", async ({ scratch }) => {
+  const sources = [
+    "- 项目\n正文",
+    "- 项目\n\n正文",
+    "1. 项目\n\n正文",
+    "- [ ] 项目\n\n正文",
+    "- 项目\n\n\n正文",
+    "- 项目\n\n- 另一项",
+    "- 项目\n- 另一项",
+    "段落\n\n正文",
+    "段落\n正文",
+  ];
+  const { app, page, open, saved } = await openLibrary(scratch, sources);
+  const top = async (n: number, text: string) => {
+    await open(n);
+    return topOf(page, text);
+  };
+  const tight = await top(1, "正文");
+  for (const n of [2, 3, 4]) {
+    expect(await top(n, "正文")).toBeCloseTo(tight, 0);
+    // Display only: the source keeps its blank line.
+    expect(await saved(n)()).toBe(sources[n - 1]);
+  }
+  // The arrow keys stop on it, and with the caret there the blank line opens.
+  await open(2);
+  await page.keyboard.press("ArrowUp");
+  expect((await topOf(page, "正文")) - tight).toBeGreaterThan(20);
+  await page.keyboard.press("ArrowUp");
+  expect(await topOf(page, "正文")).toBeCloseTo(tight, 0);
+  await page.keyboard.press("ArrowDown");
+  expect((await topOf(page, "正文")) - tight).toBeGreaterThan(20);
+  // Two blank lines, and blank lines between list items or paragraphs, show as they are.
+  expect((await top(5, "正文")) - tight).toBeGreaterThan(20);
+  expect((await top(6, "另一项")) - (await top(7, "另一项"))).toBeGreaterThan(20);
+  expect((await top(8, "正文")) - (await top(9, "正文"))).toBeGreaterThan(20);
+  await app.close();
+});
+
+test("typing or composing after exiting a list leaves the line where it was", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  const line = await caretLineTop(page);
+  await page.keyboard.type("正");
+  await expect.poll(saved(1)).toBe("- 项目\n\n正");
+  expect(await caretLineTop(page)).toBeCloseTo(line, 0);
+
+  await open(2);
+  await page.keyboard.press("Enter");
+  const exited = await caretLineTop(page);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: "zhong", selectionStart: 5, selectionEnd: 5 });
+  expect(await topOf(page, "zhong")).toBeGreaterThanOrEqual(exited);
+  expect(await caretLineTop(page)).toBeCloseTo(exited, 0);
+  await cdp.send("Input.insertText", { text: "中" });
+  await cdp.detach();
+  expect(await caretLineTop(page)).toBeCloseTo(exited, 0);
+  await expect.poll(saved(2)).toBe("- 项目\n\n中");
+  await app.close();
+});
+
 test("stepping out of a numbered list leaves later numbers alone, and code is left alone", async ({ scratch }) => {
   const { app, page, open, saved } = await openLibrary(scratch, ["1. 甲\n   1. 乙\n   2. \n2. 丙", "```\n- 项目\n- \n```"]);
   await open(1);
