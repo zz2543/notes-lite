@@ -67,9 +67,24 @@ test("the selection pill slides to the chosen folder", async ({ scratch }) => {
   const frames = await film(page, sidePill, () => target.click());
   // It passes through the rows in between instead of jumping, and comes to rest on the chosen row.
   expect(frames.some((f) => f.top > from + 2 && f.top < to - 2)).toBe(true);
-  expect(frames.at(-1)?.top).toBeCloseTo(to, 0);
+  await expect.poll(() => top(page.locator(sidePill))).toBeCloseTo(to, 0);
   await app.close();
 });
+
+/** Whether `scale` is changing on a spring right now: a running transition with a duration and a curve. */
+const springOf = (locator: Locator) =>
+  locator.evaluate((element) =>
+    element.getAnimations().some((animation) => {
+      const timing = animation.effect?.getComputedTiming();
+      const easing = animation.effect?.getTiming().easing ?? "";
+      return (
+        animation instanceof CSSTransition &&
+        animation.transitionProperty === "scale" &&
+        Number(timing?.duration) > 0 &&
+        easing !== "linear"
+      );
+    }),
+  );
 
 const scaleOf = (frame: Frame | undefined) => (!frame || frame.scale === "none" ? 1 : Number(frame.scale));
 
@@ -77,21 +92,20 @@ test("hover only tints a row; pressing shrinks it with a spring and it springs b
   const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步", "读书.md": "# 读书" });
   const { app, page } = await launchWith(scratch, root);
   const item = page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "读书" });
-  // Marked for filming, so the film follows this button whatever the pointer does.
-  await item.evaluate((element) => element.setAttribute("data-filmed", ""));
-  const selector = "[data-filmed]";
 
   await item.hover();
   await expect(item).toHaveCSS("background-color", await computed(page, "color", "var(--hover)"));
   await expect(item).toHaveCSS("scale", "none");
 
-  const pressed = await film(page, selector, () => item.hover().then(() => page.mouse.down()), 700);
-  // It eases through in-between sizes, not a jump, and holds at 0.97 while pressed.
-  expect(pressed.some((f) => scaleOf(f) < 0.995 && scaleOf(f) > 0.975)).toBe(true);
-  expect(scaleOf(pressed.at(-1))).toBeCloseTo(0.97, 3);
-  const released = await film(page, selector, () => page.mouse.up(), 700);
-  expect(released.some((f) => scaleOf(f) > 0.975 && scaleOf(f) < 0.995)).toBe(true);
-  expect(scaleOf(released.at(-1))).toBe(1);
+  // It eases into the new size, not a jump, and holds at 0.97 while pressed. Asked of the running transition
+  // rather than of filmed frames, since a busy runner may draw too few frames to catch the in-between.
+  await item.hover();
+  await page.mouse.down();
+  expect(await springOf(item)).toBe(true);
+  await expect(item).toHaveCSS("scale", "0.97");
+  await page.mouse.up();
+  expect(await springOf(item)).toBe(true);
+  await expect(item).toHaveCSS("scale", /^(none|1)$/);
   await app.close();
 });
 
