@@ -732,7 +732,7 @@ nav.rail .drag {
   opacity: 1;
 }
 aside.side,
-.list,
+section.list,
 nav.rail {
   transition:
     margin-right var(--focus-move),
@@ -745,13 +745,13 @@ aside.side {
 aside.side.single {
   --column-width: var(--single-nav-width);
 }
-.list {
+section.list {
   --column-width: var(--list-width);
 }
 nav.rail {
   --column-width: var(--rail-width);
 }
-.app.focused :is(aside.side, .list, nav.rail) {
+.app.focused :is(aside.side, section.list, nav.rail) {
   margin-right: calc(-1 * var(--column-width));
   translate: calc(-1 * var(--focus-shift)) 0;
   opacity: 0;

@@ -1,4 +1,6 @@
 import type { Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, launchWith, library, test } from "./fixtures";
 
 // 专注模式 (spec.md, ui-motion-spec.md): only the note's title and body, the card filling the window.
@@ -70,6 +72,71 @@ test("the card's button goes in and out, keeping the text, the selection and whe
   // The caret is still in the note: typing replaces the selection.
   await page.keyboard.type("首");
   await expect(editor).toContainText("首雨后的石阶。");
+  await app.close();
+});
+
+test("typing goes on through the transition, which turns back halfway; 专注模式 saves as usual", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "雨后" });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "随记");
+  await page.keyboard.press("ControlOrMeta+End");
+  const side = page.getByRole("tree", { name: "文件夹" });
+
+  // In, back out before it settles, and in again: nothing waits for the motion.
+  await page.keyboard.press(focusShortcut);
+  await page.keyboard.type("，青");
+  await page.keyboard.press(focusShortcut);
+  await page.keyboard.type("苔");
+  await page.keyboard.press(focusShortcut);
+  await page.keyboard.type("石阶");
+  await expect(side).toBeHidden();
+  await expect(page.getByRole("button", { name: "退出专注" })).toBeVisible();
+  await expect.poll(() => readFile(join(root, "随记.md"), "utf8")).toBe("雨后，青苔石阶");
+
+  await page.keyboard.type("。");
+  await expect.poll(() => readFile(join(root, "随记.md"), "utf8")).toBe("雨后，青苔石阶。");
+  await app.close();
+});
+
+/** The transitions running on an element: property, duration in ms and easing. */
+const transitions = (page: Page, selector: string) =>
+  page.locator(selector).evaluate((el) =>
+    el.getAnimations().map((a) => [(a as CSSTransition).transitionProperty, a.effect!.getTiming().duration, String(a.effect!.getTiming().easing)]),
+  );
+const dimming = (page: Page) => page.locator(".app").evaluate((el) => getComputedStyle(el, "::before").opacity);
+
+test("the card fills on the 专注 spring while the columns fade and slide 5px left over a dimming window", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记" });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "随记");
+  expect(await dimming(page)).toBe("0");
+
+  await page.keyboard.press(focusShortcut);
+  // 强 (the default): 0.46s with a 0.12 bounce, which Motion's spring curve takes 600ms to settle.
+  const side = await transitions(page, "aside.side");
+  expect(side).toContainEqual(["margin-right", 600, expect.stringMatching(/^linear\(/)]);
+  expect(side).toContainEqual(["translate", 600, expect.stringMatching(/^linear\(/)]);
+  expect(side).toContainEqual(["opacity", 460, "ease-out"]);
+  expect(await transitions(page, "section.list")).toContainEqual(["margin-right", 600, expect.stringMatching(/^linear\(/)]);
+  await expect.poll(() => page.locator("aside.side").evaluate((el) => getComputedStyle(el).translate)).toBe("-5px");
+  await expect.poll(() => dimming(page)).toBe("1");
+  await app.close();
+});
+
+test("with reduced motion 专注模式 moves nothing; the columns and the dimming only fade", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记" });
+  const { app, page } = await launchWith(scratch, root);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openNote(page, "随记");
+  const card = page.locator(".card");
+
+  await page.keyboard.press(focusShortcut);
+  const side = await transitions(page, "aside.side");
+  // Hidden once faded (visibility), but nothing slides.
+  expect(side.map(([property]) => property).sort()).toEqual(["opacity", "visibility"]);
+  // The card is at its full size at once.
+  expect((await card.boundingBox())!.x).toBeLessThanOrEqual(12);
+  await expect.poll(() => dimming(page)).toBe("1");
   await app.close();
 });
 
