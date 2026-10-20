@@ -51,9 +51,17 @@ export function libraryChanged() {
 const readFolder = (path: string) => window.notes.readFolder(path);
 const readNote = (path: string) => window.notes.readNote(path);
 
+const readSummaries = (path: string) => window.notes.readSummaries(path);
+
+/** Bumped whenever something in `path` may have changed: the app's own changes, or the watcher's word. */
+const useFolderRevision = (path: string) => useSyncExternalStore(subscribeRevision, () => revision) + useChangeCount(path, touchesFolder);
+
 /** 当前目录内容 of one folder, read again after the app's own changes and whenever the watcher reports one in it. */
-export const useFolder = (path: string): Read<FolderContents> =>
-  useRead(path, readFolder, useSyncExternalStore(subscribeRevision, () => revision) + useChangeCount(path, touchesFolder));
+export const useFolder = (path: string): Read<FolderContents> => useRead(path, readFolder, useFolderRevision(path));
+
+/** 摘要 of a folder's notes, read only while `wanted` (the 详细 list), and again whenever the folder changes. */
+export const useSummaries = (path: string, wanted: boolean): Read<Record<string, string>> =>
+  useRead(wanted ? path : null, readSummaries, useFolderRevision(path));
 
 /** A note's Markdown source. */
 export const useNoteSource = (path: string | null): Read<string> => useRead(path, readNote);

@@ -1,8 +1,9 @@
 import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import type { AccentChoice, ColorScheme, MotionIntensity } from "../../shared/preferences";
+import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
-import { Segmented, Swatches, type Choice, type Swatch } from "./controls";
+import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
+import { listDetails } from "./listDetail";
 import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
@@ -20,7 +21,7 @@ interface SettingsPage {
 
 const pages: SettingsPage[] = [
   { id: "general", label: "通用", icon: FadersHorizontal, content: () => <GeneralPage /> },
-  { id: "list", label: "笔记列表", icon: ListBullets, content: () => null },
+  { id: "list", label: "笔记列表", icon: ListBullets, content: () => <ListPage /> },
   { id: "motion", label: "动画", icon: Sparkle, content: () => <MotionPage /> },
 ];
 
@@ -73,6 +74,36 @@ function GeneralPage() {
       <SettingRow label="强调色">
         <Swatches label="强调色" choices={accents} value={preferences.accent} onChange={(accent) => change({ accent })} />
       </SettingRow>
+    </SettingsGroup>
+  );
+}
+
+/** A miniature list row at one detail level: bars stand in for the title, the summary and the date. */
+function DetailPreview({ detail }: { detail: ListDetail }) {
+  return (
+    <span className={`detail-preview ${detail}`}>
+      {[0, 1].map((row) => (
+        <span key={row} className="detail-row">
+          <span className="bar title" />
+          {detail === "detailed" && <span className="bar summary" />}
+          {detail !== "compact" && <span className="bar date" />}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+const detailChoices: PreviewChoice<ListDetail>[] = listDetails.map(({ value, label }) => ({
+  value,
+  label,
+  preview: <DetailPreview detail={value} />,
+}));
+
+function ListPage() {
+  const { preferences, change } = usePreferences();
+  return (
+    <SettingsGroup title="详细程度" description="笔记列表每一行显示多少：简洁只有标题，标准加上日期，详细再加一行摘要。也可以在列表顶部的“…”菜单里切换。">
+      <PreviewChoices label="详细程度" choices={detailChoices} value={preferences.listDetail} onChange={(listDetail) => change({ listDetail })} />
     </SettingsGroup>
   );
 }

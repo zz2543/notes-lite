@@ -1,4 +1,4 @@
-import { Folder } from "@phosphor-icons/react";
+import { Check, Folder } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { ListedItem } from "./FolderContentsList";
 import { libraryChanged } from "./ipc";
@@ -31,12 +31,14 @@ export interface OrganizeView {
   relocated(from: string, to: string): void;
 }
 
-interface MenuItem {
+export interface MenuItem {
   label: string;
   run(): void;
+  /** Set for one of a set of choices (a menuitemradio): whether it is the current one. */
+  checked?: boolean;
 }
 
-type Menu = { x: number; y: number; items: Array<MenuItem | "separator"> };
+export type Menu = { x: number; y: number; items: Array<MenuItem | "separator"> };
 
 export function useOrganize(view: OrganizeView) {
   // Steps finish after awaits; they act on the view as it is then.
@@ -187,7 +189,10 @@ export function useOrganize(view: OrganizeView) {
   return { newNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
 }
 
-function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
+const menuItemSelector = "[role=menuitem], [role=menuitemradio]";
+
+/** A menu at a point: the right-click menus, and the list's “…” menu. */
+export function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState({ left: x, top: y });
 
@@ -196,7 +201,7 @@ function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
     const menu = ref.current!;
     const { width, height } = menu.getBoundingClientRect();
     setPlace({ left: x + width > innerWidth ? Math.max(0, x - width) : x, top: y + height > innerHeight ? Math.max(0, y - height) : y });
-    menu.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+    (menu.querySelector<HTMLElement>("[aria-checked=true]") ?? menu.querySelector<HTMLElement>(menuItemSelector))?.focus();
   }, [x, y]);
 
   useEffect(() => {
@@ -215,7 +220,7 @@ function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
     if (event.key === "Escape") return onClose();
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     event.preventDefault();
-    const all = [...ref.current!.querySelectorAll<HTMLElement>("[role=menuitem]")];
+    const all = [...ref.current!.querySelectorAll<HTMLElement>(menuItemSelector)];
     const at = all.indexOf(document.activeElement as HTMLElement);
     all[(at + (event.key === "ArrowDown" ? 1 : all.length - 1)) % all.length]?.focus();
   };
@@ -229,12 +234,13 @@ function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
           <button
             key={item.label}
             className="menu-item"
-            role="menuitem"
+            {...(item.checked === undefined ? { role: "menuitem" } : { role: "menuitemradio", "aria-checked": item.checked })}
             onClick={() => {
               onClose();
               item.run();
             }}
           >
+            {item.checked !== undefined && <span className="menu-check">{item.checked && <Check size={icon.small} weight="bold" />}</span>}
             {item.label}
           </button>
         ),

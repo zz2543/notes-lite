@@ -159,6 +159,7 @@ function registerIpc() {
     return chosen;
   });
   ipcMain.handle(channels.readFolder, (_, path: string) => requireLibrary().readFolder(path));
+  ipcMain.handle(channels.readSummaries, (_, path: string) => requireLibrary().readSummaries(path));
   ipcMain.handle(channels.readNote, (_, path: string) => requireLibrary().readNote(path));
   // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {

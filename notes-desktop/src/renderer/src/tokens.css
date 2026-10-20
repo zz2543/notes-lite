@@ -94,6 +94,8 @@
   --swatch-gap: 10px;
   --swatch-ring: 2px;
   --swatch-ring-gap: 2px;
+  --preview-bar: 5px;
+  --preview-bar-gap: 5px;
   --inline-gap: 8px;
 
   /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */

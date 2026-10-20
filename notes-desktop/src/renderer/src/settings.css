@@ -136,6 +136,80 @@
     0 0 0 calc(var(--swatch-ring-gap) + var(--swatch-ring)) var(--side-fg);
 }
 
+/* 带预览的选项: a card per choice, its preview above its name; the chosen card is ringed. */
+.preview-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--card-gap);
+}
+.preview-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--inline-gap);
+  transition: scale var(--spring-pop);
+}
+.preview-choice:active {
+  scale: var(--press-scale);
+}
+.preview-choice .preview {
+  width: 100%;
+  display: flex;
+  border-radius: var(--item-radius);
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+.preview-choice[aria-checked="true"] .preview {
+  box-shadow:
+    0 0 0 var(--swatch-ring-gap) var(--card-bg),
+    0 0 0 calc(var(--swatch-ring-gap) + var(--swatch-ring)) var(--accent);
+}
+.preview-choice .label {
+  text-align: center;
+  font-size: var(--text-meta);
+}
+.preview-choice[aria-checked="true"] .label {
+  font-weight: 600;
+}
+
+/* The miniature list rows inside the 详细程度 previews. */
+.detail-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+  padding: var(--item-padding);
+}
+.detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--preview-bar-gap);
+}
+.bar {
+  height: var(--preview-bar);
+  border-radius: var(--preview-bar);
+  background: var(--side-fg);
+}
+.bar.title {
+  width: 55%;
+  opacity: 0.7;
+}
+.bar.summary {
+  order: 1;
+  width: 100%;
+  opacity: 0.25;
+}
+.bar.date {
+  width: 22%;
+  margin-left: auto;
+  opacity: 0.35;
+}
+.detailed .bar.date {
+  order: 2;
+  margin-left: 0;
+}
+
 .segment-pill {
   position: absolute;
   inset: 0;

@@ -54,6 +54,13 @@
   color: var(--on-accent);
   box-shadow: none;
 }
+/* A choice in a menu keeps room for its check mark, so labels line up. */
+.menu-check {
+  width: var(--icon-button-small);
+  flex: none;
+  display: grid;
+  place-items: center start;
+}
 .menu-separator {
   height: 1px;
   margin: var(--menu-padding) var(--row-padding);

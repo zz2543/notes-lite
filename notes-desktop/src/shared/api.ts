@@ -33,6 +33,8 @@ export interface NotesApi {
   /** File > 打开笔记库… asks the page, which saves first and then lets the user choose. */
   onOpenLibraryRequest(listener: () => void): () => void;
   readFolder(path: string): Promise<FolderContents>;
+  /** 摘要 of a folder's direct notes, by path, for the 详细 list. */
+  readSummaries(path: string): Promise<Record<string, string>>;
   readNote(path: string): Promise<string>;
   /** `expected` is the source last read or saved; a note changed on disk since then is not overwritten. */
   saveNote(path: string, text: string, expected: string): Promise<SaveResult>;
@@ -92,6 +94,7 @@ export const channels = {
   openLibraryRequest: "menu:open-library",
   openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",
+  readSummaries: "library:read-summaries",
   readNote: "library:read-note",
   saveNote: "library:save-note",
   beforeClose: "window:before-close",

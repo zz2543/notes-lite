@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
-import { readdir } from "node:fs/promises";
+import { readdir, utimes } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, launch, launchWith, library, test } from "./fixtures";
 
 test("⌘, / Ctrl+, opens the settings panel and Esc closes it", async ({ scratch }) => {
@@ -54,6 +55,35 @@ test("appearance can be fixed to light or dark; it is kept with the app, not in 
   await expect(reopened.getByRole("radio", { name: "深色" })).toHaveAttribute("aria-checked", "true");
   await again.app.close();
   expect(await readdir(root, { recursive: true })).toEqual(before);
+});
+
+test("the list shows 简洁, 标准 or 详细 rows, chosen in settings or the list's “…” menu alike", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "雨后.md": "# 雨后\n\n小路上**青苔**很滑。" });
+  await utimes(join(root, "雨后.md"), new Date(2024, 2, 1, 9, 30), new Date(2024, 2, 1, 9, 30));
+  const { app, page } = await launchWith(scratch, root);
+  const row = page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: /雨后/ });
+  // 简洁 by default: the title alone.
+  await expect(row).toHaveText("雨后");
+
+  await page.getByRole("button", { name: "列表选项" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitemradio")).toHaveText(["简洁", "标准", "详细"]);
+  await expect(menu.getByRole("menuitemradio", { name: "简洁" })).toHaveAttribute("aria-checked", "true");
+  await menu.getByRole("menuitemradio", { name: "详细" }).click();
+  await expect(menu).toBeHidden();
+  await expect(row).toContainText("小路上青苔很滑。");
+  await expect(row).toContainText("2024年3月1日");
+
+  const detail = (await openSettings(page, "笔记列表")).getByRole("radiogroup", { name: "详细程度" });
+  await expect(detail.getByRole("radio", { name: "详细" })).toHaveAttribute("aria-checked", "true");
+  await detail.getByRole("radio", { name: "标准" }).click();
+  await page.keyboard.press("Escape");
+  await expect(row).toContainText("2024年3月1日");
+  await expect(row).not.toContainText("青苔");
+
+  await page.getByRole("button", { name: "列表选项" }).click();
+  await expect(page.getByRole("menu").getByRole("menuitemradio", { name: "标准" })).toHaveAttribute("aria-checked", "true");
+  await app.close();
 });
 
 /** The spring CSS transitions use for 浮现, as `<duration> linear(…)`. */

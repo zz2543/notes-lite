@@ -14,6 +14,7 @@ const api: NotesApi = {
     return () => ipcRenderer.off(channels.openLibraryRequest, handler);
   },
   readFolder: (path) => ipcRenderer.invoke(channels.readFolder, path),
+  readSummaries: (path) => ipcRenderer.invoke(channels.readSummaries, path),
   readNote: (path) => ipcRenderer.invoke(channels.readNote, path),
   saveNote: (path, text, expected) => ipcRenderer.invoke(channels.saveNote, path, text, expected),
   onSourceViewRequest: (listener) => {

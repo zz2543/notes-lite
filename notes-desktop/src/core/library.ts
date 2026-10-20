@@ -1,5 +1,6 @@
-import { chmod, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, sep } from "node:path";
+import { noteSummary } from "./markdown";
 import { organizer, type OrganizeOptions, type Organizer } from "./organize";
 
 export type LibraryErrorCode =
@@ -49,6 +50,8 @@ export interface FolderContents {
 export interface Library extends Organizer {
   readonly root: string;
   readFolder(path?: string): Promise<FolderContents>;
+  /** 摘要 of the folder's direct notes, by path; "" for a note with no prose or that cannot be read. */
+  readSummaries(path?: string): Promise<Record<string, string>>;
   /** The note's Markdown source, verbatim. */
   readNote(path: string): Promise<string>;
   /**
@@ -75,6 +78,8 @@ export const writeFailures: Record<string, string> = {
 
 // Strict, and keeping a byte-order mark as text, so that decoding and re-encoding is lossless.
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+// 摘要 reads only this much of each note.
+const summaryBytes = 8192;
 
 export const collator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
 
@@ -179,5 +184,26 @@ export async function openLibrary(root: string, options: OrganizeOptions = {}): 
       }
     }
   };
-  return { root, readFolder, readNote, saveNote, saveCopy, ...organizer({ ...options, root: realRoot, resolve }) };
+  const readSummaries = async (path = ""): Promise<Record<string, string>> => {
+    const { real: dir } = await resolve(path);
+    const { notes } = await readFolder(path);
+    const summaries = await Promise.all(
+      notes.map(async (note) => {
+        const file = await open(join(dir, basename(note.path))).catch(() => null);
+        if (!file) return [note.path, ""] as const;
+        try {
+          // The opening of the note is enough for one line; a character cut in half at the end is no error.
+          const { buffer, bytesRead } = await file.read(Buffer.alloc(summaryBytes), 0, summaryBytes, 0);
+          const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer.subarray(0, bytesRead), { stream: true });
+          return [note.path, noteSummary(text)] as const;
+        } catch {
+          return [note.path, ""] as const;
+        } finally {
+          await file.close();
+        }
+      }),
+    );
+    return Object.fromEntries(summaries);
+  };
+  return { root, readFolder, readSummaries, readNote, saveNote, saveCopy, ...organizer({ ...options, root: realRoot, resolve }) };
 }
