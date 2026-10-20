@@ -93,6 +93,27 @@ test("Return on an empty nested item steps out one level, taking its parent's ma
   await app.close();
 });
 
+test("text typed after exiting a list is separated from it by a blank line, undone with it", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正文");
+  // Markdown needs the blank line to end the list.
+  await expect.poll(saved(1)).toBe("- 项目\n\n正文");
+
+  // Undo steps back to the exited list without the blank line ever standing alone.
+  const states: string[] = [];
+  for (let text = await saved(1)(); text !== "- 项目\n- " && states.length < 6; ) {
+    await page.keyboard.press("ControlOrMeta+KeyZ");
+    const before = text;
+    await expect.poll(async () => (text = await saved(1)())).not.toBe(before);
+    states.push(text);
+  }
+  expect(states.at(-1)).toBe("- 项目\n- ");
+  expect(states).not.toContain("- 项目\n\n");
+  await app.close();
+});
+
 test("stepping out of a numbered list leaves later numbers alone, and code is left alone", async ({ scratch }) => {
   const { app, page, open, saved } = await openLibrary(scratch, ["1. 甲\n   1. 乙\n   2. \n2. 丙", "```\n- 项目\n- \n```"]);
   await open(1);
