@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { codeTokens } from "../../src/core/codeHighlight";
-import { blockType, fenceInfo, isFence, literalBlocks, parseLine, type Range } from "../../src/core/markdown";
+import { codeTokens } from "../../src/shared/codeHighlight";
+import { blockType, fenceInfo, isFence, literalBlocks, parseLine, type Range } from "../../src/shared/markdown";
 
 const text = (line: string, r: Range) => line.slice(r.from, r.to);
 

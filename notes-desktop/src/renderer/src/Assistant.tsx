@@ -1,7 +1,7 @@
 import { FolderSimple, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { InstalledAgent } from "../../core";
-import { agents, type AgentId } from "../../core/agentKinds";
+import { agents, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
 import { Composer, ConversationView, type AssistantState } from "./AssistantChat";
 import type { FigureState } from "./figureModel";

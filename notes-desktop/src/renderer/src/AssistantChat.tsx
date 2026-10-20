@@ -1,10 +1,10 @@
 import { ArrowUp, CaretRight, Plus, Stop, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
-import type { AgentActivity } from "../../core/agentStream";
-import type { AgentId } from "../../core/agentKinds";
-import { addEvent, type Conversation, type Reply, type Step } from "../../core/conversation";
-import type { TurnEvent } from "../../core/agentStream";
+import type { AgentActivity } from "../../shared/conversation";
+import type { AgentId } from "../../shared/agentKinds";
+import { addEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
+import type { TurnEvent } from "../../shared/conversation";
 import type { FigureState } from "./figureModel";
 import { icon } from "./tokens";
 

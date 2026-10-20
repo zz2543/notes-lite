@@ -4,7 +4,7 @@
 import { spawn } from "node:child_process";
 import { join, relative } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
-import type { AgentId } from "./agentKinds";
+import type { AgentId } from "../shared/agentKinds";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
 

@@ -4,9 +4,9 @@
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { delimiter, join } from "node:path";
-import { agents, type AgentKind } from "./agentKinds";
+import { agents, type AgentKind } from "../shared/agentKinds";
 
-export * from "./agentKinds";
+export * from "../shared/agentKinds";
 
 /** An agent found on this computer. */
 export interface InstalledAgent extends AgentKind {

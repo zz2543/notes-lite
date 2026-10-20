@@ -1,24 +1,9 @@
-// What a command-line agent says during 一轮, as the 助手栏 shows it. No Node here, so the page may
-// fold these events into a conversation with the same code the main process stores it with.
-import type { AgentId } from "./agentKinds";
-import type { ChangeKind } from "./snapshots";
+// What a command-line agent says during 一轮, read from its output into the events the 助手栏 shows
+// (their types live in shared/conversation, where the page folds them too).
+import type { AgentId } from "../shared/agentKinds";
+import type { AgentActivity, AgentEvent } from "../shared/conversation";
 
-/** What the figure shows while a tool runs: 思考, 搜索, 读取, 写入 or 运行命令. */
-export type AgentActivity = "thinking" | "searching" | "reading" | "writing" | "running";
-
-export type AgentEvent =
-  /** The agent's own id for the conversation, to continue it next turn. */
-  | { kind: "session"; id: string }
-  /** More of the reply. */
-  | { kind: "text"; text: string }
-  /** A tool call began: what it is and what it works on. */
-  | { kind: "tool"; id: string; name: string; activity: AgentActivity; detail: string }
-  | { kind: "toolDone"; id: string; failed: boolean }
-  /** The agent finished, or failed with a message. */
-  | { kind: "result"; failed?: string };
-
-/** One turn's events: the agent's, then the end with what the turn changed in the library. */
-export type TurnEvent = AgentEvent | { kind: "end"; changes: Array<{ path: string; kind: ChangeKind }>; failed?: string };
+export type { AgentActivity, AgentEvent, TurnEvent } from "../shared/conversation";
 
 /** How one agent is run and read. */
 export interface AgentAdapter {

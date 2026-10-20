@@ -16,7 +16,9 @@ import { serialized } from "./serialized";
 
 const retention = 30 * 86_400_000;
 
-export type ChangeKind = "added" | "modified" | "deleted";
+import type { ChangeKind } from "../shared/conversation";
+
+export type { ChangeKind } from "../shared/conversation";
 
 export interface TurnChange {
   /** Library-relative, "/"-separated. */

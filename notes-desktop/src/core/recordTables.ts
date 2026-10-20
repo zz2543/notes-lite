@@ -1,7 +1,7 @@
 // 记录表: Markdown tables inside notes, where the header names the fields and each row is a
 // record. Pure, like markdown.ts: finding tables, typed reading, and line-level edits that leave
 // the rest of the note as it was.
-import { blockType, literalBlocks } from "./markdown";
+import { blockType, literalBlocks } from "../shared/markdown";
 
 export interface RecordTable {
   /** The nearest heading above the table, without its `#` marks; null when there is none. */

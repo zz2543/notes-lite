@@ -1,8 +1,27 @@
-// 对话: what the 助手栏 shows and the app keeps of a conversation. No Node here, so the page folds a
-// turn's events with the same code the main process stores them with.
-import type { AgentActivity, TurnEvent } from "./agentStream";
+// 对话: what the 助手栏 shows and the app keeps of a conversation, and the events of a turn that
+// build it. No Node here, so the page folds a turn's events with the same code the main process
+// stores them with.
 import type { AgentId } from "./agentKinds";
-import type { ChangeKind } from "./snapshots";
+
+/** What a turn did to one file of the library. */
+export type ChangeKind = "added" | "modified" | "deleted";
+
+/** What the figure shows while a tool runs: 思考, 搜索, 读取, 写入 or 运行命令. */
+export type AgentActivity = "thinking" | "searching" | "reading" | "writing" | "running";
+
+export type AgentEvent =
+  /** The agent's own id for the conversation, to continue it next turn. */
+  | { kind: "session"; id: string }
+  /** More of the reply. */
+  | { kind: "text"; text: string }
+  /** A tool call began: what it is and what it works on. */
+  | { kind: "tool"; id: string; name: string; activity: AgentActivity; detail: string }
+  | { kind: "toolDone"; id: string; failed: boolean }
+  /** The agent finished, or failed with a message. */
+  | { kind: "result"; failed?: string };
+
+/** One turn's events: the agent's, then the end with what the turn changed in the library. */
+export type TurnEvent = AgentEvent | { kind: "end"; changes: Array<{ path: string; kind: ChangeKind }>; failed?: string };
 
 /** A tool call, one line of a reply's timeline. */
 export interface Step {

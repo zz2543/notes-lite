@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closesListGap, listReturn, opensListGap } from "../../src/core/lists";
+import { closesListGap, listReturn, opensListGap } from "../../src/shared/lists";
 
 // Return at the end of a list item, as in the old editor (Markdown.continuation and its parent lookup)
 // and the 退出列表 spec. `above` lists the note's lines above the item, nearest first.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countWords, noteSummary } from "../../src/core/markdown";
+import { countWords, noteSummary } from "../../src/shared/markdown";
 
 // Ported from the old NotesCore NotePreview: the 详细 list shows prose, not Markdown delimiters,
 // headings, code or attachment paths.

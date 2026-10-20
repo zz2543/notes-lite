@@ -2,8 +2,8 @@
 // views of the same document; typesetting only adds decorations, so the text never changes.
 import { Compartment, Prec, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
-import { codeTokens, type CodeToken } from "../../core/codeHighlight";
-import { blockPrefixLength, blockType, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../core/markdown";
+import { codeTokens, type CodeToken } from "../../shared/codeHighlight";
+import { blockPrefixLength, blockType, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../shared/markdown";
 import "./markdown.css";
 
 /** The note's literal blocks (code, math, front matter), kept current as it changes. */

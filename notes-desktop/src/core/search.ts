@@ -1,6 +1,6 @@
 import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { blockPrefixLength } from "./markdown";
+import { blockPrefixLength } from "../shared/markdown";
 
 export interface Snippet {
   text: string;

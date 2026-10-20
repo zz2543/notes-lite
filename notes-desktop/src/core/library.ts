@@ -1,6 +1,6 @@
 import { chmod, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, sep } from "node:path";
-import { noteSummary } from "./markdown";
+import { noteSummary } from "../shared/markdown";
 import { organizer, type OrganizeOptions, type Organizer } from "./organize";
 
 export type LibraryErrorCode =
