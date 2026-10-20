@@ -31,12 +31,12 @@ export interface OrganizeView {
   relocated(from: string, to: string): void;
 }
 
-interface MenuItem {
+export interface MenuItem {
   label: string;
   run(): void;
 }
 
-type Menu = { x: number; y: number; items: Array<MenuItem | "separator"> };
+export type Menu = { x: number; y: number; items: Array<MenuItem | "separator"> };
 
 export function useOrganize(view: OrganizeView) {
   // Steps finish after awaits; they act on the view as it is then.
@@ -187,7 +187,7 @@ export function useOrganize(view: OrganizeView) {
   return { newNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
 }
 
-function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
+export function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState({ left: x, top: y });
 
@@ -248,7 +248,7 @@ interface DialogProps {
 }
 
 /** A floating panel over a dimmed window: Esc or a click outside closes it. */
-function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
+export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
   return (
     <div className="scrim" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
       <form
@@ -270,7 +270,7 @@ function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: s
 }
 
 /** Runs a step that answers with what went wrong, if anything; while it runs, the dialog waits. */
-function useStep(onClose: () => void) {
+export function useStep(onClose: () => void) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const run = async (step: () => Promise<string | void>) => {

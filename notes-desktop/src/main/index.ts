@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences } from "electron";
 import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { stat } from "node:fs/promises";
 import { release } from "node:os";
@@ -6,7 +6,10 @@ import { basename, join } from "node:path";
 import {
   createSearchIndex,
   LibraryError,
+  migrateLegacyFolder,
   openLibrary,
+  SpaceError,
+  spaceLibrary,
   watchLibrary,
   type Library,
   type LibraryWatcher,
@@ -14,6 +17,8 @@ import {
   type Relocation,
   type SearchIndex,
   type SearchOptions,
+  type Space,
+  type SpaceDraft,
 } from "../core";
 import {
   channels,
@@ -25,6 +30,8 @@ import {
   type Organized,
   type Place,
   type SaveResult,
+  type SpaceDone,
+  type SpaceInfo,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
 import { materialWindowOptions, windowMaterial } from "./material";
@@ -64,10 +71,21 @@ function systemAppearance(): Appearance {
   return { material, accent };
 }
 
-const libraryInfo = (lib: Library): LibraryInfo => ({ root: lib.root, name: basename(lib.root) });
+const libraryInfo = (lib: Library, notice?: string): LibraryInfo => ({ root: lib.root, name: basename(lib.root), ...(notice ? { notice } : {}) });
 
 // Deleting goes to the system trash. Looked up on each call, so tests can stand in for the trash.
 const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path) };
+
+/**
+ * Readies a library just opened: the old app's `.留白/` moves into `.notes/` the first time, and the
+ * authoring guide follows this version. Answers with what the user should be told, if anything.
+ */
+async function prepare(lib: Library): Promise<string | undefined> {
+  const migration = await migrateLegacyFolder(lib.root);
+  const spaces = spaceLibrary(lib.root, libraryOptions);
+  if ((await spaces.spaces()).length > 0) await spaces.installGuide().catch(() => undefined);
+  return migration.kind === "failed" ? migration.message : undefined;
+}
 
 let watcher: LibraryWatcher | null = null;
 let watched: Library | null = null;
@@ -94,9 +112,10 @@ const launch: Promise<LaunchState> = (async () => {
   if (!libraryPath) return { kind: "welcome" };
   library = await openLibrary(libraryPath, libraryOptions).catch(() => null);
   if (!library) return { kind: "welcome", missing: libraryPath };
+  const notice = await prepare(library);
   const found = place && (await stillThere(library, place));
   if (found) readAhead(library, found);
-  return { kind: "open", library: libraryInfo(library), place: found };
+  return { kind: "open", library: libraryInfo(library, notice), place: found };
 })();
 
 // What the page reads first at launch (the reopened folder with the folders above it, and the
@@ -140,10 +159,11 @@ async function chooseLibrary(): Promise<LibraryInfo | null> {
   if (picked.canceled || !path) return null;
   library = await openLibrary(path, libraryOptions);
   readsAhead.clear();
+  const notice = await prepare(library);
   watch(library);
   // A new library starts at its root; the place remembered belonged to the old one.
   await settings.update({ libraryPath: path, place: undefined });
-  return libraryInfo(library);
+  return libraryInfo(library, notice);
 }
 
 function requireLibrary(): Library {
@@ -242,6 +262,29 @@ function registerIpc() {
     const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
     return response === 1;
   });
+  // 空间: the core library does the work; a refusal reaches the page as a result it can show.
+  const spaces = () => spaceLibrary(requireLibrary().root, libraryOptions);
+  const info = ({ name, icon, scope, hasPage }: Space): SpaceInfo => ({ name, icon, scope, hasPage });
+  const space = <T, A extends unknown[]>(channel: string, run: (...args: A) => Promise<T>) =>
+    ipcMain.handle(channel, async (_, ...args: unknown[]): Promise<SpaceDone<T>> => {
+      try {
+        return { ok: true, value: await run(...(args as A)) };
+      } catch (error) {
+        const code = error instanceof SpaceError || error instanceof LibraryError ? error.code : "write-failed";
+        return { ok: false, code, message: (error as Error).message };
+      }
+    });
+  const copyPrompt = async (chosen: Space) => clipboard.writeText(await spaces().prompt(chosen));
+  ipcMain.handle(channels.listSpaces, async () => (await spaces().spaces()).map(info));
+  space(channels.createSpace, async (draft: SpaceDraft) => {
+    const created = await spaces().create(draft);
+    await copyPrompt(created);
+    return info(created);
+  });
+  space(channels.updateSpace, async (name: string, draft: SpaceDraft) => info(await spaces().update(name, draft)));
+  space(channels.deleteSpace, async (name: string) => (await spaces().delete(name), null));
+  space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
+  space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.openLibraryListening, (event) => {

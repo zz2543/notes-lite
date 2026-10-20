@@ -57,6 +57,12 @@ const api: NotesApi = {
   },
   saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
   confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
+  listSpaces: () => ipcRenderer.invoke(channels.listSpaces),
+  createSpace: (draft) => ipcRenderer.invoke(channels.createSpace, draft),
+  updateSpace: (name, draft) => ipcRenderer.invoke(channels.updateSpace, name, draft),
+  deleteSpace: (name) => ipcRenderer.invoke(channels.deleteSpace, name),
+  reorderSpaces: (names) => ipcRenderer.invoke(channels.reorderSpaces, names),
+  copySpacePrompt: (name) => ipcRenderer.invoke(channels.copySpacePrompt, name),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

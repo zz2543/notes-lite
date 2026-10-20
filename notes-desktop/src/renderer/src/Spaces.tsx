@@ -1,0 +1,341 @@
+import { Plus, SquaresFour } from "@phosphor-icons/react";
+import { AnimatePresence, motion, Reorder } from "motion/react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import type { SpaceDraft, SpaceScope } from "../../core";
+import type { SpaceInfo } from "../../shared/api";
+import { travel } from "./motion";
+import { useMotion } from "./MotionProvider";
+import { ContextMenu, Dialog, useStep, type Menu } from "./Organize";
+import { SelectionPill } from "./SelectionPill";
+import "./spaces.css";
+import { icon } from "./tokens";
+
+// 空间 in the side panel: the list of spaces (dragged to reorder), its menu, and the form that
+// creates or edits a space. The space files live in the library's `.notes/空间/`; the core library
+// does the work. Opening a space (its page and scoped tree) is ticket 19.
+
+export type SideMode = "library" | "spaces";
+
+/** “资料库 | 空间”: which of the two the side panel shows; the pill slides with 滑移. */
+export function SideSwitch({ mode, onChange }: { mode: SideMode; onChange(mode: SideMode): void }) {
+  const { slide } = useMotion();
+  const tabs: Array<[SideMode, string]> = [
+    ["library", "资料库"],
+    ["spaces", "空间"],
+  ];
+  return (
+    <div className="side-switch" role="tablist" aria-label="侧栏">
+      {tabs.map(([value, label]) => (
+        <button key={value} role="tab" aria-selected={mode === value} onClick={() => onChange(value)}>
+          {mode === value && <motion.span layoutId="side-switch-pill" transition={slide} className="pill" aria-hidden />}
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The side panel's two pages share one place: entering 空间 slides the content left, going back to
+ * 资料库 slides it right, fading as it goes. A switch midway turns the slide around.
+ */
+export function SidePages({ mode, children }: { mode: SideMode; children: ReactNode }) {
+  const { slide, amplitude } = useMotion();
+  const distance = travel.sideSwitch * amplitude;
+  // Spaces lie to the right of the library.
+  const offset = (page: SideMode) => (page === "spaces" ? distance : -distance);
+  return (
+    <div className="side-pages">
+      <AnimatePresence initial={false} mode="popLayout" custom={mode}>
+        <motion.div
+          key={mode}
+          className="side-page"
+          custom={mode}
+          variants={{
+            enter: (page: SideMode) => ({ x: offset(page), opacity: 0 }),
+            shown: { x: 0, opacity: 1 },
+            // The page leaving goes the other way from the one arriving.
+            leave: (arriving: SideMode) => ({ x: -offset(arriving), opacity: 0 }),
+          }}
+          initial="enter"
+          animate="shown"
+          exit="leave"
+          transition={slide}
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+const touchesSpaces =(path: string) => path === "" || path === ".notes" || path.startsWith(".notes/空间");
+
+/** The open library's spaces, read again whenever a space file changes, by this app or any other program. */
+function useSpaceList(): [SpaceInfo[] | undefined, (spaces: SpaceInfo[]) => void, () => void] {
+  const [spaces, setSpaces] = useState<SpaceInfo[]>();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let live = true;
+    window.notes.listSpaces().then(
+      (listed) => live && setSpaces(listed),
+      () => live && setSpaces([]),
+    );
+    return () => {
+      live = false;
+    };
+  }, [revision]);
+  const reload = () => setRevision((n) => n + 1);
+  useEffect(() => window.notes.onLibraryChanged((paths) => paths.some(touchesSpaces) && reload()), []);
+  return [spaces, setSpaces, reload];
+}
+
+interface SpacePanelProps {
+  libraryName: string;
+  /** The space last clicked, if any. */
+  selected: string | null;
+  onSelect(name: string | null): void;
+  notify(message: string): void;
+}
+
+export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePanelProps) {
+  const [spaces, setSpaces, reload] = useSpaceList();
+  const [menu, setMenu] = useState<Menu>();
+  const [dialog, setDialog] = useState<ReactNode>();
+  const close = () => setDialog(undefined);
+  // The order on screen while a row is dragged; saved once it is dropped.
+  const order = useRef<string[]>([]);
+  order.current = spaces?.map((space) => space.name) ?? [];
+
+  const create = () =>
+    setDialog(
+      <SpaceDialog
+        title="新建空间"
+        confirm="新建"
+        libraryName={libraryName}
+        onClose={close}
+        onSubmit={async (draft) => {
+          const created = await window.notes.createSpace(draft);
+          if (!created.ok) return created.message;
+          reload();
+          onSelect(created.value.name);
+          notify(`已新建空间“${created.value.name}”，提示词已复制到剪贴板。把它粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。`);
+        }}
+      />,
+    );
+
+  const edit = (space: SpaceInfo) =>
+    setDialog(
+      <SpaceDialog
+        title="编辑空间"
+        confirm="保存"
+        libraryName={libraryName}
+        space={space}
+        onClose={close}
+        onSubmit={async (draft) => {
+          const edited = await window.notes.updateSpace(space.name, draft);
+          if (!edited.ok) return edited.message;
+          reload();
+          if (selected === space.name) onSelect(edited.value.name);
+        }}
+      />,
+    );
+
+  const remove = async (space: SpaceInfo) => {
+    const sure = await window.notes.confirm({
+      message: `删除空间“${space.name}”？`,
+      detail: "只删除这个空间的主页文件，范围内的笔记不会被改动。",
+      action: "删除空间",
+    });
+    if (!sure) return;
+    const deleted = await window.notes.deleteSpace(space.name);
+    if (!deleted.ok) return notify(deleted.message);
+    reload();
+    if (selected === space.name) onSelect(null);
+  };
+
+  const copyPrompt = async (space: SpaceInfo) => {
+    const copied = await window.notes.copySpacePrompt(space.name);
+    notify(copied.ok ? "提示词已复制到剪贴板，粘贴给外部 agent 即可生成空间主页。" : copied.message);
+  };
+
+  const saveOrder = async () => {
+    const saved = await window.notes.reorderSpaces(order.current);
+    if (!saved.ok) {
+      notify(saved.message);
+      reload();
+    }
+  };
+
+  const openMenu = (space: SpaceInfo, event: MouseEvent) => {
+    event.preventDefault();
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        { label: "编辑空间…", run: () => edit(space) },
+        { label: "复制给 agent 的提示词", run: () => void copyPrompt(space) },
+        "separator",
+        { label: "删除空间…", run: () => void remove(space) },
+      ],
+    });
+  };
+
+  return (
+    <>
+      <div className="side-label">
+        <span className="label">空间</span>
+        <button className="icon-button small" onClick={create} aria-label="新建空间" title="新建空间">
+          <Plus size={icon.small} />
+        </button>
+      </div>
+      <div className="space-scroll">
+        {spaces && spaces.length > 0 && (
+          <Reorder.Group
+            axis="y"
+            className="space-list"
+            aria-label="空间"
+            values={spaces}
+            onReorder={(next: SpaceInfo[]) => setSpaces(next)}
+          >
+            {spaces.map((space) => (
+              <Reorder.Item key={space.name} value={space} className="space-item" onDragEnd={() => void saveOrder()}>
+                <button
+                  className={`row space-row ${selected === space.name ? "on" : ""}`}
+                  aria-label={space.name}
+                  aria-current={selected === space.name ? "true" : undefined}
+                  title={`${space.name} · ${scopeText(space.scope)}`}
+                  onClick={() => onSelect(space.name)}
+                  onContextMenu={(event) => openMenu(space, event)}
+                >
+                  {selected === space.name && <SelectionPill group="space" />}
+                  <span className="space-icon" aria-hidden>
+                    {space.icon || <SquaresFour size={icon.regular} />}
+                  </span>
+                  <span className="label">{space.name}</span>
+                </button>
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
+        )}
+        {spaces?.length === 0 && (
+          <div className="space-empty">
+            <button className="secondary" onClick={create}>
+              新建空间
+            </button>
+            <p>空间围绕一个主题，把相关文件夹放在一起，并有一个由 agent 生成的主页。</p>
+          </div>
+        )}
+      </div>
+      {menu && <ContextMenu {...menu} onClose={() => setMenu(undefined)} />}
+      {dialog}
+    </>
+  );
+}
+
+const scopeText = (scope: SpaceScope) => (scope.library ? "整个笔记库" : scope.folders.map((f) => f || "笔记库根目录").join("、"));
+
+interface SpaceDialogProps {
+  title: string;
+  confirm: string;
+  libraryName: string;
+  /** The space being edited; none when creating one. */
+  space?: SpaceInfo;
+  onClose(): void;
+  /** Answers with why the space was refused; the dialog then stays open. */
+  onSubmit(draft: SpaceDraft): Promise<string | void>;
+}
+
+/** 新建空间 / 编辑空间: name, emoji and scope. */
+function SpaceDialog({ title, confirm, libraryName, space, onClose, onSubmit }: SpaceDialogProps) {
+  const [name, setName] = useState(space?.name ?? "");
+  const [emoji, setEmoji] = useState(space?.icon ?? "✨");
+  const [whole, setWhole] = useState(space?.scope.library ?? false);
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(space && !space.scope.library ? space.scope.folders : []));
+  const [folders, setFolders] = useState<string[]>();
+  const { error, setError, busy, run } = useStep(onClose);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameInput.current?.select();
+    window.notes.listFolders().then(setFolders, () => setFolders([]));
+  }, []);
+
+  const toggle = (folder: string) => {
+    setError(undefined);
+    setChosen((now) => {
+      const next = new Set(now);
+      if (!next.delete(folder)) next.add(folder);
+      return next;
+    });
+  };
+  const submit = () => {
+    // Folders keep the library's order, whatever order they were ticked in.
+    const scope: SpaceScope = whole ? { library: true } : { library: false, folders: (folders ?? []).filter((f) => chosen.has(f)) };
+    void run(() => onSubmit({ name: name.trim(), icon: emoji.trim(), scope }));
+  };
+
+  return (
+    <Dialog title={title} onClose={onClose} onSubmit={submit}>
+      <div className="space-name">
+        <input
+          className="dialog-input space-emoji"
+          aria-label="空间图标"
+          value={emoji}
+          spellCheck={false}
+          onChange={(event) => setEmoji(event.target.value)}
+        />
+        <input
+          ref={nameInput}
+          className="dialog-input"
+          aria-label="空间名称"
+          placeholder="空间名称，例如：健身"
+          value={name}
+          spellCheck={false}
+          onChange={(event) => {
+            setName(event.target.value);
+            setError(undefined);
+          }}
+        />
+      </div>
+      <p className="dialog-hint">范围：空间主页只能读取和写入范围内的笔记。</p>
+      <label className="space-check">
+        <input
+          type="checkbox"
+          checked={whole}
+          onChange={(event) => {
+            setWhole(event.target.checked);
+            setError(undefined);
+          }}
+        />
+        <span className="label">整个笔记库</span>
+      </label>
+      {!whole && (
+        <div className="dialog-list space-folders" role="group" aria-label={`${libraryName}中的文件夹`}>
+          {folders?.map((folder) => {
+            const parts = folder.split("/");
+            return (
+              <label key={folder} className="space-check" style={{ "--depth": parts.length - 1 } as CSSProperties} title={folder}>
+                <input type="checkbox" aria-label={parts.join(" / ")} checked={chosen.has(folder)} onChange={() => toggle(folder)} />
+                <span className="label">{parts.at(-1)}</span>
+              </label>
+            );
+          })}
+          {folders?.length === 0 && <p className="dialog-hint">笔记库里还没有文件夹，可以选择整个笔记库。</p>}
+        </div>
+      )}
+      {error && (
+        <p className="dialog-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="dialog-buttons">
+        <button type="button" className="secondary" onClick={onClose}>
+          取消
+        </button>
+        <button type="submit" className="primary" disabled={busy}>
+          {confirm}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
