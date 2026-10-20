@@ -94,7 +94,7 @@ test("switching 导航模式 keeps the open note, where its caret is and the fol
   await page.keyboard.press("End");
   await page.keyboard.type("的雪");
   // The note's folder is folded away in the folder tree (its arrow only folds; the folder browsed stays).
-  await page.getByRole("treeitem", { name: "日记" }).locator(".caret").click();
+  await page.getByRole("treeitem", { name: "日记" }).getByRole("button", { name: "收起日记" }).click();
   await expect(page.getByRole("treeitem", { name: "旧的" })).toHaveCount(0);
   await editor.focus();
 

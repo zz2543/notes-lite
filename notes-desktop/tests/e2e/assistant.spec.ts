@@ -46,7 +46,7 @@ test("⌘J docks the 助手栏 right of the card, which narrows; one 助手形�
   const { app, page } = await launchWith(scratch, root);
   await setWindowWidth(app, page, 1240);
   const column = page.getByRole("complementary", { name: "助手栏" });
-  const card = page.locator(".card");
+  const card = page.getByRole("article", { name: "卡片" });
   await expect(card).toBeVisible();
   const wide = (await card.boundingBox())!;
 
@@ -167,8 +167,9 @@ test("with the 助手栏 open the navigation narrows with the window: 双栏, �
   await setWindowWidth(app, page, 1100);
   await page.keyboard.press("ControlOrMeta+KeyJ");
   // Once the column has finished shutting, the navigation is still as it was.
-  await expect(page.locator(".assistant")).toBeHidden();
-  await expect(page.locator(".assistant")).toHaveCSS("visibility", "hidden");
+  const shut = page.getByRole("complementary", { name: "助手栏", includeHidden: true });
+  await expect(shut).toBeHidden();
+  await expect(shut).toHaveCSS("visibility", "hidden");
   await expect(singleTree).toBeVisible();
   await expect(list).toHaveCount(0);
   await setWindowWidth(app, page, 1120);

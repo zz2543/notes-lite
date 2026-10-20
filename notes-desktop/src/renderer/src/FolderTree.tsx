@@ -145,6 +145,9 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
       {hasPill && <SelectionPill group="side" />}
       <span
         className="caret"
+        role={expandable ? "button" : undefined}
+        aria-label={expandable ? `${isOpen ? "收起" : "展开"}${name}` : undefined}
+        aria-hidden={expandable ? undefined : true}
         style={{ visibility: expandable ? "visible" : "hidden" }}
         onClick={(event) => {
           event.stopPropagation();

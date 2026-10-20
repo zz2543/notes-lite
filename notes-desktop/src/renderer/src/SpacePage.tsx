@@ -118,7 +118,7 @@ export function SpaceHome({ space, notify, onShowLog, headEnd }: SpaceHomeProps)
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。" : copied.message);
   };
   return (
-    <article className="card">
+    <article className="card" aria-label="卡片">
       <header className="card-head">
         <span className="card-path">{space.name} · 主页</span>
         <button className="card-tool" onClick={onShowLog}>

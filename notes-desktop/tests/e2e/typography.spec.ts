@@ -133,7 +133,7 @@ test("sliders set the size, leading, gap, measure and heading ratio; the preview
 
   // The editor behind the panel takes the same values at once.
   await first.page.keyboard.press("Escape");
-  const editor = first.page.locator(".editor").first();
+  const editor = first.page.getByRole("group", { name: "编辑器" });
   expect(await style(editor, ".cm-scroller", "font-size")).toBe("18px");
   expect(await style(editor, ".cm-content", "max-width")).toBe("480px");
   await first.app.close();

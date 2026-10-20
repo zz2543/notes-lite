@@ -58,7 +58,7 @@ test("the card's button goes in and out, keeping the text, the selection and whe
   expect(await selected(page)).toBe("第60行，");
   const top = await scrolled(page);
   expect(top).toBeGreaterThan(0);
-  const card = page.locator(".card");
+  const card = page.getByRole("article", { name: "卡片" });
   const before = (await card.boundingBox())!;
 
   await page.getByRole("button", { name: "进入专注模式" }).click();
@@ -130,7 +130,7 @@ test("with reduced motion 专注模式 moves nothing; the columns and the dimmin
   const { app, page } = await launchWith(scratch, root);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openNote(page, "随记");
-  const card = page.locator(".card");
+  const card = page.getByRole("article", { name: "卡片" });
 
   await page.keyboard.press(focusShortcut);
   const side = await transitions(page, "aside.side");
@@ -152,7 +152,7 @@ test("in 专注模式 the 助手栏 stays docked right and the card fills the re
   await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(1240);
   await openNote(page, "随记");
   const column = page.getByRole("complementary", { name: "助手栏" });
-  const card = page.locator(".card");
+  const card = page.getByRole("article", { name: "卡片" });
 
   await page.keyboard.press(focusShortcut);
   // ⌘J still opens the column in 专注模式.
