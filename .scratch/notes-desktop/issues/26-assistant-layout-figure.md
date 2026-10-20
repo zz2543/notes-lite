@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 助手栏停靠在右侧，⌘J / Ctrl+J 开关，栏宽无回弹过渡；不使用浮动面板
 - [x] 助手栏打开时：≥ 1180px 双栏、960–1180px 单栏、< 960px 图标栏；收起助手栏不重排左侧导航
@@ -34,3 +34,7 @@
 - 形象的状态驱动、完成后回到待命、对话内容与输入框：任务 28；每种 Agent 的安装方式与适配：任务 30（含核实 `dsh` 安装命令；登录 shell 的 PATH 如 nvm 目录也可在 28 启动 Agent 时一并处理）。
 - 形象与栏宽过渡的观感、常驻 rAF 动画的耗电：任务 23 动效审查。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39363917162 。专注模式下助手栏停靠一项由任务 14 补上。
