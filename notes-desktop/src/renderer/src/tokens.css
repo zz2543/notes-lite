@@ -56,6 +56,11 @@
   /* 助手栏开关: the column's width moves without a bounce. */
   --assistant-toggle-duration: 0.26s;
   --assistant-toggle: var(--assistant-toggle-duration) cubic-bezier(0.32, 0.72, 0, 1);
+  /* 专注模式: the navigation and the list fade, sliding only this far left, as the card fills their
+     room on the 专注 spring (--spring-focus). What fades eases over --focus-fade-duration, written
+     beside the springs. */
+  --focus-shift: 5px;
+  --focus-move: var(--spring-focus);
   /* 助手形象: flat ink, eyes the opposite colour; red when something failed. */
   --figure-ink: #1d1d1f;
   --figure-eye: #ffffff;
@@ -185,6 +190,7 @@
     --press-scale: 1;
     --press-scale-icon: 1;
     --assistant-toggle-duration: 0s;
+    --focus-move: 0s;
   }
 }
 

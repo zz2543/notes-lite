@@ -29,9 +29,11 @@ const cssSpring = ({ visualDuration, bounce }: Transition) => spring(visualDurat
  */
 function useCssSprings(intensity: MotionIntensity) {
   useLayoutEffect(() => {
-    const { pop, slide, expand, emerge } = motionPresets(intensity);
+    const { pop, slide, expand, emerge, focus } = motionPresets(intensity);
     const root = document.documentElement.style;
-    for (const [name, preset] of Object.entries({ pop, slide, expand, emerge })) root.setProperty(`--spring-${name}`, cssSpring(preset));
+    for (const [name, preset] of Object.entries({ pop, slide, expand, emerge, focus })) root.setProperty(`--spring-${name}`, cssSpring(preset));
+    // What fades with 专注模式 (the columns, the dimming) eases over the spring's visual duration, without a bounce.
+    root.setProperty("--focus-fade-duration", `${focus.visualDuration}s`);
   }, [intensity]);
 }
 

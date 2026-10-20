@@ -4,6 +4,7 @@ import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
 import { AssistantColumn, AssistantToggle, isAssistantShortcut } from "./Assistant";
 import type { FigureState } from "./figureModel";
+import { FocusToggle, useFocusMode } from "./FocusMode";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
@@ -226,6 +227,10 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   }, []);
   const narrow = useNarrowWindow();
 
+  // 专注模式: the card fills what the navigation and the list leave; the 助手栏 stays docked.
+  const cardWrap = useRef<HTMLElement>(null);
+  const [focused, setFocused] = useFocusMode(cardWrap);
+
   // 导航模式. 单栏导航 browses folders and notes in one tree; a note opened there makes its folder the one
   // browsed, so 双栏导航 shows the same place. Switching keeps the open note (and where its caret is)
   // and the folder, and the tree unfolds down to them. With the 助手栏 open a narrow window narrows the
@@ -294,7 +299,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   ) : null;
 
   return (
-    <div className={`app ${narrow ? "narrow" : ""}`}>
+    <div className={`app ${narrow ? "narrow" : ""} ${focused ? "focused" : ""}`}>
       {tier === "rail" ? (
         <nav className="rail" aria-label="导航">
           <div className="drag" />
@@ -385,14 +390,19 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
           )}
         </section>
       )}
-      <main className="card-wrap">
+      <main className="card-wrap" ref={cardWrap}>
         <NoteEditor
           key={reloads}
           path={note}
           fresh={note !== null && note === fresh}
           onOpenCopy={openCopy}
           onLetGo={letGo}
-          headEnd={!assistantOpen && <AssistantToggle state={figureState} onOpen={() => setAssistantOpen(true)} />}
+          headEnd={
+            <>
+              <FocusToggle focused={focused} onChange={setFocused} />
+              {!assistantOpen && <AssistantToggle state={figureState} onOpen={() => setAssistantOpen(true)} />}
+            </>
+          }
         />
       </main>
       <AssistantColumn open={assistantOpen} state={figureState} onClose={() => setAssistantOpen(false)} />

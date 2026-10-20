@@ -710,3 +710,69 @@ nav.rail .drag {
   flex-basis: 100%;
   overflow-wrap: anywhere;
 }
+
+/* 专注模式: the navigation and the list fade and slide a few px left while the card, on the 专注
+   spring, grows over the room they give up (a negative margin, so their own width never changes and
+   nothing in them reflows). The window material behind dims. The 助手栏 stays docked. */
+.app {
+  position: relative;
+  isolation: isolate;
+}
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--focus-dim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--focus-fade-duration) ease-out;
+}
+.app.focused::before {
+  opacity: 1;
+}
+aside.side,
+.list,
+nav.rail {
+  transition:
+    margin-right var(--focus-move),
+    translate var(--focus-move),
+    opacity var(--focus-fade-duration) ease-out;
+}
+.app.focused :is(aside.side, .list, nav.rail) {
+  --column-width: var(--side-width);
+  margin-right: calc(-1 * var(--column-width));
+  translate: calc(-1 * var(--focus-shift)) 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    margin-right var(--focus-move),
+    translate var(--focus-move),
+    opacity var(--focus-fade-duration) ease-out,
+    visibility 0s linear var(--focus-fade-duration);
+}
+.app.focused aside.side.single {
+  --column-width: var(--single-nav-width);
+}
+.app.focused .list {
+  --column-width: var(--list-width);
+}
+.app.focused nav.rail {
+  --column-width: var(--rail-width);
+}
+/* Only the title and the body: the path, the card's tools and its foot step aside; the way out stays. */
+.card-path,
+.card-tool,
+.card-foot {
+  transition: opacity var(--focus-fade-duration) ease-out;
+}
+.app.focused :is(.card-path, .card-tool, .card-foot) {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--focus-fade-duration) ease-out,
+    visibility 0s linear var(--focus-fade-duration);
+}
+.card-focus {
+  color: var(--card-path);
+}
