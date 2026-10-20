@@ -110,6 +110,40 @@ describe("按轮快照", () => {
     expect((await lib.snapshots.usage()).bytes - first.bytes).toBeLessThan(100_000);
   });
 
+  it("lets turns go after 30 days, and everything at once on request", async () => {
+    const root = await library({ "a.md": "A", "b.md": "B".repeat(50_000) });
+    const store = await scratchFolder();
+    let today = new Date("2026-10-01T09:00:00Z");
+    const snapshots = turnSnapshots(store, root, { now: () => today });
+    const old = await snapshots.begin();
+    await writeFile(join(root, "b.md"), "B2");
+    await snapshots.finish(old);
+    const kept = (await snapshots.usage()).bytes;
+
+    today = new Date("2026-10-30T09:00:00Z");
+    await snapshots.clean();
+    expect((await snapshots.turn(old)).changes, "29 days on, still there").toHaveLength(1);
+    expect((await snapshots.usage()).bytes).toBe(kept);
+
+    today = new Date("2026-11-01T09:00:00Z");
+    const recent = await snapshots.begin();
+    await writeFile(join(root, "a.md"), "A2");
+    await snapshots.finish(recent);
+    await expect(snapshots.revert(old), "the turn begun 31 days ago is gone").rejects.toMatchObject({ code: "not-found" });
+    expect((await snapshots.usage()).bytes, "with what only it kept").toBeLessThan(kept);
+    await snapshots.revert(recent);
+    expect(await contents(root)).toEqual({ "a.md": "A", "b.md": "B2" });
+
+    await snapshots.clear();
+    expect((await snapshots.usage()).bytes).toBe(0);
+    await expect(snapshots.revert(recent)).rejects.toMatchObject({ code: "not-found" });
+    const next = await snapshots.begin();
+    await rm(join(root, "a.md"));
+    await snapshots.finish(next);
+    await snapshots.revert(next);
+    expect(await contents(root)).toEqual({ "a.md": "A", "b.md": "B2" });
+  });
+
   it("refuses to take back a file changed again since the turn, and leaves the turn alone", async () => {
     const lib = await setup({ "a.md": "A\n", "b.md": "B\n" });
     const id = await lib.snapshots.begin();

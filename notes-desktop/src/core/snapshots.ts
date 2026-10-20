@@ -9,8 +9,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, utimes, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { logPath } from "./operationLog";
+import { serialized } from "./serialized";
+
+const retention = 30 * 86_400_000;
 
 export type ChangeKind = "added" | "modified" | "deleted";
 
@@ -76,8 +79,14 @@ export interface TurnSnapshots {
    * nothing touched, when any of those files has changed again since the turn.
    */
   revert(id: string, path?: string): Promise<Turn>;
+  /** A finished turn and what it changed. */
+  turn(id: string): Promise<Turn>;
   /** How much disk the snapshots take. */
   usage(): Promise<SnapshotUsage>;
+  /** Lets turns begun more than 30 days ago go, with whatever only they kept. Each turn's start does this too. */
+  clean(): Promise<void>;
+  /** Lets every snapshot go now (设置 › 立即清理); no turn so far can be taken back after. */
+  clear(): Promise<void>;
 }
 
 export interface SnapshotUsage {
@@ -220,6 +229,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
   };
 
   const begin = async () => {
+    await expire();
     const before = await snapshot();
     const turn: StoredTurn = { id: randomUUID(), date: before.date, before: before.id, changes: [] };
     await writeJson(turnAt(turn.id), turn);
@@ -293,5 +303,59 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     return { bytes: await sizeOf(store), attachmentsKept: latest?.attachmentsKept ?? true };
   };
 
-  return { begin, finish, revert, usage };
+  const turn = async (id: string): Promise<Turn> => {
+    const { turn: found } = await loadTurn(id);
+    return { id, date: found.date, changes: found.changes };
+  };
+
+  /** Drops expired turns, every snapshot but the newest that no turn left needs, and what nothing refers to any more. */
+  const expire = async () => {
+    const cutoff = now().getTime() - retention;
+    const needed = new Set<string>();
+    for (const name of await readdir(join(store, "turns")).catch(() => [])) {
+      if (!name.endsWith(".json")) continue;
+      const found = await readJson<StoredTurn>(join(store, "turns", name)).catch(() => null);
+      if (found && Date.parse(found.date) >= cutoff) {
+        needed.add(found.before);
+        if (found.after) needed.add(found.after);
+      } else await rm(join(store, "turns", name), { force: true });
+    }
+    latest ??= await newestManifest();
+    if (latest) needed.add(latest.id);
+    const blobs = new Set<string>();
+    for (const name of await readdir(join(store, "snapshots")).catch(() => [])) {
+      const id = name.replace(/\.json$/, "");
+      if (!needed.has(id)) {
+        await rm(join(store, "snapshots", name), { force: true });
+        continue;
+      }
+      const manifest = await readJson<Manifest>(join(store, "snapshots", name)).catch(() => null);
+      for (const state of Object.values(manifest?.files ?? {})) if (state.blob) blobs.add(state.blob);
+    }
+    for (const kind of ["objects", "files"])
+      for (const entry of await readdir(join(store, kind), { recursive: true, withFileTypes: true }).catch(() => [])) {
+        if (!entry.isFile()) continue;
+        const file = join(entry.parentPath, entry.name);
+        const blob = relative(store, file).split(sep).join("/");
+        if (!blobs.has(blob)) await rm(file, { force: true });
+      }
+  };
+
+  const clear = async () => {
+    latest = null;
+    await rm(store, { recursive: true, force: true });
+  };
+
+  // One library's snapshots change one step at a time.
+  const queued = <A extends unknown[], T>(run: (...args: A) => Promise<T>) => (...args: A) => serialized(`snapshots:${store}`, () => run(...args));
+
+  return {
+    begin: queued(begin),
+    finish: queued(finish),
+    revert: queued(revert),
+    turn: queued(turn),
+    usage: queued(usage),
+    clean: queued(expire),
+    clear: queued(clear),
+  };
 }
