@@ -3,4 +3,6 @@
 export const spacePageChannels = {
   request: "space-page:request",
   changed: "space-page:changed",
+  /** main → homepage: the page settings as CSS, replacing the style element that holds them. */
+  settings: "space-page:settings",
 } as const;

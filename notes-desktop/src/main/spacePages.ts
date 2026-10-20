@@ -1,13 +1,13 @@
 // 空间主页: each space's homepage runs in a sandbox of its own, a WebContentsView laid over the
 // card, never in the app's page (ADR 0003). It has no Node, its own persistent storage, and the
-// network; it reaches the notes only through `lb`, whose requests main hands to the core library.
-// Nothing here decides what a request may do.
+// network; it reaches the notes only through `space` (or its old name `lb`), whose requests main hands
+// to the core library. Nothing here decides what a request may do.
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { ipcMain, protocol, session, shell, WebContentsView, type BrowserWindow, type Rectangle, type Session } from "electron";
 import { spaceLibrary, spaceRequests, type SpaceReply } from "../core";
 import { spacePageChannels } from "../shared/spacePage";
-import { lbShim } from "./lbShim";
+import { kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
 
 export const spaceScheme = "notes-space";
 const pageUrl = `${spaceScheme}://page/`;
@@ -19,9 +19,23 @@ export function registerSpaceScheme() {
 
 const escapeHtml = (s: string) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-/** The space file as a whole page, with `lb` defined before any of its own scripts run. */
-function documentFor(name: string, html: string): string {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(name)}</title><script>${lbShim}</script></head><body class="lb-page">\n${html}\n</body></html>`;
+/** `</` would close the element an inline script or style sits in; `<\/` reads the same to JS and CSS. */
+const inline = (text: string) => text.replaceAll("</", "<\\/");
+
+/**
+ * The space file as a whole page: the style kit and the page settings, then `space` and the components,
+ * all before any of its own content, so its scripts and elements find them ready.
+ */
+function documentFor(name: string, html: string, settings: string): string {
+  const head = [
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<title>${escapeHtml(name)}</title>`,
+    `<style>${inline(kitStyle)}</style>`,
+    `<style id="${settingsStyleId}">${inline(settings)}</style>`,
+    ...kitScripts.map((script) => `<script>${inline(script)}</script>`),
+  ].join("");
+  return `<!doctype html><html lang="zh-CN"><head>${head}</head><body class="space-page lb-page">\n${html}\n</body></html>`;
 }
 
 /** Stable per library and space, so a space keeps its preferences and never sees another's. */
@@ -41,9 +55,15 @@ export interface SpacePages {
   hide(): void;
   /** Closes every homepage, as when another library opens. */
   closeAll(): void;
+  /** Sends the page settings (排版, 强调色, 动效) again to every open homepage, after they changed. */
+  settingsChanged(): void;
 }
 
-export function spacePages(window: () => BrowserWindow | null, root: () => string | null): SpacePages {
+/**
+ * `settings` answers the page settings as CSS (spaceKit's spacePageSettings) at the moment they are
+ * needed: when a homepage loads, and whenever `settingsChanged` is called.
+ */
+export function spacePages(window: () => BrowserWindow | null, root: () => string | null, settings: () => string): SpacePages {
   let hosted: Hosted[] = [];
   let shown: Hosted | null = null;
   let hostedRoot: string | null = null;
@@ -57,7 +77,7 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
     handled.add(ses);
     ses.protocol.handle(spaceScheme, async () => {
       const space = await spaceLibrary(library).space(name).catch(() => null);
-      const page = documentFor(name, space?.html ?? "");
+      const page = documentFor(name, space?.html ?? "", settings());
       return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
     });
     // No camera, microphone, location or notifications: the page is someone else's script.
@@ -147,5 +167,10 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
     return spaceRequests(library, page.name, { trash }).handle(request);
   });
 
-  return { show, hide, closeAll };
+  const settingsChanged = () => {
+    const css = settings();
+    for (const { view } of hosted) if (!view.webContents.isDestroyed()) view.webContents.send(spacePageChannels.settings, css);
+  };
+
+  return { show, hide, closeAll, settingsChanged };
 }

@@ -45,6 +45,7 @@ import { appearanceArguments, type Appearance } from "../shared/appearance";
 import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
+import { spacePageSettings } from "./spaceKit";
 import { registerSpaceScheme, spacePages } from "./spacePages";
 
 // A separate profile, for tests and for running beside an installed copy.
@@ -56,7 +57,8 @@ const mac = process.platform === "darwin";
 let library: Library | null = null;
 let window: BrowserWindow | null = null;
 // Space homepages, each in its own sandbox laid over the card.
-const pages = spacePages(() => window, () => library?.root ?? null);
+// A homepage takes the app's 排版, 强调色 and 动效 (spaceKit), and follows them when they change.
+const pages = spacePages(() => window, () => library?.root ?? null, () => spacePageSettings(preferences, systemAppearance().accent));
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
 // The close check in progress; the first answer (the page's, or the timeout's) consumes it.
@@ -151,6 +153,7 @@ function applyPreferences() {
 async function changePreferences(change: unknown): Promise<Preferences> {
   preferences = readPreferences(change, preferences);
   applyPreferences();
+  pages.settingsChanged();
   await settings.update({ preferences });
   return preferences;
 }
@@ -542,6 +545,7 @@ function createWindow() {
 function followSystemAccent() {
   const changed = () => {
     if (window && !window.isDestroyed()) window.webContents.send(channels.systemAccentChanged, systemAppearance().accent);
+    pages.settingsChanged();
   };
   systemPreferences.on("accent-color-changed", changed);
   if (mac) systemPreferences.subscribeNotification("AppleColorPreferencesChangedNotification", changed);
