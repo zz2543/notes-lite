@@ -11,7 +11,7 @@ test("⌘, / Ctrl+, opens the settings panel and Esc closes it", async ({ scratc
   const panel = page.getByRole("dialog", { name: "设置" });
   await expect(panel).toBeVisible();
   // 左侧分类，右侧分组：each group has a title and a short description.
-  await expect(panel.getByRole("tablist", { name: "设置分类" }).getByRole("tab")).toHaveText(["通用", "笔记列表", "动画"]);
+  await expect(panel.getByRole("tablist", { name: "设置分类" }).getByRole("tab")).toHaveText(["通用", "排版", "笔记列表", "动画"]);
   await expect(panel.getByRole("tab", { name: "通用" })).toHaveAttribute("aria-selected", "true");
   await expect(panel.getByRole("group", { name: "外观" })).toBeVisible();
 

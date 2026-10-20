@@ -98,7 +98,7 @@ const presetStacks: { readonly [P in FontPreset]: string } = {
 };
 
 /** A choice as a font-family value. An installed family falls back to the face its role uses by default. */
-function fontStack(choice: FontChoice, fallback: FontPreset): string {
+export function fontStack(choice: FontChoice, fallback: FontPreset): string {
   const family = installedFamily(choice);
   if (family === undefined) return presetStacks[choice as FontPreset];
   return `"${family.replace(/[\\"]/g, (c) => `\\${c}`)}", ${presetStacks[fallback]}`;

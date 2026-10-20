@@ -1,0 +1,85 @@
+/* 排版 page (TypographySettings.tsx): options on the left, the live preview on the right. */
+
+.typography-page {
+  display: flex;
+  gap: var(--settings-padding);
+  align-items: flex-start;
+}
+.typography-options {
+  --settings-label-width: var(--typography-label-width);
+  width: var(--typography-options-width);
+  flex: none;
+}
+.settings-row.stacked {
+  grid-template-columns: 1fr;
+  gap: var(--inline-gap);
+}
+
+.font-picker {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+}
+.font-picker .preview-choices {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.font-sample {
+  flex: 1;
+  padding: var(--item-padding);
+  font-size: var(--font-sample-size);
+  text-align: center;
+  white-space: nowrap;
+}
+.font-installed {
+  height: var(--row-height);
+  padding: 0 var(--row-padding);
+  border: 0;
+  border-radius: var(--row-radius);
+  background: var(--hover);
+  color: inherit;
+  font: inherit;
+}
+
+/* The preview: the editor's own rules, drawn at half size on a card that stays in view. */
+.typeset-preview {
+  position: sticky;
+  top: 0;
+  flex: 1;
+  min-width: 0;
+  height: calc(var(--settings-height) - var(--settings-padding) * 4);
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--item-radius);
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+}
+.typeset-page {
+  width: calc(100% / var(--typeset-preview-scale));
+  height: calc(100% / var(--typeset-preview-scale));
+  transform: scale(var(--typeset-preview-scale));
+  transform-origin: top left;
+}
+.typeset-page .cm-scroller {
+  overflow: hidden;
+  transition:
+    font-size var(--spring-slide),
+    line-height var(--spring-slide);
+}
+.typeset-page .cm-content {
+  transition: max-width var(--spring-slide);
+}
+.typeset-page .cm-line {
+  transition:
+    font-size var(--spring-slide),
+    padding var(--spring-slide);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typeset-page .cm-scroller,
+  .typeset-page .cm-content,
+  .typeset-page .cm-line {
+    transition: none;
+  }
+}

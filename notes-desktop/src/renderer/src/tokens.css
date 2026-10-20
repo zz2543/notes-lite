@@ -108,6 +108,18 @@
   --swatch-ring-gap: 2px;
   --preview-bar: 5px;
   --preview-bar-gap: 5px;
+  /* 滑块与开关 (controls.tsx), and the 排版 page: its options column and the preview drawn at half size,
+     so the text keeps its proportions and the 版心 still shows. */
+  --slider-track: 4px;
+  --slider-thumb: 18px;
+  --slider-value-width: 52px;
+  --switch-width: 38px;
+  --switch-height: 22px;
+  --switch-inset: 2px;
+  --typography-options-width: 340px;
+  --typography-label-width: 76px;
+  --typeset-preview-scale: 0.5;
+  --font-sample-size: 17px;
   --inline-gap: 8px;
 
   /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */
@@ -128,11 +140,18 @@
   --text-path: 13px;
   --text-meta: 11.5px;
 
-  /* 正文排版的默认值（排版设置以后改这些变量） */
+  /* 字体预设（排版设置）：思源宋体与 Source Serif 4 随应用分发（fonts.ts），等宽用平台默认。 */
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Mono", monospace;
+  --font-songti: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-serif: "Source Serif 4 Variable", var(--font-songti);
+
+  /* 正文排版的默认值。排版设置（shared/typography.ts）把用户的取值写在根元素上，覆盖这些变量。 */
   --body-font: var(--font-ui);
   --body-size: 17px;
   --body-leading: 1.8;
   --measure: 680px;
+  /* 中英文自动间距：只影响显示（CSS text-autospace），文件不变。 */
+  --text-autospace: normal;
 
   /* Placeholders owned by a later ticket: the welcome page (empty states). */
   --welcome-title: 22px;
@@ -212,7 +231,7 @@
   --list-indent: 28px;
   --quote-indent: 18px;
   --quote-bar: 3px;
-  --code-font: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Mono", monospace;
+  --code-font: var(--font-mono);
   --code-size: 0.86em;
   --code-leading: 1.5;
   --code-inset: 14px;
