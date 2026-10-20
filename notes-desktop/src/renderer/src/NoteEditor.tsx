@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
+import { listEditing } from "./listEditing";
 import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 import { setShowSource, useShowSource } from "./sourceView";
@@ -85,6 +86,7 @@ function Editor({
           keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
           markdownDisplay(shown.current),
+          listEditing,
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
