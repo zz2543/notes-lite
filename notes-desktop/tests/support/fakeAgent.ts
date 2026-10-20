@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 export type FakeStep =
   | { say: string }
-  | { tool: string; input?: Record<string, unknown>; write?: { path: string; text: string }; toolFails?: boolean }
+  | { tool: string; input?: Record<string, unknown>; write?: { path: string; text: string }; toolFails?: boolean; waitFor?: string }
   | { waitFor: string }
   | { fail: string };
 

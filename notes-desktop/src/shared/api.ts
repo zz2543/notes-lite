@@ -1,4 +1,4 @@
-import type { FolderContents, InstalledAgent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
+import type { AgentId, Conversation, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
 import type { Appearance } from "./appearance";
 import type { Preferences } from "./preferences";
 
@@ -112,6 +112,15 @@ export interface NotesApi {
   snapshotUsage(): Promise<SnapshotUsage>;
   /** Lets every snapshot go now; no turn so far can be undone after. */
   clearSnapshots(): Promise<void>;
+  /**
+   * Starts a turn (ticket 28): in the conversation given, or in a new one with this agent and working
+   * directory. Answers at once with the conversation as it now stands; the turn's events follow.
+   */
+  startTurn(request: TurnStart): Promise<{ ok: true; conversation: Conversation } | { ok: false; message: string }>;
+  /** Stops the conversation's running turn. */
+  stopTurn(conversation: string): void;
+  /** An event of a running turn, by conversation. */
+  onTurnEvent(listener: (conversation: string, event: TurnEvent) => void): () => void;
 
   // 空间主页 (ticket 19). The homepage runs in a sandbox main lays over the card.
   /** The notes inside a space's scope, by path. */
@@ -124,6 +133,17 @@ export interface NotesApi {
   operationLog(): Promise<SpaceDone<LogItem[]>>;
   /** Takes one entry back; refused, with why, when what it wrote has changed since. */
   undoOperation(id: string): Promise<SpaceDone<null>>;
+}
+
+export interface TurnStart {
+  /** The conversation to continue; null begins one. */
+  conversation: string | null;
+  /** For a new conversation: its agent and its working directory (library-relative). */
+  agent: AgentId;
+  folder: string;
+  text: string;
+  /** Notes put in the context, library-relative. */
+  notes: string[];
 }
 
 export interface SpaceNote {
@@ -211,6 +231,9 @@ export const channels = {
   prepareSnapshots: "assistant:prepare-snapshots",
   snapshotUsage: "assistant:snapshot-usage",
   clearSnapshots: "assistant:clear-snapshots",
+  startTurn: "assistant:start-turn",
+  stopTurn: "assistant:stop-turn",
+  turnEvent: "assistant:turn-event",
   spaceNotes: "spaces:notes",
   showSpacePage: "spaces:show-page",
   hideSpacePage: "spaces:hide-page",

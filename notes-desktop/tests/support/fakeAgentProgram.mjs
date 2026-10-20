@@ -5,8 +5,9 @@
 //
 // FAKE_AGENT_SCRIPT is a JSON file: { "session": "s1", "steps": [step…] }, each step one of
 //   { "say": "text" }                                  a reply, streamed in pieces
-//   { "tool": "Write", "input": {…}, "write": { "path": "a.md", "text": "…" } }
-//                                                      a tool call; `write` changes a file (relative to the working directory)
+//   { "tool": "Write", "input": {…}, "write": { "path": "a.md", "text": "…" }, "waitFor": "/abs/file" }
+//                                                      a tool call; `write` changes a file (relative to the working
+//                                                      directory); `waitFor` holds the call open until that file exists
 //   { "waitFor": "/abs/file" }                         holds until that file exists (so a test can look mid-turn)
 //   { "fail": "message" }                              stops with an error on stderr and exit code 1
 // When FAKE_AGENT_SCRIPT names a JSON array, each run takes the next script (by how many runs the log holds).
@@ -62,6 +63,7 @@ for (const step of script.steps ?? []) {
       writeFileSync(file, step.write.text);
     }
     await pause(5);
+    if (step.waitFor) while (!existsSync(step.waitFor)) await pause(20);
     emit({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: use, content: "ok", is_error: Boolean(step.toolFails) }] } });
   } else if (step.waitFor !== undefined) {
     while (!existsSync(step.waitFor)) await pause(20);

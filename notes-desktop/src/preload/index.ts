@@ -86,6 +86,13 @@ const api: NotesApi = {
   prepareSnapshots: () => ipcRenderer.send(channels.prepareSnapshots),
   snapshotUsage: () => ipcRenderer.invoke(channels.snapshotUsage),
   clearSnapshots: () => ipcRenderer.invoke(channels.clearSnapshots),
+  startTurn: (request) => ipcRenderer.invoke(channels.startTurn, request),
+  stopTurn: (conversation) => ipcRenderer.send(channels.stopTurn, conversation),
+  onTurnEvent: (listener) => {
+    const handler = (_: unknown, conversation: string, event: Parameters<typeof listener>[1]) => listener(conversation, event);
+    ipcRenderer.on(channels.turnEvent, handler);
+    return () => ipcRenderer.off(channels.turnEvent, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("notes", api);
