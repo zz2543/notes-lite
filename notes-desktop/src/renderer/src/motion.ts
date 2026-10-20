@@ -21,6 +21,12 @@ export interface MotionPresets {
   amplitude: number;
 }
 
+/** Travel distances at 标准 (幅度), in px; multiply by `amplitude`. */
+export const travel = {
+  /** “资料库 | 空间”切换: the side panel's content slides this far as it fades. */
+  sideSwitch: 60,
+} as const;
+
 type Spring = { visualDuration: number; bounce: number };
 
 // The 标准 values; the other intensities are derived from them.

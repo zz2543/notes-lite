@@ -1,4 +1,4 @@
-import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults } from "../core";
+import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
 import type { Appearance } from "./appearance";
 
 export interface LibraryInfo {
@@ -6,6 +6,8 @@ export interface LibraryInfo {
   root: string;
   /** The folder's own name, shown as the root of the folder tree. */
   name: string;
+  /** Something to tell the user once it opens, such as why the old app's spaces could not be moved in. */
+  notice?: string;
 }
 
 /** What the window shows at launch: the remembered library, or the welcome page. */
@@ -63,7 +65,29 @@ export interface NotesApi {
   saveCopy(path: string, text: string): Promise<CopyResult>;
   /** Asks before something the user cannot take back; true when they go ahead. */
   confirm(question: Confirmation): Promise<boolean>;
+
+  // 空间 (ticket 18). The space files live in the library's `.notes/空间/`.
+  /** The open library's spaces, in the user's order. */
+  listSpaces(): Promise<SpaceInfo[]>;
+  /** Creates the space and copies the prompt for an external agent to the clipboard. */
+  createSpace(draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  updateSpace(name: string, draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  /** Moves only the space file to the trash. */
+  deleteSpace(name: string): Promise<SpaceDone<null>>;
+  reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
+  /** Copies the prompt for an external agent to the clipboard. */
+  copySpacePrompt(name: string): Promise<SpaceDone<null>>;
 }
+
+/** A space as the side panel shows it. */
+export interface SpaceInfo {
+  name: string;
+  icon: string;
+  scope: SpaceScope;
+  hasPage: boolean;
+}
+
+export type SpaceDone<T> = { ok: true; value: T } | { ok: false; code: SpaceErrorCode | LibraryErrorCode; message: string };
 
 export interface Confirmation {
   message: string;
@@ -99,4 +123,10 @@ export const channels = {
   libraryChanged: "library:changed",
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
+  listSpaces: "spaces:list",
+  createSpace: "spaces:create",
+  updateSpace: "spaces:update",
+  deleteSpace: "spaces:delete",
+  reorderSpaces: "spaces:reorder",
+  copySpacePrompt: "spaces:copy-prompt",
 } as const;

@@ -11,6 +11,7 @@ import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
+import { SidePages, SideSwitch, SpacePanel, type SideMode } from "./Spaces";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
@@ -185,6 +186,14 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
 
+  // “资料库 | 空间”. Opening a space (its page and scoped tree) comes with ticket 19.
+  const [sideMode, setSideMode] = useState<SideMode>("library");
+  const [space, setSpace] = useState<string | null>(null);
+  // Said once the library opens, such as the old app's spaces failing to move into `.notes/`.
+  useEffect(() => {
+    if (library.notice) notify(library.notice);
+  }, [library]);
+
   // 就地搜索: the list header turns into the search field; results stand in for the list.
   const [search, setSearch] = useState<SearchState | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
@@ -217,27 +226,36 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
     <div className="app">
       <aside className="side">
         <div className="drag" />
-        <div className="side-label">
-          <span className="label">文件夹</span>
-          <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
-            <MagnifyingGlass size={icon.small} />
-          </button>
-        </div>
-        <FolderTree
-          libraryName={library.name}
-          selected={folder}
-          expanded={expanded}
-          onActivate={activate}
-          onToggle={toggle}
-          onNewNote={(path) => void organize.newNote(path)}
-          onMenu={organize.folderMenu}
-        />
-        {lastDeletedName !== undefined && (
-          <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
-            <ArrowCounterClockwise size={icon.small} />
-            <span className="label">恢复上次删除</span>
-          </button>
-        )}
+        <SideSwitch mode={sideMode} onChange={setSideMode} />
+        <SidePages mode={sideMode}>
+          {sideMode === "library" ? (
+            <>
+              <div className="side-label">
+                <span className="label">文件夹</span>
+                <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+                  <MagnifyingGlass size={icon.small} />
+                </button>
+              </div>
+              <FolderTree
+                libraryName={library.name}
+                selected={folder}
+                expanded={expanded}
+                onActivate={activate}
+                onToggle={toggle}
+                onNewNote={(path) => void organize.newNote(path)}
+                onMenu={organize.folderMenu}
+              />
+              {lastDeletedName !== undefined && (
+                <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
+                  <ArrowCounterClockwise size={icon.small} />
+                  <span className="label">恢复上次删除</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <SpacePanel libraryName={library.name} selected={space} onSelect={setSpace} notify={notify} />
+          )}
+        </SidePages>
         <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
           <HardDrives size={icon.small} />
           <span className="label">{library.name}</span>
