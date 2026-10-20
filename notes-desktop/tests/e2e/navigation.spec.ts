@@ -42,6 +42,15 @@ test("单栏导航 shows folders and notes in one tree: subfolders first, the op
   // Once it settles, the pill covers its row exactly, in the wider 单栏 side panel too.
   const widths = () => open.evaluate((row) => [row.getBoundingClientRect().width, row.querySelector("[data-testid=selection-pill]")!.getBoundingClientRect().width]);
   await expect.poll(async () => ((w) => w[0] === w[1])(await widths())).toBe(true);
+
+  // A note in the tree has the same menu as in the list; renamed, it stays open and selected.
+  await open.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "重命名…" }).click();
+  const rename = page.getByRole("dialog", { name: "重命名笔记" });
+  await rename.getByLabel("名称").fill("星期一");
+  await page.keyboard.press("Enter");
+  await expect(rename).toBeHidden();
+  await expect(tree.getByRole("treeitem", { name: "星期一" })).toHaveAttribute("aria-selected", "true");
   await app.close();
 });
 
