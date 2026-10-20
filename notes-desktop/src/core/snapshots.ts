@@ -163,8 +163,9 @@ async function walk(root: string) {
         await visit(join(folder, entry.name), `${path}/`);
       }
       else if (entry.isFile()) {
-        const info = await stat(join(folder, entry.name));
-        found.set(path, { size: info.size, mtimeMs: info.mtimeMs });
+        // A file gone between listing and looking (another program at work) is simply not there.
+        const info = await stat(join(folder, entry.name)).catch(() => null);
+        if (info) found.set(path, { size: info.size, mtimeMs: info.mtimeMs });
       }
     }
   };
