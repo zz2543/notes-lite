@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { turnSnapshots } from "../../src/core";
+import { entryChanges, entrySummary, logPath, operationLog, turnEntry, turnSnapshots } from "../../src/core";
 import { contents, fakeTrash, library, scratchFolder } from "../support/library";
 
 // 快照 (assistant-spec): before each 一轮 the whole library is snapshotted, so everything the
@@ -142,6 +142,41 @@ describe("按轮快照", () => {
     await snapshots.finish(next);
     await snapshots.revert(next);
     expect(await contents(root)).toEqual({ "a.md": "A", "b.md": "B2" });
+  });
+
+  it("a turn is one entry in the operation log, undone as a whole", async () => {
+    const lib = await setup({ "日记/今天.md": "# 今天\n", "日记/图.png": Buffer.from([1, 2, 3]) });
+    const log = operationLog(lib.root, { trash: lib.trash.trash, turns: lib.snapshots });
+    const before = await contents(lib.root);
+    const id = await lib.snapshots.begin();
+    await lib.write("日记/今天.md", "# 今天\n\n改过\n");
+    await lib.remove("日记/图.png");
+    await lib.write("别处.md", "新的\n");
+    const [entry] = await log.record([turnEntry(await lib.snapshots.finish(id))]);
+
+    expect(entrySummary(entry!)).toBe("助手一轮：改动 3 个文件");
+    expect(entryChanges(entry!)).toEqual([
+      { sign: "+", text: "新建 别处.md" },
+      { sign: "+", text: "改写 日记/今天.md" },
+      { sign: "-", text: "删除 日记/图.png" },
+    ]);
+    expect(await contents(lib.root), "recording the turn leaves the library's notes alone").toMatchObject({ "别处.md": "新的\n" });
+
+    await log.undo(entry!.id);
+    const { [logPath]: _, ...after } = await contents(lib.root);
+    expect(after).toEqual(before);
+    expect((await log.entries())[0]?.undone).toBe(true);
+  });
+
+  it("refuses to undo a turn from the log when a file changed since", async () => {
+    const lib = await setup({ "a.md": "A\n" });
+    const log = operationLog(lib.root, { turns: lib.snapshots });
+    const id = await lib.snapshots.begin();
+    await lib.write("a.md", "A2\n");
+    const [entry] = await log.record([turnEntry(await lib.snapshots.finish(id))]);
+    await lib.write("a.md", "用户又改了，长一点\n");
+    await expect(log.undo(entry!.id)).rejects.toMatchObject({ code: "conflict" });
+    expect((await log.entries())[0]?.undone).toBe(false);
   });
 
   it("refuses to take back a file changed again since the turn, and leaves the turn alone", async () => {
