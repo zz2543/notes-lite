@@ -15,8 +15,8 @@
 | [07: 启动性能达标](issues/07-startup-performance.md) | 01, 06 |
 | [08: 原地排版与源码切换](issues/08-live-markdown.md) | 02 |
 | [09: 列表延续与退出列表](issues/09-list-continuation-exit.md) | 08 |
-| [10: 插入光标与文字选区](issues/10-caret-selection.md) | 08 |
-| [11: 光标与输入动画](issues/11-typing-motion.md) | 10, 03 |
+| [10: 插入光标与文字选区](issues/10-caret-selection.md) | 08（移到最后，届时问用户） |
+| [11: 光标与输入动画](issues/11-typing-motion.md) | 10, 03（随 10 移到最后） |
 | [12: 表格与公式](issues/12-tables-math.md) | 08 |
 | [13: 笔记链接、图片与附件](issues/13-links-attachments.md) | 08, 04 |
 | [14: 专注模式](issues/14-focus-mode.md) | 02, 03 |
@@ -28,8 +28,8 @@
 | [20: 空间组件、样式包与新接口前缀](issues/20-space-components-prefix.md) | 19 |
 | [21: 空间的刷新、错误条与引用同步](issues/21-space-refresh-errors.md) | 19 |
 | [22: Windows 适配](issues/22-windows-adaptation.md) | 14, 15, 16, 17 |
-| [23: 动效专项审查与打磨](issues/23-motion-review.md) | 11, 14, 16, 17, 21 |
-| [24: 大胆高饱和外观风格](issues/24-bold-appearance.md) | 15, 23 |
+| [23: 动效专项审查与打磨](issues/23-motion-review.md) | 14, 16, 17, 21 |
+| [24: 大胆高饱和外观风格](issues/24-bold-appearance.md) | 15, 23（移到最后，届时问用户） |
 | [25: 完整验收并取代旧版](issues/25-acceptance-replace-old.md) | 07, 09, 12, 13, 20, 22, 23 |
 | [26: 助手栏布局与助手形象](issues/26-assistant-layout-figure.md) | 03, 17 |
 | [27: 按轮快照与撤销](issues/27-turn-snapshots.md) | 19 |
@@ -37,4 +37,4 @@
 | [29: 审查卡片与“直接保留”模式](issues/29-turn-review.md) | 28 |
 | [30: 其余 Agent 与对话历史](issues/30-more-agents-history.md) | 28 |
 
-进度：01–08、18 已完成（CI 两平台通过）；15 已合并待 CI；09、19 进行中。
+进度：01–08、15、18 已完成（CI 两平台通过）；09 待合并；19 进行中。10、11、24 按用户要求移到最后，届时再问是否做。

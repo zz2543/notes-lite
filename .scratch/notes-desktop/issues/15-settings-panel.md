@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 左侧分类、右侧分组，每组有标题与简短说明，项目对齐、间距一致
 - [x] 控件库：带实时数值的滑块、分段控件、色板、开关、带预览的选项；不使用纯文本输入数值
@@ -41,3 +41,7 @@
 - 新设置：在 `shared/preferences.ts` 加字段与默认值，在 `SettingsPanel.tsx` 的 `pages` 加页面（任务 16 排版页）或往已有页面加 `SettingsGroup`（任务 17 导航模式放“通用”）。
 - 控件库 `controls.tsx` 中的滑块（带实时数值）与开关已实现但本任务没有使用者，接缝 B 覆盖分别留给任务 16（排版滑块）与任务 10/11（光标动画、输入动画开关，放在“动画”页）。
 - 面板内间距、色板与预览条尺寸为设计规范未列出的新变量（`tokens.css` 中 `--settings-*`、`--swatch-*`、`--preview-bar*`），任务 23 动效与观感审查时一并核对。
+
+### 2026-10-20 完成
+
+合并后 macOS CI 有依赖帧率的用例不稳，修复后（4be26c5 顺带修了输入法延后保存与冲突的一个真实问题；23b3750、8dce2db 改测试）CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39357929607 。合并 15 后 macOS CI 虚拟机冷启动由约 1.1 s 升到约 1.7–1.9 s（本机 M4 不变，约 0.46 s）；按用户要求启动优化放到所有功能完成后。
