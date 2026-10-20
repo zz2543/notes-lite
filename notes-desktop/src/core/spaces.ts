@@ -85,21 +85,38 @@ function metaAttributes(tag: string): Record<string, string> {
   return attributes;
 }
 
-function readMeta(html: string, name: string): string | undefined {
+/**
+ * The meta a space file declares itself with, current name first: `space-*` since ticket 20, and the
+ * old app's `lb-*`, which stays readable for good so its homepages run unchanged.
+ */
+export const spaceMeta = {
+  scope: ["space-scope", "lb-scope"],
+  icon: ["space-icon", "lb-icon"],
+} as const;
+
+type MetaNames = (typeof spaceMeta)[keyof typeof spaceMeta];
+
+function readMeta(html: string, names: MetaNames): string | undefined {
+  const found = new Map<string, string | undefined>();
   for (const [tag] of html.matchAll(metaRe)) {
-    const attributes = metaAttributes(tag);
-    if (attributes.name === name) return attributes.content;
+    const { name, content } = metaAttributes(tag);
+    if (name !== undefined && !found.has(name)) found.set(name, content);
   }
+  for (const name of names) if (found.has(name)) return found.get(name);
   return undefined;
 }
 
-/** Replaces (or inserts at the top) one `<meta name=… content=…>`, leaving the page untouched. */
-function settingMeta(html: string, name: string, value: string): string {
-  const tag = `<meta name="${name}" content="${escapeAttribute(value)}">`;
-  for (const match of html.matchAll(metaRe)) {
-    if (metaAttributes(match[0]).name === name) return html.slice(0, match.index) + tag + html.slice(match.index + match[0].length);
+/**
+ * Replaces one meta (or inserts it under its current name at the top), leaving the page untouched. A
+ * file using the old name keeps it, so it never ends up declaring a second, different scope.
+ */
+function settingMeta(html: string, names: MetaNames, value: string): string {
+  const matches = [...html.matchAll(metaRe)];
+  for (const name of names) {
+    const match = matches.find((m) => metaAttributes(m[0]).name === name);
+    if (match) return html.slice(0, match.index) + `<meta name="${name}" content="${escapeAttribute(value)}">` + html.slice(match.index + match[0].length);
   }
-  return `${tag}\n${html}`;
+  return `<meta name="${names[0]}" content="${escapeAttribute(value)}">\n${html}`;
 }
 
 function pageBody(html: string): string {
@@ -109,8 +126,8 @@ function pageBody(html: string): string {
 function parseSpace(name: string, html: string): Space {
   return {
     name,
-    icon: readMeta(html, "lb-icon") ?? "",
-    scope: scopeFromMeta(readMeta(html, "lb-scope") ?? ""),
+    icon: readMeta(html, spaceMeta.icon) ?? "",
+    scope: scopeFromMeta(readMeta(html, spaceMeta.scope) ?? ""),
     html,
     path: `${spacesFolder}/${name}.html`,
     hasPage: pageBody(html) !== "",
@@ -137,9 +154,9 @@ export async function notesInScope(root: string, scope: SpaceScope): Promise<str
   return [...new Set(found)].sort((a, b) => collator.compare(a, b));
 }
 
-/** The scope a space file's `lb-scope` meta declares; none declared is an empty scope. */
+/** The scope a space file's `space-scope` (or old `lb-scope`) meta declares; none declared is an empty scope. */
 export function spaceScopeOf(html: string): SpaceScope {
-  return scopeFromMeta(readMeta(html, "lb-scope") ?? "");
+  return scopeFromMeta(readMeta(html, spaceMeta.scope) ?? "");
 }
 
 // A library syncs between macOS and Windows, so a space's file name must work on both.
@@ -249,7 +266,7 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
     checkDraft(draft);
     const { name, icon, scope } = draft;
     await mkdir(folder, { recursive: true });
-    const html = `<meta name="lb-scope" content="${escapeAttribute(scopeMeta(scope))}">\n<meta name="lb-icon" content="${escapeAttribute(icon)}">\n`;
+    const html = `<meta name="${spaceMeta.scope[0]}" content="${escapeAttribute(scopeMeta(scope))}">\n<meta name="${spaceMeta.icon[0]}" content="${escapeAttribute(icon)}">\n`;
     // Created, never replaced: a space by that name keeps its page.
     await writeFile(fileOf(name), html, { encoding: "utf8", flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
       throw error.code === "EEXIST" ? taken(name) : error;
@@ -262,7 +279,7 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
   const update = async (name: string, draft: SpaceDraft): Promise<Space> => {
     checkDraft(draft);
     const current = await space(name);
-    const html = settingMeta(settingMeta(current.html, "lb-icon", draft.icon), "lb-scope", scopeMeta(draft.scope));
+    const html = settingMeta(settingMeta(current.html, spaceMeta.icon, draft.icon), spaceMeta.scope, scopeMeta(draft.scope));
     const renamed = draft.name !== name;
     // A change of case only is the same file on a case-insensitive disk, not a clash.
     if (renamed && draft.name.toLowerCase() !== name.toLowerCase() && (await exists(fileOf(draft.name)))) throw taken(draft.name);
@@ -304,12 +321,12 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
       `请为笔记应用编写“${space.name}”空间的空间主页。`,
       "",
       `- 编写说明：${guidePath}（请先完整阅读并遵守）`,
-      `- 空间文件：${fileOf(space.name)}（保留开头的 meta，在其后写主页；不要修改 lb-scope）`,
+      `- 空间文件：${fileOf(space.name)}（保留开头的 meta，在其后写主页；不要修改 space-scope）`,
       `- 空间名称：${space.name}`,
       `- 范围：${scopeLabel(space.scope)}`,
       "- 范围内现有记录表：",
       ...(tables.length === 0
-        ? ["  - 暂无。可以用 lb-quick-add 或 lb.append 指定目标笔记和表头，笔记应用会自动新建记录表。"]
+        ? ["  - 暂无。可以用 space-quick-add 或 space.append 指定目标笔记和表头，笔记应用会自动新建记录表。"]
         : tables.map((table) => `  - ${table.source}：${table.header.join(" | ")}`)),
       "",
       "请围绕我每天的进展设计这个主页：用美观的图表展示进展，并提供快捷录入。数据只能存进范围内的记录表。",
