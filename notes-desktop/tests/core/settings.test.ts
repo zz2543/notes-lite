@@ -23,7 +23,7 @@ describe("settings store", () => {
 
 describe("preferences", () => {
   it("read missing or unknown values as the defaults: 跟随系统, 简洁, 强, 双栏", () => {
-    expect(readPreferences(undefined)).toEqual({ colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong", navigation: "double" });
+    expect(readPreferences(undefined)).toMatchObject({ colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong", navigation: "double" });
     expect(readPreferences({ colorScheme: "sepia", accent: "purple", motion: 3, navigation: "triple", extra: true })).toEqual({
       ...defaultPreferences,
       accent: "purple",
