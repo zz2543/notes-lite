@@ -11,3 +11,4 @@ export * from "./recordTables";
 export * from "./operationLog";
 export { serialized } from "./serialized";
 export * from "./agents";
+export * from "./snapshots";

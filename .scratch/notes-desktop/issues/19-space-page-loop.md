@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 空间主页在隔离沙盒中运行，每个空间独立存储，允许联网；页面只能通过桥接接口访问笔记
 - [x] 空间请求处理在核心库：记录表定位、占位符、类型推断、增删改记录、按表头新建
@@ -27,3 +27,7 @@
 - 证据：`npm run typecheck`；`npm test` 140 通过 / 1 跳过（含 `tests/core/spaceRequests.test.ts`、`spaceRecordWrites.test.ts`、`spaceNoteWrites.test.ts`：范围、`..`、符号链接/目录联接、隐藏目录、其他空间文件、逐条撤销、重开后撤销、撤销冲突、30 天清理）；`npm run test:e2e` 71 通过，含 `tests/e2e/space-page.spec.ts` 4 项（录入后磁盘出现新行、操作记录逐条撤销与冲突提示、沙盒无 Node/无 `window.notes`/范围外拒绝/iframe 无 `lb`/不能导航/存储隔离、主页与笔记切换保留状态、单栏空间）。`spaces.spec.ts` 的空间列表定位改为精确名称，避免与“空间内容”相撞。
 - 留给后续：主页的 `lb.on("change")` 推送与外部改动后刷新随任务 21；组件库随任务 20。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39386345223 。合并后修过的 CI 问题：慢机器上的撤销分组与助手栏宽度过渡用例、字体许可证在 Windows 检出时被改成 CRLF（加 `.gitattributes`）。

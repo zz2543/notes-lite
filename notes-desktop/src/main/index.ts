@@ -14,6 +14,7 @@ import {
   openLibrary,
   operationLog,
   OperationLogError,
+  snapshotStore,
   SpaceError,
   spaceLibrary,
   watchLibrary,
@@ -104,6 +105,15 @@ const libraryInfo = (lib: Library, notice?: string): LibraryInfo => ({ root: lib
 
 // Deleting goes to the system trash. Looked up on each call, so tests can stand in for the trash.
 const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path) };
+
+// 快照 of every library before each assistant turn, kept with the app (never in a library). macOS clones
+// attachments; elsewhere they are copied, up to about 10 GB. NOTES_DESKTOP_SNAPSHOT_COPY_LIMIT (tests)
+// copies on every platform, with that limit in bytes.
+const copyLimit = Number(process.env.NOTES_DESKTOP_SNAPSHOT_COPY_LIMIT) || undefined;
+const snapshots = snapshotStore(join(app.getPath("userData"), "snapshots"), {
+  trash: (path) => shell.trashItem(path),
+  ...(copyLimit ? { attachments: "copy" as const, copyLimit } : {}),
+});
 
 /**
  * Readies a library just opened: the old app's `.留白/` moves into `.notes/` the first time, and the
@@ -238,6 +248,8 @@ const indexInBackground = () => void (library && searchIndex());
 
 /** Once the page shows the remembered library: index it and follow its changes, if not yet. */
 function startBackgroundWork() {
+  // Turns begun more than 30 days ago go, in every library.
+  void snapshots.clean().catch(() => undefined);
   if (!library) return;
   if (watched !== library) watch(library);
   indexInBackground();
@@ -346,7 +358,10 @@ function registerIpc() {
   });
   ipcMain.on(channels.showSpacePage, (_, name: string, bounds: Rectangle) => void pages.show(name, bounds).catch(() => pages.hide()));
   ipcMain.on(channels.hideSpacePage, () => pages.hide());
-  const log = () => operationLog(requireLibrary().root, libraryOptions);
+  const log = () => {
+    const { root } = requireLibrary();
+    return operationLog(root, { ...libraryOptions, turns: snapshots.library(root) });
+  };
   space(channels.operationLog, async (): Promise<LogItem[]> =>
     (await log().entries()).map((entry) => ({
       id: entry.id,
@@ -358,6 +373,9 @@ function registerIpc() {
     })),
   );
   space(channels.undoOperation, async (id: string) => (await log().undo(id), null));
+  ipcMain.on(channels.prepareSnapshots, () => void (library && snapshots.library(library.root).baseline().catch(() => undefined)));
+  ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
+  ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
   ipcMain.handle(channels.detectAgents, () => detectAgents({ path: agentSearchPath(), pathext: process.env.PATHEXT }));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));

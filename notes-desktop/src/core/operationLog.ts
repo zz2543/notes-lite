@@ -7,9 +7,10 @@ import { access, chmod, mkdir, readFile, rename, rm, stat, writeFile } from "nod
 import { basename, dirname, join } from "node:path";
 import { findTable, insertRow, paddedRow, renderRow, rewriteRows } from "./recordTables";
 import { serialized } from "./serialized";
+import type { ChangeKind, Turn } from "./snapshots";
 import { notesFolder } from "./spaces";
 
-export type LogKind = "recordAppend" | "recordUpdate" | "recordRemove" | "noteCreate" | "noteWrite" | "noteRename" | "noteMove" | "noteTrash" | "pageWrite";
+export type LogKind = "recordAppend" | "recordUpdate" | "recordRemove" | "noteCreate" | "noteWrite" | "noteRename" | "noteMove" | "noteTrash" | "pageWrite" | "agentTurn";
 
 /** Another note rewritten alongside a rename or move (its links), by its path after the move. */
 export interface FileChange {
@@ -22,7 +23,7 @@ export interface LogEntry {
   id: string;
   /** ISO 8601. */
   date: string;
-  /** The space whose homepage wrote it. */
+  /** The space whose homepage wrote it; 助手 for a turn of the assistant. */
   space: string;
   kind: LogKind;
   /** The note (or space file) written; for a rename or move, where it was before. */
@@ -38,8 +39,22 @@ export interface LogEntry {
   /** The old app's record of where the system trash put a note. */
   trashed?: string;
   related?: FileChange[];
+  /** An assistant turn: its id among the snapshots, and the files it changed. */
+  turn?: string;
+  files?: Array<{ path: string; kind: ChangeKind }>;
   undone: boolean;
 }
+
+/** The log entry for one assistant turn: the whole turn, undone through its snapshots. */
+export function turnEntry(turn: Turn): NewLogEntry {
+  return { space: "助手", kind: "agentTurn", path: "", turn: turn.id, files: turn.changes.map(({ path, kind }) => ({ path, kind })) };
+}
+
+const fileVerbs: Record<ChangeKind, { sign: "-" | "+"; verb: string }> = {
+  added: { sign: "+", verb: "新建" },
+  deleted: { sign: "-", verb: "删除" },
+  modified: { sign: "+", verb: "改写" },
+};
 
 export type NewLogEntry = Omit<LogEntry, "id" | "date" | "undone">;
 
@@ -126,6 +141,8 @@ export function entryChanges(entry: LogEntry): Array<{ sign: "-" | "+"; text: st
       ];
     case "noteTrash":
       return [{ sign: "-", text: entry.path }];
+    case "agentTurn":
+      return (entry.files ?? []).map(({ path, kind }) => ({ sign: fileVerbs[kind].sign, text: `${fileVerbs[kind].verb} ${path}` }));
   }
 }
 
@@ -152,6 +169,8 @@ export function entrySummary(entry: LogEntry): string {
       return `移到废纸篓 ${entry.path}`;
     case "pageWrite":
       return `重写空间主页 ${entry.path}`;
+    case "agentTurn":
+      return `助手一轮：改动 ${entry.files?.length ?? 0} 个文件`;
   }
 }
 
@@ -159,6 +178,8 @@ export interface OperationLogOptions {
   now?(): Date;
   /** Moves a file, by real location, to the system trash. */
   trash?(path: string): Promise<void>;
+  /** Where assistant turns are taken back from: the library's snapshots. */
+  turns?: { revert(id: string): Promise<unknown> };
 }
 
 export interface OperationLog {
@@ -260,6 +281,17 @@ export function operationLog(root: string, options: OperationLogOptions = {}): O
     }
   };
 
+  const revertTurn = async (entry: LogEntry) => {
+    if (!options.turns || !entry.turn) throw new OperationLogError("not-found", "这一轮的快照不在这台电脑上，无法撤销。");
+    try {
+      await options.turns.revert(entry.turn);
+    } catch (error) {
+      const code = (error as { code?: unknown }).code;
+      if (code === "conflict" || code === "not-found") throw new OperationLogError(code, (error as Error).message);
+      throw error;
+    }
+  };
+
   const revert = async (entry: LogEntry) => {
     switch (entry.kind) {
       case "recordAppend":
@@ -277,6 +309,8 @@ export function operationLog(root: string, options: OperationLogOptions = {}): O
       case "noteRename":
       case "noteMove":
         return revertMove(entry);
+      case "agentTurn":
+        return revertTurn(entry);
       case "noteTrash":
         if (await exists(at(entry.path))) throw changed();
         if (entry.trashed && (await exists(entry.trashed))) {
