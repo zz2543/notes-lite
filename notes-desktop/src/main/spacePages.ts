@@ -5,7 +5,8 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { ipcMain, protocol, session, shell, WebContentsView, type BrowserWindow, type Rectangle, type Session } from "electron";
-import { spaceLibrary, spaceRequests, type SpaceReply } from "../core";
+import { spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope } from "../core";
+import type { SpacePageEvent, SpacePageProblem } from "../shared/api";
 import { spacePageChannels } from "../shared/spacePage";
 import { kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
 
@@ -24,9 +25,10 @@ const inline = (text: string) => text.replaceAll("</", "<\\/");
 
 /**
  * The space file as a whole page: the style kit and the page settings, then `space` and the components,
- * all before any of its own content, so its scripts and elements find them ready.
+ * all before any of its own content, so its scripts and elements find them ready. `offset` is how many
+ * lines come before the space file's first, so an error's line can be told in the file's own terms.
  */
-function documentFor(name: string, html: string, settings: string): string {
+function documentFor(name: string, html: string, settings: string): { page: string; offset: number } {
   const head = [
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -35,7 +37,33 @@ function documentFor(name: string, html: string, settings: string): string {
     `<style id="${settingsStyleId}">${inline(settings)}</style>`,
     ...kitScripts.map((script) => `<script>${inline(script)}</script>`),
   ].join("");
-  return `<!doctype html><html lang="zh-CN"><head>${head}</head><body class="space-page lb-page">\n${html}\n</body></html>`;
+  const before = `<!doctype html><html lang="zh-CN"><head>${head}</head><body class="space-page lb-page">\n`;
+  return { page: `${before}${html}\n</body></html>`, offset: before.split("\n").length - 1 };
+}
+
+/** What a homepage's script reported (see spaceShim), as the page tells it; nothing in it is trusted. */
+interface RawProblem {
+  message?: unknown;
+  source?: unknown;
+  line?: unknown;
+  column?: unknown;
+  stack?: unknown;
+}
+
+const text = (value: unknown, limit: number) => (typeof value === "string" ? value.slice(0, limit) : "");
+const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : 0);
+
+/** Where an error happened, in the space file's own lines when it happened there. */
+function problemOf(raw: RawProblem, offset: number): SpacePageProblem {
+  const source = text(raw.source, 2000);
+  const line = count(raw.line);
+  const column = count(raw.column);
+  let location = "";
+  if (source === "" || source.startsWith(pageUrl)) {
+    // Lines before the file are the style kit and the components, which the page's author never sees.
+    if (line > offset) location = `空间文件第 ${line - offset} 行${column > 0 ? `，第 ${column} 列` : ""}`;
+  } else if (line > 0) location = `${source} 第 ${line} 行`;
+  return { message: text(raw.message, 2000) || "未知错误", location, stack: text(raw.stack, 8000) };
 }
 
 /** Stable per library and space, so a space keeps its preferences and never sees another's. */
@@ -46,6 +74,8 @@ interface Hosted {
   view: WebContentsView;
   /** The space file as last loaded. */
   html: string;
+  /** Its scope, which decides which changes the page hears of. */
+  scope: SpaceScope;
 }
 
 export interface SpacePages {
@@ -57,14 +87,26 @@ export interface SpacePages {
   closeAll(): void;
   /** Sends the page settings (排版, 强调色, 动效) again to every open homepage, after they changed. */
   settingsChanged(): void;
+  /**
+   * Paths in the library changed (the watcher's report, whoever changed them): a rewritten space file
+   * loads again, and each homepage hears, through `space.on("change")`, of the changes in its scope.
+   */
+  libraryChanged(paths: string[]): Promise<void>;
 }
 
 /**
  * `settings` answers the page settings as CSS (spaceKit's spacePageSettings) at the moment they are
  * needed: when a homepage loads, and whenever `settingsChanged` is called.
  */
-export function spacePages(window: () => BrowserWindow | null, root: () => string | null, settings: () => string): SpacePages {
+export function spacePages(
+  window: () => BrowserWindow | null,
+  root: () => string | null,
+  settings: () => string,
+  emit: (event: SpacePageEvent) => void,
+): SpacePages {
   let hosted: Hosted[] = [];
+  // How many lines come before each space file in the page last served for it.
+  const offsets = new Map<string, number>();
   let shown: Hosted | null = null;
   let hostedRoot: string | null = null;
   const handled = new WeakSet<Session>();
@@ -77,7 +119,8 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
     handled.add(ses);
     ses.protocol.handle(spaceScheme, async () => {
       const space = await spaceLibrary(library).space(name).catch(() => null);
-      const page = documentFor(name, space?.html ?? "", settings());
+      const { page, offset } = documentFor(name, space?.html ?? "", settings());
+      offsets.set(name, offset);
       return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
     });
     // No camera, microphone, location or notifications: the page is someone else's script.
@@ -85,7 +128,13 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
     ses.setPermissionCheckHandler(() => false);
   };
 
-  const create = (library: string, name: string, html: string): Hosted => {
+  /** Loads the page afresh; whatever went wrong on the old one goes with it. */
+  const reload = (page: Hosted) => {
+    emit({ space: page.name, kind: "loaded" });
+    page.view.webContents.reload();
+  };
+
+  const create = (library: string, name: string, html: string, scope: SpaceScope): Hosted => {
     const partition = partitionOf(library, name);
     const ses = session.fromPartition(partition);
     serve(ses, library, name);
@@ -110,8 +159,21 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
       return { action: "deny" };
     });
     contents.setBackgroundThrottling(false);
+    const problem = (message: string) => emit({ space: name, kind: "problem", problem: { message, location: "", stack: "" } });
+    contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
+      // -3 is a load given up for another (a reload, say), which is no failure.
+      if (isMainFrame && code !== -3) problem(`页面加载失败：${description}（${url}）`);
+    });
+    const hostedPage: Hosted = { name, view, html, scope };
+    contents.on("render-process-gone", (_event, details) => {
+      if (details.reason === "clean-exit") return;
+      problem("页面进程意外退出，已重新载入。");
+      // Loads again as itself; the problem stays shown, so it is not a fresh start.
+      setTimeout(() => !contents.isDestroyed() && contents.reload(), 0);
+    });
+    emit({ space: name, kind: "loaded" });
     void contents.loadURL(pageUrl);
-    return { name, view, html };
+    return hostedPage;
   };
 
   const closeAll = () => {
@@ -142,12 +204,13 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
       page = undefined;
     }
     if (!page) {
-      page = create(library, name, space.html);
+      page = create(library, name, space.html, space.scope);
       hosted.push(page);
     } else if (page.html !== space.html) {
       // Rewritten since it was loaded (by an agent, say): shown as it is now.
       page.html = space.html;
-      page.view.webContents.reload();
+      page.scope = space.scope;
+      reload(page);
     }
     if (shown !== page) {
       hide();
@@ -157,20 +220,57 @@ export function spacePages(window: () => BrowserWindow | null, root: () => strin
     page.view.setBounds({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) });
   };
 
+  /** The homepage that sent an IPC message from its own main frame; embedded frames have no say. */
+  const sentBy = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
+    const page = hosted.find((h) => !h.view.webContents.isDestroyed() && h.view.webContents === event.sender);
+    return page && event.senderFrame === page.view.webContents.mainFrame ? page : undefined;
+  };
+
   // `lb` requests: only from a homepage's own main frame, and always as that homepage's space.
   ipcMain.handle(spacePageChannels.request, async (event, request: unknown): Promise<SpaceReply> => {
-    const page = hosted.find((h) => !h.view.webContents.isDestroyed() && h.view.webContents === event.sender);
+    const page = sentBy(event);
     const library = hostedRoot;
-    if (!page || !library || event.senderFrame !== page.view.webContents.mainFrame) {
+    if (!page || !library) {
       return { ok: false, error: { code: "outside-scope", message: "只有空间主页本身可以使用 lb。" } };
     }
-    return spaceRequests(library, page.name, { trash }).handle(request);
+    const reply = await spaceRequests(library, page.name, { trash }).handle(request);
+    // 写入提示: the app says the homepage wrote, and how much.
+    if (reply.ok && reply.changes > 0) emit({ space: page.name, kind: "wrote", changes: reply.changes, records: reply.recordChanges });
+    return reply;
   });
+
+  // 错误条: errors the page's scripts, resources and components ran into.
+  ipcMain.on(spacePageChannels.error, (event, raw: unknown) => {
+    const page = sentBy(event);
+    if (!page || typeof raw !== "object" || raw === null) return;
+    emit({ space: page.name, kind: "problem", problem: problemOf(raw as RawProblem, offsets.get(page.name) ?? 0) });
+  });
+
+  const touchesSpaceFiles = (path: string) => path === "" || path === ".notes" || path === spacesFolder || path.startsWith(`${spacesFolder}/`);
+
+  const libraryChanged = async (paths: string[]) => {
+    const library = hostedRoot;
+    if (!library || paths.length === 0) return;
+    const spaces = paths.some(touchesSpaceFiles) ? spaceLibrary(library) : null;
+    for (const page of hosted) {
+      if (page.view.webContents.isDestroyed()) continue;
+      const space = spaces && (await spaces.space(page.name).catch(() => null));
+      if (space && space.html !== page.html) {
+        // An agent rewrote it: shown as it is now, without review (ADR 0002).
+        page.html = space.html;
+        page.scope = space.scope;
+        reload(page);
+        continue;
+      }
+      const changed = spaceChanges(page.scope, paths);
+      if (changed.length > 0) page.view.webContents.send(spacePageChannels.changed, changed);
+    }
+  };
 
   const settingsChanged = () => {
     const css = settings();
     for (const { view } of hosted) if (!view.webContents.isDestroyed()) view.webContents.send(spacePageChannels.settings, css);
   };
 
-  return { show, hide, closeAll, settingsChanged };
+  return { show, hide, closeAll, settingsChanged, libraryChanged };
 }

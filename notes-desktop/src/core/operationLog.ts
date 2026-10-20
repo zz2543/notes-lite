@@ -8,7 +8,7 @@ import { basename, dirname, join } from "node:path";
 import { findTable, insertRow, paddedRow, renderRow, rewriteRows } from "./recordTables";
 import { serialized } from "./serialized";
 import type { ChangeKind, Turn } from "./snapshots";
-import { notesFolder } from "./spaces";
+import { notesFolder, spaceLibrary } from "./spaces";
 
 export type LogKind = "recordAppend" | "recordUpdate" | "recordRemove" | "noteCreate" | "noteWrite" | "noteRename" | "noteMove" | "noteTrash" | "pageWrite" | "agentTurn";
 
@@ -279,6 +279,8 @@ export function operationLog(root: string, options: OperationLogOptions = {}): O
       await rename(at(entry.path), at(newPath)).catch(() => undefined);
       throw error;
     }
+    // Space files follow the note back; a space file that can't be written keeps its paths.
+    await spaceLibrary(root).syncPaths(newPath, entry.path).catch(() => undefined);
   };
 
   const revertTurn = async (entry: LogEntry) => {

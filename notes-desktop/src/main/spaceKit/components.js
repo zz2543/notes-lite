@@ -34,7 +34,11 @@
     const max = digits != null && digits !== "" ? +digits : Math.abs(n) >= 100 ? 0 : Math.abs(n) >= 10 ? 1 : 2;
     return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: max, minimumFractionDigits: digits != null && digits !== "" ? +digits : 0 }).format(n);
   };
-  const report = (message) => console.error(message);
+  // To the 错误条 (the interface listens for "space:problem"), and the console.
+  const report = (message) => {
+    console.error(message);
+    window.dispatchEvent(new CustomEvent("space:problem", { detail: { message } }));
+  };
   const firstOfType = (fields, type) => (fields || []).find((f) => f.type === type);
   const inPeriod = (period) => {
     const now = new Date();

@@ -135,6 +135,87 @@
   min-height: 0;
   margin-bottom: var(--card-radius);
 }
+/* 错误条与写入提示, above the homepage; the frame carries the 展开 height so the bar keeps its padding. */
+.space-bars {
+  flex: none;
+  padding-inline: var(--card-gap);
+}
+.space-bar-frame {
+  overflow: hidden;
+}
+.space-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  margin-top: var(--inline-gap);
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
+  color: var(--card-fg);
+  font-size: var(--text-meta);
+}
+.space-bar.problem {
+  background: color-mix(in srgb, var(--space-problem) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--space-problem) 22%, transparent);
+}
+.space-bar.problem .space-bar-icon {
+  color: var(--space-problem);
+}
+.space-bar.notice {
+  background: var(--hover);
+}
+.space-bar.notice .space-bar-icon {
+  color: var(--card-muted);
+}
+.space-bar-icon {
+  flex: none;
+}
+.space-bar-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.4;
+}
+.space-bar.notice .space-bar-text {
+  display: block;
+}
+.space-bar-detail {
+  color: var(--card-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  user-select: text;
+}
+.space-bar-button,
+.space-bar-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--inline-gap) / 2);
+  padding: calc(var(--inline-gap) / 2) var(--inline-gap);
+  border-radius: var(--icon-button-small-radius);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-item);
+}
+.space-bar-button:hover,
+.space-bar-close:hover {
+  background: var(--hover);
+}
+.space-bar-close {
+  color: var(--card-muted);
+  padding: calc(var(--inline-gap) / 2);
+}
+.space-bar-link {
+  flex: none;
+  padding: 0;
+  font-size: var(--text-meta);
+  font-weight: var(--weight-item);
+  text-decoration: underline;
+}
+
 .space-no-page {
   flex: 1;
   justify-content: center;

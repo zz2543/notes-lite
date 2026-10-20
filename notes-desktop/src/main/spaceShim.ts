@@ -71,6 +71,28 @@ export const spaceShim = `(() => {
     },
   };
   if (bridge) bridge.onChange((paths) => { for (const handler of listeners) { try { handler(paths); } catch (e) { setTimeout(() => { throw e; }); } } });
+
+  // 错误条: what goes wrong on the page reaches the app. Uncaught errors and rejections, resources that
+  // fail to load (images, scripts, styles: their error events don't bubble, so they are caught on the
+  // way down), and what the components report as "space:problem".
+  const report = (problem) => { if (bridge) bridge.error(problem); };
+  const stackOf = (error) => (error && typeof error.stack === "string" ? error.stack : "");
+  window.addEventListener("error", (event) => {
+    const target = event.target;
+    if (target && target !== window && target.nodeType === 1) {
+      const url = target.currentSrc || target.src || target.href || "";
+      let shown = url;
+      try { shown = decodeURI(url); } catch (_) {}
+      report({ message: "资源加载失败：<" + target.localName + "> " + shown });
+    } else {
+      report({ message: event.message, source: event.filename, line: event.lineno, column: event.colno, stack: stackOf(event.error) });
+    }
+  }, true);
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    report({ message: "未处理的 Promise 拒绝：" + (reason && reason.message ? reason.message : String(reason)), stack: stackOf(reason) });
+  });
+  window.addEventListener("space:problem", (event) => report({ message: String(event.detail && event.detail.message) }));
   Object.freeze(space);
   Object.defineProperty(window, "space", { value: space, enumerable: true });
   Object.defineProperty(window, "lb", { value: space, enumerable: true });

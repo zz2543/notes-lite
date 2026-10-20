@@ -166,6 +166,23 @@ describe("移动", () => {
   });
 });
 
+describe("空间里的路径", () => {
+  it("renaming or moving a note or folder updates the scopes and paths in space files", async () => {
+    const root = await library({
+      "健身/训练记录.md": "# 训练记录\n",
+      "归档/": "",
+      ".notes/空间/健身.html": '<meta name="space-scope" content="健身">\n<space-stat source="健身/训练记录.md#卧推"></space-stat>\n',
+    });
+    const lib = await openLibrary(root);
+    const page = () => readFile(join(root, ".notes/空间/健身.html"), "utf8");
+
+    await lib.rename("健身/训练记录.md", "力量");
+    expect(await page()).toContain('source="健身/力量.md#卧推"');
+    await lib.move("健身", "归档");
+    expect(await page()).toBe('<meta name="space-scope" content="归档/健身">\n<space-stat source="归档/健身/力量.md#卧推"></space-stat>\n');
+  });
+});
+
 describe("移到废纸篓与恢复上次删除", () => {
   it("sends a note to the trash and restores the last one deleted", async () => {
     const { folder: trashed, trash } = await fakeTrash();
