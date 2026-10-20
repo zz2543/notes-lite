@@ -1,17 +1,18 @@
 import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
-import type { LaunchState, LibraryInfo } from "../../shared/api";
+import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
-import { errorText } from "./ipc";
+import { errorText, pageShown } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
 import { useSettingsPanel } from "./SettingsPanel";
+import { SidePages, SideSwitch, SpacePanel, type SideMode } from "./Spaces";
 import { icon } from "./tokens";
 
 type Phase = { kind: "starting" } | LaunchState;
@@ -52,12 +53,22 @@ export function App() {
   useEffect(() => {
     void window.notes.launchState().then(setPhase);
     const offMenu = window.notes.onOpenLibraryRequest(() => void choose());
-    const offClose = window.notes.onBeforeClose(saveOpenNote);
+    // A window closed on macOS is only hidden; shown again, typing goes on where it was, though
+    // the system may have moved focus to the first control meanwhile.
+    let focused: Element | null = null;
+    const offClose = window.notes.onBeforeClose(() => {
+      focused = document.activeElement;
+      return saveOpenNote();
+    });
+    const offShown = window.notes.onShownAgain(() => {
+      if (focused instanceof HTMLElement && focused.isConnected) focused.focus({ preventScroll: true });
+    });
     const offSourceView = listenForSourceView();
     return () => {
       offSourceView();
       offMenu();
       offClose();
+      offShown();
     };
   }, []);
 
@@ -66,7 +77,7 @@ export function App() {
       {/* Until the remembered library answers, the window shows only its own color: no spinner. */}
       {phase.kind === "welcome" && <Welcome missing={phase.missing} onChoose={choose} />}
       {phase.kind === "open" && (
-        <LibraryView key={phase.library.root} library={phase.library} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
+        <LibraryView key={phase.library.root} library={phase.library} place={phase.place} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
       )}
       {settings}
       {error && (
@@ -79,6 +90,7 @@ export function App() {
 }
 
 function Welcome({ missing, onChoose }: { missing?: string; onChoose(): void }) {
+  useEffect(pageShown, []);
   return (
     <main className="welcome">
       <div className="drag" />
@@ -107,6 +119,8 @@ function ancestors(path: string): string[] {
 
 interface LibraryViewProps {
   library: LibraryInfo;
+  /** Where the user last was in this library; the root with no note open when absent. */
+  place?: Place;
   onSwitch(): void;
   /** Saves the open note; false when it could not, so the note must stay open. */
   saveFirst(): Promise<boolean>;
@@ -114,10 +128,13 @@ interface LibraryViewProps {
   notify(message: string): void;
 }
 
-function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps) {
-  const [folder, setFolder] = useState("");
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([""]));
-  const [note, setNote] = useState<string | null>(null);
+function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryViewProps) {
+  const [folder, setFolder] = useState(place?.folder ?? "");
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(ancestors(place?.folder ?? "")));
+  const [note, setNote] = useState<string | null>(place?.note ?? null);
+
+  // The next launch reopens this folder and note.
+  useEffect(() => window.notes.rememberPlace({ folder, note }), [folder, note]);
   // The last note clicked wins, however long saving the current one takes.
   const requested = useRef(note);
   // Other programs may move, delete or rewrite what is shown.
@@ -162,7 +179,8 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
   };
 
   // 整理笔记与文件夹: a new note opens ready to type; a note rewritten on disk is read again.
-  const [fresh, setFresh] = useState<string | null>(null);
+  // The note reopened at launch also waits with the caret at its end, ready to carry on typing.
+  const [fresh, setFresh] = useState<string | null>(place?.note ?? null);
   const [reloads, setReloads] = useState(0);
   const showNote = (path: string | null, how: { fresh?: boolean; reload?: boolean } = {}) => {
     requested.current = path;
@@ -187,6 +205,14 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
   };
 
   const title = folder ? (folder.split("/").pop() ?? folder) : library.name;
+
+  // “资料库 | 空间”. Opening a space (its page and scoped tree) comes with ticket 19.
+  const [sideMode, setSideMode] = useState<SideMode>("library");
+  const [space, setSpace] = useState<string | null>(null);
+  // Said once the library opens, such as the old app's spaces failing to move into `.notes/`.
+  useEffect(() => {
+    if (library.notice) notify(library.notice);
+  }, [library]);
 
   // 就地搜索: the list header turns into the search field; results stand in for the list.
   const [search, setSearch] = useState<SearchState | null>(null);
@@ -220,27 +246,36 @@ function LibraryView({ library, onSwitch, saveFirst, notify }: LibraryViewProps)
     <div className="app">
       <aside className="side">
         <div className="drag" />
-        <div className="side-label">
-          <span className="label">文件夹</span>
-          <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
-            <MagnifyingGlass size={icon.small} />
-          </button>
-        </div>
-        <FolderTree
-          libraryName={library.name}
-          selected={folder}
-          expanded={expanded}
-          onActivate={activate}
-          onToggle={toggle}
-          onNewNote={(path) => void organize.newNote(path)}
-          onMenu={organize.folderMenu}
-        />
-        {lastDeletedName !== undefined && (
-          <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
-            <ArrowCounterClockwise size={icon.small} />
-            <span className="label">恢复上次删除</span>
-          </button>
-        )}
+        <SideSwitch mode={sideMode} onChange={setSideMode} />
+        <SidePages mode={sideMode}>
+          {sideMode === "library" ? (
+            <>
+              <div className="side-label">
+                <span className="label">文件夹</span>
+                <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+                  <MagnifyingGlass size={icon.small} />
+                </button>
+              </div>
+              <FolderTree
+                libraryName={library.name}
+                selected={folder}
+                expanded={expanded}
+                onActivate={activate}
+                onToggle={toggle}
+                onNewNote={(path) => void organize.newNote(path)}
+                onMenu={organize.folderMenu}
+              />
+              {lastDeletedName !== undefined && (
+                <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
+                  <ArrowCounterClockwise size={icon.small} />
+                  <span className="label">恢复上次删除</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <SpacePanel libraryName={library.name} selected={space} onSelect={setSpace} notify={notify} />
+          )}
+        </SidePages>
         <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
           <HardDrives size={icon.small} />
           <span className="label">{library.name}</span>

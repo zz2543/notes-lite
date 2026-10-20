@@ -5,5 +5,6 @@ import { defineConfig } from "electron-vite";
 export default defineConfig({
   main: {},
   preload: {},
-  renderer: { plugins: [react()] },
+  // The page is parsed on every launch: minified, it reaches first paint sooner (ticket 07).
+  renderer: { plugins: [react()], build: { minify: true } },
 });

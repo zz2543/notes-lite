@@ -36,7 +36,13 @@ export async function launch(scratch: string): Promise<{ app: ElectronApplicatio
   const app = await electron.launch({ args: [appDir], env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile") } });
   running.add(app);
   app.on("close", () => running.delete(app));
-  return { app, page: await app.firstWindow() };
+  const page = await app.firstWindow();
+  // A window the runner leaves unfocused or hidden would otherwise get its frames throttled, and motion
+  // tests would see springs crawl or jump.
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().forEach((window) => window.webContents.setBackgroundThrottling(false)),
+  );
+  return { app, page };
 }
 
 /** The next folder picker answers with this folder instead of asking. */

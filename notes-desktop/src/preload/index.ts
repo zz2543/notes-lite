@@ -6,6 +6,8 @@ const api: NotesApi = {
   appearance: readAppearance(process.argv),
   launchState: () => ipcRenderer.invoke(channels.launchState),
   chooseLibrary: () => ipcRenderer.invoke(channels.chooseLibrary),
+  rememberPlace: (place) => ipcRenderer.send(channels.rememberPlace, place),
+  shown: () => ipcRenderer.send(channels.pageShown),
   onOpenLibraryRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.openLibraryRequest, handler);
@@ -23,6 +25,11 @@ const api: NotesApi = {
     return () => ipcRenderer.off(channels.sourceViewRequest, handler);
   },
   sourceViewChanged: (showSource) => ipcRenderer.send(channels.sourceViewChanged, showSource),
+  onShownAgain: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.shownAgain, handler);
+    return () => ipcRenderer.off(channels.shownAgain, handler);
+  },
   onBeforeClose: (check) => {
     const handler = async () => {
       const answer: CloseCheck = await check().catch((error: Error) => ({ saved: false, message: error.message }));
@@ -64,6 +71,12 @@ const api: NotesApi = {
     ipcRenderer.on(channels.systemAccentChanged, handler);
     return () => ipcRenderer.off(channels.systemAccentChanged, handler);
   },
+  listSpaces: () => ipcRenderer.invoke(channels.listSpaces),
+  createSpace: (draft) => ipcRenderer.invoke(channels.createSpace, draft),
+  updateSpace: (name, draft) => ipcRenderer.invoke(channels.updateSpace, name, draft),
+  deleteSpace: (name) => ipcRenderer.invoke(channels.deleteSpace, name),
+  reorderSpaces: (names) => ipcRenderer.invoke(channels.reorderSpaces, names),
+  copySpacePrompt: (name) => ipcRenderer.invoke(channels.copySpacePrompt, name),
 };
 
 contextBridge.exposeInMainWorld("notes", api);

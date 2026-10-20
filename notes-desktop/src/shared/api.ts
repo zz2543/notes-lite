@@ -1,4 +1,4 @@
-import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults } from "../core";
+import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
 import type { Appearance } from "./appearance";
 import type { Preferences } from "./preferences";
 
@@ -7,11 +7,20 @@ export interface LibraryInfo {
   root: string;
   /** The folder's own name, shown as the root of the folder tree. */
   name: string;
+  /** Something to tell the user once it opens, such as why the old app's spaces could not be moved in. */
+  notice?: string;
+}
+
+/** The current folder and open note, library-relative; `note` is null when none is open. */
+export interface Place {
+  folder: string;
+  note: string | null;
 }
 
 /** What the window shows at launch: the remembered library, or the welcome page. */
 export type LaunchState =
-  | { kind: "open"; library: LibraryInfo }
+  /** `place` is where the user last was in this library, when it is still there. */
+  | { kind: "open"; library: LibraryInfo; place?: Place }
   /** `missing` is the remembered library's path when it can no longer be opened. */
   | { kind: "welcome"; missing?: string };
 
@@ -30,6 +39,10 @@ export interface NotesApi {
   launchState(): Promise<LaunchState>;
   /** Lets the user pick a folder and opens it; null when they cancel. */
   chooseLibrary(): Promise<LibraryInfo | null>;
+  /** Remembers the current folder and open note, to reopen them at the next launch. */
+  rememberPlace(place: Place): void;
+  /** The page shows where the user left off (or the welcome page); background work may start. */
+  shown(): void;
   /** File > 打开笔记库… asks the page, which saves first and then lets the user choose. */
   onOpenLibraryRequest(listener: () => void): () => void;
   readFolder(path: string): Promise<FolderContents>;
@@ -44,6 +57,8 @@ export interface NotesApi {
   sourceViewChanged(showSource: boolean): void;
   /** Before the window closes or the app quits, the main process asks the page to save. */
   onBeforeClose(check: () => Promise<CloseCheck>): () => void;
+  /** A window closed on macOS (only hidden) is shown again, as it was. */
+  onShownAgain(listener: () => void): () => void;
 
   // 整理笔记与文件夹 (ticket 04). Each answers with a result, so the page can show why it failed.
   /** File > 新建笔记 (⌘N / Ctrl+N): the page creates a note in the current folder. */
@@ -76,7 +91,28 @@ export interface NotesApi {
   setPreferences(change: Partial<Preferences>): Promise<Preferences>;
   /** The system accent colour changed while the app runs (#rrggbb, or null when the system does not say). */
   onSystemAccentChanged(listener: (accent: string | null) => void): () => void;
+  // 空间 (ticket 18). The space files live in the library's `.notes/空间/`.
+  /** The open library's spaces, in the user's order. */
+  listSpaces(): Promise<SpaceInfo[]>;
+  /** Creates the space and copies the prompt for an external agent to the clipboard. */
+  createSpace(draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  updateSpace(name: string, draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  /** Moves only the space file to the trash. */
+  deleteSpace(name: string): Promise<SpaceDone<null>>;
+  reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
+  /** Copies the prompt for an external agent to the clipboard. */
+  copySpacePrompt(name: string): Promise<SpaceDone<null>>;
 }
+
+/** A space as the side panel shows it. */
+export interface SpaceInfo {
+  name: string;
+  icon: string;
+  scope: SpaceScope;
+  hasPage: boolean;
+}
+
+export type SpaceDone<T> = { ok: true; value: T } | { ok: false; code: SpaceErrorCode | LibraryErrorCode; message: string };
 
 export interface Confirmation {
   message: string;
@@ -91,6 +127,8 @@ export type Organized<T> = { ok: true; value: T } | { ok: false; code: LibraryEr
 export const channels = {
   launchState: "library:launch-state",
   chooseLibrary: "library:choose",
+  rememberPlace: "library:remember-place",
+  pageShown: "window:page-shown",
   openLibraryRequest: "menu:open-library",
   openLibraryListening: "menu:open-library-listening",
   readFolder: "library:read-folder",
@@ -111,10 +149,17 @@ export const channels = {
   listFolders: "library:list-folders",
   search: "library:search",
   libraryChanged: "library:changed",
+  shownAgain: "window:shown-again",
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
   settingsRequest: "menu:settings",
   preferences: "settings:preferences",
   setPreferences: "settings:set-preferences",
   systemAccentChanged: "system:accent-changed",
+  listSpaces: "spaces:list",
+  createSpace: "spaces:create",
+  updateSpace: "spaces:update",
+  deleteSpace: "spaces:delete",
+  reorderSpaces: "spaces:reorder",
+  copySpacePrompt: "spaces:copy-prompt",
 } as const;

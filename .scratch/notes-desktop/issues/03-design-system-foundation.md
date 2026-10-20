@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [ ] macOS vibrancy、Windows 11 Mica；Windows 10 退回不透明底色
 - [x] 设计规范中的颜色、尺寸、阴影、圆角以变量形式定义，组件只引用变量
@@ -41,3 +41,7 @@
 - 运行中跟随系统强调色变化、在设置中选择预设色与动效强度：任务 15。
 - 分段控件（就地搜索范围）的选中底板仍是静态样式，未接滑移：任务 23 动效审查时统一。
 - 本机运行时，真实鼠标停在窗口上会干扰悬停/按压用例，偶尔失败；CI 上没有真实鼠标。
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 在 macOS 与 Windows 均通过：https://github.com/zz2543/notes-lite/actions/runs/39291544784 。CI 上两个依赖帧时序的用例改为检查正在运行的过渡与 1px 内的位置（提交 979f5b4、bae9c12）。

@@ -4,7 +4,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { countWords } from "../../core/markdown";
 import { ConflictNotice } from "./ConflictNotice";
-import { useNoteSource } from "./ipc";
+import { pageShown, useNoteSource } from "./ipc";
 import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 import { setShowSource, useShowSource } from "./sourceView";
@@ -23,6 +23,9 @@ interface Choices {
 export function NoteEditor({ path, fresh = false, ...choices }: { path: string | null; fresh?: boolean } & Choices) {
   const { value: source, error } = useNoteSource(path);
   const showSource = useShowSource();
+  useEffect(() => {
+    if (!path || error) pageShown();
+  }, [path, error]);
   return (
     <article className="card">
       <header className="card-head">
@@ -110,6 +113,7 @@ function Editor({
     viewRef.current = view;
     if (fresh) view.dispatch({ selection: { anchor: view.state.doc.length } });
     view.focus();
+    pageShown();
     return () => {
       clearTimeout(countTimer);
       // The app saves before it switches notes; this only catches an unmount nobody asked to save.

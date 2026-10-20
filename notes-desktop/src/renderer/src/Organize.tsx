@@ -254,7 +254,7 @@ interface DialogProps {
 }
 
 /** A floating panel over a dimmed window: Esc or a click outside closes it. */
-function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
+export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
   return (
     <div className="scrim" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
       <form
@@ -276,7 +276,7 @@ function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: s
 }
 
 /** Runs a step that answers with what went wrong, if anything; while it runs, the dialog waits. */
-function useStep(onClose: () => void) {
+export function useStep(onClose: () => void) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const run = async (step: () => Promise<string | void>) => {
