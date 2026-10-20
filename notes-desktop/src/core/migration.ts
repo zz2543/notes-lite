@@ -42,6 +42,9 @@ export async function migrateLegacyFolder(root: string, options: MigrationOption
   if (!(await exists(legacy)) || (await isFolder(target))) return { kind: "none" };
 
   try {
+    // Something else named `.notes` is in the way. Windows would let the swap below replace a file there,
+    // so it is refused here on every platform.
+    if (await exists(target)) throw new Error(`已有不是文件夹的 ${notesFolder}`);
     // Left over from a move that was cut short (the app quit, say): it starts again.
     await rm(staging, { recursive: true, force: true });
     await cp(legacy, staging, { recursive: true, force: false });
