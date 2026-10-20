@@ -91,7 +91,7 @@ button {
   padding: 0 var(--row-padding);
   border-radius: var(--icon-button-radius);
   background: var(--accent);
-  color: var(--card-bg);
+  color: var(--on-accent);
   font-weight: var(--weight-item);
 }
 
@@ -134,7 +134,7 @@ aside.side {
   background: var(--hover);
 }
 .caret {
-  width: 14px;
+  width: var(--caret-width);
   display: grid;
   place-items: center;
   color: var(--side-muted);
