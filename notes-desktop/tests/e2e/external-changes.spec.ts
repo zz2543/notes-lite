@@ -127,6 +127,10 @@ test("unsaved input is never overwritten: the conflict lets you keep it, retry, 
   // Keep the input for now: back to typing, still unsaved, nothing written over.
   await conflict.getByRole("button", { name: "保留输入" }).click();
   await expect(conflict).toHaveCount(0);
+  // And it stays away: nothing new happened, so nothing raises it again (a save the input method put off
+  // must not try again behind the user's back and meet the same conflict).
+  await page.waitForTimeout(1000);
+  await expect(conflict).toHaveCount(0);
   await expect(editor).toBeFocused();
   await page.keyboard.type("，青苔");
   await expect(saveState(page)).toContainText("保存冲突：这篇笔记已在别处修改。");
