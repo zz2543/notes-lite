@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 正文、标题字体可选预设与系统已安装字体
 - [x] 字号、行距、段距、版心宽度、标题比例使用滑块，预览带动效同步变化
@@ -35,3 +35,7 @@
 留给后续：
 - 空间主页使用同样的字体字号 → 任务 20（样式变量与组件）：目前空间页没有样式变量。可在 `main/spacePages.ts` 里用 `typographyVariables(preferences.typography)`（shared，Node 可用）生成变量，`--lb-font`/`--lb-mono` 指向 `--body-font`/`--code-font`，排版改动时推送给已打开的空间页。
 - Windows 上 `queryLocalFonts` 与 `text-autospace` 的表现 → 任务 22 走查。
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39386345223 。合并后修过的 CI 问题：慢机器上的撤销分组与助手栏宽度过渡用例、字体许可证在 Windows 检出时被改成 CRLF（加 `.gitattributes`）。
