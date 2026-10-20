@@ -1,6 +1,8 @@
+import { defaultTypography, readTypography, type Typography } from "./typography";
+
 // 设置: what the user chose in the settings panel. Kept with the app (settings.json in its profile),
-// never inside a library. Later settings (排版 ticket 16) add a field, its choices
-// and its default here; anything missing or unknown on disk reads as the default.
+// never inside a library. A later setting adds a field, its choices and its default here; anything
+// missing or unknown on disk reads as the default. 排版 is a group of its own (typography.ts).
 
 /** 外观: 跟随系统, 浅色, 深色. */
 export type ColorScheme = "system" | "light" | "dark";
@@ -19,9 +21,14 @@ export interface Preferences {
   listDetail: ListDetail;
   motion: MotionIntensity;
   navigation: Navigation;
+  /** 排版: a change may carry only the fields it changes; the rest stay. */
+  typography: Typography;
 }
 
-export const choices: { readonly [K in keyof Preferences]: readonly Preferences[K][] } = {
+/** The settings that are one of a few choices. */
+type ChoiceKey = Exclude<keyof Preferences, "typography">;
+
+export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } = {
   colorScheme: ["system", "light", "dark"],
   accent: ["system", "blue", "purple", "pink", "orange", "green"],
   listDetail: ["compact", "standard", "detailed"],
@@ -29,12 +36,20 @@ export const choices: { readonly [K in keyof Preferences]: readonly Preferences[
   navigation: ["double", "single"],
 };
 
-export const defaultPreferences: Preferences = { colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong", navigation: "double" };
+export const defaultPreferences: Preferences = {
+  colorScheme: "system",
+  accent: "system",
+  listDetail: "compact",
+  motion: "strong",
+  navigation: "double",
+  typography: defaultTypography,
+};
 
-/** Whatever was stored (or sent), as preferences: known keys with known values, the rest defaults. */
+/** Whatever was stored (or sent), as preferences: known keys with known values, the rest from `base`. */
 export function readPreferences(stored: unknown, base: Preferences = defaultPreferences): Preferences {
   const raw = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
-  const pick = <K extends keyof Preferences>(key: K): Preferences[K] =>
+  const pick = <K extends ChoiceKey>(key: K): Preferences[K] =>
     (choices[key] as readonly unknown[]).includes(raw[key]) ? (raw[key] as Preferences[K]) : base[key];
-  return Object.fromEntries((Object.keys(choices) as Array<keyof Preferences>).map((key) => [key, pick(key)])) as unknown as Preferences;
+  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography">;
+  return { ...picked, typography: readTypography(raw.typography, base.typography) };
 }

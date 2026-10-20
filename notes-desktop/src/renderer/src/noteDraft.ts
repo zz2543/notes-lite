@@ -47,6 +47,11 @@ export class NoteDraft {
     this.saved = source;
   }
 
+  /** The text in the editor now. */
+  get text(): string {
+    return this.readEditor().text;
+  }
+
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -226,6 +231,9 @@ let openDraft: NoteDraft | null = null;
 export function setOpenDraft(draft: NoteDraft | null) {
   openDraft = draft;
 }
+
+/** The open note's text as the editor holds it now, saved or not; null when no note is open. */
+export const openNoteText = (): string | null => openDraft?.text ?? null;
 
 /** Saves the open note, if any: before switching notes or libraries and before the window closes. */
 export async function saveOpenNote(): Promise<CloseCheck> {

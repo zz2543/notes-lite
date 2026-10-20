@@ -4,6 +4,7 @@ import { App } from "./App";
 import { applyAppearance } from "./appearance";
 import { MotionProvider } from "./MotionProvider";
 import { PreferencesProvider } from "./preferences";
+import "./fonts";
 import "./tokens.css";
 import "./styles.css";
 

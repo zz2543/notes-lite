@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { Appearance } from "../../shared/appearance";
 import type { AccentChoice } from "../../shared/preferences";
+import { typographyVariables, type Typography } from "../../shared/typography";
 
 /** Hands the window material to the design system's variables (tokens.css), before the first frame. */
 export function applyAppearance({ material }: Appearance, root: HTMLElement = document.documentElement) {
@@ -12,6 +13,14 @@ export function useSystemAccent(): string | null {
   const [accent, setAccent] = useState(window.notes.appearance.accent);
   useEffect(() => window.notes.onSystemAccentChanged(setAccent), []);
   return accent;
+}
+
+/** 排版: the typesetting variables on the root, so the editor, the preview and the space homepage all follow. */
+export function useTypography(typography: Typography) {
+  useLayoutEffect(() => {
+    const root = document.documentElement.style;
+    for (const [name, value] of Object.entries(typographyVariables(typography))) root.setProperty(name, value);
+  }, [typography]);
 }
 
 /** --accent: the chosen preset, or the system's colour (the design system's blue when it has none). */

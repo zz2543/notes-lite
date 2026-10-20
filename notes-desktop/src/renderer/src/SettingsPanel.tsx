@@ -1,4 +1,4 @@
-import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
+import { FadersHorizontal, ListBullets, Sparkle, TextAa, type Icon } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
@@ -10,6 +10,7 @@ import { useOverlay } from "./Organize";
 import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
+import { TypographyPage } from "./TypographySettings";
 
 // 设置: a glass panel floating over the window. Categories on the left, each a page of groups on the
 // right; every group has a title and a short description, and its rows line up label | control.
@@ -24,6 +25,7 @@ interface SettingsPage {
 
 const pages: SettingsPage[] = [
   { id: "general", label: "通用", icon: FadersHorizontal, content: () => <GeneralPage /> },
+  { id: "typography", label: "排版", icon: TextAa, content: () => <TypographyPage /> },
   { id: "list", label: "笔记列表", icon: ListBullets, content: () => <ListPage /> },
   { id: "motion", label: "动画", icon: Sparkle, content: () => <MotionPage /> },
 ];
@@ -41,10 +43,10 @@ export function SettingsGroup({ title, description, children }: { title: string;
   );
 }
 
-/** One setting: its name on the left, its control on the right. */
-export function SettingRow({ label, children }: { label: string; children: ReactNode }) {
+/** One setting: its name on the left, its control on the right (or below it, when `stacked`). */
+export function SettingRow({ label, stacked = false, children }: { label: string; stacked?: boolean; children: ReactNode }) {
   return (
-    <div className="settings-row">
+    <div className={stacked ? "settings-row stacked" : "settings-row"}>
       <span className="settings-label">{label}</span>
       <div className="settings-control">{children}</div>
     </div>
