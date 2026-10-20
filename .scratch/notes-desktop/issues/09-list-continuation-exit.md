@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 非空列表项末尾换行带出同级同类型标记
 - [x] 嵌套空项回车退回上一层；最外层空项回车结束列表且不另起新行
@@ -31,3 +31,7 @@
 留给后续：
 - 空行插入光标的位置与高度（规格用户故事 25–29）→ 任务 10；最后一项验收框因此未勾。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39359385148 。最后一项（空行插入光标位置）随任务 10 移到最后，未勾选。
