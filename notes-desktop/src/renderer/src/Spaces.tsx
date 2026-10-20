@@ -159,6 +159,11 @@ export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePan
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给外部 agent 即可生成空间主页。" : copied.message);
   };
 
+  const revealSource = async (space: SpaceInfo) => {
+    const shown = await window.notes.revealSpaceSource(space.name);
+    if (!shown.ok) notify(shown.message);
+  };
+
   const saveOrder = async () => {
     const saved = await window.notes.reorderSpaces(order.current);
     if (!saved.ok) {
@@ -175,6 +180,7 @@ export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePan
       items: [
         { label: "编辑空间…", run: () => edit(space) },
         { label: "复制给 agent 的提示词", run: () => void copyPrompt(space) },
+        { label: "显示源文件", run: () => void revealSource(space) },
         "separator",
         { label: "删除空间…", run: () => void remove(space) },
       ],

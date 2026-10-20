@@ -128,7 +128,7 @@
    card's rounded foot clear. */
 .card-tool svg {
   vertical-align: -2px;
-  margin-right: 4px;
+  margin-right: var(--icon-label-gap);
 }
 .space-page-slot {
   flex: 1;

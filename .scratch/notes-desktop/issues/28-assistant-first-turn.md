@@ -36,3 +36,7 @@
 ### 2026-10-20 完成
 
 合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39390616033 （此前 28 单独合并的一轮 macOS 上排版设置的“已安装字体”用例偶发为空，同代码这一轮通过）。
+
+### 2026-10-20 里程碑代码审查
+
+撤销一轮不再只能从空间主页进入：回复里的「在操作记录中撤销」和菜单 笔记 › 操作记录… 都能打开，没有空间也行：`4b7290f`。主进程里的一轮编排移到核心库 `assistantTurns`，事件折叠只由 `shared/conversation` 的 `withEvent` 负责；顺带修好“快照未完成就停止”时 Agent 不会被停下的问题：`f236e3a`。主进程错误转结果收成一个 `failure()`：`a44f3fd`。

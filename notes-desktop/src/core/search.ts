@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { blockPrefixLength } from "./markdown";
+import { blockPrefixLength } from "../shared/markdown";
+import { isHidden } from "../shared/paths";
 
 export interface Snippet {
   text: string;
@@ -138,7 +139,7 @@ export function createSearchIndex(root: string): SearchIndex {
 
   // Whatever is at `path` now replaces what the index held there: a note, a folder's notes, or nothing.
   const reread = async (path: string) => {
-    if (path.split("/").some((part) => part.startsWith("."))) return;
+    if (isHidden(path)) return;
     for (const key of entries.keys()) if (path === "" || key === path || key.startsWith(`${path}/`)) entries.delete(key);
     const found = await lstat(join(root, path)).catch(() => null);
     if (found?.isDirectory()) await scan(root, path, entries);

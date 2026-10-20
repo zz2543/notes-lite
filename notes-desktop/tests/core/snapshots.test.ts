@@ -39,6 +39,39 @@ describe("按轮快照", () => {
     expect(await contents(lib.root)).toEqual(before);
   });
 
+  it("leaves out what the app itself wrote during the turn, so undoing the turn keeps the user's typing", async () => {
+    const lib = await setup({ "日记/今天.md": "# 今天\n", "随记.md": "随记\n", "旧.md": "旧\n" });
+
+    const id = await lib.snapshots.begin();
+    await lib.write("日记/今天.md", "# 今天\n\n跑步\n");
+    // Meanwhile the user goes on typing in another note, which the app autosaves, and trashes one.
+    await lib.write("随记.md", "随记\n\n用户自己写的\n");
+    await lib.remove("旧.md");
+    await lib.snapshots.appWrote(["随记.md", "旧.md"]);
+    const turn = await lib.snapshots.finish(id);
+
+    expect(turn.changes.map(({ path, kind }) => ({ path, kind }))).toEqual([{ path: "日记/今天.md", kind: "modified" }]);
+    await lib.snapshots.revert(id);
+    expect(await contents(lib.root)).toEqual({ "日记/今天.md": "# 今天\n", "随记.md": "随记\n\n用户自己写的\n" });
+  });
+
+  it("still counts a file the agent changed after the app last wrote it", async () => {
+    const lib = await setup({ "a.md": "A\n" });
+
+    const id = await lib.snapshots.begin();
+    await lib.write("a.md", "用户\n");
+    await lib.snapshots.appWrote(["a.md"]);
+    await lib.write("a.md", "Agent\n");
+    const turn = await lib.snapshots.finish(id);
+
+    expect(turn.changes.map(({ path, kind }) => ({ path, kind }))).toEqual([{ path: "a.md", kind: "modified" }]);
+    // Between turns nothing is remembered: the next turn counts the file as usual.
+    await lib.snapshots.appWrote(["a.md"]);
+    const next = await lib.snapshots.begin();
+    await lib.write("a.md", "Agent 又改\n");
+    expect((await lib.snapshots.finish(next)).changes.map((c) => c.path)).toEqual(["a.md"]);
+  });
+
   it("takes back one file at a time, then the rest of the turn", async () => {
     const lib = await setup({ "a.md": "A\n", "b.md": "B\n" });
     const id = await lib.snapshots.begin();

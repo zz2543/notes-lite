@@ -1,5 +1,5 @@
 // 列表延续与退出列表 in the editor: Return in a list item and the 分隔空行 after a list, by the rules in
-// core/lists.ts. Works in both the typeset and the source view; code, math and front matter are left alone.
+// shared/lists.ts. Works in both the typeset and the source view; code, math and front matter are left alone.
 import {
   EditorState,
   Prec,
@@ -11,8 +11,8 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { closesListGap, listReturn, opensListGap } from "../../core/lists";
-import { blockPrefixLength } from "../../core/markdown";
+import { closesListGap, listReturn, opensListGap } from "../../shared/lists";
+import { blockPrefixLength } from "../../shared/markdown";
 import { inLiteralBlock, literal } from "./markdownView";
 
 /** The note's lines above line `number` (1-based), nearest first. */

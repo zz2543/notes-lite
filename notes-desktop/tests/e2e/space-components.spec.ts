@@ -46,7 +46,7 @@ test("a homepage written for the old app runs unchanged: lb, lb-* components and
   await expect(home.locator("lb-chart svg")).toHaveCount(1);
   await expect(home.locator("lb-calendar")).toContainText("最近");
   // The style kit under its old names.
-  const card = home.locator(".lb-card").first();
+  const card = home.locator("#week-card");
   expect(await card.evaluate((el) => getComputedStyle(el).borderRadius)).not.toBe("0px");
   expect(await home.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--lb-chart-1").trim())).not.toBe("");
 
@@ -63,7 +63,7 @@ const homepage = `<meta name="space-scope" content="健身">
 <meta name="space-icon" content="🏋️">
 <h1>健身</h1>
 <div class="space-grid">
-  <div class="space-card"><space-stat source="健身/训练记录.md#卧推" op="max" field="重量" label="卧推纪录" unit="kg"></space-stat></div>
+  <div class="space-card" id="record-card"><space-stat source="健身/训练记录.md#卧推" op="max" field="重量" label="卧推纪录" unit="kg"></space-stat></div>
   <div class="space-card"><space-stat source="健身/训练记录.md#卧推" op="sum" field="组数" label="总组数" unit="组"></space-stat></div>
 </div>
 <div class="space-card"><space-chart source="健身/训练记录.md#卧推" x="日期" y="重量" title="卧推重量"></space-chart></div>
@@ -104,7 +104,7 @@ test("the five components, the space interface and the style kit under the new n
   expect(await resolved(home, "var(--space-bg)")).toBe("rgb(255, 255, 255)");
   expect(await resolved(home, "var(--space-text)")).toBe("rgb(29, 29, 31)");
   expect(await rootStyle(home, "--space-radius")).toBe("12px");
-  const card = home.locator(".space-card").first();
+  const card = home.locator("#record-card");
   expect(await card.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("12px");
   expect(await home.evaluate(() => getComputedStyle(document.body).fontSize)).toBe("17px");
 

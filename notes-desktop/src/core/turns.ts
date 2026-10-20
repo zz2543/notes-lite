@@ -4,7 +4,7 @@
 import { spawn } from "node:child_process";
 import { join, relative } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
-import type { AgentId } from "./agentKinds";
+import type { AgentId } from "../shared/agentKinds";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
 
@@ -97,7 +97,9 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
         process.platform === "win32" && child.pid
           ? spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }).on("error", () => child.kill())
           : child.kill();
-      request.signal?.addEventListener("abort", stop, { once: true });
+      // Stopped while the snapshot was still being taken: the agent goes as soon as it starts.
+      if (request.signal?.aborted) stop();
+      else request.signal?.addEventListener("abort", stop, { once: true });
       child.on("error", (error) => done(`无法启动 Agent：${error.message}`));
       child.on("close", (code) => {
         request.signal?.removeEventListener("abort", stop);

@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/command
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { countWords } from "../../core/markdown";
+import { countWords } from "../../shared/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
 import { listEditing } from "./listEditing";
@@ -38,7 +38,7 @@ export function NoteEditor({
     if (!path || error) pageShown();
   }, [path, error]);
   return (
-    <article className="card">
+    <article className="card" aria-label="卡片">
       <header className="card-head">
         <span className="card-path">{path?.split("/").join(" / ")}</span>
         <button
@@ -147,7 +147,7 @@ function Editor({
   return (
     <>
       {draft && <ConflictNotice draft={draft} onKeep={() => viewRef.current?.focus()} onOpenCopy={onOpenCopy} onLetGo={onLetGo} />}
-      <div className="editor" ref={host} />
+      <div className="editor" ref={host} role="group" aria-label="编辑器" />
       <footer className="card-foot">
         {draft && <SaveState draft={draft} />}
         <span className="words">{words} 字</span>

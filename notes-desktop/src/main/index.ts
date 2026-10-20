@@ -5,18 +5,16 @@ import { homedir, release } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { execFile } from "node:child_process";
 import {
-  addEvent,
+  assistantTurns,
   conversationStore,
   createSearchIndex,
   detectAgents,
-  emptyReply,
-  runTurn,
-  type Conversation,
   LibraryError,
+  type LibraryErrorCode,
+  type SpaceErrorCode,
   entryChanges,
   entrySummary,
   migrateLegacyFolder,
-  notesInScope,
   openLibrary,
   operationLog,
   OperationLogError,
@@ -24,6 +22,8 @@ import {
   SpaceError,
   spaceErrorReport,
   spaceLibrary,
+  spaceNotes,
+  spaceStorage,
   watchLibrary,
   type Library,
   type LibraryWatcher,
@@ -34,7 +34,6 @@ import {
   type Space,
   type SpaceDraft,
   type SpacePageProblem,
-  type TurnEvent,
 } from "../core";
 import {
   channels,
@@ -53,6 +52,7 @@ import {
   type TurnStart,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
+import { isHidden } from "../shared/paths";
 import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
@@ -67,6 +67,8 @@ const settings = settingsStore(app.getPath("userData"));
 const mac = process.platform === "darwin";
 let library: Library | null = null;
 let window: BrowserWindow | null = null;
+// Each homepage's own storage, kept with the app (spaces-spec #51).
+const homepageStorage = spaceStorage(join(app.getPath("userData"), "space-storage.json"));
 // Space homepages, each in its own sandbox laid over the card.
 // A homepage takes the app's 排版, 强调色 and 动效 (spaceKit), and follows them when they change.
 const pages = spacePages(
@@ -74,6 +76,8 @@ const pages = spacePages(
   () => library?.root ?? null,
   () => spacePageSettings(preferences, systemAppearance().accent),
   (event) => window && !window.isDestroyed() && window.webContents.send(channels.spacePageEvent, event),
+  (paths) => changedHere(paths),
+  homepageStorage,
 );
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
@@ -158,70 +162,21 @@ const snapshots = snapshotStore(join(app.getPath("userData"), "snapshots"), {
   ...(copyLimit ? { attachments: "copy" as const, copyLimit } : {}),
 });
 
-// 对话记录, kept with the app; the conversations of this run stay in memory too.
-const conversations = conversationStore(join(app.getPath("userData"), "conversations"));
-const conversationsOpen = new Map<string, Conversation>();
-const running = new Map<string, AbortController>();
-
-type Started = { ok: true; conversation: Conversation } | { ok: false; message: string };
-
-/** Begins (or continues) a conversation's turn and passes its events to the page as they come. */
-async function startTurn(page: WebContents, request: TurnStart): Promise<Started> {
-  const lib = library;
-  if (!lib) return { ok: false, message: "请先打开笔记库。" };
-  const known = request.conversation
-    ? (conversationsOpen.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined)))
-    : undefined;
-  const conversation = known ?? conversations.start({ agent: request.agent, root: lib.root, folder: request.folder });
-  if (conversation.root !== lib.root) return { ok: false, message: "这个对话属于另一个笔记库。" };
-  if (running.has(conversation.id)) return { ok: false, message: "上一轮还没有结束。" };
-  const installed = await detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT });
-  const agent = installed.find((a) => a.id === conversation.agent);
-  if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
-  conversation.messages.push({ role: "user", text: request.text, notes: request.notes }, emptyReply());
-  conversationsOpen.set(conversation.id, conversation);
-  await conversations.save(conversation);
-  const stop = new AbortController();
-  running.set(conversation.id, stop);
-  const replyAt = conversation.messages.length - 1;
-  const pass = (event: TurnEvent) => {
-    if (event.kind === "session") conversation.session = event.id;
-    const reply = conversation.messages[replyAt];
-    if (reply?.role === "assistant") conversation.messages[replyAt] = addEvent(reply, event);
-    if (!page.isDestroyed()) page.send(channels.turnEvent, conversation.id, event);
-  };
-  const turns = snapshots.library(lib.root);
-  void runTurn({
-    agent,
-    root: lib.root,
-    folder: conversation.folder,
-    text: request.text,
-    notes: request.notes,
-    session: conversation.session,
-    snapshots: turns,
-    log: operationLog(lib.root, { ...libraryOptions, turns }),
-    env: await agentEnvironment(),
-    signal: stop.signal,
-    onEvent: pass,
-  })
-    .catch((error: Error) => {
-      // The snapshots themselves failed: the turn ends saying why.
-      const reply = conversation.messages[replyAt];
-      if (reply?.role === "assistant" && !reply.done) pass({ kind: "end", changes: [], failed: error.message });
-    })
-    .finally(() => {
-      running.delete(conversation.id);
-      void conversations.save(conversation).catch(() => undefined);
-    });
-  return { ok: true, conversation };
-}
+// 助手栏 turns, their conversations (对话记录) kept with the app.
+const turns = assistantTurns({
+  conversations: conversationStore(join(app.getPath("userData"), "conversations")),
+  snapshots,
+  log: (root) => operationLog(root, { ...libraryOptions, turns: snapshots.library(root) }),
+  agents: async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }),
+  env: agentEnvironment,
+});
 
 /**
- * Readies a library just opened: the old app's `.留白/` moves into `.notes/` the first time, and the
+ * Readies a library just opened: the old app's `.留白/` moves into `.notes/` (and then to the trash) the first time, and the
  * authoring guide follows this version. Answers with what the user should be told, if anything.
  */
 async function prepare(lib: Library): Promise<string | undefined> {
-  const migration = await migrateLegacyFolder(lib.root);
+  const migration = await migrateLegacyFolder(lib.root, libraryOptions);
   const spaces = spaceLibrary(lib.root, libraryOptions);
   if ((await spaces.spaces()).length > 0) await spaces.installGuide().catch(() => undefined);
   return migration.kind === "failed" ? migration.message : undefined;
@@ -237,7 +192,7 @@ function watch(lib: Library) {
   try {
     watcher = watchLibrary(lib.root, (paths) => {
       // Search finds notes as they are now, whoever changed them.
-      for (const path of paths) if (!path.split("/").some((part) => part.startsWith("."))) noteChanged(path);
+      for (const path of paths) if (!isHidden(path)) noteChanged(path);
       if (window && !window.isDestroyed()) window.webContents.send(channels.libraryChanged, paths);
       // Open homepages follow too: a rewritten space file, or notes changed in their scope.
       void pages.libraryChanged(paths).catch(() => undefined);
@@ -363,6 +318,26 @@ function noteChanged(path: string) {
   if (index && index.library === library) void index.index.update(path);
 }
 
+/** The app itself changed these paths: search reads them again, and an assistant turn running now leaves them out. */
+async function changedHere(paths: string[]) {
+  for (const path of paths) noteChanged(path);
+  if (library) await snapshots.library(library.root).appWrote(paths).catch(() => undefined);
+}
+
+type Failure<C> = { ok: false; code: C; message: string };
+
+/**
+ * Errors cross IPC as plain messages, so a refusal reaches the page as a result it can act on: the
+ * core library's own code where it gave one (with `spaces`, a space's or the operation log's too),
+ * otherwise write-failed.
+ */
+function failure(error: unknown): Failure<LibraryErrorCode>;
+function failure(error: unknown, spaces: "spaces"): Failure<LibraryErrorCode | SpaceErrorCode>;
+function failure(error: unknown, spaces?: "spaces"): Failure<LibraryErrorCode | SpaceErrorCode> {
+  const coded = error instanceof LibraryError || (spaces && (error instanceof SpaceError || error instanceof OperationLogError));
+  return { ok: false, code: coded ? (error as LibraryError | SpaceError).code : "write-failed", message: (error as Error).message };
+}
+
 function registerIpc() {
   ipcMain.handle(channels.launchState, () => launch);
   ipcMain.handle(channels.chooseLibrary, async () => {
@@ -374,15 +349,13 @@ function registerIpc() {
   ipcMain.on(channels.rememberPlace, (_, place: Place) => void settings.update({ place }).catch(() => {}));
   ipcMain.handle(channels.readFolder, (_, path: string) => readOnce(`folder:${path}`, () => requireLibrary().readFolder(path)));
   ipcMain.handle(channels.readNote, (_, path: string) => readOnce(`note:${path}`, () => requireLibrary().readNote(path)));
-  // Errors cross IPC as plain messages, so a save answers with a result the page can act on.
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
     try {
       await requireLibrary().saveNote(path, text, expected);
-      noteChanged(path);
+      await changedHere([path]);
       return { ok: true };
     } catch (error) {
-      const code = error instanceof LibraryError ? error.code : "write-failed";
-      return { ok: false, code, message: (error as Error).message };
+      return failure(error);
     }
   });
   ipcMain.on(channels.sourceViewChanged, (_, showSource: boolean) => {
@@ -395,13 +368,12 @@ function registerIpc() {
       try {
         return { ok: true, value: await run(requireLibrary(), ...args) };
       } catch (error) {
-        const code = error instanceof LibraryError ? error.code : "write-failed";
-        return { ok: false, code, message: (error as Error).message };
+        return failure(error);
       }
     });
   // The search index reads again whatever an operation touched.
-  const touched = <T>(value: T, ...paths: string[]) => {
-    for (const path of paths) noteChanged(path);
+  const touched = async <T>(value: T, ...paths: string[]) => {
+    await changedHere(paths);
     return value;
   };
   const relocated = (from: string, moved: Relocation) => touched(moved, from, moved.path, ...moved.updated);
@@ -420,10 +392,11 @@ function registerIpc() {
   ipcMain.handle(channels.listFolders, () => requireLibrary().listFolders());
   ipcMain.handle(channels.saveCopy, async (_, path: string, text: string): Promise<CopyResult> => {
     try {
-      return { ok: true, path: await requireLibrary().saveCopy(path, text) };
+      const copy = await requireLibrary().saveCopy(path, text);
+      await changedHere([copy]);
+      return { ok: true, path: copy };
     } catch (error) {
-      const code = error instanceof LibraryError ? error.code : "write-failed";
-      return { ok: false, code, message: (error as Error).message };
+      return failure(error);
     }
   });
   ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
@@ -439,8 +412,7 @@ function registerIpc() {
       try {
         return { ok: true, value: await run(...(args as A)) };
       } catch (error) {
-        const code = error instanceof SpaceError || error instanceof LibraryError || error instanceof OperationLogError ? error.code : "write-failed";
-        return { ok: false, code, message: (error as Error).message };
+        return failure(error, "spaces");
       }
     });
   const copyPrompt = async (chosen: Space) => clipboard.writeText(await spaces().prompt(chosen));
@@ -450,15 +422,30 @@ function registerIpc() {
     await copyPrompt(created);
     return info(created);
   });
-  space(channels.updateSpace, async (name: string, draft: SpaceDraft) => info(await spaces().update(name, draft)));
-  space(channels.deleteSpace, async (name: string) => (await spaces().delete(name), null));
+  // A homepage's own storage goes with its space when renamed, and a deleted space's is let go.
+  space(channels.updateSpace, async (name: string, draft: SpaceDraft) => {
+    const updated = await spaces().update(name, draft);
+    if (updated.name !== name) {
+      pages.close(name);
+      await homepageStorage.renamed(requireLibrary().root, name, updated.name);
+    }
+    return info(updated);
+  });
+  space(channels.deleteSpace, async (name: string) => {
+    await spaces().delete(name);
+    pages.close(name);
+    await homepageStorage.deleted(requireLibrary().root, name);
+    return null;
+  });
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
-  // 空间主页 and its operation log.
-  space(channels.spaceNotes, async (name: string): Promise<SpaceNote[]> => {
-    const notes = await notesInScope(requireLibrary().root, (await spaces().space(name)).scope);
-    return notes.map((path) => ({ path, title: path.split("/").pop()!.replace(/\.md$/i, "") }));
+  space(channels.revealSpaceSource, async (name: string) => {
+    const { path } = await spaces().space(name);
+    shell.showItemInFolder(join(requireLibrary().root, ...path.split("/")));
+    return null;
   });
+  // 空间主页 and its operation log.
+  space(channels.spaceNotes, async (name: string): Promise<SpaceNote[]> => spaceNotes(requireLibrary().root, (await spaces().space(name)).scope));
   ipcMain.on(channels.showSpacePage, (_, name: string, bounds: Rectangle) => void pages.show(name, bounds).catch(() => pages.hide()));
   ipcMain.on(channels.hideSpacePage, () => pages.hide());
   const log = () => {
@@ -489,8 +476,10 @@ function registerIpc() {
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
   ipcMain.handle(channels.detectAgents, async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }));
-  ipcMain.handle(channels.startTurn, (event, request: TurnStart) => startTurn(event.sender, request));
-  ipcMain.on(channels.stopTurn, (_, id: string) => running.get(id)?.abort());
+  ipcMain.handle(channels.startTurn, ({ sender }, request: TurnStart) =>
+    turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
+  );
+  ipcMain.on(channels.stopTurn, (_, id: string) => turns.stop(id));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
@@ -564,6 +553,12 @@ function buildMenu() {
     registerAccelerator: false,
     click: (item) => window?.webContents.send(channels.sourceViewRequest, item.checked),
   };
+  // 操作记录: what homepages wrote and what assistant turns changed, with or without a space.
+  const operationLogItem: MenuItemConstructorOptions = {
+    id: "operation-log",
+    label: "操作记录…",
+    click: () => reveal() && window?.webContents.send(channels.operationLogRequest),
+  };
   // The page knows the current folder, so it does the creating.
   const newNoteItem: MenuItemConstructorOptions = {
     id: "new-note",
@@ -602,7 +597,7 @@ function buildMenu() {
       submenu: mac ? [...fileItems, { role: "close" }] : [...fileItems, settingsItem, { type: "separator" }, { role: "quit" }],
     },
     { role: "editMenu" },
-    { label: "笔记", submenu: [sourceViewToggle] },
+    { label: "笔记", submenu: [sourceViewToggle, { type: "separator" }, operationLogItem] },
     { role: "viewMenu" },
     { role: "windowMenu" },
   ];
@@ -698,7 +693,7 @@ void app.whenReady().then(async () => {
 
 app.on("before-quit", () => (quitting = true));
 // An agent still running stops with the app.
-app.on("will-quit", () => running.forEach((turn) => turn.abort()));
+app.on("will-quit", () => turns.stopAll());
 
 app.on("window-all-closed", () => {
   if (!mac) app.quit();

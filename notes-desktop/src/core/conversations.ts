@@ -3,8 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AgentId } from "./agentKinds";
-import type { Conversation } from "./conversation";
+import type { AgentId } from "../shared/agentKinds";
+import type { Conversation } from "../shared/conversation";
 
 export interface ConversationStore {
   /** A new conversation, not yet kept. */

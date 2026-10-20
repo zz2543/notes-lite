@@ -1,10 +1,11 @@
 import { ArrowUp, CaretRight, Plus, Stop, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
-import type { AgentActivity } from "../../core/agentStream";
-import type { AgentId } from "../../core/agentKinds";
-import { addEvent, type Conversation, type Reply, type Step } from "../../core/conversation";
-import type { TurnEvent } from "../../core/agentStream";
+import type { AgentActivity } from "../../shared/conversation";
+import type { AgentId } from "../../shared/agentKinds";
+import { withEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
+import type { TurnEvent } from "../../shared/conversation";
+import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
 import { icon } from "./tokens";
 
@@ -16,7 +17,7 @@ const doneFor = 1600;
 /** What a turn the user stopped ends with: no error for the figure. */
 const stopped = "已停止。";
 
-const titleOf = (path: string) => path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/i, "");
+const titleOf = noteTitle;
 
 /** The conversation in the 助手栏 and what the figure shows of it. */
 export function useAssistant() {
@@ -29,13 +30,7 @@ export function useAssistant() {
   // Events can come before the answer that says which conversation they belong to; they wait for it.
   const early = useRef<Array<[string, TurnEvent]>>([]);
   const apply = (event: TurnEvent) => {
-    setConversation((now) => {
-      if (!now) return now;
-      const messages = [...now.messages];
-      const reply = messages.at(-1);
-      if (reply?.role === "assistant") messages[messages.length - 1] = addEvent(reply, event);
-      return { ...now, messages, ...(event.kind === "session" ? { session: event.id } : {}) };
-    });
+    setConversation((now) => now && withEvent(now, event));
     if (event.kind === "tool") setFigure(event.activity);
     else if (event.kind === "text" || event.kind === "toolDone") setFigure("thinking");
     else if (event.kind === "end") setFigure(event.failed && event.failed !== stopped ? "error" : "done");
@@ -107,7 +102,7 @@ function Timeline({ steps, live }: { steps: Step[]; live: boolean }) {
   );
 }
 
-function ReplyView({ reply }: { reply: Reply }) {
+function ReplyView({ reply, onShowLog }: { reply: Reply; onShowLog(): void }) {
   return (
     <div className="assistant-reply">
       {reply.parts.map((part, i) =>
@@ -126,13 +121,18 @@ function ReplyView({ reply }: { reply: Reply }) {
         </p>
       )}
       {reply.done && reply.changes && reply.changes.length > 0 && (
-        <p className="reply-changes">改动了 {reply.changes.length} 个文件，可在操作记录中撤销。</p>
+        <p className="reply-changes">
+          改动了 {reply.changes.length} 个文件。
+          <button type="button" className="reply-log" onClick={onShowLog}>
+            在操作记录中撤销
+          </button>
+        </p>
       )}
     </div>
   );
 }
 
-export function ConversationView({ conversation }: { conversation: Conversation }) {
+export function ConversationView({ conversation, onShowLog }: { conversation: Conversation; onShowLog(): void }) {
   const end = useRef<HTMLDivElement>(null);
   const last = conversation.messages.at(-1);
   // Follows the reply as it grows. (Braces: scrollIntoView answers a promise now, not a cleanup.)
@@ -148,7 +148,7 @@ export function ConversationView({ conversation }: { conversation: Conversation 
             {message.notes.length > 0 && <p className="user-notes">{message.notes.map(titleOf).join("、")}</p>}
           </div>
         ) : (
-          <ReplyView key={i} reply={message} />
+          <ReplyView key={i} reply={message} onShowLog={onShowLog} />
         ),
       )}
       <div ref={end} />

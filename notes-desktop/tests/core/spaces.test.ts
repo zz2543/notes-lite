@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { scopeContains, spaceChanges, spaceErrorReport, spaceGuide, spaceLibrary } from "../../src/core";
+import { scopeContains, spaceChanges, spaceErrorReport, spaceGuide, spaceLibrary, spaceNotes } from "../../src/core";
 import { fakeTrash, library } from "../support/library";
 
 // Ported from the old SpaceLibraryTests: spaces live as `.notes/空间/<名称>.html` inside the note
@@ -205,6 +205,14 @@ describe("空间库", () => {
     expect(spaceChanges(scope, ["别处/秘密.md"])).toEqual([]);
     expect(spaceChanges(scope, [""]), "when the system can't say what changed, anything may have").toEqual([""]);
     expect(spaceChanges({ library: true }, ["a.md", ".notes/操作记录.json"])).toEqual(["a.md"]);
+  });
+
+  it("lists the notes in a space's scope by path and title, leaving hidden ones out", async () => {
+    const root = await library({ "健身/训练记录.md": "", "健身/.草稿.md": "", "健身/图.png": "", "别处/秘密.md": "", "日记/10月/周一.md": "" });
+    expect(await spaceNotes(root, { library: false, folders: ["健身", "日记"] })).toEqual([
+      { path: "健身/训练记录.md", title: "训练记录" },
+      { path: "日记/10月/周一.md", title: "周一" },
+    ]);
   });
 
   it("writes an error report an agent can act on", () => {

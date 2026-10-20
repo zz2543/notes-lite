@@ -10,6 +10,8 @@ import type { VetRelocation } from "./organize";
 import { appendRecords, cellNumber, fieldTypes, findTable, normalizedCell, RecordError, rewriteRows, unknownField, type FieldType } from "./recordTables";
 import { serialized } from "./serialized";
 import { notesInScope, scopeContains, scopeMeta, spaceLibrary, spaceScopeOf, type SpaceScope } from "./spaces";
+import { isHidden, noteTitle } from "../shared/paths";
+
 
 export type SpaceRequestErrorCode = "outside-scope" | "invalid" | "not-found" | "exists" | "unknown-field" | "scope-change" | "conflict" | "failed";
 
@@ -41,6 +43,8 @@ export interface SpaceRequestOptions {
   now?(): Date;
   /** Moves a file, by real location, to the system trash. The app passes Electron's `shell.trashItem`. */
   trash?(path: string): Promise<void>;
+  /** Told, once a request wrote, every library path it wrote, created, renamed or removed (an assistant turn leaves them out). */
+  wrote?(paths: string[]): void | Promise<void>;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -149,7 +153,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     const full = join(real ?? base, ...parts.slice(existing));
     if (!full.startsWith(base + sep)) throw outsideScope(raw);
     const realPath = full.slice(base.length + 1).split(sep).join("/");
-    if (realPath.split("/").some((part) => part.startsWith(".")) || !scopeContains(within, realPath)) throw outsideScope(raw);
+    if (isHidden(realPath) || !scopeContains(within, realPath)) throw outsideScope(raw);
     return { path, real: join(base, ...parts) };
   };
 
@@ -194,7 +198,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     return Promise.all(
       paths.map(async (path) => ({
         path,
-        title: path.split("/").pop()!.replace(/\.md$/i, ""),
+        title: noteTitle(path),
         modified: new Date((await stat(join(base, ...path.split("/")))).mtimeMs).toISOString(),
       })),
     );
@@ -260,12 +264,14 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
       await log.discard(logged.map((e) => e.id)).catch(() => undefined);
       throw error;
     }
-    counted(entries, tally);
+    await counted(entries, tally);
   };
 
-  const counted = (entries: NewLogEntry[], tally: Tally) => {
+  const counted = async (entries: NewLogEntry[], tally: Tally) => {
     tally.changes += entries.length;
     tally.records += entries.filter((e) => e.kind.startsWith("record")).length;
+    const paths = entries.flatMap((e) => [e.path, ...(e.newPath ? [e.newPath] : []), ...(e.related ?? []).map((r) => r.path)]);
+    if (paths.length > 0) await options.wrote?.([...new Set(paths)]);
   };
 
   /** A record's values as cell text; strings may use placeholders. */
@@ -284,7 +290,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     // The page sends the fields in the order it wrote them; that order heads a new table.
     let header = Array.isArray(options.header) ? options.header.map(cellText).filter((field) => field !== "") : [];
     if (header.length === 0) header = [...new Set(records.flatMap((record) => Object.keys(record).filter((key) => key !== "_row")))];
-    const title = path.split("/").pop()!.replace(/\.md$/i, "");
+    const title = noteTitle(path);
     const written = appendRecords(await textAt(real), title, heading, header, records.map(cellsFrom));
     const entries = written.rows.map((row) => entry("recordAppend", path, { heading, header: written.header, after: row }));
     await commit(written.text, real, entries, tally);
@@ -360,7 +366,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     try {
       if (kind === "noteMove") await mkdir(join(await rootReal(), ...folder.split("/").filter(Boolean)), { recursive: true });
       const moved = kind === "noteRename" ? await lib.rename(path, name, vet) : await lib.move(path, folder, vet);
-      counted(logged, tally);
+      await counted(logged, tally);
       return { path: moved.path };
     } catch (error) {
       if (logged.length > 0) await log.discard(logged.map((e) => e.id)).catch(() => undefined);
@@ -396,7 +402,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
       await log.discard(logged.map((e) => e.id)).catch(() => undefined);
       throw new SpaceRequestError("failed", `无法把“${raw}”移到废纸篓：${(error as Error).message}。`);
     }
-    counted(logged, tally);
+    await counted(logged, tally);
     return { path };
   };
 

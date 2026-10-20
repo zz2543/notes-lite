@@ -58,6 +58,11 @@ const api: NotesApi = {
   },
   saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
   confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
+  onOperationLogRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.operationLogRequest, handler);
+    return () => ipcRenderer.off(channels.operationLogRequest, handler);
+  },
   onSettingsRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.settingsRequest, handler);
@@ -77,6 +82,7 @@ const api: NotesApi = {
   deleteSpace: (name) => ipcRenderer.invoke(channels.deleteSpace, name),
   reorderSpaces: (names) => ipcRenderer.invoke(channels.reorderSpaces, names),
   copySpacePrompt: (name) => ipcRenderer.invoke(channels.copySpacePrompt, name),
+  revealSpaceSource: (name) => ipcRenderer.invoke(channels.revealSpaceSource, name),
   spaceNotes: (name) => ipcRenderer.invoke(channels.spaceNotes, name),
   showSpacePage: (name, bounds) => ipcRenderer.send(channels.showSpacePage, name, bounds),
   hideSpacePage: () => ipcRenderer.send(channels.hideSpacePage),

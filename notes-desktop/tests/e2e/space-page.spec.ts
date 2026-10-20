@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launchWith, library, test } from "./fixtures";
+import { expect, launch, launchWith, library, test } from "./fixtures";
 
 // The space page loop (ticket 19), after the old SpaceWorkflowTests: the built app, a real
 // temporary library, and the space homepage running in its own sandbox. Records the page writes
@@ -138,6 +138,35 @@ test("the homepage runs sandboxed: no Node, no app interface, only its own scope
   const global = await spacePage(app, "全局");
   await expect(global.getByText("全局主页")).toBeVisible();
   expect(await global.evaluate(() => localStorage.getItem("周期"))).toBeNull();
+  await app.close();
+});
+
+test("a homepage's own storage stays with its space when the space is renamed, after a restart too", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "健身/训练记录.md": training, ".notes/空间/健身.html": homepage });
+  const first = await launchWith(scratch, root);
+  await sideTab(first.page, "空间").click();
+  await spaceList(first.page).getByRole("button", { name: "健身" }).click();
+  const home = await spacePage(first.app, "健身");
+  await expect(home.getByText("训练 3 次")).toBeVisible();
+  await home.evaluate(() => localStorage.setItem("周期", "本周"));
+
+  await spaceList(first.page).getByRole("button", { name: "健身" }).click({ button: "right" });
+  await first.page.getByRole("menuitem", { name: "编辑空间…" }).click();
+  const edit = first.page.getByRole("dialog", { name: "编辑空间" });
+  await edit.getByLabel("空间名称").fill("力量");
+  await edit.getByRole("button", { name: "保存" }).click();
+  await spaceList(first.page).getByRole("button", { name: "力量" }).click();
+  const renamed = await spacePage(first.app, "力量");
+  await expect(renamed.getByText("训练 3 次")).toBeVisible();
+  expect(await renamed.evaluate(() => localStorage.getItem("周期"))).toBe("本周");
+  await first.app.close();
+
+  const { app, page } = await launch(scratch);
+  await sideTab(page, "空间").click();
+  await spaceList(page).getByRole("button", { name: "力量" }).click();
+  const again = await spacePage(app, "力量");
+  await expect(again.getByText("训练 3 次")).toBeVisible();
+  expect(await again.evaluate(() => localStorage.getItem("周期"))).toBe("本周");
   await app.close();
 });
 

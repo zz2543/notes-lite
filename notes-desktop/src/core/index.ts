@@ -1,5 +1,5 @@
 export * from "./library";
-export * from "./markdown";
+export * from "../shared/markdown";
 export type { LinkRewrite, OrganizeOptions, Organizer, Relocation, VetRelocation } from "./organize";
 export * from "./search";
 export * from "./watcher";
@@ -14,5 +14,7 @@ export * from "./agents";
 export * from "./snapshots";
 export * from "./agentStream";
 export * from "./turns";
-export * from "./conversation";
+export * from "./assistantTurns";
+export * from "../shared/conversation";
 export * from "./conversations";
+export * from "./spaceStorage";
