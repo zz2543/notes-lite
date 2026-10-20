@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, launch, launchWith, library, test } from "./fixtures";
 
-const note = "# 雨后\n\n小路上的青苔很滑，我们走了 3 公里才到 Lakeside。\n\n第二段。\n";
+const note = "# 雨后\n\n小路上的青苔很滑，我们走了3公里才到Lakeside。\n\n第二段。\n";
 
 async function openNote(page: Page, title: string) {
   await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: title }).click();
@@ -20,6 +20,74 @@ async function openTypography(page: Page) {
 /** A computed style of the first element inside `scope` that matches `selector`. */
 const style = (scope: Locator, selector: string, property: string) =>
   scope.evaluate((element, [selector, property]) => getComputedStyle(element.querySelector(selector)!).getPropertyValue(property), [selector, property] as const);
+
+/** Loads `family` for `text` and answers whether a face of it came from the app (not a system fallback). */
+const bundled = (page: Page, family: string, weight: number, text: string) =>
+  page.evaluate(
+    async ([family, weight, text]) => (await document.fonts.load(`${weight} 16px "${family}"`, text)).some((face) => face.family.replace(/"/g, "") === family),
+    [family, weight, text] as const,
+  );
+
+test("body and heading fonts come from presets, the bundled serifs, or the fonts installed here", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "雨后.md": note });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "雨后");
+
+  // 思源宋体 (常规, 半粗) and Source Serif 4 ship with the app.
+  expect(await bundled(page, "Noto Serif SC", 400, "永")).toBe(true);
+  expect(await bundled(page, "Noto Serif SC", 600, "永")).toBe(true);
+  expect(await bundled(page, "Source Serif 4 Variable", 400, "A")).toBe(true);
+
+  const panel = await openTypography(page);
+  const body = panel.getByRole("radiogroup", { name: "正文字体" });
+  expect(await body.getByRole("radio").evaluateAll((radios) => radios.map((r) => r.getAttribute("aria-label")))).toEqual(["系统", "思源宋体", "Source Serif", "等宽"]);
+  await expect(body.getByRole("radio", { name: "系统" })).toHaveAttribute("aria-checked", "true");
+  const preview = panel.getByRole("figure", { name: "排版预览" });
+
+  await body.getByRole("radio", { name: "Source Serif" }).click();
+  await expect.poll(() => style(preview, ".cm-content", "font-family")).toMatch(/^"Source Serif 4 Variable", "Noto Serif SC"/);
+  await panel.getByRole("radiogroup", { name: "标题字体" }).getByRole("radio", { name: "思源宋体" }).click();
+  await expect.poll(() => style(preview, ".cm-md-h1", "font-family")).toMatch(/^"Noto Serif SC"/);
+
+  // Any installed font: the menu lists this computer's fonts.
+  const installed = panel.getByRole("combobox", { name: "正文字体：系统已安装字体" });
+  await installed.focus();
+  await expect.poll(() => installed.locator("option:not([disabled])").count()).toBeGreaterThan(0);
+  const family = (await installed.locator("option:not([disabled])").first().getAttribute("value"))!;
+  await installed.selectOption(family);
+  await expect.poll(() => style(preview, ".cm-content", "font-family")).toContain(family);
+  await expect(body.getByRole("radio", { checked: true })).toHaveCount(0);
+  await app.close();
+});
+
+test("中英文自动间距 widens the gap between Chinese and Latin on screen only", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "雨后.md": note });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "雨后");
+  // The width of "了3" as drawn: wider when a gap is added between the Chinese and the digit.
+  const gap = () =>
+    page.getByRole("textbox", { name: "笔记正文" }).evaluate((content) => {
+      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = node.textContent!.indexOf("了3");
+        if (at < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + 2);
+        return range.getBoundingClientRect().width;
+      }
+      return -1;
+    });
+  const spaced = await gap();
+  const panel = await openTypography(page);
+  const autospace = panel.getByRole("switch", { name: "中英文自动间距" });
+  await expect(autospace).toHaveAttribute("aria-checked", "true");
+  await autospace.click();
+  await expect(autospace).toHaveAttribute("aria-checked", "false");
+  await expect.poll(gap).toBeLessThan(spaced);
+  await app.close();
+  expect(await readFile(join(root, "雨后.md"), "utf8")).toBe(note);
+});
 
 test("sliders set the size, leading, gap, measure and heading ratio; the preview follows with motion", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "雨后.md": note });
