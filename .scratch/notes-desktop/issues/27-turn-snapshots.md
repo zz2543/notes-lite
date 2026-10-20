@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] Markdown 与文本存入按内容去重的存储，每轮只检查修改时间与大小
 - [x] 附件：macOS 用 APFS 克隆；Windows 首次后台复制基线；超过约 10GB 时 Windows 只记录元数据并提示
@@ -39,3 +39,7 @@
 留给后续：
 - 一轮的驱动（`begin` → Agent 运行 → `finish` → `log.record([turnEntry(turn)])`）、审查汇总卡片的“全部保留 / 逐篇撤回”（用 `revert(id, path)`）与“直接保留”设置：任务 28 及其后。
 - 设置里的占用按文件逻辑大小相加，macOS 克隆共享的磁盘块会被重复计入（是上限值）。Windows 上的实际耗时未在 Windows 机器上测量。
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39386345223 。合并后修过的 CI 问题：慢机器上的撤销分组与助手栏宽度过渡用例、字体许可证在 Windows 检出时被改成 CRLF（加 `.gitattributes`）。

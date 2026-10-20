@@ -1,0 +1,66 @@
+<meta name="lb-scope" content="健身, 日记">
+<meta name="lb-icon" content="🏋️">
+
+<style>
+  .hero { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  .hero h1 { margin: 0; }
+  #streak { font-size: 12px; color: var(--lb-muted); }
+  #streak b { color: var(--lb-text); font-size: 15px; }
+  .split { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  .split > .lb-card { margin: 0 0 16px; }
+  @media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+  #mix { max-height: 180px; }
+</style>
+
+<div class="hero">
+  <h1>🏋️ 健身</h1>
+  <div id="streak">正在统计…</div>
+</div>
+
+<div class="lb-grid">
+  <div class="lb-card"><lb-stat source="健身/训练记录.md#卧推" period="week" label="本周训练" unit="次"></lb-stat></div>
+  <div class="lb-card"><lb-stat source="健身/训练记录.md#卧推" op="max" field="重量" label="卧推纪录" unit="kg"></lb-stat></div>
+  <div class="lb-card"><lb-stat source="健身/训练记录.md#卧推" op="sum" field="组数" period="month" label="本月组数" unit="组"></lb-stat></div>
+</div>
+
+<div class="lb-card">
+  <lb-quick-add target="健身/训练记录.md#卧推" defaults='{"动作":"卧推","组数":5}' label="记一组" title="今天练了什么"></lb-quick-add>
+</div>
+
+<div class="split">
+  <div class="lb-card"><lb-chart source="健身/训练记录.md#卧推" x="日期" y="重量" title="卧推重量" unit="kg" limit="30"></lb-chart></div>
+  <div class="lb-card"><h3>组数分布</h3><canvas id="mix"></canvas></div>
+</div>
+
+<div class="lb-card"><lb-calendar source="健身/训练记录.md#卧推" label="打卡"></lb-calendar></div>
+<div class="lb-card"><lb-records source="健身/训练记录.md#卧推" limit="5" fields="日期, 重量, 组数" title="最近训练"></lb-records></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  let mix;
+  async function draw() {
+    const rows = await lb.query("健身/训练记录.md#卧推", { sort: "-日期" });
+    const days = new Set(rows.map((r) => r.日期));
+    let streak = 0, d = new Date();
+    if (!days.has(lb.today())) d.setDate(d.getDate() - 1);
+    const key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    while (days.has(key(d))) { streak++; d.setDate(d.getDate() - 1); }
+    document.getElementById("streak").innerHTML = `连续训练 <b>${streak}</b> 天 · 共 <b>${rows.length}</b> 次`;
+
+    const counts = {};
+    for (const r of rows) if (r.组数 != null) counts[r.组数 + " 组"] = (counts[r.组数 + " 组"] || 0) + 1;
+    const labels = Object.keys(counts).sort();
+    const data = labels.map((l) => counts[l]);
+    if (!window.Chart) return;
+    const colors = [1, 2, 3, 4, 5, 6].map((i) => css(`--lb-chart-${i}`));
+    if (mix) { mix.data.labels = labels; mix.data.datasets[0].data = data; mix.update(); return; }
+    mix = new Chart(document.getElementById("mix"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, borderRadius: 4, spacing: 2 }] },
+      options: { cutout: "68%", plugins: { legend: { position: "bottom", labels: { color: css("--lb-muted"), boxWidth: 8, boxHeight: 8, usePointStyle: true } } } },
+    });
+  }
+  draw();
+  lb.on("change", draw);
+</script>

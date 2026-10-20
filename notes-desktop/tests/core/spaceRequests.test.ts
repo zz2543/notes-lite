@@ -94,6 +94,6 @@ describe("空间请求：读取", () => {
 
   it("page reads the space file itself", async () => {
     const lib = await fitnessLibrary();
-    expect(result<string>(await lib.call("page"))).toContain("lb-scope");
+    expect(result<string>(await lib.call("page"))).toContain("space-scope");
   });
 });

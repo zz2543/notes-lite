@@ -78,12 +78,18 @@ describe("空间请求：管理笔记", () => {
     expect(code(await lib.call("writePage", `${page}<p>新主页</p>`))).toBe("ok");
     expect(await lib.read(".notes/空间/健身.html")).toBe(`${page}<p>新主页</p>`);
     expect(code(await lib.call("writePage", page.replace("健身, 日记", "*")))).toBe("scope-change");
-    expect(code(await lib.call("writePage", "<p>没有范围</p>")), "dropping lb-scope also changes the scope").toBe("scope-change");
+    expect(code(await lib.call("writePage", "<p>没有范围</p>")), "dropping space-scope also changes the scope").toBe("scope-change");
+    // The old name is the same meta: a page may write either, but not a different scope under it.
+    const legacy = page.replace("space-scope", "lb-scope");
+    expect(code(await lib.call("writePage", legacy))).toBe("ok");
+    expect(code(await lib.call("writePage", legacy.replace("健身, 日记", "*")))).toBe("scope-change");
+    expect(code(await lib.call("writePage", `<meta name="lb-scope" content="*">\n${page}`)), "space-scope wins over lb-scope").toBe("ok");
+    expect(code(await lib.call("writePage", `<meta name="space-scope" content="*">\n${legacy}`))).toBe("scope-change");
     expect(code(await lib.call("write", ".notes/空间/雅思.html", "x"))).toBe("outside-scope");
     expect(code(await lib.call("write", ".notes/空间/编写说明.md", "x"))).toBe("outside-scope");
     expect(code(await lib.call("write", ".notes/空间/顺序.json", "x"))).toBe("outside-scope");
 
-    await log.undo((await log.entries())[0]!.id);
+    for (const entry of await log.entries()) await log.undo(entry.id);
     expect(await lib.read(".notes/空间/健身.html")).toBe(page);
   });
 

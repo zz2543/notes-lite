@@ -279,7 +279,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
   const append = async (target: string, value: unknown, options: Record<string, unknown>, tally: Tally) => {
     const { path, real, heading } = await source(target);
     const records = isObject(value) ? [value] : Array.isArray(value) && value.every(isObject) ? value : null;
-    if (!records) throw invalid("lb.append 需要一条记录（对象）或记录数组。");
+    if (!records) throw invalid("space.append 需要一条记录（对象）或记录数组。");
     if (records.length === 0) return { count: 0 };
     // The page sends the fields in the order it wrote them; that order heads a new table.
     let header = Array.isArray(options.header) ? options.header.map(cellText).filter((field) => field !== "") : [];
@@ -404,7 +404,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
   const writePage = async (html: string, tally: Tally) => {
     const current = await spaces.space(space).catch(() => Promise.reject(notFound(space)));
     if (scopeMeta(spaceScopeOf(html)) !== scopeMeta(current.scope) || spaceScopeOf(html).library !== current.scope.library) {
-      throw new SpaceRequestError("scope-change", "空间主页不能修改自己的范围（lb-scope）。请在笔记应用里编辑空间。");
+      throw new SpaceRequestError("scope-change", "空间主页不能修改自己的范围（space-scope）。请在笔记应用里编辑空间。");
     }
     await commit(html, join(spaces.folder, `${space}.html`), [entry("pageWrite", current.path, { before: [current.html], after: [html] })], tally);
     return { path: current.path };
@@ -442,7 +442,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
       case "writePage":
         return writePage(typeof args[0] === "string" ? args[0] : "", tally);
       default:
-        throw invalid(`没有方法 lb.${method}。`);
+        throw invalid(`没有方法 space.${method}。`);
     }
   };
 

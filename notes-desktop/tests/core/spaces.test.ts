@@ -18,8 +18,8 @@ describe("空间库", () => {
     expect(space.path).toBe(".notes/空间/健身.html");
     expect(space.hasPage).toBe(false);
     const html = await read(root, ".notes/空间/健身.html");
-    expect(html).toContain('<meta name="lb-scope" content="健身, 日记">');
-    expect(html).toContain('<meta name="lb-icon" content="🏋️">');
+    expect(html).toContain('<meta name="space-scope" content="健身, 日记">');
+    expect(html).toContain('<meta name="space-icon" content="🏋️">');
 
     const listed = await spaces.spaces();
     expect(listed.map((s) => s.name)).toEqual(["健身"]);
@@ -143,5 +143,25 @@ describe("空间库", () => {
 
     await expect(spaces.update("力量", { name: "雅思", icon: "", scope: { library: true } })).rejects.toMatchObject({ code: "exists" });
     expect(await read(root, ".notes/空间/力量.html")).toBe(html);
+  });
+
+  it("still reads lb-scope and lb-icon, and editing such a space keeps a single scope meta", async () => {
+    const root = await library({ ".notes/空间/旧.html": '<meta name="lb-scope" content="健身">\n<meta name="lb-icon" content="🏋️">\n<p>旧主页</p>' });
+    const spaces = spaceLibrary(root);
+    const [old] = await spaces.spaces();
+    expect(old).toMatchObject({ name: "旧", icon: "🏋️", scope: { library: false, folders: ["健身"] }, hasPage: true });
+
+    await spaces.update("旧", { name: "旧", icon: "💪", scope: { library: false, folders: ["健身", "日记"] } });
+    const html = await read(root, ".notes/空间/旧.html");
+    expect(html.match(/-scope"/g), "one scope meta, whichever name the file used").toHaveLength(1);
+    expect(html.match(/-icon"/g)).toHaveLength(1);
+    expect((await spaces.space("旧")).scope).toEqual({ library: false, folders: ["健身", "日记"] });
+    expect((await spaces.space("旧")).icon).toBe("💪");
+    expect(html).toContain("<p>旧主页</p>");
+  });
+
+  it("prefers space-scope when a file declares both names", async () => {
+    const root = await library({ ".notes/空间/双.html": '<meta name="lb-scope" content="旧">\n<meta name="space-scope" content="新">\n' });
+    expect((await spaceLibrary(root).space("双")).scope).toEqual({ library: false, folders: ["新"] });
   });
 });
