@@ -80,20 +80,39 @@ const separateFromList = EditorState.transactionFilter.of((tr): Transaction | re
     if (!blank || !closesListGap(tr.newDoc.line(blank.number + 1).text)) return tr;
     return [tr, { changes: { from: at - 1, to: at }, effects: setGap.of(null), sequential: true }];
   }
-  if (start.selection.ranges.length > 1) return tr;
+  // A composition has its blank line from when it started (`separateComposition`).
+  if (start.selection.ranges.length > 1 || tr.isUserEvent("input.type.compose")) return tr;
   let opening: TransactionSpec | null = null;
   let changes = 0;
   tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
     changes += 1;
-    const line = start.doc.lineAt(fromA);
-    if (toA !== fromA || line.number === 1) return;
-    const above = start.doc.line(line.number - 1);
-    if (!opensListGap(above.text, line.text, inserted.toString()) || inLiteralBlock(start, above.number)) return;
     // Text that is itself a list item joins the list above.
-    if (closesListGap(inserted.line(1).text)) return;
-    opening = { changes: { from: above.to, insert: start.lineBreak }, effects: setGap.of(line.from) };
+    if (toA === fromA && !closesListGap(inserted.line(1).text)) opening = gapFor(start, fromA, inserted.toString());
   });
   return opening && changes === 1 ? [tr, opening] : tr;
+});
+
+/** The blank line to put in before `inserted` goes in at `at`, if it needs one. */
+function gapFor(state: EditorState, at: number, inserted: string): TransactionSpec | null {
+  const line = state.doc.lineAt(at);
+  if (line.number === 1) return null;
+  const above = state.doc.line(line.number - 1);
+  if (!opensListGap(above.text, line.text, inserted) || inLiteralBlock(state, above.number)) return null;
+  // At the end of the item above rather than the start of the caret's line, which keeps that line's
+  // element, and with it a composition starting there, in place.
+  return { changes: { from: above.to, insert: state.lineBreak }, effects: setGap.of(line.from) };
+}
+
+/** An input method starting to compose counts as text starting: the blank line goes in before the
+ *  composition touches the line. Undo joins the composition to it. */
+const separateComposition = EditorView.domEventHandlers({
+  compositionstart(_event, view) {
+    const { main } = view.state.selection;
+    if (view.state.selection.ranges.length > 1 || !main.empty) return false;
+    const gap = gapFor(view.state, main.head, "composed");
+    if (gap) view.dispatch({ ...gap, userEvent: "input.type" });
+    return false;
+  },
 });
 
 /** Return continues, steps out of or ends a list; text after a list is kept apart from it. */
@@ -101,5 +120,6 @@ export const listEditing: Extension = [
   literal,
   listGap,
   separateFromList,
+  separateComposition,
   Prec.high(keymap.of([{ key: "Enter", run: returnInList }])),
 ];

@@ -114,6 +114,93 @@ test("text typed after exiting a list is separated from it by a blank line, undo
   await app.close();
 });
 
+test("composing or pasting after exiting a list also separates it", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  // Composition starting counts as input. Nothing is saved mid-composition: read the source view.
+  await page.keyboard.press("ControlOrMeta+Shift+KeyM");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: "zhong", selectionStart: 5, selectionEnd: 5 });
+  await expect.poll(() => editor(page).evaluate((root) => [...root.children].map((line) => line.textContent).join("\n"))).toBe(
+    "- 项目\n\nzhong",
+  );
+  await cdp.send("Input.insertText", { text: "中" });
+  await cdp.detach();
+  await expect.poll(saved(1)).toBe("- 项目\n\n中");
+
+  await open(2);
+  await page.keyboard.press("Enter");
+  await app.evaluate(({ clipboard }) => clipboard.writeText("粘贴"));
+  await page.keyboard.press("ControlOrMeta+KeyV");
+  await expect.poll(saved(2)).toBe("- 项目\n\n粘贴");
+  await app.close();
+});
+
+test("the blank line goes again when the line is a list item again or empty", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- "]);
+  await open(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("-");
+  // A dash alone may start a paragraph.
+  await expect.poll(saved(1)).toBe("- 项目\n\n-");
+  await page.keyboard.type(" 新项");
+  // A complete marker joins the list above, the caret after it.
+  await expect.poll(saved(1)).toBe("- 项目\n- 新项");
+
+  await open(2);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正");
+  await expect.poll(saved(2)).toBe("- 项目\n\n正");
+  await page.keyboard.press("Backspace");
+  await expect.poll(saved(2)).toBe("- 项目\n");
+  await page.keyboard.type("再");
+  await expect.poll(saved(2)).toBe("- 项目\n\n再");
+  await app.close();
+});
+
+test("Return, undo, typing elsewhere and other notes keep the blank line honest", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 项目\n- ", "- 项目\n- ", "- 项目\n- \n\n后文", "- 项目\n- "]);
+  // Return is a new line, not text that needs a separator.
+  await open(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(1)).toBe("- 项目\n\n");
+
+  // Undo takes the text and its separator together; typing after it separates again.
+  await open(2);
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(2)).toBe("- 项目\n");
+  await page.keyboard.type("正");
+  await expect.poll(saved(2)).toBe("- 项目\n\n正");
+  await page.keyboard.press("ControlOrMeta+KeyZ");
+  await expect.poll(saved(2)).toBe("- 项目\n");
+  await page.keyboard.type("再");
+  await expect.poll(saved(2)).toBe("- 项目\n\n再");
+
+  // Leaving the exited line empty and typing elsewhere adds nothing.
+  await open(3);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(saved(3)).toBe("- 项目\n\n\n后文");
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("！");
+  await expect.poll(saved(3)).toBe("- 项目\n\n\n后文！");
+
+  // Another note gets no stray blank line.
+  await open(4);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正");
+  await expect.poll(saved(4)).toBe("- 项目\n\n正");
+  await open(1);
+  await page.keyboard.press("ControlOrMeta+Home");
+  await page.keyboard.type("新");
+  await expect.poll(saved(1)).toBe("新- 项目\n\n");
+  await app.close();
+});
+
 test("stepping out of a numbered list leaves later numbers alone, and code is left alone", async ({ scratch }) => {
   const { app, page, open, saved } = await openLibrary(scratch, ["1. 甲\n   1. 乙\n   2. \n2. 丙", "```\n- 项目\n- \n```"]);
   await open(1);
