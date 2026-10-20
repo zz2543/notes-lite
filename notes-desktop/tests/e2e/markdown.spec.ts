@@ -184,7 +184,8 @@ test("switching to the Markdown source and back keeps the caret, selection, scro
   expect(await sourceMenuChecked()).toBe(true);
   await expect(editor(page)).toContainText("第 31 段，**粗体**与 *斜体*。");
   // The line being edited stays where it was on screen.
-  await expect.poll(async () => Math.round((await look(page, line).catch(() => ({ y: NaN }))).y - typeset.y)).toBe(0);
+  // Within a pixel: text lands on sub-pixel positions that differ by platform.
+  await expect.poll(async () => Math.abs((await look(page, line).catch(() => ({ y: NaN }))).y - typeset.y)).toBeLessThan(1);
   expect((await look(page, line)).fontFamily).toContain("monospace");
 
   // Typing replaces the selection made before the switch; undo reaches back across it.
@@ -192,7 +193,7 @@ test("switching to the Markdown source and back keeps the caret, selection, scro
   await page.keyboard.press("ControlOrMeta+Shift+KeyM");
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   expect(await sourceMenuChecked()).toBe(false);
-  await expect.poll(async () => Math.round((await look(page, "三十 段，").catch(() => ({ y: NaN }))).y - typeset.y)).toBe(0);
+  await expect.poll(async () => Math.abs((await look(page, "三十 段，").catch(() => ({ y: NaN }))).y - typeset.y)).toBeLessThan(1);
   await expect(page.getByRole("status", { name: "保存状态" })).toHaveText("已保存");
   expect(await readFile(join(root, "长笔记.md"), "utf8")).toBe(source.replace(`${selected} 段`, "第三十 段"));
   await page.keyboard.press("ControlOrMeta+z");
