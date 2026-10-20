@@ -20,6 +20,35 @@ test("⌘, / Ctrl+, opens the settings panel and Esc closes it", async ({ scratc
   await app.close();
 });
 
+test("the panel emerges: it grows into place out of a blur", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "一.md": "一" });
+  const { app, page } = await launchWith(scratch, root);
+  // Every frame of the panel from the moment it appears.
+  await page.evaluate(() => {
+    const w = window as unknown as { frames: Array<{ scale: number; blur: number }> };
+    w.frames = [];
+    const frame = () => {
+      const panel = document.querySelector<HTMLElement>('[role="dialog"][aria-label="设置"]');
+      if (panel) {
+        const style = getComputedStyle(panel);
+        const blur = /blur\(([\d.]+)px\)/.exec(style.filter);
+        w.frames.push({ scale: new DOMMatrix(style.transform).a, blur: blur ? Number(blur[1]) : 0 });
+      }
+      if (w.frames.length < 90) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  await page.keyboard.press("ControlOrMeta+Comma");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { frames: unknown[] }).frames.length), { timeout: 5000 }).toBe(90);
+  const frames = await page.evaluate(() => (window as unknown as { frames: Array<{ scale: number; blur: number }> }).frames);
+  expect(frames[0]!.scale).toBeLessThan(0.95);
+  expect(frames[0]!.blur).toBeGreaterThan(0);
+  // 浮现 at 强 overshoots a little before settling at full size, sharp.
+  expect(Math.max(...frames.map((f) => f.scale))).toBeGreaterThan(1);
+  expect(frames.at(-1)).toEqual({ scale: 1, blur: 0 });
+  await app.close();
+});
+
 // Playwright pins pages to light; with that lifted the page sees what the app tells the system to show.
 async function dark(page: Page) {
   await page.emulateMedia({ colorScheme: null });

@@ -47,3 +47,17 @@ describe("动效预设", () => {
     }
   });
 });
+
+describe("浮层进入与退出", () => {
+  it("at 强 enters from scale 0.88, 20px lower and 10px blur; leaves in 0.16s to scale 0.97 and 6px blur", () => {
+    const { overlay } = motionPresets("strong");
+    expect(overlay.initial).toEqual({ opacity: 0, scale: 0.88, y: 20, filter: "blur(10px)" });
+    expect(overlay.animate).toEqual({ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" });
+    expect(overlay.exit).toMatchObject({ opacity: 0, scale: 0.97, filter: "blur(6px)", transition: { duration: 0.16 } });
+  });
+
+  it("travels half as far at 标准 and 0.3 as far at 轻", () => {
+    expect(motionPresets("standard").overlay.initial).toEqual({ opacity: 0, scale: 0.94, y: 10, filter: "blur(5px)" });
+    expect(motionPresets("light").overlay.initial).toEqual({ opacity: 0, scale: 0.96, y: 6, filter: "blur(3px)" });
+  });
+});

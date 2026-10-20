@@ -19,7 +19,19 @@ export interface MotionPresets {
   focus: Transition;
   /** Travel distances and scale-ins are multiplied by this: 强 2, 标准 1, 轻 0.6. */
   amplitude: number;
+  /** 浮层进入 / 退出 (the settings panel, dialogs): motion targets, entering with 浮现. */
+  overlay: OverlayMotion;
 }
+
+export interface OverlayMotion {
+  initial: { opacity: number; scale: number; y: number; filter: string };
+  animate: { opacity: number; scale: number; y: number; filter: string };
+  exit: { opacity: number; scale: number; filter: string; transition: Transition };
+}
+
+// 幅度 at 标准 (the design system lists 强, twice these): an overlay rises 10px from scale 0.94 out of a
+// 5px blur, and leaves in 0.16s to scale 0.985 and a 3px blur.
+const overlayTravel = { scale: 0.06, rise: 10, blur: 5, exitScale: 0.015, exitBlur: 3, exitDuration: 0.16 };
 
 type Spring = { visualDuration: number; bounce: number };
 
@@ -49,6 +61,21 @@ const blur = { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] as [number, number, numb
 // The design system states every value to two decimals.
 const round = (value: number) => Math.round(value * 100 + 1e-9) / 100;
 
+function overlayMotion(amplitude: number, reduced: boolean): OverlayMotion {
+  const t = overlayTravel;
+  const exitDuration = t.exitDuration;
+  return {
+    initial: { opacity: 0, scale: round(1 - t.scale * amplitude), y: round(t.rise * amplitude), filter: `blur(${round(t.blur * amplitude)}px)` },
+    animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" },
+    exit: {
+      opacity: 0,
+      scale: round(1 - t.exitScale * amplitude),
+      filter: `blur(${round(t.exitBlur * amplitude)}px)`,
+      transition: reduced ? { default: { type: false }, opacity: { duration: exitDuration } } : { duration: exitDuration, ease: "easeIn" },
+    },
+  };
+}
+
 /**
  * `reduced` follows the system's 减弱动态效果: every value then changes at once except opacity, which
  * still fades (without a bounce) over the preset's duration.
@@ -69,5 +96,6 @@ export function motionPresets(intensity: MotionIntensity = defaultIntensity, { r
     emerge: spring(standard.emerge, factor),
     focus: spring(focus, { bounce: factor.bounce, duration: Math.min(factor.duration, focusLimits.duration) }, focusLimits.bounce),
     amplitude: factor.amplitude,
+    overlay: overlayMotion(factor.amplitude, reduced),
   };
 }

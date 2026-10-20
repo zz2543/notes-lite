@@ -1,9 +1,11 @@
 import { FadersHorizontal, ListBullets, Sparkle, type Icon } from "@phosphor-icons/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
+import { useMotion } from "./MotionProvider";
 import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
@@ -138,10 +140,23 @@ function SettingsPanel({ onClose }: { onClose(): void }) {
     return () => before?.focus();
   }, []);
 
+  // 浮现: the panel grows into place out of a blur over a fading scrim, and shrinks away when it closes.
+  const { emerge, overlay } = useMotion();
   return (
-    <div className="scrim" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div
+    <motion.div
+      className="scrim"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: overlay.exit.transition }}
+      transition={emerge}
+      onPointerDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <motion.div
         ref={panel}
+        initial={overlay.initial}
+        animate={overlay.animate}
+        exit={overlay.exit}
+        transition={emerge}
         className="settings"
         role="dialog"
         aria-modal="true"
@@ -178,8 +193,8 @@ function SettingsPanel({ onClose }: { onClose(): void }) {
           <h2>{current.label}</h2>
           {current.content()}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -202,5 +217,5 @@ export function useSettingsPanel(): ReactNode {
       offMenu();
     };
   }, []);
-  return open ? <SettingsPanel onClose={() => setOpen(false)} /> : null;
+  return <AnimatePresence>{open && <SettingsPanel key="settings" onClose={() => setOpen(false)} />}</AnimatePresence>;
 }
