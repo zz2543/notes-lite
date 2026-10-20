@@ -1,6 +1,6 @@
 export * from "./library";
 export * from "./markdown";
-export type { OrganizeOptions, Organizer, Relocation } from "./organize";
+export type { LinkRewrite, OrganizeOptions, Organizer, Relocation, VetRelocation } from "./organize";
 export * from "./search";
 export * from "./watcher";
 export * from "./spaces";

@@ -81,6 +81,80 @@ export async function writeWhole(path: string, text: string) {
   }
 }
 
+const lines = (text: string | undefined) => (text === undefined ? [] : text.split(/\r\n|\r|\n/));
+
+/** Lines removed (`-`) and added (`+`) going from `old` to `now`, in reading order. */
+function lineDiff(old: string[], now: string[]): Array<{ sign: "-" | "+"; text: string }> {
+  // Longest common subsequence, then walked from the start.
+  const lcs = Array.from({ length: old.length + 1 }, () => new Array<number>(now.length + 1).fill(0));
+  for (let i = old.length - 1; i >= 0; i--) {
+    for (let j = now.length - 1; j >= 0; j--) lcs[i]![j] = old[i] === now[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+  }
+  const out: Array<{ sign: "-" | "+"; text: string }> = [];
+  let i = 0;
+  let j = 0;
+  while (i < old.length || j < now.length) {
+    if (i < old.length && j < now.length && old[i] === now[j]) {
+      i++;
+      j++;
+    } else if (j >= now.length || (i < old.length && lcs[i + 1]![j]! >= lcs[i]![j + 1]!)) out.push({ sign: "-", text: old[i++]! });
+    else out.push({ sign: "+", text: now[j++]! });
+  }
+  return out;
+}
+
+/** What an entry changed, line by line: `-` for what was there before, `+` for what the write left. */
+export function entryChanges(entry: LogEntry): Array<{ sign: "-" | "+"; text: string }> {
+  const row = (cells: string[] | undefined, sign: "-" | "+") => (cells ? [{ sign, text: renderRow(cells) }] : []);
+  switch (entry.kind) {
+    case "recordAppend":
+      return row(entry.after, "+");
+    case "recordRemove":
+      return row(entry.before, "-");
+    case "recordUpdate":
+      return [...row(entry.before, "-"), ...row(entry.after, "+")];
+    case "noteCreate":
+      return lines(entry.after?.[0]).map((text) => ({ sign: "+", text }));
+    case "noteWrite":
+    case "pageWrite":
+      return lineDiff(lines(entry.before?.[0]), lines(entry.after?.[0]));
+    case "noteRename":
+    case "noteMove":
+      return [
+        { sign: "-", text: entry.path },
+        { sign: "+", text: entry.newPath ?? "" },
+      ];
+    case "noteTrash":
+      return [{ sign: "-", text: entry.path }];
+  }
+}
+
+/** One line saying what an entry did. */
+export function entrySummary(entry: LogEntry): string {
+  const table = entry.path + (entry.heading ? `#${entry.heading}` : "");
+  const cells = (row: string[] | undefined) => (row ?? []).filter((cell) => cell !== "").join(" · ");
+  switch (entry.kind) {
+    case "recordAppend":
+      return `新增记录 ${cells(entry.after)} → ${table}`;
+    case "recordUpdate":
+      return `修改记录 ${cells(entry.before)} → ${cells(entry.after)}（${table}）`;
+    case "recordRemove":
+      return `删除记录 ${cells(entry.before)}（${table}）`;
+    case "noteCreate":
+      return `新建笔记 ${entry.path}`;
+    case "noteWrite":
+      return `改写笔记 ${entry.path}`;
+    case "noteRename":
+      return `改名 ${entry.path} → ${entry.newPath ?? ""}`;
+    case "noteMove":
+      return `移动 ${entry.path} → ${entry.newPath ?? ""}`;
+    case "noteTrash":
+      return `移到废纸篓 ${entry.path}`;
+    case "pageWrite":
+      return `重写空间主页 ${entry.path}`;
+  }
+}
+
 export interface OperationLogOptions {
   now?(): Date;
   /** Moves a file, by real location, to the system trash. */

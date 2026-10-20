@@ -19,9 +19,9 @@ export interface Organizer {
   /** Creates a folder named `name` in `parent`; returns its path. */
   createFolder(parent: string, name: string): Promise<string>;
   /** Renames a note (`name` is its title) or folder; links to it elsewhere follow, all or nothing. */
-  rename(path: string, name: string): Promise<Relocation>;
+  rename(path: string, name: string, vet?: VetRelocation): Promise<Relocation>;
   /** Moves a note or folder into `folder`, keeping its name; links to and from it follow, all or nothing. */
-  move(path: string, folder: string): Promise<Relocation>;
+  move(path: string, folder: string, vet?: VetRelocation): Promise<Relocation>;
   /** Moves a note or folder to the system trash; the last one can be restored while the library stays open. */
   trash(path: string): Promise<void>;
   /** Puts the last item moved to the trash back where it was; returns its path. */
@@ -29,6 +29,20 @@ export interface Organizer {
   /** Every folder in the library except the root, in folder-tree order: where things can move to. */
   listFolders(): Promise<string[]>;
 }
+
+/** A note whose links a rename or move rewrites: library paths before and after, and its text. */
+export interface LinkRewrite {
+  from: string;
+  to: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * Sees a rename or move before anything is written: where the item goes and which notes' links
+ * change. Throwing stops it with nothing written.
+ */
+export type VetRelocation = (destination: string, rewrites: LinkRewrite[]) => Promise<void>;
 
 export interface OrganizeOptions {
   /** Moves a file or folder, by real location, to the system trash. The app passes Electron's `shell.trashItem`. */
@@ -219,7 +233,7 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
   };
 
   /** Moves `source` to `destination` and rewrites the links that point at it, undoing everything on failure. */
-  const relocate = async (source: string, destination: string, display: string): Promise<Relocation> => {
+  const relocate = async (source: string, destination: string, display: string, vet?: VetRelocation): Promise<Relocation> => {
     if (destination === source) return { path: relativeOf(source), updated: [] };
     // Whatever is there already stays; only a change of letter case finds the item itself.
     const existing = await lstat(destination).catch(() => null);
@@ -228,6 +242,10 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
       if (existing.ino !== self.ino || existing.dev !== self.dev) throw taken(display);
     }
     const changes = await plan(source, destination);
+    await vet?.(
+      relativeOf(destination),
+      changes.map((change) => ({ from: relativeOf(change.from), to: relativeOf(change.to), before: utf8.decode(change.before), after: change.after })),
+    );
     try {
       await rename(source, destination);
     } catch (error) {
@@ -253,7 +271,7 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
 
   const notAllowed = () => new LibraryError("not-allowed", "不能改名、移动或删除笔记库文件夹本身。");
 
-  const rename_ = async (path: string, name: string): Promise<Relocation> => {
+  const rename_ = async (path: string, name: string, vet?: VetRelocation): Promise<Relocation> => {
     const { real, relative } = await resolve(path);
     if (!relative) throw notAllowed();
     const folder = (await stat(real)).isDirectory();
@@ -261,15 +279,15 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
     checkName(title);
     // A note keeps its own extension, whatever its case.
     const fileName = folder ? title : title + real.slice(-3);
-    return relocate(real, join(dirname(real), fileName), title);
+    return relocate(real, join(dirname(real), fileName), title, vet);
   };
 
-  const move = async (path: string, folder: string): Promise<Relocation> => {
+  const move = async (path: string, folder: string, vet?: VetRelocation): Promise<Relocation> => {
     const { real, relative } = await resolve(path);
     if (!relative) throw notAllowed();
     const { real: into } = await resolve(folder);
     if (into === real || into.startsWith(real + sep)) throw new LibraryError("not-allowed", "不能把文件夹移到它自己里面。");
-    return relocate(real, join(into, basename(real)), titleOf(basename(real)));
+    return relocate(real, join(into, basename(real)), titleOf(basename(real)), vet);
   };
 
   // The system trash can't be asked for an item back the same way on every platform, so what gets

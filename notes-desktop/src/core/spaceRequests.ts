@@ -2,13 +2,14 @@
 // arrives here as one structured request (`{method, args}`) and leaves as one JSON-ready reply.
 // Scope checks, record and note operations and the operation log all live here; the app only
 // carries requests from the page's sandbox to `handle` and back (ADR 0003).
-import { readFile, realpath, stat } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
-import { collator, LibraryError } from "./library";
-import { operationLog, OperationLogError, writeWhole, type LogKind, type NewLogEntry } from "./operationLog";
+import { collator, LibraryError, openLibrary, type Library } from "./library";
+import { operationLog, OperationLogError, writeWhole, type LogEntry, type LogKind, type NewLogEntry } from "./operationLog";
+import type { VetRelocation } from "./organize";
 import { appendRecords, cellNumber, fieldTypes, findTable, normalizedCell, RecordError, rewriteRows, unknownField, type FieldType } from "./recordTables";
 import { serialized } from "./serialized";
-import { notesInScope, scopeContains, spaceLibrary, type SpaceScope } from "./spaces";
+import { notesInScope, scopeContains, scopeMeta, spaceLibrary, spaceScopeOf, type SpaceScope } from "./spaces";
 
 export type SpaceRequestErrorCode = "outside-scope" | "invalid" | "not-found" | "exists" | "unknown-field" | "scope-change" | "conflict" | "failed";
 
@@ -91,6 +92,24 @@ function compare(a: unknown, b: unknown): number {
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The code a failure reaches the page with; the library's own codes in the page interface's terms. */
+function replyCode(error: unknown): SpaceRequestErrorCode {
+  if (error instanceof SpaceRequestError || error instanceof RecordError || error instanceof OperationLogError) return error.code;
+  if (error instanceof LibraryError) {
+    const codes: Partial<Record<LibraryError["code"], SpaceRequestErrorCode>> = {
+      "invalid-name": "invalid",
+      "not-allowed": "invalid",
+      "not-utf8": "invalid",
+      exists: "exists",
+      "not-found": "not-found",
+      conflict: "conflict",
+      "outside-library": "outside-scope",
+    };
+    return codes[error.code] ?? "failed";
+  }
+  return "failed";
+}
 
 export interface SpaceRequests {
   handle(request: unknown): Promise<SpaceReply>;
@@ -309,6 +328,88 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     return { count: indices.length };
   };
 
+  const writeNote = async (raw: string, content: string, create: boolean, tally: Tally) => {
+    const { path, real } = await resolve(raw);
+    const before = await textAt(real);
+    if (create && before !== null) throw new SpaceRequestError("exists", `“${raw}”已经存在。`);
+    await commit(content, real, [entry(before === null ? "noteCreate" : "noteWrite", path, { ...(before === null ? {} : { before: [before] }), after: [content] })], tally);
+    return { path };
+  };
+
+  let opened: Promise<Library> | undefined;
+  const notesLibrary = () => (opened ??= openLibrary(root, options));
+
+  /** Renames or moves a note; links to it follow, but never inside a note outside the scope. */
+  const relocate = async (raw: string, kind: "noteRename" | "noteMove", destination: string, tally: Tally) => {
+    const { path } = await resolve(raw);
+    const target = await resolve(destination);
+    if ((await textAt((await resolve(raw)).real)) === null) throw notFound(raw);
+    if (target.path === path) return { path };
+    const within = await scope();
+    let logged: LogEntry[] = [];
+    const vet: VetRelocation = async (to, rewrites) => {
+      const outside = rewrites.find((rewrite) => rewrite.to !== to && !scopeContains(within, rewrite.to));
+      if (outside) {
+        throw new SpaceRequestError("outside-scope", `范围外的笔记“${outside.from}”链接到“${path}”。为了不改动范围外的笔记，不能改名或移动它。`);
+      }
+      logged = await log.record([entry(kind, path, { newPath: to, related: rewrites.map(({ to: at, before, after }) => ({ path: at, before, after })) })]);
+    };
+    const lib = await notesLibrary();
+    const name = target.path.split("/").pop()!;
+    const folder = target.path.split("/").slice(0, -1).join("/");
+    try {
+      if (kind === "noteMove") await mkdir(join(await rootReal(), ...folder.split("/").filter(Boolean)), { recursive: true });
+      const moved = kind === "noteRename" ? await lib.rename(path, name, vet) : await lib.move(path, folder, vet);
+      counted(logged, tally);
+      return { path: moved.path };
+    } catch (error) {
+      if (logged.length > 0) await log.discard(logged.map((e) => e.id)).catch(() => undefined);
+      throw error;
+    }
+  };
+
+  const rename = async (raw: string, title: string, tally: Tally) => {
+    let name = title.trim();
+    if (name.toLowerCase().endsWith(".md")) name = name.slice(0, -3);
+    if (name === "" || name.startsWith(".") || /[\\/:\n\r]/.test(name)) throw invalid("新名称不能为空，不能包含斜杠、冒号或以点开头。");
+    const { path } = await resolve(raw);
+    const folder = path.split("/").slice(0, -1);
+    return relocate(raw, "noteRename", [...folder, `${name}.md`].join("/"), tally);
+  };
+
+  const move = async (raw: string, folder: unknown, tally: Tally) => {
+    const destination = (typeof folder === "string" ? folder : "").replace(/^[/ ]+|[/ ]+$/g, "");
+    const { path } = await resolve(raw);
+    return relocate(raw, "noteMove", [destination, path.split("/").pop()!].filter(Boolean).join("/"), tally);
+  };
+
+  const trash = async (raw: string, tally: Tally) => {
+    const { path, real } = await resolve(raw);
+    const before = await textAt(real);
+    if (before === null) throw notFound(raw);
+    // The note's text stays in the log, so undo can bring it back whatever the system trash does.
+    const logged = await log.record([entry("noteTrash", path, { before: [before] })]);
+    try {
+      if (!options.trash) throw new Error("没有可用的废纸篓");
+      await options.trash(real);
+    } catch (error) {
+      await log.discard(logged.map((e) => e.id)).catch(() => undefined);
+      throw new SpaceRequestError("failed", `无法把“${raw}”移到废纸篓：${(error as Error).message}。`);
+    }
+    counted(logged, tally);
+    return { path };
+  };
+
+  /** The homepage may rewrite its own file, but its scope stays what the user set. */
+  const writePage = async (html: string, tally: Tally) => {
+    const current = await spaces.space(space).catch(() => Promise.reject(notFound(space)));
+    if (scopeMeta(spaceScopeOf(html)) !== scopeMeta(current.scope) || spaceScopeOf(html).library !== current.scope.library) {
+      throw new SpaceRequestError("scope-change", "空间主页不能修改自己的范围（lb-scope）。请在笔记应用里编辑空间。");
+    }
+    await commit(html, join(spaces.folder, `${space}.html`), [entry("pageWrite", current.path, { before: [current.html], after: [html] })], tally);
+    return { path: current.path };
+  };
+
   const dispatch = async (method: string, args: unknown[], tally: Tally): Promise<unknown> => {
     switch (method) {
       case "scope":
@@ -329,6 +430,17 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
         return update(stringArg(args, 0, "target"), objectArg(args, 1), objectArg(args, 2), tally);
       case "remove":
         return update(stringArg(args, 0, "target"), objectArg(args, 1), null, tally);
+      case "create":
+      case "write":
+        return writeNote(stringArg(args, 0, "path"), typeof args[1] === "string" ? args[1] : "", method === "create", tally);
+      case "rename":
+        return rename(stringArg(args, 0, "path"), stringArg(args, 1, "newTitle"), tally);
+      case "move":
+        return move(stringArg(args, 0, "path"), args[1], tally);
+      case "trash":
+        return trash(stringArg(args, 0, "path"), tally);
+      case "writePage":
+        return writePage(typeof args[0] === "string" ? args[0] : "", tally);
       default:
         throw invalid(`没有方法 lb.${method}。`);
     }
@@ -343,12 +455,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
       const result = await serialized(root, () => dispatch(method, args, tally));
       return { ok: true, result, changes: tally.changes, recordChanges: tally.records };
     } catch (error) {
-      if (error instanceof SpaceRequestError || error instanceof RecordError || error instanceof OperationLogError || error instanceof LibraryError) {
-        const code = error.code;
-        const known: SpaceRequestErrorCode[] = ["outside-scope", "invalid", "not-found", "exists", "unknown-field", "scope-change", "conflict"];
-        return { ok: false, error: { code: known.includes(code as SpaceRequestErrorCode) ? (code as SpaceRequestErrorCode) : "failed", message: error.message } };
-      }
-      return { ok: false, error: { code: "failed", message: (error as Error).message } };
+      return { ok: false, error: { code: replyCode(error), message: (error as Error).message } };
     }
   };
 
