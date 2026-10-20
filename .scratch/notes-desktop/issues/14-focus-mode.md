@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] ⌘⇧F / Ctrl+Shift+F 或卡片按钮进入，Esc 或退出按钮返回
 - [x] 正文卡片以“专注”弹簧展开（强档回弹 ≤ 0.12），侧栏与列表淡出仅左移 4–6px，背景压暗
@@ -23,3 +23,7 @@
 - Evidence: `tests/e2e/focus.spec.ts` (6 tests: shortcut/Esc, button round trip keeping selection + scroll, typing through a reversed transition and saving, spring/fade/5px/dimming timings, reduced motion, docked 助手栏); preset limits in `tests/core/motion.test.ts`.
 - Commands: `npm run typecheck`, `npm test` (117 passed, 1 skipped), `npm run test:e2e` (67 passed); after merging `feat/notes-desktop` (docs only) typecheck + `focus.spec.ts` green again.
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 Windows 上一个用固定次数 ↓ 定位第 60 段的用例差一行（字体折行不同），改为按到达为止（提交见 git log）；CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39383413147
