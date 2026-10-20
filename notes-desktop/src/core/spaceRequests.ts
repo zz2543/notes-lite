@@ -10,6 +10,8 @@ import type { VetRelocation } from "./organize";
 import { appendRecords, cellNumber, fieldTypes, findTable, normalizedCell, RecordError, rewriteRows, unknownField, type FieldType } from "./recordTables";
 import { serialized } from "./serialized";
 import { notesInScope, scopeContains, scopeMeta, spaceLibrary, spaceScopeOf, type SpaceScope } from "./spaces";
+import { isHidden, noteTitle } from "../shared/paths";
+
 
 export type SpaceRequestErrorCode = "outside-scope" | "invalid" | "not-found" | "exists" | "unknown-field" | "scope-change" | "conflict" | "failed";
 
@@ -151,7 +153,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     const full = join(real ?? base, ...parts.slice(existing));
     if (!full.startsWith(base + sep)) throw outsideScope(raw);
     const realPath = full.slice(base.length + 1).split(sep).join("/");
-    if (realPath.split("/").some((part) => part.startsWith(".")) || !scopeContains(within, realPath)) throw outsideScope(raw);
+    if (isHidden(realPath) || !scopeContains(within, realPath)) throw outsideScope(raw);
     return { path, real: join(base, ...parts) };
   };
 
@@ -196,7 +198,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     return Promise.all(
       paths.map(async (path) => ({
         path,
-        title: path.split("/").pop()!.replace(/\.md$/i, ""),
+        title: noteTitle(path),
         modified: new Date((await stat(join(base, ...path.split("/")))).mtimeMs).toISOString(),
       })),
     );
@@ -288,7 +290,7 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     // The page sends the fields in the order it wrote them; that order heads a new table.
     let header = Array.isArray(options.header) ? options.header.map(cellText).filter((field) => field !== "") : [];
     if (header.length === 0) header = [...new Set(records.flatMap((record) => Object.keys(record).filter((key) => key !== "_row")))];
-    const title = path.split("/").pop()!.replace(/\.md$/i, "");
+    const title = noteTitle(path);
     const written = appendRecords(await textAt(real), title, heading, header, records.map(cellsFrom));
     const entries = written.rows.map((row) => entry("recordAppend", path, { heading, header: written.header, after: row }));
     await commit(written.text, real, entries, tally);

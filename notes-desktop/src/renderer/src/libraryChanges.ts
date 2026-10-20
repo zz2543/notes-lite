@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isHidden } from "../../shared/paths";
 
 // Changes in the open library, made by this app or any other program, as the watcher reports them.
 
@@ -7,7 +8,7 @@ type Listener = (paths: string[]) => void;
 const listeners = new Set<Listener>();
 let listening = false;
 
-const visible = (path: string) => !path.split("/").some((part) => part.startsWith("."));
+const visible = (path: string) => !isHidden(path);
 
 /**
  * Calls `listener` with each batch of changed paths the folder tree, the list or the open note can

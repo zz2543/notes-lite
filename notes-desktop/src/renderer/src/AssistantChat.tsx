@@ -5,6 +5,7 @@ import type { AgentActivity } from "../../shared/conversation";
 import type { AgentId } from "../../shared/agentKinds";
 import { withEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
 import type { TurnEvent } from "../../shared/conversation";
+import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
 import { icon } from "./tokens";
 
@@ -16,7 +17,7 @@ const doneFor = 1600;
 /** What a turn the user stopped ends with: no error for the figure. */
 const stopped = "已停止。";
 
-const titleOf = (path: string) => path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/i, "");
+const titleOf = noteTitle;
 
 /** The conversation in the 助手栏 and what the figure shows of it. */
 export function useAssistant() {

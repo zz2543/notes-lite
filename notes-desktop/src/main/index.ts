@@ -13,7 +13,6 @@ import {
   entryChanges,
   entrySummary,
   migrateLegacyFolder,
-  notesInScope,
   openLibrary,
   operationLog,
   OperationLogError,
@@ -21,6 +20,7 @@ import {
   SpaceError,
   spaceErrorReport,
   spaceLibrary,
+  spaceNotes,
   spaceStorage,
   watchLibrary,
   type Library,
@@ -50,6 +50,7 @@ import {
   type TurnStart,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
+import { isHidden } from "../shared/paths";
 import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
@@ -189,7 +190,7 @@ function watch(lib: Library) {
   try {
     watcher = watchLibrary(lib.root, (paths) => {
       // Search finds notes as they are now, whoever changed them.
-      for (const path of paths) if (!path.split("/").some((part) => part.startsWith("."))) noteChanged(path);
+      for (const path of paths) if (!isHidden(path)) noteChanged(path);
       if (window && !window.isDestroyed()) window.webContents.send(channels.libraryChanged, paths);
       // Open homepages follow too: a rewritten space file, or notes changed in their scope.
       void pages.libraryChanged(paths).catch(() => undefined);
@@ -433,10 +434,7 @@ function registerIpc() {
     return null;
   });
   // 空间主页 and its operation log.
-  space(channels.spaceNotes, async (name: string): Promise<SpaceNote[]> => {
-    const notes = await notesInScope(requireLibrary().root, (await spaces().space(name)).scope);
-    return notes.map((path) => ({ path, title: path.split("/").pop()!.replace(/\.md$/i, "") }));
-  });
+  space(channels.spaceNotes, async (name: string): Promise<SpaceNote[]> => spaceNotes(requireLibrary().root, (await spaces().space(name)).scope));
   ipcMain.on(channels.showSpacePage, (_, name: string, bounds: Rectangle) => void pages.show(name, bounds).catch(() => pages.hide()));
   ipcMain.on(channels.hideSpacePage, () => pages.hide());
   const log = () => {

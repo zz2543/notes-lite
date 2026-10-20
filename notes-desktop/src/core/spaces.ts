@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { collator } from "./library";
 import { addressableTables } from "./recordTables";
 import { spaceGuide } from "./spaceGuide";
+import { isHidden, noteTitle } from "../shared/paths";
 
 /** The app's own folder inside a note library (spaces, guide, order, operation log). */
 export const notesFolder = ".notes";
@@ -75,7 +76,7 @@ export function scopeLabel(scope: SpaceScope): string {
  * visible ones inside its scope. "" (something changed, the system can't say what) always passes.
  */
 export function spaceChanges(scope: SpaceScope, paths: readonly string[]): string[] {
-  return paths.filter((path) => path === "" || (!path.split("/").some((part) => part.startsWith(".")) && scopeContains(scope, path)));
+  return paths.filter((path) => path === "" || (!isHidden(path) && scopeContains(scope, path)));
 }
 
 /** What went wrong on a homepage: the message, where in the space file (if known), and the stack. */
@@ -159,6 +160,11 @@ function parseSpace(name: string, html: string): Space {
 }
 
 /** The visible notes inside the scope, by library path; hidden folders such as `.notes/` are never entered. */
+/** The notes in a space's scope (its contents in the middle column), each by path and title. */
+export async function spaceNotes(root: string, scope: SpaceScope): Promise<Array<{ path: string; title: string }>> {
+  return (await notesInScope(root, scope)).map((path) => ({ path, title: noteTitle(path) }));
+}
+
 export async function notesInScope(root: string, scope: SpaceScope): Promise<string[]> {
   const found: string[] = [];
   const walk = async (relative: string) => {
