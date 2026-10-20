@@ -1,11 +1,17 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences, type Rectangle } from "electron";
-import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions } from "electron";
+import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions, WebContents } from "electron";
 import { stat } from "node:fs/promises";
 import { homedir, release } from "node:os";
 import { basename, delimiter, join } from "node:path";
+import { execFile } from "node:child_process";
 import {
+  addEvent,
+  conversationStore,
   createSearchIndex,
   detectAgents,
+  emptyReply,
+  runTurn,
+  type Conversation,
   LibraryError,
   entryChanges,
   entrySummary,
@@ -28,6 +34,7 @@ import {
   type Space,
   type SpaceDraft,
   type SpacePageProblem,
+  type TurnEvent,
 } from "../core";
 import {
   channels,
@@ -43,6 +50,7 @@ import {
   type SpaceDone,
   type SpaceInfo,
   type SpaceNote,
+  type TurnStart,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
 import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
@@ -84,17 +92,45 @@ const sourceViewItem = "source-view";
 const material = windowMaterial({ platform: process.platform, release: release(), frameless: false });
 
 /**
- * Where the command-line agents are looked for: PATH, then the folders their installers use, since an
- * app opened from the Finder or Start menu does not get the PATH a terminal sets up.
- * NOTES_DESKTOP_AGENT_PATH (tests) replaces the whole search path.
+ * The PATH a terminal sets up, read once from the user's login shell: an app opened from the Finder
+ * does not get it, and agents installed through nvm, say, are only on it. Not on Windows, where apps
+ * get the user's PATH anyway.
  */
-function agentSearchPath(): string {
-  if (process.env.NOTES_DESKTOP_AGENT_PATH !== undefined) return process.env.NOTES_DESKTOP_AGENT_PATH;
+let loginShellPath: Promise<string | undefined> | undefined;
+function shellPath(): Promise<string | undefined> {
+  if (process.platform === "win32") return Promise.resolve(undefined);
+  loginShellPath ??= new Promise((done) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    const marker = "__NOTES_DESKTOP_PATH__";
+    execFile(shell, ["-ilc", `printf '${marker}%s' "$PATH"`], { timeout: 3000 }, (error, stdout) => {
+      const at = stdout.lastIndexOf(marker);
+      done((!error && at >= 0 && stdout.slice(at + marker.length).trim()) || undefined);
+    });
+  });
+  return loginShellPath;
+}
+
+function installerFolders(): Array<string | undefined> {
   const home = homedir();
-  const installers = process.platform === "win32"
+  return process.platform === "win32"
     ? [process.env.APPDATA && join(process.env.APPDATA, "npm"), join(home, ".local", "bin")]
     : [join(home, ".local", "bin"), join(home, ".claude", "local"), "/opt/homebrew/bin", "/usr/local/bin", join(home, ".npm-global", "bin"), join(home, ".bun", "bin"), join(home, ".volta", "bin")];
-  return [process.env.PATH, ...installers].filter(Boolean).join(delimiter);
+}
+
+/** The login shell's PATH, this process's, then the folders agent installers use. */
+const fullPath = async () => [await shellPath(), process.env.PATH, ...installerFolders()].filter(Boolean).join(delimiter);
+
+/** Where the command-line agents are looked for. NOTES_DESKTOP_AGENT_PATH (tests) replaces the whole search path. */
+async function agentSearchPath(): Promise<string> {
+  if (process.env.NOTES_DESKTOP_AGENT_PATH !== undefined) return process.env.NOTES_DESKTOP_AGENT_PATH;
+  return fullPath();
+}
+
+/** What an agent runs with: this environment, with the PATH a terminal would have (so its own tools are found). */
+async function agentEnvironment(): Promise<NodeJS.ProcessEnv> {
+  const key = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+  if (process.env.NOTES_DESKTOP_AGENT_PATH !== undefined) return process.env;
+  return { ...process.env, [key]: await fullPath() };
 }
 
 /** The look the page needs before its first frame; the accent is read again for each new window. */
@@ -121,6 +157,64 @@ const snapshots = snapshotStore(join(app.getPath("userData"), "snapshots"), {
   trash: (path) => shell.trashItem(path),
   ...(copyLimit ? { attachments: "copy" as const, copyLimit } : {}),
 });
+
+// 对话记录, kept with the app; the conversations of this run stay in memory too.
+const conversations = conversationStore(join(app.getPath("userData"), "conversations"));
+const conversationsOpen = new Map<string, Conversation>();
+const running = new Map<string, AbortController>();
+
+type Started = { ok: true; conversation: Conversation } | { ok: false; message: string };
+
+/** Begins (or continues) a conversation's turn and passes its events to the page as they come. */
+async function startTurn(page: WebContents, request: TurnStart): Promise<Started> {
+  const lib = library;
+  if (!lib) return { ok: false, message: "请先打开笔记库。" };
+  const known = request.conversation
+    ? (conversationsOpen.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined)))
+    : undefined;
+  const conversation = known ?? conversations.start({ agent: request.agent, root: lib.root, folder: request.folder });
+  if (conversation.root !== lib.root) return { ok: false, message: "这个对话属于另一个笔记库。" };
+  if (running.has(conversation.id)) return { ok: false, message: "上一轮还没有结束。" };
+  const installed = await detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT });
+  const agent = installed.find((a) => a.id === conversation.agent);
+  if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
+  conversation.messages.push({ role: "user", text: request.text, notes: request.notes }, emptyReply());
+  conversationsOpen.set(conversation.id, conversation);
+  await conversations.save(conversation);
+  const stop = new AbortController();
+  running.set(conversation.id, stop);
+  const replyAt = conversation.messages.length - 1;
+  const pass = (event: TurnEvent) => {
+    if (event.kind === "session") conversation.session = event.id;
+    const reply = conversation.messages[replyAt];
+    if (reply?.role === "assistant") conversation.messages[replyAt] = addEvent(reply, event);
+    if (!page.isDestroyed()) page.send(channels.turnEvent, conversation.id, event);
+  };
+  const turns = snapshots.library(lib.root);
+  void runTurn({
+    agent,
+    root: lib.root,
+    folder: conversation.folder,
+    text: request.text,
+    notes: request.notes,
+    session: conversation.session,
+    snapshots: turns,
+    log: operationLog(lib.root, { ...libraryOptions, turns }),
+    env: await agentEnvironment(),
+    signal: stop.signal,
+    onEvent: pass,
+  })
+    .catch((error: Error) => {
+      // The snapshots themselves failed: the turn ends saying why.
+      const reply = conversation.messages[replyAt];
+      if (reply?.role === "assistant" && !reply.done) pass({ kind: "end", changes: [], failed: error.message });
+    })
+    .finally(() => {
+      running.delete(conversation.id);
+      void conversations.save(conversation).catch(() => undefined);
+    });
+  return { ok: true, conversation };
+}
 
 /**
  * Readies a library just opened: the old app's `.留白/` moves into `.notes/` the first time, and the
@@ -387,10 +481,16 @@ function registerIpc() {
     clipboard.writeText(spaceErrorReport({ space: name, file: join(lib.folder, `${name}.html`), guide: lib.guidePath, error: problem }));
     return null;
   });
-  ipcMain.on(channels.prepareSnapshots, () => void (library && snapshots.library(library.root).baseline().catch(() => undefined)));
+  ipcMain.on(channels.prepareSnapshots, () => {
+    void (library && snapshots.library(library.root).baseline().catch(() => undefined));
+    // The login shell is asked for its PATH ahead of the first turn too.
+    void shellPath();
+  });
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
-  ipcMain.handle(channels.detectAgents, () => detectAgents({ path: agentSearchPath(), pathext: process.env.PATHEXT }));
+  ipcMain.handle(channels.detectAgents, async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }));
+  ipcMain.handle(channels.startTurn, (event, request: TurnStart) => startTurn(event.sender, request));
+  ipcMain.on(channels.stopTurn, (_, id: string) => running.get(id)?.abort());
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
@@ -597,6 +697,8 @@ void app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => (quitting = true));
+// An agent still running stops with the app.
+app.on("will-quit", () => running.forEach((turn) => turn.abort()));
 
 app.on("window-all-closed", () => {
   if (!mac) app.quit();

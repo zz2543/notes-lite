@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
 import { AssistantColumn, AssistantToggle, isAssistantShortcut } from "./Assistant";
-import type { FigureState } from "./figureModel";
+import { useAssistant } from "./AssistantChat";
 import { FocusToggle, useFocusMode } from "./FocusMode";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
@@ -214,9 +214,22 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   };
 
   // 助手栏: docked right of the card, opened and closed with ⌘J / Ctrl+J. Its figure shows what the
-  // assistant is doing; a turn (ticket 28) moves it out of 待命.
+  // assistant is doing, in the column or, closed, on the card's toggle.
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const figureState: FigureState = "idle";
+  const assistant = useAssistant();
+  const figureState = assistant.figure;
+  // A new conversation works where the user last chose: the open note's folder, or a folder chosen since.
+  const [picked, setPicked] = useState<"note" | "folder">(note === null ? "folder" : "note");
+  const pickedFolder = useRef(folder);
+  useEffect(() => {
+    if (note !== null) setPicked("note");
+  }, [note]);
+  useEffect(() => {
+    if (folder === pickedFolder.current) return;
+    pickedFolder.current = folder;
+    if (note === null || parentOf(note) !== folder) setPicked("folder");
+  }, [folder]);
+  const workingFolder = picked === "note" && note !== null ? parentOf(note) : folder;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isAssistantShortcut(event)) return;
@@ -453,7 +466,16 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
           />
         )}
       </main>
-      <AssistantColumn open={assistantOpen} state={figureState} onClose={() => setAssistantOpen(false)} />
+      <AssistantColumn
+        open={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
+        assistant={assistant}
+        folder={workingFolder}
+        note={note}
+        libraryName={library.name}
+        onOpenFolder={openFolder}
+        saveFirst={saveFirst}
+      />
       {organize.overlay}
     </div>
   );

@@ -713,6 +713,213 @@ nav.rail .drag {
   overflow-wrap: anywhere;
 }
 
+/* 一轮: the working directory under the figure, the conversation in the middle, the input at the
+   bottom. Replies are plain text on the material; the user's words sit on a pill. Tool calls fold
+   into one muted timeline line. */
+.assistant-agent {
+  font-size: var(--text-path);
+  font-weight: var(--weight-item);
+}
+.assistant-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  max-width: 100%;
+  padding: 0 var(--row-padding);
+  height: var(--icon-button-small);
+  border-radius: var(--icon-button-radius);
+  font-size: var(--text-path);
+  color: var(--side-muted);
+}
+.assistant-folder span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assistant-folder:hover {
+  background: var(--hover);
+  color: var(--side-fg);
+}
+.assistant-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  padding: var(--card-gap) 0;
+  font-size: var(--text-item);
+  line-height: 1.55;
+  user-select: text;
+}
+.assistant-user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+.assistant-user p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-user .user-notes {
+  font-size: var(--text-meta);
+  color: var(--side-muted);
+}
+.assistant-reply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+}
+.assistant-reply p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reply-waiting,
+.reply-changes {
+  font-size: var(--text-path);
+  color: var(--side-muted);
+}
+.reply-failed,
+.assistant-problem {
+  font-size: var(--text-path);
+  color: var(--figure-error);
+}
+.assistant-problem {
+  margin: 0 0 var(--inline-gap);
+}
+.timeline-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  font-size: var(--text-path);
+  color: var(--side-muted);
+}
+.timeline-head:hover {
+  color: var(--side-fg);
+}
+.timeline-caret {
+  transition: rotate var(--spring-pop);
+}
+.timeline-head[aria-expanded="true"] .timeline-caret {
+  rotate: 90deg;
+}
+.timeline-steps {
+  margin: var(--inline-gap) 0 0;
+  padding: 0 0 0 var(--row-indent);
+  list-style: none;
+  font-size: var(--text-path);
+  color: var(--side-muted);
+  border-left: 1px solid var(--line);
+}
+.timeline-steps li {
+  overflow-wrap: anywhere;
+}
+.timeline-steps li.running {
+  color: var(--side-fg);
+}
+.timeline-steps li.failed {
+  color: var(--figure-error);
+}
+.assistant-composer {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+  padding: var(--inline-gap) var(--row-padding);
+  border-radius: var(--item-radius);
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+.assistant-composer textarea {
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--list-fg);
+  font: inherit;
+  font-size: var(--text-item);
+  line-height: 1.5;
+}
+.attached-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--inline-gap);
+}
+.note-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 0 0 var(--row-padding);
+  border-radius: var(--icon-button-small-radius);
+  background: var(--hover);
+  font-size: var(--text-meta);
+  line-height: var(--icon-button-small);
+}
+.note-chip button {
+  display: grid;
+  place-items: center;
+  width: var(--icon-button-small);
+  height: var(--icon-button-small);
+  color: var(--side-muted);
+}
+.composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.composer-send {
+  display: grid;
+  place-items: center;
+  width: var(--icon-button-small);
+  height: var(--icon-button-small);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.composer-send:disabled {
+  opacity: 0.35;
+}
+.mention-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--inline-gap));
+  margin: 0;
+  padding: var(--menu-padding);
+  list-style: none;
+  border-radius: var(--menu-radius);
+  background: var(--glass);
+  backdrop-filter: var(--menu-blur);
+  box-shadow: var(--overlay-shadow);
+}
+.mention-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--inline-gap);
+  height: var(--menu-item-height);
+  padding: 0 var(--row-padding);
+  border-radius: var(--row-radius);
+  font-size: var(--text-path);
+  cursor: default;
+}
+.mention-list li[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.mention-folder {
+  font-size: var(--text-meta);
+  opacity: 0.6;
+}
+
 /* 专注模式: the navigation and the list fade and slide a few px left while the card, on the 专注
    spring, grows over the room they give up (a negative margin, so their own width never changes and
    nothing in them reflows). The window material behind dims. The 助手栏 stays docked. */
