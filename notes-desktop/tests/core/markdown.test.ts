@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { countWords } from "../../src/core/markdown";
+import { countWords, noteSummary } from "../../src/core/markdown";
+
+// Ported from the old NotesCore NotePreview: the 详细 list shows prose, not Markdown delimiters,
+// headings, code or attachment paths.
+describe("摘要", () => {
+  it("shows the prose without headings, markers, code or embeds", () => {
+    const note = ["---", "tags: 日记", "---", "# 雨后的散步", "", "![[雨.png]]", "- 走过**小路**，看见 `青苔`", "```js", "let x = 1;", "```", "> 空气[很好](https://example.com)"].join("\n");
+    expect(noteSummary(note)).toBe("走过小路，看见 青苔 空气很好");
+  });
+
+  it("is one short line: about a hundred characters", () => {
+    const long = Array.from({ length: 30 }, (_, i) => `第${i}段文字写得很长。`).join("\n\n");
+    const summary = noteSummary(long);
+    expect(summary.length).toBeLessThanOrEqual(110);
+    expect(summary.startsWith("第0段文字写得很长。 第1段文字写得很长。")).toBe(true);
+    expect(noteSummary("# 只有标题\n\n---\n")).toBe("");
+  });
+});
 
 // Ported from the old NotesCore Markdown.countWords: block markers are skipped, each CJK character
 // counts once, and a run of ASCII letters or digits counts once ("2.0", "3,200" and "50%" included).
