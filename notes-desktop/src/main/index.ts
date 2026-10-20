@@ -1,10 +1,11 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences } from "electron";
 import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import { stat } from "node:fs/promises";
-import { release } from "node:os";
-import { basename, join } from "node:path";
+import { homedir, release } from "node:os";
+import { basename, delimiter, join } from "node:path";
 import {
   createSearchIndex,
+  detectAgents,
   LibraryError,
   migrateLegacyFolder,
   openLibrary,
@@ -60,6 +61,20 @@ const sourceViewItem = "source-view";
 
 // Windows keeps its system frame (and so the fallback colour) until the app draws its own title bar there.
 const material = windowMaterial({ platform: process.platform, release: release(), frameless: false });
+
+/**
+ * Where the command-line agents are looked for: PATH, then the folders their installers use, since an
+ * app opened from the Finder or Start menu does not get the PATH a terminal sets up.
+ * NOTES_DESKTOP_AGENT_PATH (tests) replaces the whole search path.
+ */
+function agentSearchPath(): string {
+  if (process.env.NOTES_DESKTOP_AGENT_PATH !== undefined) return process.env.NOTES_DESKTOP_AGENT_PATH;
+  const home = homedir();
+  const installers = process.platform === "win32"
+    ? [process.env.APPDATA && join(process.env.APPDATA, "npm"), join(home, ".local", "bin")]
+    : [join(home, ".local", "bin"), join(home, ".claude", "local"), "/opt/homebrew/bin", "/usr/local/bin", join(home, ".npm-global", "bin"), join(home, ".bun", "bin"), join(home, ".volta", "bin")];
+  return [process.env.PATH, ...installers].filter(Boolean).join(delimiter);
+}
 
 /** The look the page needs before its first frame; the accent is read again for each new window. */
 function systemAppearance(): Appearance {
@@ -309,6 +324,7 @@ function registerIpc() {
   space(channels.deleteSpace, async (name: string) => (await spaces().delete(name), null));
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
+  ipcMain.handle(channels.detectAgents, () => detectAgents({ path: agentSearchPath(), pathext: process.env.PATHEXT }));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));

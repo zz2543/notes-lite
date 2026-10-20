@@ -5,7 +5,7 @@ import { defaultIntensity, motionPresets, type MotionIntensity, type MotionPrese
 const reducedMotion = "(prefers-reduced-motion: reduce)";
 
 /** The system's 减弱动态效果, followed while the app runs. */
-function usePrefersReducedMotion(): boolean {
+export function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(
     (onChange) => {
       const query = matchMedia(reducedMotion);

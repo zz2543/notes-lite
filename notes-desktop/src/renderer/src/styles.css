@@ -559,3 +559,154 @@ aside.side .search-head,
 aside.side .items {
   padding-inline: 0;
 }
+
+/* 图标栏: with the 助手栏 open in a narrow window the navigation shrinks to icons. */
+nav.rail {
+  width: var(--rail-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--inline-gap) / 2);
+  padding-bottom: var(--card-gap);
+}
+nav.rail .drag {
+  align-self: stretch;
+}
+.rail-button {
+  width: var(--rail-button);
+  height: var(--rail-button);
+  display: grid;
+  place-items: center;
+  border-radius: var(--rail-button-radius);
+  color: var(--side-fg);
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.rail-button:hover {
+  background: var(--hover);
+}
+.rail-button:active {
+  scale: var(--press-scale-icon);
+}
+.rail-gap {
+  flex: 1;
+}
+
+/* 助手栏: the fourth column, on the window material right of the card. Its width moves without a
+   bounce; the content keeps its own width meanwhile, so nothing inside reflows as it opens or shuts. */
+.assistant {
+  width: 0;
+  flex: none;
+  overflow: hidden;
+  visibility: hidden;
+  transition:
+    width var(--assistant-toggle),
+    visibility 0s linear var(--assistant-toggle-duration);
+}
+.assistant.open {
+  width: var(--assistant-width);
+  visibility: visible;
+  transition: width var(--assistant-toggle);
+}
+.app.narrow .assistant.open {
+  width: var(--assistant-width-narrow);
+}
+.assistant-inner {
+  width: var(--assistant-width);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--card-gap) var(--card-gap) 0;
+  color: var(--side-fg);
+}
+.app.narrow .assistant-inner {
+  width: var(--assistant-width-narrow);
+}
+.assistant-bar {
+  height: var(--titlebar-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  -webkit-app-region: drag;
+}
+.assistant-bar button {
+  -webkit-app-region: no-drag;
+}
+.assistant-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--card-gap);
+  padding-bottom: var(--card-gap);
+}
+.assistant-figure {
+  display: block;
+  flex: none;
+}
+.assistant-toggle {
+  flex: none;
+  width: var(--icon-button);
+  height: var(--icon-button);
+  display: grid;
+  place-items: center;
+  margin-left: var(--inline-gap);
+  border-radius: var(--icon-button-radius);
+  -webkit-app-region: no-drag;
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.assistant-toggle:hover {
+  background: var(--hover);
+}
+.assistant-toggle:active {
+  scale: var(--press-scale-icon);
+}
+.assistant-guide {
+  margin: var(--card-gap) 0;
+  padding: var(--settings-padding);
+  border-radius: var(--item-radius);
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+  font-size: var(--text-path);
+  line-height: 1.5;
+  user-select: text;
+}
+.assistant-guide h2 {
+  margin: 0 0 var(--inline-gap);
+  font-size: var(--text-item);
+  font-weight: var(--weight-list-title);
+}
+.assistant-guide p {
+  margin: 0 0 var(--card-gap);
+  color: var(--side-muted);
+}
+.assistant-guide ul {
+  margin: 0 0 var(--settings-padding);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+}
+.assistant-guide li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--inline-gap);
+}
+.guide-name {
+  font-weight: var(--weight-item);
+}
+.assistant-guide code {
+  font-family: var(--code-font);
+  font-size: var(--text-meta);
+  color: var(--side-muted);
+}
+.assistant-guide .guide-install {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}

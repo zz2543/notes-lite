@@ -1,12 +1,15 @@
-import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass, SidebarSimple } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
+import { AssistantColumn, AssistantToggle, isAssistantShortcut } from "./Assistant";
+import type { FigureState } from "./figureModel";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
 import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
 import { errorText, pageShown } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
+import { useNarrowWindow, useNavigationTier } from "./navigationTier";
 import { NoteEditor } from "./NoteEditor";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
@@ -208,10 +211,27 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     void openNote(path);
   };
 
+  // 助手栏: docked right of the card, opened and closed with ⌘J / Ctrl+J. Its figure shows what the
+  // assistant is doing; a turn (ticket 28) moves it out of 待命.
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const figureState: FigureState = "idle";
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isAssistantShortcut(event)) return;
+      event.preventDefault();
+      setAssistantOpen((now) => !now);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+  const narrow = useNarrowWindow();
+
   // 导航模式. 单栏导航 browses folders and notes in one tree; a note opened there makes its folder the one
   // browsed, so 双栏导航 shows the same place. Switching keeps the open note (and where its caret is)
-  // and the folder, and the tree unfolds down to them.
-  const single = usePreferences().preferences.navigation === "single";
+  // and the folder, and the tree unfolds down to them. With the 助手栏 open a narrow window narrows the
+  // navigation further, to 单栏 and then to the 图标栏.
+  const [tier, expandNavigation] = useNavigationTier(usePreferences().preferences.navigation, assistantOpen);
+  const single = tier === "single";
   useEffect(() => {
     if (single) setExpanded((now) => new Set([...now, ...ancestors(folder), ...(note === null ? [] : ancestors(parentOf(note)))]));
   }, [single]);
@@ -274,59 +294,83 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   ) : null;
 
   return (
-    <div className="app">
-      <aside className={`side ${single ? "single" : ""}`} onKeyDown={single ? closeOnEscape : undefined}>
-        <div className="drag" />
-        <SideSwitch mode={sideMode} onChange={setSideMode} />
-        <SidePages mode={sideMode}>
-          {sideMode === "library" ? (
-            <>
-              {(single && searchHead) || (
-                <div className="side-label">
-                  <span className="label">{single ? "笔记" : "文件夹"}</span>
-                  <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
-                    <MagnifyingGlass size={icon.small} />
+    <div className={`app ${narrow ? "narrow" : ""}`}>
+      {tier === "rail" ? (
+        <nav className="rail" aria-label="导航">
+          <div className="drag" />
+          <button className="rail-button" onClick={expandNavigation} aria-label="展开导航" title="展开导航">
+            <SidebarSimple size={icon.regular} />
+          </button>
+          <button
+            className="rail-button"
+            onClick={() => {
+              expandNavigation();
+              openSearch();
+            }}
+            aria-label="搜索"
+            title={`搜索 ${searchShortcut}`}
+          >
+            <MagnifyingGlass size={icon.regular} />
+          </button>
+          <span className="rail-gap" />
+          <button className="rail-button" onClick={onSwitch} aria-label="切换笔记库" title={`切换笔记库（${library.name}）`}>
+            <HardDrives size={icon.regular} />
+          </button>
+        </nav>
+      ) : (
+        <aside className={`side ${single ? "single" : ""}`} onKeyDown={single ? closeOnEscape : undefined}>
+          <div className="drag" />
+          <SideSwitch mode={sideMode} onChange={setSideMode} />
+          <SidePages mode={sideMode}>
+            {sideMode === "library" ? (
+              <>
+                {(single && searchHead) || (
+                  <div className="side-label">
+                    <span className="label">{single ? "笔记" : "文件夹"}</span>
+                    <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+                      <MagnifyingGlass size={icon.small} />
+                    </button>
+                  </div>
+                )}
+                {(single && searchResults) || (
+                  <FolderTree
+                    libraryName={library.name}
+                    selected={folder}
+                    expanded={expanded}
+                    onActivate={activate}
+                    onToggle={toggle}
+                    onNewNote={(path) => void organize.newNote(path)}
+                    onMenu={organize.folderMenu}
+                    notes={
+                      single
+                        ? {
+                            open: note,
+                            onOpen: (path) => void openTreeNote(path),
+                            onMenu: (path, name, event) => organize.itemMenu({ path, name, kind: "note" }, event),
+                          }
+                        : undefined
+                    }
+                  />
+                )}
+                {lastDeletedName !== undefined && (
+                  <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
+                    <ArrowCounterClockwise size={icon.small} />
+                    <span className="label">恢复上次删除</span>
                   </button>
-                </div>
-              )}
-              {(single && searchResults) || (
-                <FolderTree
-                  libraryName={library.name}
-                  selected={folder}
-                  expanded={expanded}
-                  onActivate={activate}
-                  onToggle={toggle}
-                  onNewNote={(path) => void organize.newNote(path)}
-                  onMenu={organize.folderMenu}
-                  notes={
-                    single
-                      ? {
-                          open: note,
-                          onOpen: (path) => void openTreeNote(path),
-                          onMenu: (path, name, event) => organize.itemMenu({ path, name, kind: "note" }, event),
-                        }
-                      : undefined
-                  }
-                />
-              )}
-              {lastDeletedName !== undefined && (
-                <button className="side-foot side-restore" onClick={() => void organize.restore()} title={`恢复“${lastDeletedName}”`}>
-                  <ArrowCounterClockwise size={icon.small} />
-                  <span className="label">恢复上次删除</span>
-                </button>
-              )}
-            </>
-          ) : (
-            <SpacePanel libraryName={library.name} selected={space} onSelect={setSpace} notify={notify} />
-          )}
-        </SidePages>
-        <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
-          <HardDrives size={icon.small} />
-          <span className="label">{library.name}</span>
-          <CaretUpDown size={icon.caret} />
-        </button>
-      </aside>
-      {!single && (
+                )}
+              </>
+            ) : (
+              <SpacePanel libraryName={library.name} selected={space} onSelect={setSpace} notify={notify} />
+            )}
+          </SidePages>
+          <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
+            <HardDrives size={icon.small} />
+            <span className="label">{library.name}</span>
+            <CaretUpDown size={icon.caret} />
+          </button>
+        </aside>
+      )}
+      {tier === "double" && (
         <section className="list" onKeyDown={closeOnEscape}>
           {searchHead}
           {searchResults ?? (
@@ -342,8 +386,16 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         </section>
       )}
       <main className="card-wrap">
-        <NoteEditor key={reloads} path={note} fresh={note !== null && note === fresh} onOpenCopy={openCopy} onLetGo={letGo} />
+        <NoteEditor
+          key={reloads}
+          path={note}
+          fresh={note !== null && note === fresh}
+          onOpenCopy={openCopy}
+          onLetGo={letGo}
+          headEnd={!assistantOpen && <AssistantToggle state={figureState} onOpen={() => setAssistantOpen(true)} />}
+        />
       </main>
+      <AssistantColumn open={assistantOpen} state={figureState} onClose={() => setAssistantOpen(false)} />
       {organize.overlay}
     </div>
   );

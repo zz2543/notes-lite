@@ -1,4 +1,4 @@
-import type { FolderContents, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
+import type { FolderContents, InstalledAgent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
 import type { Appearance } from "./appearance";
 import type { Preferences } from "./preferences";
 
@@ -102,6 +102,9 @@ export interface NotesApi {
   reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
   /** Copies the prompt for an external agent to the clipboard. */
   copySpacePrompt(name: string): Promise<SpaceDone<null>>;
+  // 助手栏 (ticket 26).
+  /** The command-line agents installed on this computer, looked for afresh each time. */
+  detectAgents(): Promise<InstalledAgent[]>;
 }
 
 /** A space as the side panel shows it. */
@@ -162,4 +165,5 @@ export const channels = {
   deleteSpace: "spaces:delete",
   reorderSpaces: "spaces:reorder",
   copySpacePrompt: "spaces:copy-prompt",
+  detectAgents: "assistant:detect-agents",
 } as const;

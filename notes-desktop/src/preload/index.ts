@@ -77,6 +77,7 @@ const api: NotesApi = {
   deleteSpace: (name) => ipcRenderer.invoke(channels.deleteSpace, name),
   reorderSpaces: (names) => ipcRenderer.invoke(channels.reorderSpaces, names),
   copySpacePrompt: (name) => ipcRenderer.invoke(channels.copySpacePrompt, name),
+  detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
 };
 
 contextBridge.exposeInMainWorld("notes", api);
