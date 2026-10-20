@@ -217,11 +217,11 @@ async function startTurn(page: WebContents, request: TurnStart): Promise<Started
 }
 
 /**
- * Readies a library just opened: the old app's `.留白/` moves into `.notes/` the first time, and the
+ * Readies a library just opened: the old app's `.留白/` moves into `.notes/` (and then to the trash) the first time, and the
  * authoring guide follows this version. Answers with what the user should be told, if anything.
  */
 async function prepare(lib: Library): Promise<string | undefined> {
-  const migration = await migrateLegacyFolder(lib.root);
+  const migration = await migrateLegacyFolder(lib.root, libraryOptions);
   const spaces = spaceLibrary(lib.root, libraryOptions);
   if ((await spaces.spaces()).length > 0) await spaces.installGuide().catch(() => undefined);
   return migration.kind === "failed" ? migration.message : undefined;
