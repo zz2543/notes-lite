@@ -36,7 +36,10 @@ function useInstalledAgents(open: boolean) {
   const [installed, setInstalled] = useState<InstalledAgent[]>();
   const detect = () => void window.notes.detectAgents().then(setInstalled);
   useEffect(() => {
-    if (open) detect();
+    if (!open) return;
+    detect();
+    // The library is snapshotted in the background now, so the first turn starts from it (ticket 27).
+    window.notes.prepareSnapshots();
   }, [open]);
   return { installed, detect };
 }

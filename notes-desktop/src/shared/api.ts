@@ -1,4 +1,4 @@
-import type { FolderContents, InstalledAgent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
+import type { FolderContents, InstalledAgent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
 import type { Appearance } from "./appearance";
 import type { Preferences } from "./preferences";
 
@@ -106,6 +106,12 @@ export interface NotesApi {
   // 助手栏 (ticket 26).
   /** The command-line agents installed on this computer, looked for afresh each time. */
   detectAgents(): Promise<InstalledAgent[]>;
+  /** The 助手栏 opened: the open library is snapshotted in the background, ahead of the first turn (ticket 27). */
+  prepareSnapshots(): void;
+  /** How much disk every library's snapshots take, for 设置 › 助手. */
+  snapshotUsage(): Promise<SnapshotUsage>;
+  /** Lets every snapshot go now; no turn so far can be undone after. */
+  clearSnapshots(): Promise<void>;
 
   // 空间主页 (ticket 19). The homepage runs in a sandbox main lays over the card.
   /** The notes inside a space's scope, by path. */
@@ -202,6 +208,9 @@ export const channels = {
   reorderSpaces: "spaces:reorder",
   copySpacePrompt: "spaces:copy-prompt",
   detectAgents: "assistant:detect-agents",
+  prepareSnapshots: "assistant:prepare-snapshots",
+  snapshotUsage: "assistant:snapshot-usage",
+  clearSnapshots: "assistant:clear-snapshots",
   spaceNotes: "spaces:notes",
   showSpacePage: "spaces:show-page",
   hideSpacePage: "spaces:hide-page",

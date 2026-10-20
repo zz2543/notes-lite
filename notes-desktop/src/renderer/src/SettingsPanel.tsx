@@ -1,8 +1,9 @@
-import { FadersHorizontal, ListBullets, Sparkle, TextAa, type Icon } from "@phosphor-icons/react";
+import { ChatsCircle, FadersHorizontal, ListBullets, Sparkle, TextAa, type Icon } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
+import { AssistantPage } from "./AssistantSettings";
 import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
 import { useMotion } from "./MotionProvider";
@@ -28,6 +29,7 @@ const pages: SettingsPage[] = [
   { id: "typography", label: "排版", icon: TextAa, content: () => <TypographyPage /> },
   { id: "list", label: "笔记列表", icon: ListBullets, content: () => <ListPage /> },
   { id: "motion", label: "动画", icon: Sparkle, content: () => <MotionPage /> },
+  { id: "assistant", label: "助手", icon: ChatsCircle, content: () => <AssistantPage /> },
 ];
 
 export function SettingsGroup({ title, description, children }: { title: string; description: string; children: ReactNode }) {
