@@ -6,6 +6,7 @@
 // into a store keyed by its content, so a file kept in a hundred snapshots is stored once; a file
 // whose size and modified time have not changed since the last snapshot is not read again. Only the
 // newest manifest is held in memory.
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, utimes, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -128,6 +129,27 @@ interface StoredTurn extends Turn {
   after?: string;
 }
 
+/**
+ * Copies a file as a copy-on-write clone where the disk can (APFS: `cp -c`, since Node's copyFile
+ * does not clone on macOS; elsewhere copyFile's own clone, as on ReFS or Btrfs), or whole.
+ */
+async function cloneFile(from: string, to: string) {
+  if (process.platform === "darwin") {
+    const cloned = await new Promise<boolean>((done) => execFile("/bin/cp", ["-c", from, to], (error) => done(!error)));
+    if (cloned) return;
+  }
+  await copyFile(from, to, constants.COPYFILE_FICLONE);
+}
+
+/** Runs `work` over `items`, a few at a time. */
+async function inParallel<T>(items: T[], work: (item: T) => Promise<void>, width = 8) {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) await work(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, lane));
+}
+
 /** The library's files and folders, by "/"-separated path. */
 async function walk(root: string) {
   const found = new Map<string, { size: number; mtimeMs: number }>();
@@ -184,7 +206,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
   const keepAttachment = async (path: string): Promise<string> => {
     const blob = `files/${randomUUID()}`;
     await mkdir(join(store, "files"), { recursive: true });
-    await copyFile(at(path), blobAt(blob), attachments === "clone" ? constants.COPYFILE_FICLONE : 0);
+    await (attachments === "clone" ? cloneFile(at(path), blobAt(blob)) : copyFile(at(path), blobAt(blob)));
     return blob;
   };
 
@@ -195,13 +217,13 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     let attachmentBytes = 0;
     for (const [path, { size }] of found.files) if (!isText(path)) attachmentBytes += size;
     const attachmentsKept = attachments === "clone" || attachmentBytes <= copyLimit;
-    for (const [path, { size, mtimeMs }] of found.files) {
+    await inParallel([...found.files], async ([path, { size, mtimeMs }]) => {
       const known = latest?.files[path];
       const text = isText(path);
       const reuse = known && known.size === size && known.mtimeMs === mtimeMs && (known.blob !== undefined || !attachmentsKept);
       const blob = reuse ? known.blob : text ? await keepText(path) : attachmentsKept ? await keepAttachment(path) : undefined;
       files[path] = blob === undefined ? { size, mtimeMs } : { size, mtimeMs, blob };
-    }
+    });
     const manifest: Manifest = { id: randomUUID(), date: now().toISOString(), files, folders: found.folders, attachmentsKept };
     await writeJson(manifestAt(manifest.id), manifest);
     latest = manifest;
@@ -224,7 +246,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     await mkdir(dirname(target), { recursive: true });
     const temp = join(dirname(target), `.${randomUUID()}.restoring`);
     try {
-      await copyFile(blobAt(state.blob!), temp, constants.COPYFILE_FICLONE);
+      await cloneFile(blobAt(state.blob!), temp);
       await utimes(temp, new Date(), new Date(state.mtimeMs));
       await rename(temp, target);
     } catch (error) {
