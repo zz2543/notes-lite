@@ -68,3 +68,63 @@ test("a turn with the open note: its folder is the working directory, the reply 
   expect(JSON.parse(await readFile(join(kept, file!), "utf8"))).toMatchObject({ agent: "claude", folder: "日记", session: "s-1" });
   expect(await readdir(join(root, "日记"))).toEqual(["周一.md"]);
 });
+
+test("a chosen folder is the working directory; the open note can be taken off, others @-mentioned; the directory stays until a new conversation", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/周一.md": "# 周一\n", "读书/书单.md": "# 书单\n", "随记.md": "随记\n" });
+  const agent = await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-2", steps: [{ say: "好的。" }] });
+  const { page } = await launchWith(scratch, root);
+  await openNote(page, "日记", "周一");
+  // Choosing a folder afterwards makes it the working directory; the open note is still attached.
+  await page.getByRole("treeitem", { name: "读书" }).click();
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await expect(column(page).getByRole("button", { name: "工作目录：读书" })).toBeVisible();
+  const attached = column(page).getByRole("list", { name: "附带的笔记" });
+  await expect(attached.getByRole("listitem")).toHaveText(["周一"]);
+  await attached.getByRole("button", { name: "不附上 周一" }).click();
+  await expect(attached).toHaveCount(0);
+
+  // @ mentions another note.
+  await input(page).fill("比较一下 @随");
+  const mentions = column(page).getByRole("listbox", { name: "提及笔记" });
+  await expect(mentions.getByRole("option")).toHaveText(["随记"]);
+  await input(page).press("Enter");
+  await expect(mentions).toHaveCount(0);
+  await expect(attached.getByRole("listitem")).toHaveText(["随记"]);
+  await expect(input(page)).toHaveValue("比较一下 ");
+  await input(page).press("Enter");
+  const conversation = column(page).getByRole("log", { name: "对话" });
+  await expect(conversation).toContainText("好的。");
+
+  // Browsing elsewhere does not move the conversation; the next turn continues it.
+  await page.getByRole("treeitem", { name: "日记" }).click();
+  await expect(column(page).getByRole("button", { name: "工作目录：读书" })).toBeVisible();
+  await input(page).fill("继续");
+  await input(page).press("Enter");
+  await expect(conversation.getByText("好的。")).toHaveCount(2);
+
+  // A new conversation starts where the user is now.
+  await column(page).getByRole("button", { name: "新对话" }).click();
+  await expect(conversation).toHaveCount(0);
+  await expect(column(page).getByRole("button", { name: "工作目录：日记" })).toBeVisible();
+
+  const [first, second] = await agent.runs();
+  expect(await realpath(first!.cwd)).toBe(await realpath(join(root, "读书")));
+  expect(first!.stdin).toContain("../随记.md");
+  expect(first!.stdin).not.toContain("周一");
+  expect(await realpath(second!.cwd)).toBe(await realpath(join(root, "读书")));
+  expect(second!.argv).toEqual(expect.arrayContaining(["--resume", "s-2"]));
+});
+
+test("an agent that fails shows why and the figure turns to 出错", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await installFakeAgent(join(scratch, "agents"), "claude", { steps: [{ say: "开始" }, { fail: "额度已用完" }] });
+  const { page } = await launchWith(scratch, root);
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await input(page).fill("写点东西");
+  await input(page).press("Enter");
+  await expect(column(page).getByRole("log", { name: "对话" }).getByRole("alert")).toHaveText("额度已用完");
+  await expect(column(page).getByRole("img", { name: "助手形象：出错" })).toBeVisible();
+  // The card's toggle shows it too, once the column is shut.
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await expect(page.getByRole("button", { name: "打开助手栏" }).getByRole("img", { name: "助手形象：出错" })).toBeVisible();
+});
