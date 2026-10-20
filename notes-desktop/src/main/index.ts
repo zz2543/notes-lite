@@ -480,6 +480,11 @@ function registerIpc() {
   });
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
+  space(channels.revealSpaceSource, async (name: string) => {
+    const { path } = await spaces().space(name);
+    shell.showItemInFolder(join(requireLibrary().root, ...path.split("/")));
+    return null;
+  });
   // 空间主页 and its operation log.
   space(channels.spaceNotes, async (name: string): Promise<SpaceNote[]> => {
     const notes = await notesInScope(requireLibrary().root, (await spaces().space(name)).scope);

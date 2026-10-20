@@ -127,6 +127,22 @@ test("creating a space copies the prompt; spaces can be renamed, reordered by dr
   await app.close();
 });
 
+test("显示源文件 in a space's menu shows its HTML file in the system file manager", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "健身/训练.md": training, ".notes/空间/健身.html": legacy[".留白/空间/健身.html"] });
+  const { app, page } = await launchWith(scratch, root);
+  await app.evaluate(({ shell }) => {
+    const shown: string[] = [];
+    (globalThis as { shown?: string[] }).shown = shown;
+    shell.showItemInFolder = (path) => void shown.push(path);
+  });
+  await sideTab(page, "空间").click();
+  await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "显示源文件" }).click();
+
+  await expect.poll(() => app.evaluate(() => (globalThis as { shown?: string[] }).shown)).toEqual([join(root, ".notes", "空间", "健身.html")]);
+  await app.close();
+});
+
 test("a space file written by another program shows up in the list", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "健身/训练.md": training });
   const { app, page } = await launchWith(scratch, root);

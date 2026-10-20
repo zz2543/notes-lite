@@ -104,6 +104,8 @@ export interface NotesApi {
   reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
   /** Copies the prompt for an external agent to the clipboard. */
   copySpacePrompt(name: string): Promise<SpaceDone<null>>;
+  /** 显示源文件: shows the space's HTML file in the system's file manager. */
+  revealSpaceSource(name: string): Promise<SpaceDone<null>>;
 
   // 助手栏 (ticket 26).
   /** The command-line agents installed on this computer, looked for afresh each time. */
@@ -242,6 +244,7 @@ export const channels = {
   deleteSpace: "spaces:delete",
   reorderSpaces: "spaces:reorder",
   copySpacePrompt: "spaces:copy-prompt",
+  revealSpaceSource: "spaces:reveal-source",
   detectAgents: "assistant:detect-agents",
   prepareSnapshots: "assistant:prepare-snapshots",
   snapshotUsage: "assistant:snapshot-usage",
