@@ -32,6 +32,8 @@ export interface FolderEntry {
   name: string;
   /** Whether it holds visible subfolders of its own, so the folder tree can offer to expand it. */
   hasSubfolders: boolean;
+  /** Whether it holds notes directly, so 单栏导航's tree can offer to expand it too. */
+  hasNotes: boolean;
 }
 
 export interface NoteEntry {
@@ -116,8 +118,10 @@ export async function openLibrary(root: string, options: OrganizeOptions = {}): 
         .filter((entry) => entry.isDirectory())
         .map(async (entry): Promise<FolderEntry> => {
           const inner = await readdir(join(dir, entry.name), { withFileTypes: true }).catch(() => []);
-          const hasSubfolders = inner.some((e) => e.isDirectory() && !e.name.startsWith("."));
-          return { path: childPath(entry.name), name: entry.name, hasSubfolders };
+          const visible = inner.filter((e) => !e.name.startsWith("."));
+          const hasSubfolders = visible.some((e) => e.isDirectory());
+          const hasNotes = visible.some((e) => e.isFile() && e.name.toLowerCase().endsWith(".md"));
+          return { path: childPath(entry.name), name: entry.name, hasSubfolders, hasNotes };
         }),
     );
     const notes = await Promise.all(

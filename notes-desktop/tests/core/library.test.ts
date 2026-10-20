@@ -86,6 +86,20 @@ describe("当前目录内容", () => {
       ["学习", true],
     ]);
   });
+
+  it("tells which subfolders hold notes of their own, for 单栏导航's tree", async () => {
+    const lib = await openLibrary(
+      await library({ "学习/英语/单词.md": "", "日记/今天.md": "", "附件/图.png": "", "附件/.notes/隐藏.md": "" }),
+    );
+
+    const { folders } = await lib.readFolder();
+
+    expect(folders.map((f) => [f.name, f.hasNotes])).toEqual([
+      ["附件", false],
+      ["日记", true],
+      ["学习", false],
+    ]);
+  });
 });
 
 describe("摘要", () => {
