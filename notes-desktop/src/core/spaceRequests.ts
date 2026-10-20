@@ -4,8 +4,10 @@
 // carries requests from the page's sandbox to `handle` and back (ADR 0003).
 import { readFile, realpath, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
-import { collator } from "./library";
-import { cellNumber, fieldTypes, findTable, type FieldType } from "./recordTables";
+import { collator, LibraryError } from "./library";
+import { operationLog, OperationLogError, writeWhole, type LogKind, type NewLogEntry } from "./operationLog";
+import { appendRecords, cellNumber, fieldTypes, findTable, normalizedCell, RecordError, rewriteRows, unknownField, type FieldType } from "./recordTables";
+import { serialized } from "./serialized";
 import { notesInScope, scopeContains, spaceLibrary, type SpaceScope } from "./spaces";
 
 export type SpaceRequestErrorCode = "outside-scope" | "invalid" | "not-found" | "exists" | "unknown-field" | "scope-change" | "conflict" | "failed";
@@ -57,19 +59,6 @@ export function expandPlaceholders(text: string, now: Date): string {
     .replaceAll("{周}", `${thursday.getUTCFullYear()}-W${pad(week)}`);
 }
 
-// Requests on one library run one at a time, whichever space sends them, so two writes never
-// interleave a read and a write of the same note. Undo takes its turn the same way.
-const queues = new Map<string, Promise<unknown>>();
-
-export function serialized<T>(root: string, run: () => Promise<T>): Promise<T> {
-  const previous = queues.get(root) ?? Promise.resolve();
-  const next = previous.then(run, run);
-  const settled = next.catch(() => undefined);
-  queues.set(root, settled);
-  void settled.then(() => queues.get(root) === settled && queues.delete(root));
-  return next;
-}
-
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 /** A cell as the page sees it: a number for number fields, null when empty, otherwise its text. */
@@ -111,6 +100,7 @@ export interface SpaceRequests {
 export function spaceRequests(root: string, space: string, options: SpaceRequestOptions = {}): SpaceRequests {
   const now = () => options.now?.() ?? new Date();
   const spaces = spaceLibrary(root, options);
+  const log = operationLog(root, options);
   let realRoot: string | undefined;
   const rootReal = async () => (realRoot ??= await realpath(root));
 
@@ -232,7 +222,94 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     return { records, fields: table.header.map((name, c) => ({ name, type: types[c] })) };
   };
 
-  const dispatch = async (method: string, args: unknown[]): Promise<unknown> => {
+  // --- writes --------------------------------------------------------------------------------
+
+  /** Entries this request logged, for the write notice. */
+  interface Tally {
+    changes: number;
+    records: number;
+  }
+
+  const entry = (kind: LogKind, path: string, rest: Partial<NewLogEntry> = {}): NewLogEntry => ({ space, kind, path, ...rest });
+
+  /** Logs first and writes second, so nothing reaches the disk that the operation log can't undo. */
+  const commit = async (text: string, real: string, entries: NewLogEntry[], tally: Tally) => {
+    const logged = await log.record(entries);
+    try {
+      await writeWhole(real, text);
+    } catch (error) {
+      await log.discard(logged.map((e) => e.id)).catch(() => undefined);
+      throw error;
+    }
+    counted(entries, tally);
+  };
+
+  const counted = (entries: NewLogEntry[], tally: Tally) => {
+    tally.changes += entries.length;
+    tally.records += entries.filter((e) => e.kind.startsWith("record")).length;
+  };
+
+  /** A record's values as cell text; strings may use placeholders. */
+  const cellsFrom = (record: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(record)
+        .filter(([key]) => key !== "_row")
+        .map(([key, value]) => [key, typeof value === "string" ? expandPlaceholders(value, now()) : cellText(value)]),
+    );
+
+  const append = async (target: string, value: unknown, options: Record<string, unknown>, tally: Tally) => {
+    const { path, real, heading } = await source(target);
+    const records = isObject(value) ? [value] : Array.isArray(value) && value.every(isObject) ? value : null;
+    if (!records) throw invalid("lb.append 需要一条记录（对象）或记录数组。");
+    if (records.length === 0) return { count: 0 };
+    // The page sends the fields in the order it wrote them; that order heads a new table.
+    let header = Array.isArray(options.header) ? options.header.map(cellText).filter((field) => field !== "") : [];
+    if (header.length === 0) header = [...new Set(records.flatMap((record) => Object.keys(record).filter((key) => key !== "_row")))];
+    const title = path.split("/").pop()!.replace(/\.md$/i, "");
+    const written = appendRecords(await textAt(real), title, heading, header, records.map(cellsFrom));
+    const entries = written.rows.map((row) => entry("recordAppend", path, { heading, header: written.header, after: row }));
+    await commit(written.text, real, entries, tally);
+    return { count: entries.length };
+  };
+
+  /** `changes` null removes the matching records. */
+  const update = async (target: string, match: Record<string, unknown>, changes: Record<string, unknown> | null, tally: Tally) => {
+    const { path, real, heading } = await source(target);
+    if (Object.keys(match).length === 0) throw invalid('需要用 match 指定要修改的记录，例如 { 日期: "2026-10-18" } 或 { _row: 0 }。');
+    const text = await textAt(real);
+    const table = text === null ? undefined : findTable(text, heading);
+    if (text === null || !table) throw notFound(target);
+    const types = fieldTypes(table);
+    const updates = changes && cellsFrom(changes);
+    const unknown = [...Object.keys(updates ?? {}), ...Object.keys(match).filter((key) => key !== "_row")].sort().find((key) => !table.header.includes(key));
+    if (unknown !== undefined) throw unknownField(unknown);
+    const indices = table.rows.flatMap((row, i) => {
+      if (typeof match._row === "number" && match._row !== i) return [];
+      const fits = Object.entries(match).every(([key, wanted]) => {
+        if (key === "_row") return true;
+        const c = table.header.indexOf(key);
+        return matches(cellValue(row[c] ?? "", types[c]!), wanted);
+      });
+      return fits ? [i] : [];
+    });
+    if (indices.length === 0) return { count: 0 };
+    const entries: NewLogEntry[] = [];
+    const rewritten = rewriteRows(text, table, indices, (index, before) => {
+      const logged = entry(updates ? "recordUpdate" : "recordRemove", path, { heading, header: table.header, before, row: index });
+      if (!updates) {
+        entries.push(logged);
+        return null;
+      }
+      const after = before.map((cell, c) => (table.header[c]! in updates ? normalizedCell(updates[table.header[c]!]!) : cell));
+      entries.push({ ...logged, after });
+      return after;
+    });
+    // Rows were visited last first; the log keeps them in table order, and only real changes.
+    await commit(rewritten, real, entries.reverse().filter((e) => e.after?.join("\u0000") !== e.before?.join("\u0000")), tally);
+    return { count: indices.length };
+  };
+
+  const dispatch = async (method: string, args: unknown[], tally: Tally): Promise<unknown> => {
     switch (method) {
       case "scope":
         return scope();
@@ -246,6 +323,12 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
         return query(stringArg(args, 0, "source"), objectArg(args, 1));
       case "page":
         return (await spaces.space(space).catch(() => Promise.reject(notFound(space)))).html;
+      case "append":
+        return append(stringArg(args, 0, "target"), args[1], objectArg(args, 2), tally);
+      case "update":
+        return update(stringArg(args, 0, "target"), objectArg(args, 1), objectArg(args, 2), tally);
+      case "remove":
+        return update(stringArg(args, 0, "target"), objectArg(args, 1), null, tally);
       default:
         throw invalid(`没有方法 lb.${method}。`);
     }
@@ -255,13 +338,17 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     if (!isObject(request) || typeof request.method !== "string") return { ok: false, error: { code: "invalid", message: "请求格式不正确。" } };
     const { method } = request;
     const args = Array.isArray(request.args) ? request.args : [];
+    const tally: Tally = { changes: 0, records: 0 };
     try {
-      const result = await serialized(root, () => dispatch(method, args));
-      return { ok: true, result, changes: 0, recordChanges: 0 };
+      const result = await serialized(root, () => dispatch(method, args, tally));
+      return { ok: true, result, changes: tally.changes, recordChanges: tally.records };
     } catch (error) {
-      if (error instanceof SpaceRequestError) return { ok: false, error: { code: error.code, message: error.message } };
-      const code = (error as { code?: unknown }).code;
-      return { ok: false, error: { code: code === "unknown-field" ? code : "failed", message: (error as Error).message } };
+      if (error instanceof SpaceRequestError || error instanceof RecordError || error instanceof OperationLogError || error instanceof LibraryError) {
+        const code = error.code;
+        const known: SpaceRequestErrorCode[] = ["outside-scope", "invalid", "not-found", "exists", "unknown-field", "scope-change", "conflict"];
+        return { ok: false, error: { code: known.includes(code as SpaceRequestErrorCode) ? (code as SpaceRequestErrorCode) : "failed", message: error.message } };
+      }
+      return { ok: false, error: { code: "failed", message: (error as Error).message } };
     }
   };
 

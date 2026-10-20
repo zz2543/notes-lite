@@ -8,3 +8,5 @@ export { spaceGuide, spaceGuideVersion } from "./spaceGuide";
 export * from "./migration";
 export * from "./spaceRequests";
 export * from "./recordTables";
+export * from "./operationLog";
+export { serialized } from "./serialized";
