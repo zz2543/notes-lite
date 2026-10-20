@@ -75,20 +75,20 @@ test("the selection pill slides to the chosen folder", async ({ scratch }) => {
   await app.close();
 });
 
-/** Whether `scale` is changing on a spring right now: a running transition with a duration and a curve. */
+/** Whether a change of `scale` on this element eases on a spring curve rather than jumping. */
 const springOf = (locator: Locator) =>
-  locator.evaluate((element) =>
-    element.getAnimations().some((animation) => {
-      const timing = animation.effect?.getComputedTiming();
-      const easing = animation.effect?.getTiming().easing ?? "";
-      return (
-        animation instanceof CSSTransition &&
-        animation.transitionProperty === "scale" &&
-        Number(timing?.duration) > 0 &&
-        easing !== "linear"
-      );
-    }),
-  );
+  locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const properties = style.transitionProperty.split(", ");
+    const index = properties.findIndex((property) => property === "scale" || property === "all");
+    if (index < 0) return false;
+    const pick = (list: string) => list.split(/,(?![^(]*\))/).map((item) => item.trim());
+    const durations = pick(style.transitionDuration);
+    const curves = pick(style.transitionTimingFunction);
+    const duration = parseFloat(durations[index % durations.length] ?? "0");
+    const curve = curves[index % curves.length] ?? "linear";
+    return duration > 0 && curve !== "linear" && curve !== "step-end";
+  });
 
 const scaleOf = (frame: Frame | undefined) => (!frame || frame.scale === "none" ? 1 : Number(frame.scale));
 
@@ -101,8 +101,9 @@ test("hover only tints a row; pressing shrinks it with a spring and it springs b
   await expect(item).toHaveCSS("background-color", await computed(page, "color", "var(--hover)"));
   await expect(item).toHaveCSS("scale", "none");
 
-  // It eases into the new size, not a jump, and holds at 0.97 while pressed. Asked of the running transition
-  // rather than of filmed frames, since a busy runner may draw too few frames to catch the in-between.
+  // It eases into the new size, not a jump, and holds at 0.97 while pressed. Asked of the transition the
+  // row carries rather than of filmed frames or a running animation, which a busy runner may finish or skip
+  // before the test can look.
   await item.hover();
   await page.mouse.down();
   expect(await springOf(item)).toBe(true);
