@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Progress:** in-progress
+**Progress:** completed
 
 - [x] 单栏树：文件夹下先子文件夹后笔记，打开的笔记显示选中底板
 - [ ] 在单栏中可就地搜索、在空间下看到主页与文件（就地搜索已完成；空间部分随任务 19）
@@ -30,3 +30,7 @@
 
 留给后续任务：单栏下“在空间下看到主页与文件”依赖任务 19（打开空间、主页与限定范围的树）；19 合入后在单栏的空间页沿用 `FolderTree` 的 `notes` 即可显示文件。任务 26 助手栏的自动收窄可直接切换 `single` 布局（`LibraryView` 中的 `single` 目前只来自设置）。
 
+
+### 2026-10-20 完成
+
+合并进 `feat/notes-desktop` 后 CI 两平台通过：https://github.com/zz2543/notes-lite/actions/runs/39362890294 。第 2 项中“在空间下看到主页与文件”随任务 19 完成，未勾选部分由 19 补上。
