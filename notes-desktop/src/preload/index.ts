@@ -58,6 +58,11 @@ const api: NotesApi = {
   },
   saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
   confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
+  onOperationLogRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.operationLogRequest, handler);
+    return () => ipcRenderer.off(channels.operationLogRequest, handler);
+  },
   onSettingsRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.settingsRequest, handler);

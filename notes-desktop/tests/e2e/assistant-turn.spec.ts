@@ -115,6 +115,34 @@ test("a chosen folder is the working directory; the open note can be taken off, 
   expect(second!.argv).toEqual(expect.arrayContaining(["--resume", "s-2"]));
 });
 
+test("a turn is undone from 操作记录 in a library with no spaces, reached from the reply or the menu", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await installFakeAgent(join(scratch, "agents"), "claude", {
+    steps: [{ tool: "Write", input: { file_path: join(root, "随记.md") }, write: { path: "随记.md", text: "随记\n\n助手写的\n" } }, { say: "写好了。" }],
+  });
+  const { app, page } = await launchWith(scratch, root);
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await input(page).fill("写点东西");
+  await input(page).press("Enter");
+  const conversation = column(page).getByRole("log", { name: "对话" });
+  await expect(conversation).toContainText("改动了 1 个文件");
+  await expect.poll(() => readFile(join(root, "随记.md"), "utf8")).toBe("随记\n\n助手写的\n");
+
+  // From the menu: the log lists the turn.
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById("operation-log")!.click());
+  const log = page.getByRole("dialog", { name: "操作记录" });
+  await expect(log.getByRole("listitem")).toHaveCount(1);
+  await expect(log.getByRole("listitem")).toContainText("助手一轮：改动 1 个文件");
+  await log.getByRole("button", { name: "关闭" }).click();
+  await expect(log).toBeHidden();
+
+  // From the reply: undone there.
+  await conversation.getByRole("button", { name: "在操作记录中撤销" }).click();
+  await log.getByRole("listitem").getByRole("button", { name: "撤销" }).click();
+  await expect(log.getByRole("listitem")).toContainText("已撤销");
+  await expect.poll(() => readFile(join(root, "随记.md"), "utf8")).toBe("随记\n");
+});
+
 test("an agent that fails shows why and the figure turns to 出错", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
   await installFakeAgent(join(scratch, "agents"), "claude", { steps: [{ say: "开始" }, { fail: "额度已用完" }] });

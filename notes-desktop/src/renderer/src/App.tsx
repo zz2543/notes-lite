@@ -12,6 +12,7 @@ import { errorText, pageShown } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
 import { useNarrowWindow, useNavigationTier } from "./navigationTier";
 import { NoteEditor } from "./NoteEditor";
+import { useOperationLog } from "./OperationLog";
 import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
@@ -217,6 +218,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   // assistant is doing, in the column or, closed, on the card's toggle.
   const [assistantOpen, setAssistantOpen] = useState(false);
   const assistant = useAssistant();
+  const operationLog = useOperationLog(notify);
   const figureState = assistant.figure;
   // A new conversation works where the user last chose: the open note's folder, or a folder chosen since.
   const [picked, setPicked] = useState<"note" | "folder">(note === null ? "folder" : "note");
@@ -454,7 +456,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
       )}
       <main className="card-wrap" ref={cardWrap}>
         {inSpace && showingHome ? (
-          <SpaceHome space={inSpace} notify={notify} headEnd={cardHeadEnd} />
+          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} headEnd={cardHeadEnd} />
         ) : (
           <NoteEditor
             key={reloads}
@@ -474,9 +476,11 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         note={note}
         libraryName={library.name}
         onOpenFolder={openFolder}
+        onShowLog={operationLog.show}
         saveFirst={saveFirst}
       />
       {organize.overlay}
+      {operationLog.dialog}
     </div>
   );
 }

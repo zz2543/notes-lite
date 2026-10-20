@@ -595,6 +595,12 @@ function buildMenu() {
     registerAccelerator: false,
     click: (item) => window?.webContents.send(channels.sourceViewRequest, item.checked),
   };
+  // 操作记录: what homepages wrote and what assistant turns changed, with or without a space.
+  const operationLogItem: MenuItemConstructorOptions = {
+    id: "operation-log",
+    label: "操作记录…",
+    click: () => reveal() && window?.webContents.send(channels.operationLogRequest),
+  };
   // The page knows the current folder, so it does the creating.
   const newNoteItem: MenuItemConstructorOptions = {
     id: "new-note",
@@ -633,7 +639,7 @@ function buildMenu() {
       submenu: mac ? [...fileItems, { role: "close" }] : [...fileItems, settingsItem, { type: "separator" }, { role: "quit" }],
     },
     { role: "editMenu" },
-    { label: "笔记", submenu: [sourceViewToggle] },
+    { label: "笔记", submenu: [sourceViewToggle, { type: "separator" }, operationLogItem] },
     { role: "viewMenu" },
     { role: "windowMenu" },
   ];

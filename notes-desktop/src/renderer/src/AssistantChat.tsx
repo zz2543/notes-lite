@@ -107,7 +107,7 @@ function Timeline({ steps, live }: { steps: Step[]; live: boolean }) {
   );
 }
 
-function ReplyView({ reply }: { reply: Reply }) {
+function ReplyView({ reply, onShowLog }: { reply: Reply; onShowLog(): void }) {
   return (
     <div className="assistant-reply">
       {reply.parts.map((part, i) =>
@@ -126,13 +126,18 @@ function ReplyView({ reply }: { reply: Reply }) {
         </p>
       )}
       {reply.done && reply.changes && reply.changes.length > 0 && (
-        <p className="reply-changes">改动了 {reply.changes.length} 个文件，可在操作记录中撤销。</p>
+        <p className="reply-changes">
+          改动了 {reply.changes.length} 个文件。
+          <button type="button" className="reply-log" onClick={onShowLog}>
+            在操作记录中撤销
+          </button>
+        </p>
       )}
     </div>
   );
 }
 
-export function ConversationView({ conversation }: { conversation: Conversation }) {
+export function ConversationView({ conversation, onShowLog }: { conversation: Conversation; onShowLog(): void }) {
   const end = useRef<HTMLDivElement>(null);
   const last = conversation.messages.at(-1);
   // Follows the reply as it grows. (Braces: scrollIntoView answers a promise now, not a cleanup.)
@@ -148,7 +153,7 @@ export function ConversationView({ conversation }: { conversation: Conversation 
             {message.notes.length > 0 && <p className="user-notes">{message.notes.map(titleOf).join("、")}</p>}
           </div>
         ) : (
-          <ReplyView key={i} reply={message} />
+          <ReplyView key={i} reply={message} onShowLog={onShowLog} />
         ),
       )}
       <div ref={end} />

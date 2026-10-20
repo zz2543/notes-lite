@@ -87,6 +87,8 @@ export interface NotesApi {
   // 设置 (ticket 15).
   /** The menu's 设置… asks the page to open the settings panel. */
   onSettingsRequest(listener: () => void): () => void;
+  /** 笔记 › 操作记录… in the menu. */
+  onOperationLogRequest(listener: () => void): () => void;
   /** The preferences as stored when the page loaded, so its first frame already shows them. */
   readonly preferences: Preferences;
   /** Stores a change and applies what the main process owns (外观); answers with all preferences. */
@@ -235,6 +237,7 @@ export const channels = {
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
   settingsRequest: "menu:settings",
+  operationLogRequest: "menu:operation-log",
   preferences: "settings:preferences",
   setPreferences: "settings:set-preferences",
   systemAccentChanged: "system:accent-changed",

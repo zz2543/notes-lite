@@ -54,11 +54,13 @@ export interface AssistantColumnProps {
   note: string | null;
   libraryName: string;
   onOpenFolder(folder: string): void;
+  /** Opens 操作记录, where a turn is undone. */
+  onShowLog(): void;
   /** Saves the open note, so the agent reads what is on screen; false when it could not. */
   saveFirst(): Promise<boolean>;
 }
 
-export function AssistantColumn({ open, onClose, assistant, folder, note, libraryName, onOpenFolder, saveFirst }: AssistantColumnProps) {
+export function AssistantColumn({ open, onClose, assistant, folder, note, libraryName, onOpenFolder, onShowLog, saveFirst }: AssistantColumnProps) {
   const { installed, detect } = useInstalledAgents(open);
   const [chosen, setChosen] = useState<AgentId>();
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
@@ -98,7 +100,7 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
           )}
         </header>
         {installed?.length === 0 && <InstallGuide onDetect={detect} />}
-        {conversation ? <ConversationView conversation={conversation} /> : <div className="assistant-messages" />}
+        {conversation ? <ConversationView conversation={conversation} onShowLog={onShowLog} /> : <div className="assistant-messages" />}
         {assistant.problem && (
           <p className="assistant-problem" role="alert">
             {assistant.problem}

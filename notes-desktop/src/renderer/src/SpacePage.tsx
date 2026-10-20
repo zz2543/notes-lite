@@ -1,15 +1,15 @@
 import { Check, Copy, House, ListChecks, PencilSimpleLine, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { LogItem, SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
+import type { SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
 import { useMotion } from "./MotionProvider";
-import { Dialog, useOverlayOpen } from "./Organize";
+import { useOverlayOpen } from "./Organize";
 import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
 
 // An open space: its notes in the middle column with 主页 pinned on top, and on the card its
 // homepage (run by main in a sandbox laid over the card) or, when a note is chosen, the editor.
-// The operation log lists what homepages wrote and takes entries back one by one.
+// Its head opens the operation log (OperationLog.tsx), which takes entries back one by one.
 
 const touchesSpaces = (path: string) => path === "" || path === ".notes" || path.startsWith(".notes/空间");
 
@@ -105,13 +105,14 @@ export function SpaceContents({ space, place, showingHome, openNote, onHome, onO
 interface SpaceHomeProps {
   space: SpaceInfo;
   notify(message: string): void;
+  /** Opens 操作记录. */
+  onShowLog(): void;
   /** At the head's right end, as on a note's card. */
   headEnd?: ReactNode;
 }
 
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
-export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
-  const [logOpen, setLogOpen] = useState(false);
+export function SpaceHome({ space, notify, onShowLog, headEnd }: SpaceHomeProps) {
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。" : copied.message);
@@ -120,7 +121,7 @@ export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
     <article className="card">
       <header className="card-head">
         <span className="card-path">{space.name} · 主页</span>
-        <button className="card-tool" onClick={() => setLogOpen(true)}>
+        <button className="card-tool" onClick={onShowLog}>
           <ListChecks size={icon.small} />
           操作记录
         </button>
@@ -128,7 +129,7 @@ export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
       </header>
       {space.hasPage ? (
         <>
-          <PageBars name={space.name} onShowLog={() => setLogOpen(true)} />
+          <PageBars name={space.name} onShowLog={onShowLog} />
           <PageSlot name={space.name} />
         </>
       ) : (
@@ -140,7 +141,6 @@ export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
           <p>提示词会复制到剪贴板，把它交给外部 agent，主页写好后会显示在这里。</p>
         </div>
       )}
-      {logOpen && <OperationLogDialog onClose={() => setLogOpen(false)} notify={notify} />}
     </article>
   );
 }
@@ -264,65 +264,4 @@ function PageSlot({ name }: { name: string }) {
     };
   }, [name, covered]);
   return <div ref={slot} className="space-page-slot" aria-label="空间主页" role="region" />;
-}
-
-const time = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
-
-/** 操作记录: everything homepages wrote in the last 30 days, newest first, each undoable on its own. */
-function OperationLogDialog({ onClose, notify }: { onClose(): void; notify(message: string): void }) {
-  const [items, setItems] = useState<LogItem[]>();
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    let live = true;
-    void window.notes.operationLog().then((read) => {
-      if (!live) return;
-      if (read.ok) setItems(read.value);
-      else {
-        setItems([]);
-        notify(read.message);
-      }
-    });
-    return () => {
-      live = false;
-    };
-  }, [revision]);
-  const undo = async (item: LogItem) => {
-    const undone = await window.notes.undoOperation(item.id);
-    if (!undone.ok) notify(undone.message);
-    setRevision((n) => n + 1);
-  };
-  return (
-    <Dialog title="操作记录" onClose={onClose} onSubmit={onClose}>
-      <p className="dialog-hint">空间主页的每次写入都记在这里，保留 30 天，可以逐条撤销。</p>
-      {items?.length === 0 && <p className="dialog-hint">还没有操作记录。</p>}
-      {items && items.length > 0 && (
-        <ul className="dialog-list log-list">
-          {items.map((item) => (
-            <li key={item.id} className={`log-item ${item.undone ? "undone" : ""}`}>
-              <div className="log-text">
-                <span className="log-summary">{item.summary}</span>
-                <span className="log-meta">
-                  {item.space} · {time.format(new Date(item.date))}
-                  {item.undone && " · 已撤销"}
-                </span>
-                {item.changes.length > 0 && (
-                  <pre className="log-changes">{item.changes.map((change) => `${change.sign} ${change.text}`).join("\n")}</pre>
-                )}
-              </div>
-              {!item.undone && (
-                <button type="button" className="secondary" onClick={() => void undo(item)}>
-                  撤销
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="dialog-buttons">
-        <button type="submit" className="primary">
-          关闭
-        </button>
-      </div>
-    </Dialog>
-  );
 }

@@ -784,6 +784,12 @@ nav.rail .drag {
   font-size: var(--text-path);
   color: var(--side-muted);
 }
+.reply-log {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+}
 .reply-failed,
 .assistant-problem {
   font-size: var(--text-path);
