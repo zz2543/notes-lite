@@ -23,29 +23,45 @@ test("⌘, / Ctrl+, opens the settings panel and Esc closes it", async ({ scratc
 test("the panel emerges: it grows into place out of a blur", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "一.md": "一" });
   const { app, page } = await launchWith(scratch, root);
-  // Every frame of the panel from the moment it appears.
+  type Frame = { t: number; scale: number; blur: number };
+  // Every frame of the panel drawn in its first second, with the time it was drawn.
   await page.evaluate(() => {
-    const w = window as unknown as { frames: Array<{ scale: number; blur: number }> };
+    const w = window as unknown as { frames: Frame[] };
     w.frames = [];
-    const frame = () => {
+    const frame = (t: number) => {
       const panel = document.querySelector<HTMLElement>('[role="dialog"][aria-label="设置"]');
       if (panel) {
         const style = getComputedStyle(panel);
         const blur = /blur\(([\d.]+)px\)/.exec(style.filter);
-        w.frames.push({ scale: new DOMMatrix(style.transform).a, blur: blur ? Number(blur[1]) : 0 });
+        w.frames.push({ t, scale: new DOMMatrix(style.transform).a, blur: blur ? Number(blur[1]) : 0 });
       }
-      if (w.frames.length < 90) requestAnimationFrame(frame);
+      if (!w.frames.length || t - w.frames[0]!.t < 1000) requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
   });
   await page.keyboard.press("ControlOrMeta+Comma");
-  await expect.poll(() => page.evaluate(() => (window as unknown as { frames: unknown[] }).frames.length), { timeout: 5000 }).toBe(90);
-  const frames = await page.evaluate(() => (window as unknown as { frames: Array<{ scale: number; blur: number }> }).frames);
+  const panel = page.getByRole("dialog", { name: "设置" });
+  await expect(panel).toBeVisible();
+  // It comes to rest at full size, sharp.
+  const settled = () =>
+    panel.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const blur = /blur\(([\d.]+)px\)/.exec(style.filter);
+      return { scale: new DOMMatrix(style.transform).a, blur: blur ? Number(blur[1]) : 0 };
+    });
+  await expect.poll(settled).toEqual({ scale: 1, blur: 0 });
+  const filmed = () => page.evaluate(() => (window as unknown as { frames: Frame[] }).frames);
+  await expect.poll(async () => ((f) => f.at(-1)!.t - f[0]!.t)(await filmed())).toBeGreaterThanOrEqual(1000);
+  const frames = await filmed();
+  // Its first frame is small and blurred: it grows out of a blur rather than appearing.
   expect(frames[0]!.scale).toBeLessThan(0.95);
   expect(frames[0]!.blur).toBeGreaterThan(0);
-  // 浮现 at 强 overshoots a little before settling at full size, sharp.
-  expect(Math.max(...frames.map((f) => f.scale))).toBeGreaterThan(1);
-  expect(frames.at(-1)).toEqual({ scale: 1, blur: 0 });
+  // 浮现 at 强 overshoots a little before settling (its spring is checked in tests/core/motion.test.ts). The
+  // overshoot lasts a fraction of the spring, so it is only asked of a runner that drew frames enough to
+  // show it; a slow one may jump from the first frame straight past it.
+  const during = frames.filter((f) => f.t - frames[0]!.t < 550).length;
+  if (during >= 15) expect(Math.max(...frames.map((f) => f.scale))).toBeGreaterThan(1);
+  else test.info().annotations.push({ type: "few frames", description: `${during} frames drawn in the panel's first 550 ms` });
   await app.close();
 });
 
