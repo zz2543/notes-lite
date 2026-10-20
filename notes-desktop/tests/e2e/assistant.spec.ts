@@ -21,6 +21,22 @@ async function setWindowWidth(app: ElectronApplication, page: Page, width: numbe
     window.setContentSize(w, window.getContentSize()[1]!);
   }, width);
   await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(width);
+  // Resizing settles the navigation again, so let the window's last resize event pass before going on.
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        let timer = setTimeout(finish, 200);
+        function finish() {
+          window.removeEventListener("resize", again);
+          done();
+        }
+        function again() {
+          clearTimeout(timer);
+          timer = setTimeout(finish, 200);
+        }
+        window.addEventListener("resize", again);
+      }),
+  );
 }
 
 const figures = (page: Page) => page.getByRole("img", { name: /^助手形象/ });
