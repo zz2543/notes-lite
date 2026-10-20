@@ -81,6 +81,12 @@ export interface TurnSnapshots {
   /** Snapshots it again once the turn is over; answers what the turn changed. */
   finish(id: string): Promise<Turn>;
   /**
+   * The app itself (the user's autosave, 整理, a homepage) just wrote, created or removed these paths.
+   * During a turn they stay out of what the turn changed, so undoing the turn never takes back the
+   * user's own work, unless the agent changes them again afterwards. Between turns it does nothing.
+   */
+  appWrote(paths: string[]): Promise<void>;
+  /**
    * Puts back what the turn changed: one file, or everything not yet taken back. Refused, with
    * nothing touched, when any of those files has changed again since the turn.
    */
@@ -173,6 +179,12 @@ async function walk(root: string) {
   return { files: found, folders };
 }
 
+/** Where the content store keeps text with these bytes. */
+function blobOf(bytes: Buffer): string {
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  return `objects/${hash.slice(0, 2)}/${hash}`;
+}
+
 export function turnSnapshots(store: string, root: string, options: SnapshotOptions = {}): TurnSnapshots {
   const now = () => options.now?.() ?? new Date();
   const at = (path: string) => join(root, ...path.split("/"));
@@ -193,8 +205,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
   /** Text goes into the content store, once per content. */
   const keepText = async (path: string): Promise<string> => {
     const bytes = await readFile(at(path));
-    const hash = createHash("sha256").update(bytes).digest("hex");
-    const blob = `objects/${hash.slice(0, 2)}/${hash}`;
+    const blob = blobOf(bytes);
     const file = blobAt(blob);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, bytes, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
@@ -256,18 +267,50 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     }
   };
 
+  /** What the app itself last left at each path, per turn still running: a fingerprint, or null for gone. */
+  const appWrites = new Map<string, Map<string, string | null>>();
+
+  /** A text file by its blob name (as the content store names it), anything else by its size and time. */
+  const fingerprint = (path: string, state: FileState | undefined) =>
+    state === undefined ? null : isText(path) ? (state.blob ?? null) : `${state.size}:${state.mtimeMs}`;
+  const fingerprintOnDisk = async (path: string): Promise<string | null> => {
+    const found = await stat(at(path)).catch(() => null);
+    if (!found?.isFile()) return null;
+    if (!isText(path)) return `${found.size}:${found.mtimeMs}`;
+    return readFile(at(path)).then(blobOf, () => null);
+  };
+
+  const appWrote = async (paths: string[]) => {
+    if (appWrites.size === 0) return;
+    for (const path of paths) {
+      const left = await fingerprintOnDisk(path);
+      for (const writes of appWrites.values()) writes.set(path, left);
+    }
+  };
+
   const begin = async () => {
     await expire();
-    const before = await snapshot();
-    const turn: StoredTurn = { id: randomUUID(), date: before.date, before: before.id, changes: [] };
-    await writeJson(turnAt(turn.id), turn);
-    return turn.id;
+    const id = randomUUID();
+    appWrites.set(id, new Map());
+    try {
+      const before = await snapshot();
+      const turn: StoredTurn = { id, date: before.date, before: before.id, changes: [] };
+      await writeJson(turnAt(turn.id), turn);
+    } catch (error) {
+      appWrites.delete(id);
+      throw error;
+    }
+    return id;
   };
 
   const finish = async (id: string): Promise<Turn> => {
     const turn = await readJson<StoredTurn>(turnAt(id));
     const before = await readJson<Manifest>(manifestAt(turn.before));
     const after = await snapshot();
+    const ownWrites = appWrites.get(id);
+    appWrites.delete(id);
+    // A path still as the app itself left it is the user's work, not the agent's.
+    const ours = (path: string) => ownWrites?.has(path) === true && ownWrites.get(path) === fingerprint(path, after.files[path]);
     const changes: TurnChange[] = [];
     for (const [path, state] of Object.entries(after.files)) {
       const old = before.files[path];
@@ -277,10 +320,11 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     }
     for (const [path, old] of Object.entries(before.files))
       if (!after.files[path]) changes.push({ path, kind: "deleted", restorable: old.blob !== undefined, reverted: false });
-    changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    const done: StoredTurn = { ...turn, after: after.id, changes };
+    const agents = changes.filter((change) => !ours(change.path));
+    agents.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    const done: StoredTurn = { ...turn, after: after.id, changes: agents };
     await writeJson(turnAt(id), done);
-    return { id, date: done.date, changes };
+    return { id, date: done.date, changes: agents };
   };
 
   const loadTurn = async (id: string) => {
@@ -381,6 +425,8 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     begin: queued(begin),
     baseline: queued(async () => void (await snapshot())),
     finish: queued(finish),
+    // Not queued: a turn about to finish must hear of it before its last snapshot.
+    appWrote,
     revert: queued(revert),
     turn: queued(turn),
     usage: queued(usage),

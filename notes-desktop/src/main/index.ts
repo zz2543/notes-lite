@@ -74,6 +74,7 @@ const pages = spacePages(
   () => library?.root ?? null,
   () => spacePageSettings(preferences, systemAppearance().accent),
   (event) => window && !window.isDestroyed() && window.webContents.send(channels.spacePageEvent, event),
+  (paths) => changedHere(paths),
 );
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
@@ -363,6 +364,12 @@ function noteChanged(path: string) {
   if (index && index.library === library) void index.index.update(path);
 }
 
+/** The app itself changed these paths: search reads them again, and an assistant turn running now leaves them out. */
+async function changedHere(paths: string[]) {
+  for (const path of paths) noteChanged(path);
+  if (library) await snapshots.library(library.root).appWrote(paths).catch(() => undefined);
+}
+
 function registerIpc() {
   ipcMain.handle(channels.launchState, () => launch);
   ipcMain.handle(channels.chooseLibrary, async () => {
@@ -378,7 +385,7 @@ function registerIpc() {
   ipcMain.handle(channels.saveNote, async (_, path: string, text: string, expected: string): Promise<SaveResult> => {
     try {
       await requireLibrary().saveNote(path, text, expected);
-      noteChanged(path);
+      await changedHere([path]);
       return { ok: true };
     } catch (error) {
       const code = error instanceof LibraryError ? error.code : "write-failed";
@@ -400,8 +407,8 @@ function registerIpc() {
       }
     });
   // The search index reads again whatever an operation touched.
-  const touched = <T>(value: T, ...paths: string[]) => {
-    for (const path of paths) noteChanged(path);
+  const touched = async <T>(value: T, ...paths: string[]) => {
+    await changedHere(paths);
     return value;
   };
   const relocated = (from: string, moved: Relocation) => touched(moved, from, moved.path, ...moved.updated);
@@ -420,7 +427,9 @@ function registerIpc() {
   ipcMain.handle(channels.listFolders, () => requireLibrary().listFolders());
   ipcMain.handle(channels.saveCopy, async (_, path: string, text: string): Promise<CopyResult> => {
     try {
-      return { ok: true, path: await requireLibrary().saveCopy(path, text) };
+      const copy = await requireLibrary().saveCopy(path, text);
+      await changedHere([copy]);
+      return { ok: true, path: copy };
     } catch (error) {
       const code = error instanceof LibraryError ? error.code : "write-failed";
       return { ok: false, code, message: (error as Error).message };

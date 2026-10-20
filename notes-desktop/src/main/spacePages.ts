@@ -103,6 +103,8 @@ export function spacePages(
   root: () => string | null,
   settings: () => string,
   emit: (event: SpacePageEvent) => void,
+  /** Told of every path a homepage wrote (see SpaceRequestOptions.wrote). */
+  wrote: (paths: string[]) => Promise<void>,
 ): SpacePages {
   let hosted: Hosted[] = [];
   // How many lines come before each space file in the page last served for it.
@@ -233,7 +235,7 @@ export function spacePages(
     if (!page || !library) {
       return { ok: false, error: { code: "outside-scope", message: "只有空间主页本身可以使用 lb。" } };
     }
-    const reply = await spaceRequests(library, page.name, { trash }).handle(request);
+    const reply = await spaceRequests(library, page.name, { trash, wrote }).handle(request);
     // 写入提示: the app says the homepage wrote, and how much.
     if (reply.ok && reply.changes > 0) emit({ space: page.name, kind: "wrote", changes: reply.changes, records: reply.recordChanges });
     return reply;

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { entryChanges, entrySummary, operationLog } from "../../src/core";
+import { entryChanges, entrySummary, operationLog, spaceRequests } from "../../src/core";
 import { code, fitnessLibrary, result } from "../support/spaces";
 
 // Ported from the old SpaceNoteWriteTests: space homepages managing notes inside their scope, and
@@ -31,6 +31,19 @@ describe("空间请求：管理笔记", () => {
     expect(code(await lib.call("write", "别处/秘密.md", ""))).toBe("outside-scope");
     expect(code(await lib.call("write", "健身/图片.png", ""))).toBe("invalid");
     expect(await lib.read("别处/秘密.md")).toBe("不在范围内");
+  });
+
+  it("says which paths each write touched, so a running assistant turn can leave them out", async () => {
+    const lib = await fitnessLibrary({ "日记/今天.md": "见 [[训练记录]]" });
+    const wrote: string[][] = [];
+    const call = (method: string, ...args: unknown[]) =>
+      spaceRequests(lib.root, "健身", { ...lib.options, wrote: (paths) => void wrote.push(paths) }).handle({ method, args });
+
+    await call("create", "健身/计划.md", "# 计划\n");
+    await call("rename", "健身/训练记录.md", "力量训练");
+    await call("query", "健身/力量训练.md#卧推");
+
+    expect(wrote).toEqual([["健身/计划.md"], ["健身/训练记录.md", "健身/力量训练.md", "日记/今天.md"]]);
   });
 
   it("rename and move update links, and undo together", async () => {
