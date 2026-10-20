@@ -1,5 +1,5 @@
-// 列表延续与退出列表 in the editor: Return in a list item, by the rules in core/lists.ts. Works in both
-// the typeset and the source view; inside code, math and front matter Return is just a new line.
+// 列表延续与退出列表 in the editor: Return in a list item and the 分隔空行 after a list, by the rules in
+// core/lists.ts. Works in both the typeset and the source view; code, math and front matter are left alone.
 import {
   EditorState,
   Prec,
