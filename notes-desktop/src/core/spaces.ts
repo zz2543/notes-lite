@@ -70,6 +70,30 @@ export function scopeLabel(scope: SpaceScope): string {
   return scope.library ? "整个笔记库" : scope.folders.map((folder) => folder || "笔记库根目录").join("、");
 }
 
+/**
+ * Of the paths the library watcher reported, those a homepage hears of through `space.on("change")`:
+ * visible ones inside its scope. "" (something changed, the system can't say what) always passes.
+ */
+export function spaceChanges(scope: SpaceScope, paths: readonly string[]): string[] {
+  return paths.filter((path) => path === "" || (!path.split("/").some((part) => part.startsWith(".")) && scopeContains(scope, path)));
+}
+
+/** What went wrong on a homepage: the message, where in the space file (if known), and the stack. */
+export interface SpacePageProblem {
+  message: string;
+  location: string;
+  stack: string;
+}
+
+/** 复制错误给 agent: the error with what an agent needs to fix it, the space file and the guide. */
+export function spaceErrorReport({ space, file, guide, error }: { space: string; file: string; guide: string; error: SpacePageProblem }): string {
+  const lines = [`空间“${space}”的主页出错了。`, "", `空间文件：${file}`, `错误：${error.message}`];
+  if (error.location) lines.push(`位置：${error.location}`);
+  if (error.stack) lines.push("堆栈：", error.stack);
+  lines.push("", `请先阅读编写说明（${guide}），再修复空间文件里的问题。`);
+  return lines.join("\n");
+}
+
 // --- the space file's meta -----------------------------------------------------------------
 
 const metaRe = /<meta\b[^>]*>/gi;

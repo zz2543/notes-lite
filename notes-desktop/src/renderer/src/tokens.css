@@ -65,6 +65,8 @@
   --figure-ink: #1d1d1f;
   --figure-eye: #ffffff;
   --figure-error: #ff453a;
+  /* 空间主页的错误条: the old app's orange, tinted for the bar and its edge. */
+  --space-problem: var(--accent-orange);
   --titlebar-height: 52px;
   --row-height: 32px;
   --row-padding: 10px;

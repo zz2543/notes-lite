@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { channels, type CloseCheck, type NotesApi } from "../shared/api";
+import { channels, type CloseCheck, type NotesApi, type SpacePageEvent } from "../shared/api";
 import { readAppearance } from "../shared/appearance";
 
 const api: NotesApi = {
@@ -82,6 +82,12 @@ const api: NotesApi = {
   hideSpacePage: () => ipcRenderer.send(channels.hideSpacePage),
   operationLog: () => ipcRenderer.invoke(channels.operationLog),
   undoOperation: (id) => ipcRenderer.invoke(channels.undoOperation, id),
+  onSpacePageEvent: (listener) => {
+    const handler = (_: unknown, event: SpacePageEvent) => listener(event);
+    ipcRenderer.on(channels.spacePageEvent, handler);
+    return () => ipcRenderer.off(channels.spacePageEvent, handler);
+  },
+  copySpaceError: (name, problem) => ipcRenderer.invoke(channels.copySpaceError, name, problem),
   detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
   prepareSnapshots: () => ipcRenderer.send(channels.prepareSnapshots),
   snapshotUsage: () => ipcRenderer.invoke(channels.snapshotUsage),

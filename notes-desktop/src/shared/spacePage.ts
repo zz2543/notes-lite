@@ -3,6 +3,8 @@
 export const spacePageChannels = {
   request: "space-page:request",
   changed: "space-page:changed",
+  /** homepage → main: an error its scripts, resources or components ran into (the 错误条). */
+  error: "space-page:error",
   /** main → homepage: the page settings as CSS, replacing the style element that holds them. */
   settings: "space-page:settings",
 } as const;

@@ -16,6 +16,7 @@ import {
   OperationLogError,
   snapshotStore,
   SpaceError,
+  spaceErrorReport,
   spaceLibrary,
   watchLibrary,
   type Library,
@@ -26,6 +27,7 @@ import {
   type SearchOptions,
   type Space,
   type SpaceDraft,
+  type SpacePageProblem,
 } from "../core";
 import {
   channels,
@@ -59,7 +61,12 @@ let library: Library | null = null;
 let window: BrowserWindow | null = null;
 // Space homepages, each in its own sandbox laid over the card.
 // A homepage takes the app's 排版, 强调色 and 动效 (spaceKit), and follows them when they change.
-const pages = spacePages(() => window, () => library?.root ?? null, () => spacePageSettings(preferences, systemAppearance().accent));
+const pages = spacePages(
+  () => window,
+  () => library?.root ?? null,
+  () => spacePageSettings(preferences, systemAppearance().accent),
+  (event) => window && !window.isDestroyed() && window.webContents.send(channels.spacePageEvent, event),
+);
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
 // The close check in progress; the first answer (the page's, or the timeout's) consumes it.
@@ -138,6 +145,8 @@ function watch(lib: Library) {
       // Search finds notes as they are now, whoever changed them.
       for (const path of paths) if (!path.split("/").some((part) => part.startsWith("."))) noteChanged(path);
       if (window && !window.isDestroyed()) window.webContents.send(channels.libraryChanged, paths);
+      // Open homepages follow too: a rewritten space file, or notes changed in their scope.
+      void pages.libraryChanged(paths).catch(() => undefined);
     });
   } catch {
     // A folder the system will not watch still opens; it just won't follow changes made elsewhere.
@@ -373,6 +382,11 @@ function registerIpc() {
     })),
   );
   space(channels.undoOperation, async (id: string) => (await log().undo(id), null));
+  space(channels.copySpaceError, async (name: string, problem: SpacePageProblem) => {
+    const lib = spaces();
+    clipboard.writeText(spaceErrorReport({ space: name, file: join(lib.folder, `${name}.html`), guide: lib.guidePath, error: problem }));
+    return null;
+  });
   ipcMain.on(channels.prepareSnapshots, () => void (library && snapshots.library(library.root).baseline().catch(() => undefined)));
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());

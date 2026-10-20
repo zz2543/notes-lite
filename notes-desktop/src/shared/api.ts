@@ -1,4 +1,6 @@
-import type { FolderContents, InstalledAgent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpaceScope } from "../core";
+import type { FolderContents, InstalledAgent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+
+export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
 import type { Preferences } from "./preferences";
 
@@ -124,7 +126,20 @@ export interface NotesApi {
   operationLog(): Promise<SpaceDone<LogItem[]>>;
   /** Takes one entry back; refused, with why, when what it wrote has changed since. */
   undoOperation(id: string): Promise<SpaceDone<null>>;
+
+  // 空间主页的刷新与错误 (ticket 21).
+  /** A homepage loaded afresh, went wrong, or wrote through `space`. */
+  onSpacePageEvent(listener: (event: SpacePageEvent) => void): () => void;
+  /** 复制错误给 agent: the problem, with the space file and the guide, to the clipboard. */
+  copySpaceError(name: string, problem: SpacePageProblem): Promise<SpaceDone<null>>;
 }
+
+/** What main tells the app about a space's homepage. */
+export type SpacePageEvent =
+  | { space: string; kind: "loaded" }
+  | { space: string; kind: "problem"; problem: SpacePageProblem }
+  /** The page wrote through `space`: `changes` operation-log entries, `records` of them records. */
+  | { space: string; kind: "wrote"; changes: number; records: number };
 
 export interface SpaceNote {
   path: string;
@@ -216,4 +231,6 @@ export const channels = {
   hideSpacePage: "spaces:hide-page",
   operationLog: "spaces:operation-log",
   undoOperation: "spaces:undo",
+  spacePageEvent: "spaces:page-event",
+  copySpaceError: "spaces:copy-error",
 } as const;

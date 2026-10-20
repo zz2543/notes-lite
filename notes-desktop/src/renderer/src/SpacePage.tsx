@@ -1,6 +1,8 @@
-import { House, ListChecks } from "@phosphor-icons/react";
+import { Check, Copy, House, ListChecks, PencilSimpleLine, Warning, X } from "@phosphor-icons/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { LogItem, SpaceInfo, SpaceNote } from "../../shared/api";
+import type { LogItem, SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
+import { useMotion } from "./MotionProvider";
 import { Dialog, useOverlayOpen } from "./Organize";
 import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
@@ -125,7 +127,10 @@ export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
         {headEnd}
       </header>
       {space.hasPage ? (
-        <PageSlot name={space.name} />
+        <>
+          <PageBars name={space.name} onShowLog={() => setLogOpen(true)} />
+          <PageSlot name={space.name} />
+        </>
       ) : (
         <div className="space-empty space-no-page">
           <p>这个空间还没有主页。</p>
@@ -137,6 +142,103 @@ export function SpaceHome({ space, notify, headEnd }: SpaceHomeProps) {
       )}
       {logOpen && <OperationLogDialog onClose={() => setLogOpen(false)} notify={notify} />}
     </article>
+  );
+}
+
+/** How long 写入提示 stays after the homepage's last write. */
+const noticeTime = 8000;
+/** The 错误条 keeps the last few distinct problems. */
+const keptProblems = 5;
+
+const sameProblem = (a: SpacePageProblem, b: SpacePageProblem) => a.message === b.message && a.location === b.location && a.stack === b.stack;
+
+/**
+ * Above the homepage: the 错误条 when it went wrong (with 复制错误给 agent), and 写入提示 after it wrote.
+ * Both open on 展开, pushing the page down rather than covering it.
+ */
+function PageBars({ name, onShowLog }: { name: string; onShowLog(): void }) {
+  const [problems, setProblems] = useState<SpacePageProblem[]>([]);
+  const [wrote, setWrote] = useState<{ changes: number; onlyRecords: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const { expand } = useMotion();
+
+  useEffect(() => {
+    setProblems([]);
+    setWrote(null);
+    let hideNotice: ReturnType<typeof setTimeout> | undefined;
+    const stop = window.notes.onSpacePageEvent((event) => {
+      if (event.space !== name) return;
+      if (event.kind === "loaded") setProblems([]);
+      else if (event.kind === "problem") {
+        const { problem } = event;
+        setProblems((kept) => (kept.some((p) => sameProblem(p, problem)) ? kept : [...kept, problem].slice(-keptProblems)));
+      } else {
+        setWrote((now) => ({ changes: (now?.changes ?? 0) + event.changes, onlyRecords: (now?.onlyRecords ?? true) && event.records === event.changes }));
+        clearTimeout(hideNotice);
+        hideNotice = setTimeout(() => setWrote(null), noticeTime);
+      }
+    });
+    return () => {
+      stop();
+      clearTimeout(hideNotice);
+    };
+  }, [name]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const back = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(back);
+  }, [copied]);
+
+  const problem = problems.at(-1);
+  // A new problem has not been copied yet.
+  useEffect(() => setCopied(false), [problem]);
+  const copy = async () => {
+    if (!problem) return;
+    const done = await window.notes.copySpaceError(name, problem);
+    if (done.ok) setCopied(true);
+  };
+  const bar = { initial: { height: 0, opacity: 0 }, animate: { height: "auto", opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: expand };
+
+  return (
+    <div className="space-bars">
+      <AnimatePresence initial={false}>
+        {problem && (
+          <motion.div key="problem" className="space-bar-frame" {...bar}>
+            <div className="space-bar problem" role="alert" aria-label="主页出错了">
+              <Warning size={icon.small} weight="fill" className="space-bar-icon" aria-hidden />
+              <div className="space-bar-text">
+                <strong>主页出错了{problems.length > 1 ? `（${problems.length} 个错误）` : ""}</strong>
+                <span className="space-bar-detail">
+                  {problem.message}
+                  {problem.location && ` · ${problem.location}`}
+                </span>
+              </div>
+              <button type="button" className="space-bar-button" onClick={() => void copy()}>
+                {copied ? <Check size={icon.small} aria-hidden /> : <Copy size={icon.small} aria-hidden />}
+                {copied ? "已复制" : "复制错误给 agent"}
+              </button>
+              <button type="button" className="space-bar-close" aria-label="关闭错误提示" onClick={() => setProblems([])}>
+                <X size={icon.caret} weight="bold" aria-hidden />
+              </button>
+            </div>
+          </motion.div>
+        )}
+        {wrote && (
+          <motion.div key="wrote" className="space-bar-frame" {...bar}>
+            <div className="space-bar notice" role="status" aria-label="主页写入">
+              <PencilSimpleLine size={icon.small} className="space-bar-icon" aria-hidden />
+              <span className="space-bar-text">
+                主页刚修改了 <strong>{wrote.changes}</strong> {wrote.onlyRecords ? "条记录" : "处内容"}
+              </span>
+              <button type="button" className="space-bar-link" onClick={onShowLog}>
+                查看
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

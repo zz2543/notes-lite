@@ -5,7 +5,9 @@ import { spacePageChannels } from "../shared/spacePage";
 
 contextBridge.exposeInMainWorld("__notesSpace", {
   call: (method: string, args: unknown[]) => ipcRenderer.invoke(spacePageChannels.request, { method, args }),
-  /** Paths in the scope that changed; main sends them once refreshing arrives (ticket 21). */
+  /** Reports an error for the 错误条; main reads only the fields it knows and trusts none of them. */
+  error: (problem: unknown) => ipcRenderer.send(spacePageChannels.error, problem),
+  /** Paths in the scope that changed, whoever changed them. */
   onChange: (listener: (paths: string[]) => void) => {
     ipcRenderer.on(spacePageChannels.changed, (_, paths: string[]) => listener(paths));
   },
