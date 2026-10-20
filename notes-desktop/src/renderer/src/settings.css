@@ -1,0 +1,220 @@
+/* 设置: a design-system 浮层 (in-app blur over the window). Values are the variables in tokens.css. */
+
+.settings {
+  width: min(var(--settings-width), calc(100vw - var(--settings-margin) * 2));
+  height: min(var(--settings-height), calc(100vh - var(--settings-margin) * 2));
+  display: flex;
+  overflow: hidden;
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--settings-radius);
+  background: var(--glass);
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: var(--overlay-blur);
+  color: var(--side-fg);
+  font-size: var(--text-side-row);
+}
+
+.settings-nav {
+  width: var(--settings-nav-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--settings-padding) var(--row-padding);
+  border-right: 1px solid var(--line);
+}
+.settings-nav h2 {
+  margin: 0 0 var(--inline-gap);
+  padding: 0 var(--row-padding);
+  font-size: var(--text-list-title);
+  font-weight: var(--weight-list-title);
+}
+.settings-tab {
+  position: relative;
+  isolation: isolate;
+  height: var(--row-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding: 0 var(--row-padding);
+  border-radius: var(--row-radius);
+  text-align: left;
+  transition:
+    background-color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.settings-tab:hover {
+  background: var(--hover);
+}
+.settings-tab:active {
+  scale: var(--press-scale);
+}
+
+.settings-page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--settings-padding) calc(var(--settings-padding) * 1.5);
+}
+.settings-page > h2 {
+  margin: 0 0 var(--settings-group-gap);
+  font-size: var(--text-list-title);
+  font-weight: var(--weight-list-title);
+}
+
+.settings-group + .settings-group {
+  margin-top: var(--settings-group-gap);
+}
+.settings-group h3 {
+  margin: 0;
+  font-size: var(--text-item);
+  font-weight: var(--weight-item);
+}
+.settings-description {
+  margin: 2px 0 var(--card-gap);
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+}
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--item-radius);
+  background: var(--settings-rows-bg);
+  box-shadow: var(--pill-shadow);
+}
+.settings-row {
+  min-height: var(--settings-row-height);
+  display: grid;
+  grid-template-columns: var(--settings-label-width) 1fr;
+  align-items: center;
+  gap: var(--card-gap);
+  padding: var(--item-padding);
+}
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+.settings-control {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* 控件 (controls.tsx) */
+
+/* 分段控件: the chosen segment's pill slides between segments. */
+.settings .segmented {
+  min-width: var(--settings-segmented-width);
+}
+.segmented [role="radio"] {
+  position: relative;
+  isolation: isolate;
+  justify-content: center;
+}
+.segmented [role="radio"][aria-checked="true"] {
+  color: var(--list-fg);
+  font-weight: 600;
+}
+/* 色板: the chosen colour is ringed, with a gap of the panel between ring and dot. */
+.swatches {
+  display: flex;
+  gap: var(--swatch-gap);
+}
+.swatch {
+  width: var(--swatch-size);
+  height: var(--swatch-size);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px var(--line);
+  transition: scale var(--spring-pop);
+}
+.swatch:active {
+  scale: var(--press-scale-icon);
+}
+.swatch[aria-checked="true"] {
+  box-shadow:
+    0 0 0 var(--swatch-ring-gap) var(--card-bg),
+    0 0 0 calc(var(--swatch-ring-gap) + var(--swatch-ring)) var(--side-fg);
+}
+
+/* 带预览的选项: a card per choice, its preview above its name; the chosen card is ringed. */
+.preview-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--card-gap);
+}
+.preview-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--inline-gap);
+  transition: scale var(--spring-pop);
+}
+.preview-choice:active {
+  scale: var(--press-scale);
+}
+.preview-choice .preview {
+  width: 100%;
+  display: flex;
+  border-radius: var(--item-radius);
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+.preview-choice[aria-checked="true"] .preview {
+  box-shadow:
+    0 0 0 var(--swatch-ring-gap) var(--card-bg),
+    0 0 0 calc(var(--swatch-ring-gap) + var(--swatch-ring)) var(--accent);
+}
+.preview-choice .label {
+  text-align: center;
+  font-size: var(--text-meta);
+}
+.preview-choice[aria-checked="true"] .label {
+  font-weight: 600;
+}
+
+/* The miniature list rows inside the 详细程度 previews. */
+.detail-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+  padding: var(--item-padding);
+}
+.detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--preview-bar-gap);
+}
+.bar {
+  height: var(--preview-bar);
+  border-radius: var(--preview-bar);
+  background: var(--side-fg);
+}
+.bar.title {
+  width: 55%;
+  opacity: 0.7;
+}
+.bar.summary {
+  order: 1;
+  width: 100%;
+  opacity: 0.25;
+}
+.bar.date {
+  width: 22%;
+  margin-left: auto;
+  opacity: 0.35;
+}
+.detailed .bar.date {
+  order: 2;
+  margin-left: 0;
+}
+
+.segment-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}

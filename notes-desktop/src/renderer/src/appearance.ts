@@ -1,7 +1,26 @@
+import { useEffect, useLayoutEffect, useState } from "react";
 import type { Appearance } from "../../shared/appearance";
+import type { AccentChoice } from "../../shared/preferences";
 
-/** Hands the system's look to the design system's variables (tokens.css), before the first frame. */
-export function applyAppearance({ material, accent }: Appearance, root: HTMLElement = document.documentElement) {
+/** Hands the window material to the design system's variables (tokens.css), before the first frame. */
+export function applyAppearance({ material }: Appearance, root: HTMLElement = document.documentElement) {
   root.dataset.material = material;
-  if (accent) root.style.setProperty("--accent", accent);
+}
+
+/** The system accent colour (#rrggbb), followed while the app runs; null when the system does not say. */
+export function useSystemAccent(): string | null {
+  const [accent, setAccent] = useState(window.notes.appearance.accent);
+  useEffect(() => window.notes.onSystemAccentChanged(setAccent), []);
+  return accent;
+}
+
+/** --accent: the chosen preset, or the system's colour (the design system's blue when it has none). */
+export function useAccent(choice: AccentChoice) {
+  const system = useSystemAccent();
+  useLayoutEffect(() => {
+    const root = document.documentElement.style;
+    const value = choice === "system" ? system : `var(--accent-${choice})`;
+    if (value) root.setProperty("--accent", value);
+    else root.removeProperty("--accent");
+  }, [choice, system]);
 }

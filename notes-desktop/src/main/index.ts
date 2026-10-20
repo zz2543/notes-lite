@@ -34,6 +34,7 @@ import {
   type SpaceInfo,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
+import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
 
@@ -106,9 +107,31 @@ function watch(lib: Library) {
   }
 }
 
+// Read once at start, before the app is even ready; the window waits for it (a few hundred bytes).
+const stored = settings.read();
+
+// 设置: kept in memory, so the page can have them synchronously before its first frame.
+let preferences: Preferences = defaultPreferences;
+const preferencesReady = stored.then((s) => void (preferences = readPreferences(s.preferences)));
+
+/** What the main process itself draws from the preferences: light or dark, for the page and the material alike. */
+function applyPreferences() {
+  nativeTheme.themeSource = preferences.colorScheme;
+  // An opaque window's own colour shows before the page paints (on resize, say); it follows too.
+  const { backgroundColor } = materialWindowOptions(material, nativeTheme.shouldUseDarkColors);
+  if (backgroundColor && window && !window.isDestroyed()) window.setBackgroundColor(backgroundColor);
+}
+
+async function changePreferences(change: unknown): Promise<Preferences> {
+  preferences = readPreferences(change, preferences);
+  applyPreferences();
+  await settings.update({ preferences });
+  return preferences;
+}
+
 // Starts while the window loads, so the remembered library is ready by the time the page asks.
 const launch: Promise<LaunchState> = (async () => {
-  const { libraryPath, place } = await settings.read();
+  const { libraryPath, place } = await stored;
   if (!libraryPath) return { kind: "welcome" };
   library = await openLibrary(libraryPath, libraryOptions).catch(() => null);
   if (!library) return { kind: "welcome", missing: libraryPath };
@@ -202,6 +225,7 @@ function registerIpc() {
     indexInBackground();
     return chosen;
   });
+  ipcMain.handle(channels.readSummaries, (_, path: string) => requireLibrary().readSummaries(path));
   ipcMain.on(channels.rememberPlace, (_, place: Place) => void settings.update({ place }).catch(() => {}));
   ipcMain.handle(channels.readFolder, (_, path: string) => readOnce(`folder:${path}`, () => requireLibrary().readFolder(path)));
   ipcMain.handle(channels.readNote, (_, path: string) => readOnce(`note:${path}`, () => requireLibrary().readNote(path)));
@@ -287,6 +311,8 @@ function registerIpc() {
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
+  ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
+  ipcMain.handle(channels.setPreferences, (_, change: unknown) => changePreferences(change));
   ipcMain.on(channels.openLibraryListening, (event) => {
     if (!openLibraryPending) return;
     openLibraryPending = false;
@@ -363,11 +389,35 @@ function buildMenu() {
     accelerator: "CmdOrCtrl+N",
     click: () => reveal() && window?.webContents.send(channels.newNoteRequest),
   };
+  // The page handles ⌘, / Ctrl+, itself (the welcome page opens the panel too); the menu only shows it.
+  const settingsItem: MenuItemConstructorOptions = {
+    label: "设置…",
+    accelerator: "CmdOrCtrl+,",
+    registerAccelerator: false,
+    click: () => window?.webContents.send(channels.settingsRequest),
+  };
+  const appMenu: MenuItemConstructorOptions = {
+    role: "appMenu",
+    submenu: [
+      { role: "about" },
+      { type: "separator" },
+      settingsItem,
+      { type: "separator" },
+      { role: "services" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  };
+  const fileItems: MenuItemConstructorOptions[] = [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }];
   const template: MenuItemConstructorOptions[] = [
-    ...(mac ? [{ role: "appMenu" } as const] : []),
+    ...(mac ? [appMenu] : []),
     {
       label: "文件",
-      submenu: [newNoteItem, { type: "separator" }, openLibraryItem, { type: "separator" }, mac ? { role: "close" } : { role: "quit" }],
+      submenu: mac ? [...fileItems, { role: "close" }] : [...fileItems, settingsItem, { type: "separator" }, { role: "quit" }],
     },
     { role: "editMenu" },
     { label: "笔记", submenu: [sourceViewToggle] },
@@ -438,9 +488,22 @@ function createWindow() {
   else void window.loadFile(join(__dirname, "../renderer/index.html"));
 }
 
-void app.whenReady().then(() => {
+/** 强调色 follows the system while the app runs. */
+function followSystemAccent() {
+  const changed = () => {
+    if (window && !window.isDestroyed()) window.webContents.send(channels.systemAccentChanged, systemAppearance().accent);
+  };
+  systemPreferences.on("accent-color-changed", changed);
+  if (mac) systemPreferences.subscribeNotification("AppleColorPreferencesChangedNotification", changed);
+}
+
+void app.whenReady().then(async () => {
   registerIpc();
   buildMenu();
+  followSystemAccent();
+  // The first frame is drawn in the chosen light or dark.
+  await preferencesReady;
+  applyPreferences();
   createWindow();
   app.on("activate", () => {
     if (!reveal()) createWindow();

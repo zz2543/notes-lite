@@ -170,6 +170,10 @@ button {
   padding: 0 calc(var(--row-padding) * 2);
   -webkit-app-region: drag;
 }
+.list-head:not(.search-head) {
+  justify-content: space-between;
+  gap: var(--inline-gap);
+}
 .list-head h1 {
   margin: 0;
   font-size: var(--text-list-title);
@@ -194,6 +198,30 @@ button {
 }
 .item:hover {
   background: var(--hover);
+}
+
+/* 笔记列表详细程度: 标准 adds a muted date at the end of the row; 详细 stacks title, summary and date. */
+.item.note .summary,
+.item.note .date {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-weight: 400;
+}
+.item.note .summary {
+  color: var(--list-summary);
+  font-size: var(--text-summary);
+}
+.item.note .date {
+  flex: none;
+  color: var(--list-muted);
+  font-size: var(--text-meta);
+}
+.items.detailed .item.note {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
 }
 
 .card-wrap {
