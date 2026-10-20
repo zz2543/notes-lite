@@ -8,7 +8,9 @@
 // newest manifest is held in memory.
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, utimes, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import { dirname, join } from "node:path";
+import { logPath } from "./operationLog";
 
 export type ChangeKind = "added" | "modified" | "deleted";
 
@@ -16,13 +18,15 @@ export interface TurnChange {
   /** Library-relative, "/"-separated. */
   path: string;
   kind: ChangeKind;
+  /** False for an attachment the snapshot could only note the size and time of: it cannot be put back. */
+  restorable: boolean;
   /** Taken back since, on its own or with the whole turn. */
   reverted: boolean;
 }
 
 export class SnapshotError extends Error {
   constructor(
-    readonly code: "not-found" | "conflict",
+    readonly code: "not-found" | "conflict" | "not-kept",
     message: string,
   ) {
     super(message);
@@ -43,7 +47,24 @@ export interface SnapshotOptions {
   now?(): Date;
   /** Moves a file, by real location, to the system trash: where a file the turn added goes when taken back. */
   trash?(path: string): Promise<void>;
+  /**
+   * How attachments (anything that is not text) are kept: "clone" makes copy-on-write clones (APFS),
+   * which cost no time or space until a file changes; "copy" copies them whole. The platform's by default.
+   */
+  attachments?: "clone" | "copy";
+  /** With "copy": once a library's attachments add up to more than this, only what they were (size and time) is kept. About 10 GB by default. */
+  copyLimit?: number;
 }
+
+/** Files kept as text in the content store; anything else is an attachment. */
+const textExtensions = new Set(["md", "markdown", "txt", "html", "htm", "css", "js", "mjs", "json", "csv", "tsv", "yaml", "yml", "xml", "svg", "canvas"]);
+const isText = (path: string) => textExtensions.has(path.slice(path.lastIndexOf(".") + 1).toLowerCase());
+
+/** Never part of a snapshot: version control, system litter, and the operation log, which records the turns themselves. */
+const skipped = (path: string) => {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name === ".git" || name === ".DS_Store" || name === "Thumbs.db" || path === logPath || path === ".留白/操作记录.json";
+};
 
 export interface TurnSnapshots {
   /** Snapshots the library before a turn; answers the turn's id. */
@@ -55,13 +76,29 @@ export interface TurnSnapshots {
    * nothing touched, when any of those files has changed again since the turn.
    */
   revert(id: string, path?: string): Promise<Turn>;
+  /** How much disk the snapshots take. */
+  usage(): Promise<SnapshotUsage>;
+}
+
+export interface SnapshotUsage {
+  bytes: number;
+  /** False when the library's attachments were too large to copy, so only their size and time are kept. */
+  attachmentsKept: boolean;
+}
+
+/** The bytes of every file under `folder`; 0 when there is none. */
+async function sizeOf(folder: string): Promise<number> {
+  const entries = await readdir(folder, { withFileTypes: true, recursive: true }).catch(() => []);
+  let bytes = 0;
+  for (const entry of entries) if (entry.isFile()) bytes += (await stat(join(entry.parentPath, entry.name))).size;
+  return bytes;
 }
 
 interface FileState {
   size: number;
   mtimeMs: number;
-  /** Where its bytes are kept in the store. */
-  blob: string;
+  /** Where its bytes are kept, relative to the store; none for an attachment only noted. */
+  blob?: string;
 }
 
 interface Manifest {
@@ -69,6 +106,7 @@ interface Manifest {
   date: string;
   files: Record<string, FileState>;
   folders: string[];
+  attachmentsKept: boolean;
 }
 
 interface StoredTurn extends Turn {
@@ -83,6 +121,7 @@ async function walk(root: string) {
   const visit = async (folder: string, prefix: string) => {
     for (const entry of await readdir(folder, { withFileTypes: true })) {
       const path = prefix + entry.name;
+      if (skipped(path)) continue;
       if (entry.isDirectory()) {
         folders.push(path);
         await visit(join(folder, entry.name), `${path}/`);
@@ -100,7 +139,9 @@ async function walk(root: string) {
 export function turnSnapshots(store: string, root: string, options: SnapshotOptions = {}): TurnSnapshots {
   const now = () => options.now?.() ?? new Date();
   const at = (path: string) => join(root, ...path.split("/"));
-  const blobAt = (blob: string) => join(store, "objects", blob.slice(0, 2), blob);
+  const blobAt = (blob: string) => join(store, ...blob.split("/"));
+  const attachments = options.attachments ?? (process.platform === "darwin" ? "clone" : "copy");
+  const copyLimit = options.copyLimit ?? 10 * 1024 ** 3;
   const manifestAt = (id: string) => join(store, "snapshots", `${id}.json`);
   const turnAt = (id: string) => join(store, "turns", `${id}.json`);
   const writeJson = async (file: string, value: unknown) => {
@@ -112,9 +153,11 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
 
   let latest: Manifest | null = null;
 
-  const keep = async (path: string): Promise<string> => {
+  /** Text goes into the content store, once per content. */
+  const keepText = async (path: string): Promise<string> => {
     const bytes = await readFile(at(path));
-    const blob = createHash("sha256").update(bytes).digest("hex");
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const blob = `objects/${hash.slice(0, 2)}/${hash}`;
     const file = blobAt(blob);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, bytes, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
@@ -123,18 +166,43 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     return blob;
   };
 
+  /** An attachment is cloned (or copied) as it is; only a changed one is kept again. */
+  const keepAttachment = async (path: string): Promise<string> => {
+    const blob = `files/${randomUUID()}`;
+    await mkdir(join(store, "files"), { recursive: true });
+    await copyFile(at(path), blobAt(blob), attachments === "clone" ? constants.COPYFILE_FICLONE : 0);
+    return blob;
+  };
+
   const snapshot = async (): Promise<Manifest> => {
+    latest ??= await newestManifest();
     const files: Record<string, FileState> = {};
     const found = await walk(root);
+    let attachmentBytes = 0;
+    for (const [path, { size }] of found.files) if (!isText(path)) attachmentBytes += size;
+    const attachmentsKept = attachments === "clone" || attachmentBytes <= copyLimit;
     for (const [path, { size, mtimeMs }] of found.files) {
       const known = latest?.files[path];
-      const blob = known && known.size === size && known.mtimeMs === mtimeMs ? known.blob : await keep(path);
-      files[path] = { size, mtimeMs, blob };
+      const text = isText(path);
+      const reuse = known && known.size === size && known.mtimeMs === mtimeMs && (known.blob !== undefined || !attachmentsKept);
+      const blob = reuse ? known.blob : text ? await keepText(path) : attachmentsKept ? await keepAttachment(path) : undefined;
+      files[path] = blob === undefined ? { size, mtimeMs } : { size, mtimeMs, blob };
     }
-    const manifest: Manifest = { id: randomUUID(), date: now().toISOString(), files, folders: found.folders };
+    const manifest: Manifest = { id: randomUUID(), date: now().toISOString(), files, folders: found.folders, attachmentsKept };
     await writeJson(manifestAt(manifest.id), manifest);
     latest = manifest;
     return manifest;
+  };
+
+  /** The last snapshot taken, from an earlier run: what the next one compares sizes and times with. */
+  const newestManifest = async (): Promise<Manifest | null> => {
+    const names = await readdir(join(store, "snapshots")).catch(() => []);
+    let newest: Manifest | null = null;
+    for (const name of names.filter((n) => n.endsWith(".json"))) {
+      const manifest = await readJson<Manifest>(join(store, "snapshots", name)).catch(() => null);
+      if (manifest && (!newest || manifest.date > newest.date)) newest = manifest;
+    }
+    return newest;
   };
 
   const restore = async (path: string, state: FileState) => {
@@ -142,7 +210,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     await mkdir(dirname(target), { recursive: true });
     const temp = join(dirname(target), `.${randomUUID()}.restoring`);
     try {
-      await copyFile(blobAt(state.blob), temp);
+      await copyFile(blobAt(state.blob!), temp, constants.COPYFILE_FICLONE);
       await utimes(temp, new Date(), new Date(state.mtimeMs));
       await rename(temp, target);
     } catch (error) {
@@ -165,10 +233,12 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     const changes: TurnChange[] = [];
     for (const [path, state] of Object.entries(after.files)) {
       const old = before.files[path];
-      if (!old) changes.push({ path, kind: "added", reverted: false });
-      else if (old.blob !== state.blob) changes.push({ path, kind: "modified", reverted: false });
+      if (!old) changes.push({ path, kind: "added", restorable: true, reverted: false });
+      else if (isText(path) ? old.blob !== state.blob : old.size !== state.size || old.mtimeMs !== state.mtimeMs)
+        changes.push({ path, kind: "modified", restorable: old.blob !== undefined, reverted: false });
     }
-    for (const path of Object.keys(before.files)) if (!after.files[path]) changes.push({ path, kind: "deleted", reverted: false });
+    for (const [path, old] of Object.entries(before.files))
+      if (!after.files[path]) changes.push({ path, kind: "deleted", restorable: old.blob !== undefined, reverted: false });
     changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     const done: StoredTurn = { ...turn, after: after.id, changes };
     await writeJson(turnAt(id), done);
@@ -194,9 +264,12 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
 
   const revert = async (id: string, path?: string): Promise<Turn> => {
     const { turn, before, after } = await loadTurn(id);
-    const chosen = turn.changes.filter((change) => !change.reverted && (path === undefined || change.path === path));
-    if (path !== undefined && chosen.length === 0 && !turn.changes.some((change) => change.path === path))
-      throw new SnapshotError("not-found", `这一轮没有改动 ${path}。`);
+    const chosen = turn.changes.filter((change) => !change.reverted && change.restorable && (path === undefined || change.path === path));
+    if (path !== undefined) {
+      const change = turn.changes.find((c) => c.path === path);
+      if (!change) throw new SnapshotError("not-found", `这一轮没有改动 ${path}。`);
+      if (!change.restorable) throw new SnapshotError("not-kept", `${path} 只记录了大小和时间，无法撤回。`);
+    }
     for (const change of chosen) if (!(await asLeft(change, after))) throw changedSince(change.path);
     for (const change of chosen) {
       if (change.kind === "added") {
@@ -215,5 +288,10 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     return { id, date: turn.date, changes: turn.changes };
   };
 
-  return { begin, finish, revert };
+  const usage = async (): Promise<SnapshotUsage> => {
+    latest ??= await newestManifest();
+    return { bytes: await sizeOf(store), attachmentsKept: latest?.attachmentsKept ?? true };
+  };
+
+  return { begin, finish, revert, usage };
 }
