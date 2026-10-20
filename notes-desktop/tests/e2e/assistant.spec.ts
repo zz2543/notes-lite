@@ -101,3 +101,72 @@ test("with no command-line agent installed, the 助手栏 shows how to install o
   await expect(agents.getByRole("radio", { name: "Codex" })).toHaveAttribute("aria-checked", "true");
   await app.close();
 });
+
+test("with the 助手栏 open the navigation narrows with the window: 双栏, 单栏, then the 图标栏; closing the column leaves it", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/周一.md": "# 周一", "随记.md": "随记" });
+  const { app, page } = await launchWith(scratch, root);
+  const column = page.getByRole("complementary", { name: "助手栏" });
+  const list = page.getByRole("list", { name: "当前目录内容" });
+  const singleTree = page.getByRole("tree", { name: "文件夹与笔记" });
+  const rail = page.getByRole("navigation", { name: "导航" });
+  await setWindowWidth(app, page, 1200);
+  await expect(list).toBeVisible();
+
+  // Wide enough: 双栏 stays, the column is 340px.
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await expect(list).toBeVisible();
+  await expect.poll(async () => (await column.boundingBox())!.width).toBe(340);
+
+  // Narrower than 1180px: 单栏, and a 300px column.
+  await setWindowWidth(app, page, 1100);
+  await expect(list).toHaveCount(0);
+  await expect(singleTree).toBeVisible();
+  await expect.poll(async () => (await column.boundingBox())!.width).toBe(300);
+
+  // Narrower than 960px: the 图标栏; “展开导航” brings back 单栏.
+  await setWindowWidth(app, page, 900);
+  await expect(rail).toBeVisible();
+  await expect(singleTree).toHaveCount(0);
+  await rail.getByRole("button", { name: "展开导航" }).click();
+  await expect(rail).toHaveCount(0);
+  await expect(singleTree).toBeVisible();
+  await setWindowWidth(app, page, 950);
+  await expect(rail).toBeVisible();
+  // Its search icon opens 单栏 searching in place.
+  await rail.getByRole("button", { name: "搜索" }).click();
+  await expect(page.getByRole("searchbox", { name: "搜索笔记" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(singleTree).toBeVisible();
+
+  // Closing the column does not rearrange the navigation; resizing the window does.
+  await setWindowWidth(app, page, 1100);
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  // Once the column has finished shutting, the navigation is still as it was.
+  await expect(page.locator(".assistant")).toBeHidden();
+  await expect(page.locator(".assistant")).toHaveCSS("visibility", "hidden");
+  await expect(singleTree).toBeVisible();
+  await expect(list).toHaveCount(0);
+  await setWindowWidth(app, page, 1120);
+  await expect(list).toBeVisible();
+
+  // Reopened, it settles the navigation again.
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await expect(singleTree).toBeVisible();
+  await app.close();
+});
+
+test("with 单栏导航 chosen in 设置, the open 助手栏 never brings back 双栏", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记" });
+  const { app, page } = await launchWith(scratch, root);
+  await setWindowWidth(app, page, 1300);
+  await page.keyboard.press("ControlOrMeta+Comma");
+  const panel = page.getByRole("dialog", { name: "设置" });
+  await panel.getByRole("radiogroup", { name: "导航模式" }).getByRole("radio", { name: "单栏" }).click();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await expect(page.getByRole("complementary", { name: "助手栏" })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "文件夹与笔记" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "当前目录内容" })).toHaveCount(0);
+  await app.close();
+});
