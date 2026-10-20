@@ -6,3 +6,5 @@ export * from "./watcher";
 export * from "./spaces";
 export { spaceGuide, spaceGuideVersion } from "./spaceGuide";
 export * from "./migration";
+export * from "./spaceRequests";
+export * from "./recordTables";

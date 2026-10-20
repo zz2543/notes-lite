@@ -117,6 +117,31 @@ function parseSpace(name: string, html: string): Space {
   };
 }
 
+/** The visible notes inside the scope, by library path; hidden folders such as `.notes/` are never entered. */
+export async function notesInScope(root: string, scope: SpaceScope): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (relative: string) => {
+    const entries = await readdir(join(root, ...relative.split("/").filter(Boolean)), { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const path = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) found.push(path);
+    }
+  };
+  const starts = scope.library ? [""] : scope.folders.filter((f) => !f.split("/").some((part) => part.startsWith(".") || part === ".."));
+  // A folder inside another one in the scope is walked once.
+  for (const start of starts.filter((f) => !starts.some((other) => other !== f && (other === "" || f.startsWith(`${other}/`))))) {
+    await walk(start);
+  }
+  return [...new Set(found)].sort((a, b) => collator.compare(a, b));
+}
+
+/** The scope a space file's `lb-scope` meta declares; none declared is an empty scope. */
+export function spaceScopeOf(html: string): SpaceScope {
+  return scopeFromMeta(readMeta(html, "lb-scope") ?? "");
+}
+
 // A library syncs between macOS and Windows, so a space's file name must work on both.
 const forbidden = /[\\/:*?"<>|\u0000-\u001f]/;
 const reserved = /^(?:con|prn|aux|nul|com\d|lpt\d)(?:\..*)?$/i;
@@ -263,29 +288,9 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
 
   const reorder = (names: string[]) => saveOrder(names);
 
-  // The visible notes inside the scope, by path; hidden folders such as `.notes/` are never entered.
-  const notesIn = async (scope: SpaceScope): Promise<string[]> => {
-    const found: string[] = [];
-    const walk = async (relative: string) => {
-      const entries = await readdir(join(root, ...relative.split("/").filter(Boolean)), { withFileTypes: true }).catch(() => []);
-      for (const entry of entries) {
-        if (entry.name.startsWith(".")) continue;
-        const path = relative ? `${relative}/${entry.name}` : entry.name;
-        if (entry.isDirectory()) await walk(path);
-        else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) found.push(path);
-      }
-    };
-    const starts = scope.library ? [""] : scope.folders.filter((f) => !f.split("/").some((part) => part.startsWith(".") || part === ".."));
-    // A folder inside another one in the scope is walked once.
-    for (const start of starts.filter((f) => !starts.some((other) => other !== f && (other === "" || f.startsWith(`${other}/`))))) {
-      await walk(start);
-    }
-    return [...new Set(found)].sort((a, b) => collator.compare(a, b));
-  };
-
   const tablesIn = async (scope: SpaceScope) => {
     const tables: { source: string; header: string[] }[] = [];
-    for (const path of await notesIn(scope)) {
+    for (const path of await notesInScope(root, scope)) {
       const text = await readFile(join(root, ...path.split("/")), "utf8").catch(() => "");
       tables.push(...addressableTables(path, text));
     }
