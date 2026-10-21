@@ -236,7 +236,7 @@ export function AssistantColumn(props: AssistantColumnProps) {
           <div className="assistant-identity">
             {conversationAgent ? (
               <span className="assistant-agent">
-                {conversationAgent.name}
+                <span>{conversationAgent.name}</span>
                 {/* The model it began with stays for the whole conversation. */}
                 <span className="assistant-model-fixed">{conversation.model ?? "默认模型"}</span>
               </span>

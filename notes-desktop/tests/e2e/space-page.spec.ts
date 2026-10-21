@@ -42,7 +42,9 @@ async function spacePage(app: ElectronApplication, name: string): Promise<Page> 
 }
 
 /** How many homepages the window shows over its own page. */
-const shownPages = (app: ElectronApplication) => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length);
+// The main window's: 设置 may be open beside it.
+const shownPages = (app: ElectronApplication) =>
+  app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() !== "设置")!.contentView.children.length);
 
 const today = () => {
   const d = new Date();

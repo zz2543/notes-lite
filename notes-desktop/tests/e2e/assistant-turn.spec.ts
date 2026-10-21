@@ -163,7 +163,7 @@ test("模型选择: 默认 names the agent's own model; one chosen goes on the c
   await library(scratch, "home", { ".claude/settings.json": JSON.stringify({ model: "claude-sonnet-4-5" }) });
   const agent = await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-1", steps: [{ say: "好的。" }] });
   const { page } = await launchWith(scratch, root);
-  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await page.getByRole("button", { name: "打开助手栏" }).click();
 
   const picker = column(page).getByRole("button", { name: /^模型：/ });
   await expect(picker).toHaveText("模型：默认（claude-sonnet-4-5）");

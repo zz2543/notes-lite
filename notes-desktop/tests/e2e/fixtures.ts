@@ -150,6 +150,10 @@ export async function openSettings(app: ElectronApplication, page: Page, categor
 
 /** Closes the 设置 window with Esc, and waits until it has gone. */
 export async function closeSettings(app: ElectronApplication, panel: Locator) {
-  await panel.page().keyboard.press("Escape");
+  // The window closes on the key going down, so the press may find its page already gone.
+  await panel
+    .page()
+    .keyboard.press("Escape")
+    .catch(() => undefined);
   await expect.poll(() => app.windows().some(isSettings)).toBe(false);
 }
