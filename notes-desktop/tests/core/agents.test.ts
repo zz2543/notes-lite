@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -55,6 +55,21 @@ describe("detectAgents", () => {
     await install(join(scratch, "second"), "codex");
     const found = await detectAgents({ path: [join(scratch, "first"), join(scratch, "second")].join(delimiter) });
     expect(found.map((a) => a.path)).toEqual([first]);
+  });
+
+  it("passes over the copy of Claude Code inside the Claude desktop app, and finds the next one", async () => {
+    const internal = join(scratch, "Claude", "claude-code-vm", "2.1.0");
+    await install(internal, "claude");
+    const real = await install(join(scratch, "bin"), "claude");
+    const found = await detectAgents({ path: [internal, join(scratch, "bin")].join(delimiter) });
+    expect(found.map((a) => a.path)).toEqual([real]);
+  });
+
+  it.skipIf(windows)("passes over a command that only leads to the desktop app's copy", async () => {
+    const internal = await install(join(scratch, "Claude", "claude-code-vm"), "claude");
+    await mkdir(join(scratch, "links"));
+    await symlink(internal, join(scratch, "links", "claude"));
+    expect(await detectAgents({ path: join(scratch, "links") })).toEqual([]);
   });
 
   it("finds none on a path without them", async () => {

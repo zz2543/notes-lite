@@ -1,0 +1,6 @@
+{"type":"session","sessionId":"session-9690cff4-48ee-4c50-be84-f6c25fc1b9ab","cwd":"/tmp/ds1"}
+{"type":"status","phase":"turn_start","turn":1}
+{"type":"status","phase":"step_start","turn":1,"step":1}
+{"type":"status","phase":"step_end","turn":1,"step":1}
+{"type":"status","phase":"turn_end","turn":1,"reason":{"kind":"error","error":{"message":"Invalid API key","code":"AUTH","status":401}}}
+{"type":"final","text":""}

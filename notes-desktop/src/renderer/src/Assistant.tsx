@@ -1,9 +1,9 @@
-import { FolderSimple, X } from "@phosphor-icons/react";
+import { ClockCounterClockwise, FolderSimple, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { InstalledAgent } from "../../core";
 import { agents, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
-import { Composer, ConversationView, type AssistantState } from "./AssistantChat";
+import { Composer, ConversationHistory, ConversationView, folderName, type AssistantState } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
 import { Segmented } from "./controls";
 import { figureSize, icon } from "./tokens";
@@ -26,11 +26,11 @@ export function AssistantToggle({ state, onOpen }: { state: FigureState; onOpen(
 }
 
 /** How to install each agent, for the guide shown when none is found. */
-const installs: Record<AgentId, string | null> = {
+const installs: Record<AgentId, string> = {
   claude: "npm install -g @anthropic-ai/claude-code",
   codex: "npm install -g @openai/codex",
-  dsh: null,
-  pi: "npm install -g @mariozechner/pi-coding-agent",
+  dsh: "npm install -g @deepseek-ai/dsh",
+  pi: "npm install -g @earendil-works/pi-coding-agent",
 };
 /** The installed agents, looked for when the column opens and again on request; undefined while looking. */
 function useInstalledAgents(open: boolean) {
@@ -52,6 +52,8 @@ export interface AssistantColumnProps {
   /** Where the user is: the working directory a new conversation gets, and the open note. */
   folder: string;
   note: string | null;
+  /** The space open in the card, told to the agent with the spaces' authoring guide. */
+  space: string | null;
   libraryName: string;
   onOpenFolder(folder: string): void;
   /** Opens 操作记录, where a turn is undone. */
@@ -60,24 +62,42 @@ export interface AssistantColumnProps {
   saveFirst(): Promise<boolean>;
 }
 
-export function AssistantColumn({ open, onClose, assistant, folder, note, libraryName, onOpenFolder, onShowLog, saveFirst }: AssistantColumnProps) {
+export function AssistantColumn({ open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst }: AssistantColumnProps) {
   const { installed, detect } = useInstalledAgents(open);
   const [chosen, setChosen] = useState<AgentId>();
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
   const { conversation } = assistant;
   // Fixed when the conversation begins; until then it follows the selection.
   const workingFolder = conversation?.folder ?? folder;
-  const folderName = workingFolder ? workingFolder.slice(workingFolder.lastIndexOf("/") + 1) : libraryName;
+  const workingName = folderName(workingFolder, libraryName);
+  // 对话历史 shows in place of the conversation until one is picked.
+  const [history, setHistory] = useState(false);
+  const pick = (id: string) => {
+    setHistory(false);
+    void assistant.open(id);
+  };
   const conversationAgent = conversation && agents.find((a) => a.id === conversation.agent);
+  // A conversation from 对话历史 whose agent is no longer installed cannot go on.
+  const agentGone = conversationAgent && installed && !installed.some((a) => a.id === conversationAgent.id);
   const send = async (text: string, notes: string[]) => {
     if (!agent || !(await saveFirst())) return;
-    await assistant.send({ agent: agent.id, folder, text, notes });
+    await assistant.send({ agent: agent.id, folder, text, notes, ...(space ? { space } : {}) });
   };
   return (
     // Always there, so its width can move; closed, it is hidden from everything once it has shut.
     <aside className={`assistant ${open ? "open" : ""}`} aria-label="助手栏" aria-hidden={!open} inert={!open}>
       <div className="assistant-inner">
         <div className="assistant-bar">
+          <button
+            className="icon-button small"
+            onClick={() => setHistory(!history)}
+            disabled={assistant.running}
+            aria-label="对话历史"
+            aria-expanded={history}
+            title="对话历史"
+          >
+            <ClockCounterClockwise size={icon.small} />
+          </button>
           <button className="icon-button small" onClick={onClose} aria-label="关闭助手栏" title={`关闭 ${assistantShortcut}`}>
             <X size={icon.small} />
           </button>
@@ -93,14 +113,25 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
             agent && <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
           )}
           {installed && installed.length > 0 && (
-            <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${folderName}`} title="工作目录">
+            <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${workingName}`} title="工作目录">
               <FolderSimple size={icon.small} />
-              <span>{folderName}</span>
+              <span>{workingName}</span>
             </button>
           )}
         </header>
         {installed?.length === 0 && <InstallGuide onDetect={detect} />}
-        {conversation ? <ConversationView conversation={conversation} onReview={assistant.review} onShowLog={onShowLog} /> : <div className="assistant-messages" />}
+        {history ? (
+          <ConversationHistory current={conversation?.id ?? null} libraryName={libraryName} onPick={pick} />
+        ) : conversation ? (
+          <ConversationView conversation={conversation} onReview={assistant.review} onShowLog={onShowLog} />
+        ) : (
+          <div className="assistant-messages" />
+        )}
+        {agentGone && (
+          <p className="assistant-problem" role="alert">
+            这个对话用的 {conversationAgent.name} 没有安装，不能继续。
+          </p>
+        )}
         {assistant.problem && (
           <p className="assistant-problem" role="alert">
             {assistant.problem}
@@ -110,11 +141,14 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
           <Composer
             note={note}
             running={assistant.running}
-            disabled={!agent}
+            disabled={!agent || Boolean(agentGone)}
             hasConversation={conversation !== null}
             onSend={(text, notes) => void send(text, notes)}
             onStop={assistant.stop}
-            onNew={assistant.reset}
+            onNew={() => {
+              setHistory(false);
+              assistant.reset();
+            }}
           />
         )}
       </div>
@@ -132,7 +166,7 @@ function InstallGuide({ onDetect }: { onDetect(): void }) {
           <li key={agent.id}>
             <span className="guide-name">{agent.name}</span>
             <code>{agent.command}</code>
-            {installs[agent.id] && <code className="guide-install">{installs[agent.id]}</code>}
+            <code className="guide-install">{installs[agent.id]}</code>
           </li>
         ))}
       </ul>

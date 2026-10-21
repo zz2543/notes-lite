@@ -752,6 +752,61 @@ nav.rail .drag {
   line-height: 1.55;
   user-select: text;
 }
+/* 对话历史: in place of the conversation, one row a conversation, its first message over its agent,
+   working directory and when it was last used. */
+.assistant-bar .icon-button[aria-expanded="true"] {
+  background: var(--hover);
+}
+.assistant-bar .icon-button:disabled {
+  opacity: 0.35;
+  background: none;
+}
+.assistant-history {
+  user-select: none;
+}
+.assistant-history ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.history-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
+  text-align: left;
+}
+.history-item:hover {
+  background: var(--hover);
+}
+.history-item[aria-current="true"] {
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+.history-title,
+.history-meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-title {
+  font-size: var(--text-path);
+}
+.history-meta,
+.history-empty {
+  font-size: var(--text-meta);
+  color: var(--side-muted);
+}
+.history-empty {
+  margin: 0;
+}
 .assistant-user {
   align-self: flex-end;
   max-width: 85%;

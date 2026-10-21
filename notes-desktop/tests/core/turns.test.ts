@@ -1,23 +1,23 @@
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, type TurnEvent } from "../../src/core";
+import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, spaceLibrary, turnSpaces, type AgentId, type TurnEvent, type TurnSpaces } from "../../src/core";
 import { installFakeAgent, type FakeScript } from "../support/fakeAgent";
 import { contents, fakeTrash, library, scratchFolder } from "../support/library";
 
 // 一轮 (assistant-spec): the library is snapshotted, the agent runs in the working directory with full
 // permissions, its replies and tool calls stream out, and what it changed becomes one operation-log entry.
 
-async function setup(files: Record<string, string>, script: FakeScript | FakeScript[]) {
+async function setup(files: Record<string, string>, script: FakeScript | FakeScript[], id: AgentId = "claude") {
   const root = await library(files);
   const data = await scratchFolder("notes-desktop-data-");
   const trash = await fakeTrash();
   const snapshots = snapshotStore(join(data, "snapshots"), { trash: trash.trash }).library(root);
   const log = operationLog(root, { trash: trash.trash, turns: snapshots });
-  const agent = await installFakeAgent(join(data, "agents"), "claude", script);
+  const agent = await installFakeAgent(join(data, "agents"), id, script);
   const events: TurnEvent[] = [];
-  const turn = (request: { folder: string; text: string; notes?: string[]; session?: string; signal?: AbortSignal }) =>
-    runTurn({ agent: { id: "claude", path: agent.path }, root, snapshots, log, notes: [], ...request, onEvent: (event) => events.push(event) });
+  const turn = (request: { folder: string; text: string; notes?: string[]; session?: string; signal?: AbortSignal; spaces?: TurnSpaces }) =>
+    runTurn({ agent: { id, path: agent.path }, root, snapshots, log, notes: [], ...request, onEvent: (event) => events.push(event) });
   return { root, agent, events, turn, log };
 }
 
@@ -123,6 +123,112 @@ describe("一轮", () => {
     await expect.poll(() => lib.events.some((e) => e.kind === "text")).toBe(true);
     stop.abort();
     expect((await running).failed).toBe("已停止。");
+  });
+});
+
+// Codex, DeepSeek Harness and Pi each speak their own output and take their own flags (ADR 0005); a turn
+// with any of them streams, continues and logs the same way.
+const others = [
+  { id: "codex", write: "file_change", fullPermission: ["--dangerously-bypass-approvals-and-sandbox"], resume: ["exec", "resume"] },
+  { id: "dsh", write: "write", fullPermission: ["--profile", "headless"], resume: ["--session-id"] },
+  { id: "pi", write: "write", fullPermission: ["--mode", "json"], resume: ["--session"] },
+] as const;
+
+describe.each(others)("一轮，用 $id", ({ id, write, fullPermission, resume }) => {
+  it("runs it with full permissions in the working directory, streams its reply and logs what it changed", async () => {
+    const lib = await setup(
+      { "日记/周一.md": "# 周一\n" },
+      {
+        session: `${id}-1`,
+        steps: [
+          { say: "我来补充。" },
+          { tool: write, input: { file_path: "周一.md" }, write: { path: "周一.md", text: "# 周一\n\n- 跑步\n" } },
+          { say: "加上了。" },
+        ],
+      },
+      id,
+    );
+    const outcome = await lib.turn({ folder: "日记", text: "补充计划" });
+
+    const [run] = await lib.agent.runs();
+    expect(run!.argv).toEqual(expect.arrayContaining([...fullPermission]));
+    // DeepSeek Harness only gets full access when asked by its environment.
+    if (id === "dsh") expect(run!.permissionMode).toBe("danger-full-access");
+    expect(await realpath(run!.cwd)).toBe(await realpath(join(lib.root, "日记")));
+    expect(run!.stdin).toContain("补充计划");
+
+    const text = lib.events.filter((e) => e.kind === "text").map((e) => (e.kind === "text" ? e.text : ""));
+    expect(text.join("")).toMatch(/^我来补充。(\n\n)?加上了。$/);
+    expect(lib.events).toContainEqual(expect.objectContaining({ kind: "tool", activity: "writing" }));
+    expect(lib.events).toContainEqual(expect.objectContaining({ kind: "toolDone", failed: false }));
+    expect(lib.events.at(-1)).toEqual({
+      kind: "end",
+      turn: expect.any(String),
+      entry: outcome.entry?.id,
+      changes: [{ path: "日记/周一.md", kind: "modified", lines: { added: 2, removed: 0 }, restorable: true, reverted: false }],
+    });
+    expect(outcome.session).toBe(`${id}-1`);
+    expect(outcome.failed).toBeUndefined();
+    expect(await lib.log.entries()).toHaveLength(1);
+  });
+
+  it("continues its conversation on the next turn", async () => {
+    const lib = await setup({ "随记.md": "随记\n" }, { session: `${id}-7`, steps: [{ say: "好的。" }] }, id);
+    const first = await lib.turn({ folder: "", text: "你好" });
+    const second = await lib.turn({ folder: "", text: "再来", session: first.session });
+    const runs = await lib.agent.runs();
+    expect(runs[0]!.argv).not.toContain(`${id}-7`);
+    expect(runs[1]!.argv.join(" ")).toContain(resume.join(" "));
+    expect(runs[1]!.argv).toContain(`${id}-7`);
+    expect(second.session).toBe(`${id}-7`);
+  });
+
+  it("says why when it fails", async () => {
+    const lib = await setup({ "随记.md": "随记\n" }, { steps: [{ say: "试试。" }, { fail: "额度已用完" }] }, id);
+    const outcome = await lib.turn({ folder: "", text: "写一篇" });
+    expect(outcome.failed).toBe("额度已用完");
+    expect(lib.events.at(-1)).toEqual({ kind: "end", turn: expect.any(String), changes: [], failed: "额度已用完" });
+  });
+});
+
+// 空间主页 (assistant-spec 20): whatever the user asks, the agent knows where the library's spaces are and
+// that the authoring guide comes first when it writes one — the space open now named.
+describe("空间主页的编写说明", () => {
+  const files = {
+    "日记/周一.md": "# 周一\n",
+    ".notes/空间/读书.html": '<meta name="space-scope" content="读书">\n',
+    ".notes/空间/健身.html": '<meta name="space-scope" content="健身">\n<p>主页</p>',
+    ".notes/空间/顺序.json": JSON.stringify(["读书", "健身"]),
+  };
+
+  it("lists the spaces, in the user's order, with the guide, installed, and the one open", async () => {
+    const root = await library(files);
+    const spaces = await turnSpaces(spaceLibrary(root), "健身");
+    expect(spaces).toEqual({
+      guide: ".notes/空间/编写说明.md",
+      list: [
+        { name: "读书", path: ".notes/空间/读书.html" },
+        { name: "健身", path: ".notes/空间/健身.html" },
+      ],
+      open: "健身",
+    });
+    expect(await readFile(join(root, ".notes", "空间", "编写说明.md"), "utf8")).toContain("空间主页编写说明");
+    // A space that is not there is not open.
+    expect((await turnSpaces(spaceLibrary(root), "没有"))?.open).toBeUndefined();
+  });
+
+  it("says nothing of spaces in a library without any", async () => {
+    expect(await turnSpaces(spaceLibrary(await library({ "随记.md": "随记\n" })))).toBeUndefined();
+  });
+
+  it("puts them in the prompt, relative to the working directory", async () => {
+    const lib = await setup(files, { steps: [{ say: "好的。" }] });
+    await lib.turn({ folder: "日记", text: "改一下健身主页", spaces: (await turnSpaces(spaceLibrary(lib.root), "健身"))! });
+    const [run] = await lib.agent.runs();
+    expect(run!.stdin).toContain("改一下健身主页");
+    expect(run!.stdin).toContain("请先完整阅读并遵守编写说明：../.notes/空间/编写说明.md");
+    expect(run!.stdin).toContain("- 健身：../.notes/空间/健身.html（当前打开）");
+    expect(run!.stdin).toContain("- 读书：../.notes/空间/读书.html\n");
   });
 });
 

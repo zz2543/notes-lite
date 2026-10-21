@@ -2,13 +2,14 @@
 // at a time; its events are folded into it (shared/conversation's one rule) and passed on as they
 // come, and it is kept with the app (对话记录) once the turn is over.
 import type { AgentId } from "../shared/agentKinds";
-import { canRevert, emptyReply, withEvent, type Conversation, type Message, type Reply, type ReviewChoice, type TurnChange, type TurnEvent } from "../shared/conversation";
+import { canRevert, emptyReply, stoppedTurn, withEvent, type Conversation, type ConversationSummary, type Message, type Reply, type ReviewChoice, type TurnChange, type TurnEvent } from "../shared/conversation";
 import type { ReviewMode } from "../shared/preferences";
 import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
 import { OperationLogError, type OperationLog } from "./operationLog";
 import { SnapshotError, type DiffLine, type SnapshotStore } from "./snapshots";
-import { runTurn } from "./turns";
+import type { SpaceLibrary } from "./spaces";
+import { runTurn, turnSpaces } from "./turns";
 
 export interface TurnStart {
   /** The conversation to continue; null begins one. */
@@ -19,6 +20,8 @@ export interface TurnStart {
   text: string;
   /** Notes put in the context, library-relative. */
   notes: string[];
+  /** The space open in the app, by name, if any. */
+  space?: string;
 }
 
 export type TurnStarted = { ok: true; conversation: Conversation } | { ok: false; message: string };
@@ -48,6 +51,8 @@ export interface AssistantTurnsOptions {
   env(): Promise<NodeJS.ProcessEnv>;
   /** The 写入审查 setting now: a card after each turn, or keep it all. */
   reviewMode(): ReviewMode;
+  /** The spaces of the library at `root`, told to the agent with their authoring guide each turn. */
+  spaces?(root: string): SpaceLibrary;
 }
 
 export interface AssistantTurns {
@@ -56,6 +61,10 @@ export interface AssistantTurns {
    * at once with the conversation as it now stands; `send` gets the turn's events as they come.
    */
   start(root: string | null, request: TurnStart, send: (conversation: string, event: TurnEvent) => void): Promise<TurnStarted>;
+  /** 对话历史: the kept conversations of the library at `root`, the latest first. */
+  history(root: string | null): Promise<ConversationSummary[]>;
+  /** A conversation of the library at `root` as it stands, to show and continue; null when there is none. */
+  open(root: string | null, conversation: string): Promise<Conversation | null>;
   /** Stops the conversation's running turn. */
   stop(conversation: string): void;
   /** Stops every running turn, as when the app quits. */
@@ -82,9 +91,14 @@ const knownReason = (error: unknown) => {
 export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
   const { conversations } = options;
   // The conversations of this run stay in memory too.
-  const open = new Map<string, Conversation>();
+  const live = new Map<string, Conversation>();
   const running = new Map<string, AbortController>();
-  const loaded = async (id: string) => open.get(id) ?? (await conversations.read(id).catch(() => undefined));
+  // Kept one save at a time, each the conversation as it stands then.
+  let saving = Promise.resolve();
+  const keep = (id: string) => {
+    saving = saving.then(() => conversations.save(live.get(id)!)).catch(() => undefined);
+  };
+  const loaded = async (id: string) => live.get(id) ?? (await conversations.read(id).catch(() => undefined));
 
   const start: AssistantTurns["start"] = async (root, request, send) => {
     if (!root) return { ok: false, message: "请先打开笔记库。" };
@@ -99,14 +113,17 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
       messages: [...conversation.messages.map(keepWaiting), { role: "user", text: request.text, notes: request.notes }, emptyReply()],
     };
     const id = conversation.id;
-    open.set(id, conversation);
+    live.set(id, conversation);
     await conversations.save(conversation);
     const stop = new AbortController();
     running.set(id, stop);
     const pass = (turnEvent: TurnEvent) => {
       const review = turnEvent.kind === "end" ? reviewOf(turnEvent, options.reviewMode()) : undefined;
       const event: TurnEvent = review && turnEvent.kind === "end" ? { ...turnEvent, review } : turnEvent;
-      open.set(id, withEvent(open.get(id)!, event));
+      const before = live.get(id)!;
+      live.set(id, withEvent(before, event));
+      // The agent's id for it is kept at once, so it can be continued even if the app quits mid-turn.
+      if (event.kind === "session" && event.id !== before.session) keep(id);
       send(id, event);
     };
     const turns = options.snapshots.library(root);
@@ -117,6 +134,8 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
       text: request.text,
       notes: request.notes,
       session: conversation.session,
+      // Without them the turn still runs.
+      spaces: options.spaces ? await turnSpaces(options.spaces(root), request.space).catch(() => undefined) : undefined,
       snapshots: turns,
       log: options.log(root),
       env: await options.env(),
@@ -125,12 +144,12 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     })
       .catch((error: Error) => {
         // The snapshots themselves failed: the turn ends saying why.
-        const reply = open.get(id)!.messages.at(-1);
+        const reply = live.get(id)!.messages.at(-1);
         if (reply?.role === "assistant" && !reply.done) pass({ kind: "end", changes: [], failed: error.message });
       })
       .finally(() => {
         running.delete(id);
-        void conversations.save(open.get(id)!).catch(() => undefined);
+        keep(id);
       });
     return { ok: true, conversation };
   };
@@ -149,7 +168,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
       return { ok: false, message: knownReason(error) };
     }
     const updated = { ...conversation, messages: conversation.messages.map((m, i) => (i === at ? next : m)) };
-    open.set(updated.id, updated);
+    live.set(updated.id, updated);
     await conversations.save(updated);
     return { ok: true, conversation: updated };
   };
@@ -177,8 +196,22 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     }
   };
 
+  const open: AssistantTurns["open"] = async (root, id) => {
+    const conversation = live.get(id) ?? (await conversations.read(id).catch(() => undefined));
+    if (!root || !conversation || conversation.root !== root) return null;
+    const reply = conversation.messages.at(-1);
+    // A turn the app quit in the middle of ended there; what it changed is not known.
+    if (!running.has(id) && reply?.role === "assistant" && !reply.done) {
+      const messages = [...conversation.messages.slice(0, -1), { ...reply, done: true, failed: stoppedTurn }];
+      return { ...conversation, messages };
+    }
+    return conversation;
+  };
+
   return {
     start,
+    history: async (root) => (root ? conversations.list(root) : []),
+    open,
     stop: (id) => running.get(id)?.abort(),
     stopAll: () => running.forEach((turn) => turn.abort()),
     review,

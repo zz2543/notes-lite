@@ -172,6 +172,7 @@ const turns = assistantTurns({
   env: agentEnvironment,
   // Read at the end of each turn (the setting is declared further down).
   reviewMode: () => preferences.assistantReview,
+  spaces: (root) => spaceLibrary(root, libraryOptions),
 });
 
 /**
@@ -485,6 +486,8 @@ function registerIpc() {
   ipcMain.on(channels.stopTurn, (_, id: string) => turns.stop(id));
   ipcMain.handle(channels.reviewTurn, (_, request: TurnReviewRequest) => turns.review(library?.root ?? null, request));
   ipcMain.handle(channels.turnDiff, (_, turn: string, path: string) => turns.diff(library?.root ?? null, turn, path));
+  ipcMain.handle(channels.conversations, () => turns.history(library?.root ?? null));
+  ipcMain.handle(channels.openConversation, (_, id: string) => turns.open(library?.root ?? null, id));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));

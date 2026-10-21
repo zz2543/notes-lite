@@ -5,8 +5,10 @@ import { spawn } from "node:child_process";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
 import type { AgentId } from "../shared/agentKinds";
+import { stoppedTurn } from "../shared/conversation";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
+import { spaceGuideName, spacesFolder, type SpaceLibrary } from "./spaces";
 
 export interface TurnRequest {
   agent: { id: AgentId; path: string };
@@ -20,6 +22,8 @@ export interface TurnRequest {
   notes: string[];
   /** The agent's conversation to continue, if this is not the first turn. */
   session?: string;
+  /** The library's spaces, so a homepage it writes follows the authoring guide. */
+  spaces?: TurnSpaces;
   snapshots: TurnSnapshots;
   log: OperationLog;
   /** The agent's environment; this process's by default. */
@@ -39,12 +43,50 @@ export interface TurnOutcome {
 
 const at = (root: string, path: string) => join(root, ...path.split("/").filter(Boolean));
 
-/** What the agent is asked: the user's words, then the notes in context, relative to the working directory. */
-export function turnPrompt({ root, folder, text, notes }: Pick<TurnRequest, "root" | "folder" | "text" | "notes">): string {
-  if (notes.length === 0) return text;
+/** A library's spaces as a turn's context (assistant-spec 20); paths library-relative. */
+export interface TurnSpaces {
+  /** The authoring guide (编写说明). */
+  guide: string;
+  /** Each space by name, with its file. */
+  list: Array<{ name: string; path: string }>;
+  /** The space open in the app, if any. */
+  open?: string;
+}
+
+/**
+ * The library's spaces for a turn, the authoring guide installed so the agent can read it; undefined
+ * when it has none. `open`: the space open in the app.
+ */
+export async function turnSpaces(library: SpaceLibrary, open?: string): Promise<TurnSpaces | undefined> {
+  const spaces = await library.spaces();
+  if (spaces.length === 0) return undefined;
+  await library.installGuide();
+  return {
+    guide: spacesGuidePath,
+    list: spaces.map(({ name, path }) => ({ name, path })),
+    ...(open && spaces.some((space) => space.name === open) ? { open } : {}),
+  };
+}
+
+const spacesGuidePath = `${spacesFolder}/${spaceGuideName}`;
+
+/**
+ * What the agent is asked: the user's words, then the notes in context and the library's spaces with
+ * their authoring guide, paths relative to the working directory.
+ */
+export function turnPrompt({ root, folder, text, notes, spaces }: Pick<TurnRequest, "root" | "folder" | "text" | "notes" | "spaces">): string {
   const cwd = at(root, folder);
-  const listed = notes.map((note) => `- ${relative(cwd, at(root, note)).split("\\").join("/")}`);
-  return `${text}\n\n附带的笔记（路径相对于当前工作目录）：\n${listed.join("\n")}\n`;
+  const rel = (path: string) => relative(cwd, at(root, path)).split("\\").join("/");
+  const parts = [text];
+  if (notes.length > 0) parts.push(`附带的笔记（路径相对于当前工作目录）：\n${notes.map((note) => `- ${rel(note)}`).join("\n")}`);
+  if (spaces)
+    parts.push(
+      [
+        `笔记库的空间主页（路径相对于当前工作目录）。编写或修改空间主页前，请先完整阅读并遵守编写说明：${rel(spaces.guide)}`,
+        ...spaces.list.map(({ name, path }) => `- ${name}：${rel(path)}${name === spaces.open ? "（当前打开）" : ""}`),
+      ].join("\n"),
+    );
+  return parts.length === 1 ? text : `${parts.join("\n\n")}\n`;
 }
 
 /** Runs the command; a Windows .cmd or .bat shim goes through the shell, which Node requires. */
@@ -60,11 +102,7 @@ function start(path: string, args: string[], cwd: string, env: NodeJS.ProcessEnv
 export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   const { agent, root, folder, snapshots, log, onEvent } = request;
   const adapter = agentAdapter(agent.id);
-  if (!adapter) {
-    const failed = "这个 Agent 还不能在助手栏里使用。";
-    onEvent({ kind: "end", changes: [], failed });
-    return { failed };
-  }
+  const env = adapter.env ? { ...(request.env ?? process.env), ...adapter.env } : request.env;
   const cwd = at(root, folder);
   const id = await snapshots.begin();
   const outcome: TurnOutcome = {};
@@ -78,7 +116,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   let failed: string | undefined;
   try {
     failed = await new Promise<string | undefined>((done) => {
-      const child = start(agent.path, adapter.args(request.session), cwd, request.env);
+      const child = start(agent.path, adapter.args(request.session), cwd, env);
       const read = adapter.reader(cwd);
       let result: AgentEvent | undefined;
       let stderr = "";
@@ -112,7 +150,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
       child.on("close", (code) => {
         request.signal?.removeEventListener("abort", stop);
         if (pending) pass(pending);
-        if (request.signal?.aborted) return done("已停止。");
+        if (request.signal?.aborted) return done(stoppedTurn);
         if (result?.kind === "result" && result.failed) return done(result.failed);
         if (code !== 0) return done(stderr.trim() || `Agent 异常退出（代码 ${code}）。`);
         done(undefined);

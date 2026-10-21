@@ -1,8 +1,9 @@
 // 助手 runs through a command-line agent the user installed (ADR 0005): Claude Code, Codex,
 // DeepSeek Harness or Pi, all equal. Which of them is installed is whichever command the search path
-// (PATH) leads to, as a terminal would find it.
+// (PATH) leads to, as a terminal would find it — except the copy of Claude Code the Claude desktop app
+// keeps for itself (in a `claude-code-vm` folder): that one is the app's, not the user's.
 import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
+import { access, realpath, stat } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { agents, type AgentKind } from "../shared/agentKinds";
 
@@ -27,10 +28,15 @@ async function runnable(file: string): Promise<boolean> {
   try {
     if (!(await stat(file)).isFile()) return false;
     if (!windows) await access(file, constants.X_OK);
-    return true;
+    return !(appsOwn(file) || appsOwn(await realpath(file)));
   } catch {
     return false;
   }
+}
+
+/** Inside the Claude desktop app's own copy of Claude Code. */
+function appsOwn(file: string): boolean {
+  return file.split(/[\\/]/).includes("claude-code-vm");
 }
 
 /** The installed agents, each at the first place on the path that has it. */

@@ -1,4 +1,4 @@
-import type { AgentId, Conversation, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+import type { AgentId, Conversation, ConversationSummary, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
 
 export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
@@ -125,6 +125,10 @@ export interface NotesApi {
   startTurn(request: TurnStart): Promise<TurnStarted>;
   /** Stops the conversation's running turn. */
   stopTurn(conversation: string): void;
+  /** 对话历史 (ticket 30): the open library's kept conversations, the latest first. */
+  conversations(): Promise<ConversationSummary[]>;
+  /** A kept conversation of the open library as it stands, to show and continue; null when it is gone. */
+  openConversation(conversation: string): Promise<Conversation | null>;
   /** An event of a running turn, by conversation. */
   onTurnEvent(listener: (conversation: string, event: TurnEvent) => void): () => void;
   /** What the review card asks (ticket 29): keep the turn, or take back one note or all of it. */
@@ -249,6 +253,8 @@ export const channels = {
   clearSnapshots: "assistant:clear-snapshots",
   startTurn: "assistant:start-turn",
   stopTurn: "assistant:stop-turn",
+  conversations: "assistant:conversations",
+  openConversation: "assistant:open-conversation",
   turnEvent: "assistant:turn-event",
   reviewTurn: "assistant:review-turn",
   turnDiff: "assistant:turn-diff",
