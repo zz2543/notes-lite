@@ -114,7 +114,7 @@ export interface NotesApi {
   // 空间 (ticket 18). The space files live in the library's `.notes/空间/`.
   /** The open library's spaces, in the user's order. */
   listSpaces(): Promise<SpaceInfo[]>;
-  /** Creates the space and copies the prompt for an external agent to the clipboard. */
+  /** Creates the space; the page then has 助手 write its homepage (spacePrompt). */
   createSpace(draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
   updateSpace(name: string, draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
   /** Moves only the space file to the trash. */
@@ -122,6 +122,8 @@ export interface NotesApi {
   reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
   /** Copies the prompt for an external agent to the clipboard. */
   copySpacePrompt(name: string): Promise<SpaceDone<null>>;
+  /** The same prompt, for 助手 to write the space's homepage in a turn of its own. */
+  spacePrompt(name: string): Promise<SpaceDone<string>>;
   /** 显示源文件: shows the space's HTML file in the system's file manager. */
   revealSpaceSource(name: string): Promise<SpaceDone<null>>;
 
@@ -277,6 +279,7 @@ export const channels = {
   deleteSpace: "spaces:delete",
   reorderSpaces: "spaces:reorder",
   copySpacePrompt: "spaces:copy-prompt",
+  spacePrompt: "spaces:prompt",
   revealSpaceSource: "spaces:reveal-source",
   detectAgents: "assistant:detect-agents",
   agentModels: "assistant:agent-models",

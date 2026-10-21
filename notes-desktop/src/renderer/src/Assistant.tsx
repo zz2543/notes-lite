@@ -147,9 +147,22 @@ export interface AssistantColumnProps {
   onShowLog(): void;
   /** Saves the open note, so the agent reads what is on screen; false when it could not. */
   saveFirst(): Promise<boolean>;
+  /** Asked of 助手 from elsewhere in the app (a space's homepage to write): a new conversation, sent at once. */
+  request: AssistantRequest | null;
+  /** The request was sent, or could not be: no agent is installed, or a turn is still running. */
+  onRequestTaken(request: AssistantRequest, sent: "sent" | "no-agent" | "busy"): void;
 }
 
-export function AssistantColumn({ open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst }: AssistantColumnProps) {
+export interface AssistantRequest {
+  /** Tells one request from the next, the same words asked again. */
+  id: number;
+  text: string;
+  /** The space it is about, told to the agent with the authoring guide. */
+  space?: string;
+}
+
+export function AssistantColumn(props: AssistantColumnProps) {
+  const { open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst, request, onRequestTaken } = props;
   const { installed, detect } = useInstalledAgents(open);
   const [chosen, setChosen] = useState<AgentId>();
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
@@ -174,6 +187,16 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
     if (!agent || !(await saveFirst())) return;
     await assistant.send({ agent: agent.id, folder, text, notes, ...(model ? { model } : {}), ...(space ? { space } : {}) });
   };
+  // A request from elsewhere: once the agents are known, a new conversation in the library itself, with
+  // the agent and model the switch shows.
+  useEffect(() => {
+    if (!open || !request || !installed) return;
+    if (!agent) return onRequestTaken(request, "no-agent");
+    if (assistant.running) return onRequestTaken(request, "busy");
+    onRequestTaken(request, "sent");
+    setHistory(false);
+    void assistant.send({ fresh: true, agent: agent.id, folder: "", text: request.text, notes: [], ...(model ? { model } : {}), ...(request.space ? { space: request.space } : {}) });
+  }, [open, request, installed]);
   return (
     // Always there, so its width can move; closed, it is hidden from everything once it has shut.
     <aside className={`assistant ${open ? "open" : ""}`} aria-label="助手栏" aria-hidden={!open} inert={!open}>

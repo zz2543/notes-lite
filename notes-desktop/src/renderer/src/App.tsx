@@ -2,7 +2,7 @@ import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass, Sideba
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
-import { AssistantColumn, AssistantToggle, isAssistantShortcut } from "./Assistant";
+import { AssistantColumn, AssistantToggle, isAssistantShortcut, type AssistantRequest } from "./Assistant";
 import { useAssistant } from "./AssistantChat";
 import { FocusToggle, useFocusMode } from "./FocusMode";
 import { FolderContentsList } from "./FolderContentsList";
@@ -218,6 +218,23 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   // assistant is doing, in the column or, closed, on the card's toggle.
   const [assistantOpen, setAssistantOpen] = useState(false);
   const assistant = useAssistant();
+  // 新建空间 and 让助手生成主页: the space's prompt goes to 助手 as a new conversation (2026-10-21 用户反馈).
+  const [assistantRequest, setAssistantRequest] = useState<AssistantRequest | null>(null);
+  const generateHomepage = async (name: string) => {
+    const prompt = await window.notes.spacePrompt(name);
+    if (!prompt.ok) return notify(prompt.message);
+    setAssistantOpen(true);
+    setAssistantRequest({ id: Date.now(), text: prompt.value, space: name });
+  };
+  const requestTaken = async (request: AssistantRequest, sent: "sent" | "no-agent" | "busy") => {
+    setAssistantRequest(null);
+    if (sent === "busy") return notify("助手还在进行上一轮，结束后再让它生成主页。");
+    if (sent === "no-agent" && request.space) {
+      // Without an agent here, the prompt is copied for one used elsewhere.
+      const copied = await window.notes.copySpacePrompt(request.space);
+      notify(copied.ok ? "没有找到本机的命令行 Agent。提示词已复制到剪贴板，可以粘贴给外部 agent 生成空间主页。" : copied.message);
+    }
+  };
   const operationLog = useOperationLog(notify);
   const figureState = assistant.figure;
   // A new conversation works where the user last chose: the open note's folder, or a folder chosen since.
@@ -406,7 +423,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
               </>
             ) : (
               <>
-                <SpacePanel libraryName={library.name} selected={space} onSelect={selectSpace} notify={notify} />
+                <SpacePanel libraryName={library.name} selected={space} onSelect={selectSpace} notify={notify} onGenerate={(name) => void generateHomepage(name)} />
                 {single && inSpace && (
                   <div className="space-files">
                     <SpaceContents
@@ -459,7 +476,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
       )}
       <main className="card-wrap" ref={cardWrap}>
         {inSpace && showingHome ? (
-          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} headEnd={cardHeadEnd} />
+          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} onGenerate={() => void generateHomepage(inSpace.name)} headEnd={cardHeadEnd} />
         ) : (
           <NoteEditor
             key={reloads}
@@ -485,6 +502,8 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         onOpenFolder={openFolder}
         onShowLog={operationLog.show}
         saveFirst={saveFirst}
+        request={assistantRequest}
+        onRequestTaken={(request, sent) => void requestTaken(request, sent)}
       />
       {organize.overlay}
       {operationLog.dialog}

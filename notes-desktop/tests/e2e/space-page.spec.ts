@@ -199,10 +199,13 @@ test("a note in the space opens in the editor, and 主页 brings the same page b
   await page.getByRole("dialog", { name: "编辑空间" }).getByRole("button", { name: "取消" }).click();
   await expect.poll(() => shownPages(app)).toBe(1);
 
-  // A space without a homepage yet offers the prompt for an agent.
+  // A space without a homepage yet has 助手 write one; with no agent installed the prompt is copied.
   await spaceList(page).getByRole("button", { name: "空白" }).click();
   await expect.poll(() => shownPages(app)).toBe(0);
-  await page.getByRole("button", { name: "让 agent 生成主页" }).click();
+  await page.getByRole("button", { name: "让助手生成主页" }).click();
+  await expect(page.getByRole("alert")).toContainText("提示词");
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await page.getByRole("button", { name: "复制提示词" }).click();
   await expect(page.getByRole("alert")).toContainText("提示词");
   expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toContain("空白.html");
 

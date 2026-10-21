@@ -230,6 +230,18 @@
   justify-content: center;
   color: var(--card-muted);
 }
+/* 复制提示词, for an agent used elsewhere: a word in the sentence, in the accent. */
+.space-no-page .link-button {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.space-no-page .link-button:hover {
+  text-decoration: underline;
+}
 
 /* 操作记录 */
 .log-list {

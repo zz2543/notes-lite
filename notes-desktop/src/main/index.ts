@@ -471,11 +471,8 @@ function registerIpc() {
     });
   const copyPrompt = async (chosen: Space) => clipboard.writeText(await spaces().prompt(chosen));
   ipcMain.handle(channels.listSpaces, async () => (await spaces().spaces()).map(info));
-  space(channels.createSpace, async (draft: SpaceDraft) => {
-    const created = await spaces().create(draft);
-    await copyPrompt(created);
-    return info(created);
-  });
+  // Its homepage is then written by 助手, asked by the page (spacePrompt).
+  space(channels.createSpace, async (draft: SpaceDraft) => info(await spaces().create(draft)));
   // A homepage's own storage goes with its space when renamed, and a deleted space's is let go.
   space(channels.updateSpace, async (name: string, draft: SpaceDraft) => {
     const updated = await spaces().update(name, draft);
@@ -493,6 +490,7 @@ function registerIpc() {
   });
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
+  space(channels.spacePrompt, async (name: string) => spaces().prompt(await spaces().space(name)));
   space(channels.revealSpaceSource, async (name: string) => {
     const { path } = await spaces().space(name);
     shell.showItemInFolder(join(requireLibrary().root, ...path.split("/")));

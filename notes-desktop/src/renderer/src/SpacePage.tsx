@@ -107,12 +107,14 @@ interface SpaceHomeProps {
   notify(message: string): void;
   /** Opens 操作记录. */
   onShowLog(): void;
+  /** 让助手生成主页: has 助手 write it. */
+  onGenerate(): void;
   /** At the head's right end, as on a note's card. */
   headEnd?: ReactNode;
 }
 
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
-export function SpaceHome({ space, notify, onShowLog, headEnd }: SpaceHomeProps) {
+export function SpaceHome({ space, notify, onShowLog, onGenerate, headEnd }: SpaceHomeProps) {
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。" : copied.message);
@@ -135,10 +137,16 @@ export function SpaceHome({ space, notify, onShowLog, headEnd }: SpaceHomeProps)
       ) : (
         <div className="space-empty space-no-page">
           <p>这个空间还没有主页。</p>
-          <button className="primary" onClick={() => void copyPrompt()}>
-            让 agent 生成主页
+          <button className="primary" onClick={onGenerate}>
+            让助手生成主页
           </button>
-          <p>提示词会复制到剪贴板，把它交给外部 agent，主页写好后会显示在这里。</p>
+          <p>
+            助手栏会打开并开始编写，写好后显示在这里。也可以
+            <button className="link-button" onClick={() => void copyPrompt()}>
+              复制提示词
+            </button>
+            交给外部 agent。
+          </p>
         </div>
       )}
     </article>

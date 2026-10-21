@@ -1,6 +1,7 @@
 import type { ElectronApplication, Page } from "@playwright/test";
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { installFakeAgent } from "../support/fakeAgent";
 import { answerFolderPicker, expect, launch, launchWith, library, showSide, sideSwitch, test } from "./fixtures";
 
 const tree = (page: Page) => page.getByRole("tree", { name: "文件夹" });
@@ -86,7 +87,7 @@ test("a move that cannot finish says so and leaves .留白/ as it was", async ({
   await app.close();
 });
 
-test("creating a space copies the prompt; spaces can be renamed, reordered by dragging and deleted", async ({ scratch }) => {
+test("creating a space with no agent installed copies the prompt; spaces can be renamed, reordered by dragging and deleted", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "健身/训练.md": training, "日记/今天.md": "# 今天" });
   const { app, page } = await launchWith(scratch, root);
   await standInTrash(app, join(scratch, "废纸篓"));
@@ -100,7 +101,8 @@ test("creating a space copies the prompt; spaces can be renamed, reordered by dr
   await form.getByRole("button", { name: "新建" }).click();
   await expect(form).toHaveCount(0);
   await expect(spaceList(page).getByRole("button")).toHaveText(["🏋️健身"]);
-  await expect(page.getByRole("alert")).toContainText("提示词");
+  // No agent here for 助手 to ask: the prompt is copied for one used elsewhere.
+  await expect(page.getByRole("alert")).toContainText("没有找到本机的命令行 Agent");
   const prompt = await app.evaluate(({ clipboard }) => clipboard.readText());
   expect(prompt).toContain(join(root, ".notes", "空间", "健身.html"));
   expect(prompt).toContain("健身/训练.md#卧推：日期 | 重量");
@@ -175,4 +177,35 @@ test("a space file written by another program shows up in the list", async ({ sc
   await library(scratch, "笔记库", { ".notes/空间/外部.html": '<meta name="lb-scope" content="*">\n<meta name="lb-icon" content="🌍">\n' });
   await expect(spaceList(page).getByRole("button")).toHaveText(["🌍外部"]);
   await app.close();
+});
+
+test("creating a space opens 助手 and has it write the homepage in a new conversation, in the library itself", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "健身/训练.md": training });
+  const agent = await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-1", steps: [{ say: "主页写好了。" }] });
+  const { page } = await launchWith(scratch, root);
+  await showSide(page, "空间");
+
+  await page.getByRole("button", { name: "新建空间" }).first().click();
+  const form = page.getByRole("dialog", { name: "新建空间" });
+  await form.getByLabel("空间名称").fill("健身");
+  await form.getByRole("checkbox", { name: "健身" }).check();
+  await form.getByRole("button", { name: "新建" }).click();
+
+  const column = page.getByRole("complementary", { name: "助手栏" });
+  await expect(column).toHaveAttribute("aria-hidden", "false");
+  const conversation = column.getByRole("log", { name: "对话" });
+  await expect(conversation).toContainText("请为笔记应用编写“健身”空间的空间主页。");
+  await expect(conversation).toContainText("主页写好了。");
+  const [run] = await agent.runs();
+  expect(run!.stdin).toContain(join(root, ".notes", "空间", "健身.html"));
+  expect(run!.stdin).toContain("健身/训练.md#卧推：日期 | 重量");
+  // The space is told with its authoring guide, as the open one.
+  expect(run!.stdin).toContain("- 健身：.notes/空间/健身.html（当前打开）");
+  expect(await realpath(run!.cwd)).toBe(await realpath(root));
+
+  // Asked again from the space's menu: another new conversation.
+  await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "让助手生成主页" }).click();
+  await expect.poll(async () => (await agent.runs()).length).toBe(2);
+  expect((await agent.runs())[1]!.argv).not.toContain("--resume");
 });

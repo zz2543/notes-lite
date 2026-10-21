@@ -105,9 +105,11 @@ interface SpacePanelProps {
   selected: string | null;
   onSelect(name: string | null): void;
   notify(message: string): void;
+  /** Has 助手 write the space's homepage. */
+  onGenerate(name: string): void;
 }
 
-export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePanelProps) {
+export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate }: SpacePanelProps) {
   const [spaces, setSpaces, reload] = useSpaceList();
   const [menu, setMenu] = useState<Menu>();
   const [dialog, setDialog] = useState<ReactNode>();
@@ -128,7 +130,8 @@ export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePan
           if (!created.ok) return created.message;
           reload();
           onSelect(created.value.name);
-          notify(`已新建空间“${created.value.name}”，提示词已复制到剪贴板。把它粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。`);
+          // 助手 writes its homepage at once, in the column (2026-10-21 用户反馈).
+          onGenerate(created.value.name);
         }}
       />,
     );
@@ -188,6 +191,7 @@ export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePan
       y: event.clientY,
       items: [
         { label: "编辑空间…", run: () => edit(space) },
+        { label: "让助手生成主页", run: () => onGenerate(space.name) },
         { label: "复制给 agent 的提示词", run: () => void copyPrompt(space) },
         { label: "显示源文件", run: () => void revealSource(space) },
         "separator",
