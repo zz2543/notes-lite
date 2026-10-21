@@ -8,6 +8,7 @@ import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
 import { icon } from "./tokens";
+import { TurnReview, type ReviewAction } from "./TurnReview";
 
 // 一轮 in the 助手栏 (assistant-spec): the conversation, its messages streaming in with tool calls
 // folded into a timeline, and the input with the notes it attaches.
@@ -65,12 +66,19 @@ export function useAssistant() {
     for (const [, event] of waiting) apply(event);
   };
   const stop = () => conversation && window.notes.stopTurn(conversation.id);
+  /** What a turn's review card asks; answers why it couldn't be done, if it couldn't. */
+  const review = async (turn: string, action: "keep" | "revert", path?: string) => {
+    if (!conversation) return;
+    const reviewed = await window.notes.reviewTurn({ conversation: conversation.id, turn, action, ...(path !== undefined ? { path } : {}) });
+    if (!reviewed.ok) return reviewed.message;
+    setConversation((now) => (now?.id === reviewed.conversation.id ? reviewed.conversation : now));
+  };
   const reset = () => {
     setConversation(null);
     setProblem(undefined);
     setFigure("idle");
   };
-  return { conversation, figure, running, problem, send, stop, reset };
+  return { conversation, figure, running, problem, send, stop, review, reset };
 }
 
 export type AssistantState = ReturnType<typeof useAssistant>;
@@ -102,7 +110,7 @@ function Timeline({ steps, live }: { steps: Step[]; live: boolean }) {
   );
 }
 
-function ReplyView({ reply, onShowLog }: { reply: Reply; onShowLog(): void }) {
+function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: ReviewAction; onShowLog(): void }) {
   return (
     <div className="assistant-reply">
       {reply.parts.map((part, i) =>
@@ -120,19 +128,21 @@ function ReplyView({ reply, onShowLog }: { reply: Reply; onShowLog(): void }) {
           {reply.failed}
         </p>
       )}
-      {reply.done && reply.changes && reply.changes.length > 0 && (
-        <p className="reply-changes">
-          改动了 {reply.changes.length} 个文件。
-          <button type="button" className="reply-log" onClick={onShowLog}>
-            在操作记录中撤销
-          </button>
-        </p>
+      {reply.done && ((reply.changes?.length ?? 0) > 0 || (reply.outside?.length ?? 0) > 0) && (
+        <TurnReview reply={reply} onReview={onReview} onShowLog={onShowLog} />
       )}
     </div>
   );
 }
 
-export function ConversationView({ conversation, onShowLog }: { conversation: Conversation; onShowLog(): void }) {
+export interface ConversationViewProps {
+  conversation: Conversation;
+  /** What a turn's review card asks, by turn. */
+  onReview(turn: string, action: "keep" | "revert", path?: string): Promise<string | undefined>;
+  onShowLog(): void;
+}
+
+export function ConversationView({ conversation, onReview, onShowLog }: ConversationViewProps) {
   const end = useRef<HTMLDivElement>(null);
   const last = conversation.messages.at(-1);
   // Follows the reply as it grows. (Braces: scrollIntoView answers a promise now, not a cleanup.)
@@ -148,7 +158,7 @@ export function ConversationView({ conversation, onShowLog }: { conversation: Co
             {message.notes.length > 0 && <p className="user-notes">{message.notes.map(titleOf).join("、")}</p>}
           </div>
         ) : (
-          <ReplyView key={i} reply={message} onShowLog={onShowLog} />
+          <ReplyView key={i} reply={message} onReview={(action, path) => onReview(message.turn!, action, path)} onShowLog={onShowLog} />
         ),
       )}
       <div ref={end} />

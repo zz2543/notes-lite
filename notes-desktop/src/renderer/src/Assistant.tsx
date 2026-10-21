@@ -100,7 +100,7 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
           )}
         </header>
         {installed?.length === 0 && <InstallGuide onDetect={detect} />}
-        {conversation ? <ConversationView conversation={conversation} onShowLog={onShowLog} /> : <div className="assistant-messages" />}
+        {conversation ? <ConversationView conversation={conversation} onReview={assistant.review} onShowLog={onShowLog} /> : <div className="assistant-messages" />}
         {assistant.problem && (
           <p className="assistant-problem" role="alert">
             {assistant.problem}

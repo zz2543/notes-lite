@@ -136,7 +136,8 @@ test("a turn is undone from 操作记录 in a library with no spaces, reached fr
   await log.getByRole("button", { name: "关闭" }).click();
   await expect(log).toBeHidden();
 
-  // From the reply: undone there.
+  // From the reply, once kept (ticket 29's card): undone there.
+  await conversation.getByRole("button", { name: "全部保留" }).click();
   await conversation.getByRole("button", { name: "在操作记录中撤销" }).click();
   await log.getByRole("listitem").getByRole("button", { name: "撤销" }).click();
   await expect(log.getByRole("listitem")).toContainText("已撤销");

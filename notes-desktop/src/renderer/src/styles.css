@@ -790,6 +790,98 @@ nav.rail .drag {
   color: inherit;
   text-decoration: underline;
 }
+/* 写入审查: the card at the end of a turn that changed anything (ticket 29). One row per file, opening
+   to its changed lines like the timeline does; 全部保留 is the primary button. */
+.turn-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+  padding: var(--item-padding);
+  border-radius: var(--item-radius);
+  background: var(--list-pill);
+  box-shadow: var(--pill-shadow);
+}
+.review-head {
+  font-size: var(--text-path);
+  font-weight: var(--weight-item);
+}
+.review-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-path);
+}
+.review-line {
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  min-height: var(--icon-button-small);
+}
+.review-file {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  text-align: left;
+}
+.review-file[aria-expanded="true"] .timeline-caret {
+  rotate: 90deg;
+}
+.review-file.outside .timeline-caret {
+  visibility: hidden;
+}
+.review-kind,
+.review-lines,
+.review-state {
+  flex-shrink: 0;
+  color: var(--side-muted);
+}
+.review-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-row.reverted .review-path {
+  color: var(--side-muted);
+  text-decoration: line-through;
+}
+.review-revert {
+  flex-shrink: 0;
+  padding: 0 var(--inline-gap);
+  height: var(--icon-button-small);
+  border-radius: var(--icon-button-small-radius);
+  color: var(--side-muted);
+}
+.review-revert:hover {
+  background: var(--hover);
+  color: var(--side-fg);
+}
+.review-diff,
+.review-diff-note {
+  margin: var(--inline-gap) 0 0;
+  padding: 0 0 0 var(--row-indent);
+  border-left: 1px solid var(--line);
+  font-size: var(--text-meta);
+  color: var(--side-muted);
+}
+.review-diff {
+  overflow-x: auto;
+  font-family: var(--code-font);
+}
+.review-diff .added {
+  color: var(--side-fg);
+}
+.review-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--inline-gap);
+}
+.review-buttons button:disabled,
+.review-revert:disabled {
+  opacity: var(--disabled-opacity);
+}
 .reply-failed,
 .assistant-problem {
   font-size: var(--text-path);
