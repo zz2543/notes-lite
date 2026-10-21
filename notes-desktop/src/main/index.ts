@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences, type Rectangle } from "electron";
 import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions, WebContents } from "electron";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { homedir, release } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { execFile } from "node:child_process";
@@ -26,6 +26,7 @@ import {
   spaceStorage,
   watchLibrary,
   type Library,
+  type Link,
   type LibraryWatcher,
   type OrganizeOptions,
   type Relocation,
@@ -37,6 +38,7 @@ import {
 } from "../core";
 import {
   channels,
+  type AttachmentFile,
   type CloseCheck,
   type Confirmation,
   type CopyResult,
@@ -403,6 +405,52 @@ function registerIpc() {
       return failure(error);
     }
   });
+  // 笔记链接、图片与附件 (ticket 13): links are followed the way renames find them, never out of the library.
+  const withLibrary = async <T>(run: (lib: Library) => Promise<T>): Promise<Organized<T>> => {
+    try {
+      return { ok: true, value: await run(requireLibrary()) };
+    } catch (error) {
+      return failure(error);
+    }
+  };
+  ipcMain.handle(channels.followLink, (_, note: string, link: Link) => withLibrary((lib) => lib.followLink(note, link)));
+  ipcMain.handle(channels.openLinkedFile, (_, note: string, link: Link) =>
+    withLibrary(async (lib) => {
+      const { path } = await lib.followLink(note, link);
+      // An empty answer means it opened; otherwise it is why not (no app for the file, say).
+      const problem = await shell.openPath(join(lib.root, ...path.split("/")));
+      if (problem) throw new LibraryError("not-allowed", `无法打开“${basename(path)}”：${problem}`);
+      return null;
+    }),
+  );
+  ipcMain.handle(channels.readImage, (_, note: string, link: Link) => withLibrary((lib) => lib.readImage(note, link)));
+  const importAll = async (lib: Library, note: string, files: AttachmentFile[]) => {
+    const snippets: string[] = [];
+    for (const { name, data } of files) snippets.push(await lib.importAttachment(note, String(name), new Uint8Array(data)));
+    return snippets;
+  };
+  ipcMain.handle(channels.importAttachments, (_, note: string, files: AttachmentFile[]) =>
+    withLibrary((lib) => importAll(lib, note, Array.isArray(files) ? files : [])),
+  );
+  ipcMain.handle(channels.chooseAttachments, (_, note: string) =>
+    withLibrary(async (lib) => {
+      const options: OpenDialogOptions = { title: "导入图片或附件", buttonLabel: "导入", properties: ["openFile", "multiSelections"] };
+      const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+      if (canceled) return [];
+      const files = await Promise.all(filePaths.map(async (path) => ({ name: basename(path), data: await readFile(path) })));
+      return importAll(lib, note, files);
+    }),
+  );
+  ipcMain.handle(channels.openExternal, async (_, url: string): Promise<Organized<null>> => {
+    // Only web and mail links leave the app; anything else a note says could run a program.
+    if (!/^(https?:|mailto:)/i.test(String(url))) return { ok: false, code: "not-allowed", message: `无法打开“${url}”：只能打开网页和邮件链接。` };
+    try {
+      await shell.openExternal(url);
+      return { ok: true, value: null };
+    } catch (error) {
+      return { ok: false, code: "not-allowed", message: `无法打开“${url}”：${(error as Error).message}` };
+    }
+  });
   ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
     const options = { type: "warning" as const, message, detail, buttons: ["取消", action], defaultId: 0, cancelId: 0 };
     const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
@@ -567,6 +615,12 @@ function buildMenu() {
     label: "操作记录…",
     click: () => reveal() && window?.webContents.send(channels.operationLogRequest),
   };
+  // The page knows the open note, so it does the importing.
+  const importAttachmentsItem: MenuItemConstructorOptions = {
+    id: "import-attachments",
+    label: "导入图片或附件…",
+    click: () => reveal() && window?.webContents.send(channels.importAttachmentsRequest),
+  };
   // The page knows the current folder, so it does the creating.
   const newNoteItem: MenuItemConstructorOptions = {
     id: "new-note",
@@ -605,7 +659,7 @@ function buildMenu() {
       submenu: mac ? [...fileItems, { role: "close" }] : [...fileItems, settingsItem, { type: "separator" }, { role: "quit" }],
     },
     { role: "editMenu" },
-    { label: "笔记", submenu: [sourceViewToggle, { type: "separator" }, operationLogItem] },
+    { label: "笔记", submenu: [sourceViewToggle, { type: "separator" }, importAttachmentsItem, { type: "separator" }, operationLogItem] },
     { role: "viewMenu" },
     { role: "windowMenu" },
   ];

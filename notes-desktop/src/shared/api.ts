@@ -1,4 +1,4 @@
-import type { AgentId, Conversation, ConversationSummary, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+import type { AgentId, Conversation, ConversationSummary, FollowedLink, Link, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
 
 export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
@@ -83,6 +83,22 @@ export interface NotesApi {
   saveCopy(path: string, text: string): Promise<CopyResult>;
   /** Asks before something the user cannot take back; true when they go ahead. */
   confirm(question: Confirmation): Promise<boolean>;
+
+  // 笔记链接、图片与附件 (ticket 13). `note` is the note the link or the import is in.
+  /** Where a link leads: a note to open, or a file to show or open; refused when it leads nowhere. */
+  followLink(note: string, link: Link): Promise<Organized<FollowedLink>>;
+  /** Opens the file a link leads to with the system's app for it. */
+  openLinkedFile(note: string, link: Link): Promise<Organized<null>>;
+  /** An image a link leads to, as a data: URL the page may show. */
+  readImage(note: string, link: Link): Promise<Organized<string>>;
+  /** Copies pasted or dropped files into 附件; answers with the Markdown for each, in order. */
+  importAttachments(note: string, files: AttachmentFile[]): Promise<Organized<string[]>>;
+  /** 笔记 › 导入图片或附件…: the user picks files, imported as above; none when they cancel. */
+  chooseAttachments(note: string): Promise<Organized<string[]>>;
+  /** The menu's 导入图片或附件… asks the page, which knows the open note. */
+  onImportAttachmentsRequest(listener: () => void): () => void;
+  /** Opens a web or mail link in the system's browser or mail app. */
+  openExternal(url: string): Promise<Organized<null>>;
 
   // 设置 (ticket 15).
   /** The menu's 设置… asks the page to open the settings panel. */
@@ -204,6 +220,12 @@ export interface Confirmation {
   action: string;
 }
 
+/** A pasted or dropped file, as the page reads it. */
+export interface AttachmentFile {
+  name: string;
+  data: Uint8Array;
+}
+
 /** The outcome of creating, renaming, moving, deleting or restoring. */
 export type Organized<T> = { ok: true; value: T } | { ok: false; code: LibraryErrorCode; message: string };
 
@@ -235,6 +257,13 @@ export const channels = {
   shownAgain: "window:shown-again",
   saveCopy: "library:save-copy",
   confirm: "window:confirm",
+  followLink: "library:follow-link",
+  openLinkedFile: "library:open-linked-file",
+  readImage: "library:read-image",
+  importAttachments: "library:import-attachments",
+  chooseAttachments: "library:choose-attachments",
+  importAttachmentsRequest: "menu:import-attachments",
+  openExternal: "window:open-external",
   settingsRequest: "menu:settings",
   operationLogRequest: "menu:operation-log",
   preferences: "settings:preferences",

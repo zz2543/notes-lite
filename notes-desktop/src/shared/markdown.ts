@@ -393,14 +393,16 @@ export function parseTable(lines: readonly string[]): MarkdownTable | null {
   };
 }
 
-/** A block drawn as a whole while the caret is elsewhere: a table, or a formula on its own lines. */
+/** A block drawn as a whole while the caret is elsewhere: a table, a formula or an image on its own lines. */
 export interface RenderedBlock {
-  kind: "table" | "math";
+  kind: "table" | "math" | "image";
   /** Line indices (0-based) of its first and last lines. */
   first: number;
   last: number;
-  /** A formula's TeX; "" for a table. */
+  /** A formula's TeX; "" for a table or an image. */
   tex: string;
+  /** An image's link, as `linkOf` gives it. */
+  image?: Link;
 }
 
 /** A note's lines read one at a time, so an editor needn't copy them all out to have them looked at. */
@@ -429,8 +431,11 @@ export function renderedBlocks(source: readonly string[] | LineSource, literal?:
     }
     const line = lines.line(i);
     const tex = line.includes("$$") ? displayMath(line) : null;
+    const image = tex === null && line.includes("![") ? embeddedImage(line) : null;
     if (tex !== null) {
       out.push({ kind: "math", first: i, last: i, tex });
+    } else if (image) {
+      out.push({ kind: "image", first: i, last: i, tex: "", image });
     } else if (line.startsWith("|") && i + 1 < lines.length && lines.line(i + 1).startsWith("|") && isTableSeparator(lines.line(i + 1))) {
       let last = i + 1;
       while (last + 1 < lines.length && lines.line(last + 1).startsWith("|")) last++;
@@ -439,6 +444,80 @@ export function renderedBlocks(source: readonly string[] | LineSource, literal?:
     }
   }
   return out;
+}
+
+// 笔记链接、图片与附件 (ticket 13).
+
+/** What a link span leads to, as the library follows it: `[[…]]` and `![[…]]` by title, the rest by path. */
+export interface Link {
+  target: string;
+  wiki: boolean;
+}
+
+/** The link a span is, or null for one that isn't a link: a Markdown link's destination without its
+ *  "title" or <angle brackets>, a wiki link's target with its #anchor and |alias left for the library. */
+export function linkOf(span: InlineSpan): Link | null {
+  const value = span.value ?? "";
+  if (span.kind === "wikilink" || span.kind === "embed") return { target: value, wiki: true };
+  if (span.kind !== "link" && span.kind !== "image") return null;
+  const trimmed = value.trim();
+  const close = trimmed.indexOf(">");
+  const target = trimmed.startsWith("<") ? trimmed.slice(1, close < 0 ? undefined : close) : trimmed.split(/\s/)[0]!;
+  return { target, wiki: false };
+}
+
+/** The part of a span shown when typeset, and its syntax: `[[页|别名]]` shows only 别名. */
+export function shownSpan(span: InlineSpan): Pick<InlineSpan, "content" | "marks"> {
+  const bar = span.kind === "wikilink" ? (span.value ?? "").indexOf("|") : -1;
+  if (bar < 0) return span;
+  const { from, to } = span.content;
+  return { content: { from: from + bar + 1, to }, marks: [...span.marks, { from, to: from + bar + 1 }] };
+}
+
+/** The file or note a link's target names: without a wiki link's |alias or any #anchor. */
+export function linkPath(target: string): string {
+  return target.split("|")[0]!.split("#")[0]!.trim();
+}
+
+/** A target that is an address outside the library (https:, mailto:, …), not a path in it. */
+export function isAddress(target: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(target.trim());
+}
+
+/** Files imported as images (`![…](…)`) and drawn in the note when the page can show them. */
+export const imageName = /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif|tiff?)$/i;
+
+/** The image a line shows when it holds nothing else: `![…](path)` or `![[file.png]]`. Web addresses are
+ *  left as links: the page loads nothing from outside the app. */
+export function embeddedImage(line: string): Link | null {
+  const markup = parseLine(line, "p");
+  const text = line.trim();
+  const span = markup.spans.find((s) => s.kind === "image" || s.kind === "embed");
+  if (!span || markup.spans.length !== 1) return null;
+  const whole = span.kind === "image" ? line.slice(span.marks[0]!.from, span.marks[1]!.to) : line.slice(span.content.from - 3, span.content.to + 2);
+  if (whole !== text) return null;
+  const link = linkOf(span)!;
+  const path = linkPath(link.target);
+  return imageName.test(path) && !isAddress(path) ? link : null;
+}
+
+/**
+ * What to insert at `offset` in `line` so that each snippet (an imported image or attachment) stands on a
+ * line of its own, and where the caret goes after it: at the end of the last one.
+ */
+export function snippetInsertion(line: string, offset: number, snippets: readonly string[]): { text: string; caret: number } {
+  const before = line.slice(0, offset).trim() ? "\n" : "";
+  const after = line.slice(offset).trim() ? "\n" : "";
+  const body = snippets.join("\n");
+  return { text: before + body + after, caret: before.length + body.length };
+}
+
+/** The name a pasted file is imported under: an image off the clipboard, which Chromium calls
+ *  "image.png", becomes 图片-<8 hex>.png as in the old app; anything else keeps its name. */
+export function pastedName(name: string, type: string, hex: string): string {
+  if (name && !/^image\.\w+$/i.test(name)) return name;
+  const ext = /^image\/(\w+)/.exec(type)?.[1]?.replace("jpeg", "jpg") ?? /\.(\w+)$/.exec(name)?.[1] ?? "png";
+  return `图片-${hex}.${ext}`;
 }
 
 const isCjk = (code: number) => (code >= 0x4e00 && code <= 0x9fff) || (code >= 0x3400 && code <= 0x4dbf);

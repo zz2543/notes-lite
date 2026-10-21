@@ -2,9 +2,11 @@ import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/command
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { countWords } from "../../shared/markdown";
+import { countWords, isAddress, linkPath } from "../../shared/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
+import { linkHost, type LinkHost } from "./linkHost";
+import { importChosen, linkHandling } from "./links";
 import { listEditing } from "./listEditing";
 import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
@@ -15,6 +17,10 @@ interface Choices {
   onOpenCopy(path: string): void;
   /** The note can no longer be shown and nothing unsaved holds it: close it, saying why. */
   onLetGo(reason: string): void;
+  /** A link in the note led to the note at `path`: open it. */
+  onOpenLinked(path: string): void;
+  /** Something to tell the user: a link that leads nowhere, a file that couldn't be imported. */
+  notify(message: string): void;
 }
 
 /**
@@ -37,6 +43,11 @@ export function NoteEditor({
   useEffect(() => {
     if (!path || error) pageShown();
   }, [path, error]);
+  // With a note open, its editor answers the menu's 导入图片或附件….
+  useEffect(() => {
+    if (path) return;
+    return window.notes.onImportAttachmentsRequest(() => choices.notify("请先打开一篇笔记，再导入图片或附件。"));
+  }, [path]);
   return (
     <article className="card" aria-label="卡片">
       <header className="card-head">
@@ -75,6 +86,8 @@ function Editor({
   showSource,
   onOpenCopy,
   onLetGo,
+  onOpenLinked,
+  notify,
 }: { path: string; source: string; fresh: boolean; showSource: boolean } & Choices) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>(null);
@@ -82,8 +95,13 @@ function Editor({
   const [draft, setDraft] = useState<NoteDraft>();
   const [words, setWords] = useState(() => countWords(source));
 
+  // The latest callbacks, for the editor made once per note.
+  const linkChoices = useRef({ onOpenLinked, notify });
+  linkChoices.current = { onOpenLinked, notify };
+
   useEffect(() => {
     let countTimer: ReturnType<typeof setTimeout> | undefined;
+    const links = noteLinks(path, linkChoices);
     const stateFor = (doc: string) => {
       const separator = lineSeparatorOf(doc);
       return EditorState.create({
@@ -98,6 +116,8 @@ function Editor({
           EditorView.lineWrapping,
           markdownDisplay(shown.current),
           listEditing,
+          linkHost.of(links.host),
+          linkHandling,
           EditorView.contentAttributes.of({ "aria-label": "笔记正文", spellcheck: "false" }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
@@ -127,7 +147,10 @@ function Editor({
     if (fresh) view.dispatch({ selection: { anchor: view.state.doc.length } });
     view.focus();
     pageShown();
+    const offImport = window.notes.onImportAttachmentsRequest(() => void importChosen(view, links.choose));
     return () => {
+      offImport();
+      links.close();
       clearTimeout(countTimer);
       // The app saves before it switches notes; this only catches an unmount nobody asked to save.
       void draft.flush();
@@ -154,6 +177,49 @@ function Editor({
       </footer>
     </>
   );
+}
+
+/** Following links and importing files for the note at `path`; its images are read once each until
+ *  something other than a note changes in the library. */
+function noteLinks(path: string, choices: { current: Pick<Choices, "onOpenLinked" | "notify"> }) {
+  const notes = window.notes;
+  /** Whether it worked; a refusal is shown to the user. */
+  const reported = (result: { ok: true } | { ok: false; message: string }) => {
+    if (!result.ok) choices.current.notify(result.message);
+    return result.ok;
+  };
+  const images = new Map<string, ReturnType<LinkHost["image"]>>();
+  const offChanged = notes.onLibraryChanged((paths) => {
+    if (paths.some((changed) => !/\.md$/i.test(changed))) images.clear();
+  });
+  const host: LinkHost = {
+    follow: async (link) => {
+      // A web or mail address leaves the app; anything else is looked for in the library.
+      if (isAddress(link.target)) return void reported(await notes.openExternal(link.target.trim()));
+      // `[[#标题]]`, `[x](#标题)`: a place in this note, which there is nothing yet to go to.
+      if (linkPath(link.target) === "") return;
+      const found = await notes.followLink(path, link);
+      if (!reported(found) || !found.ok) return;
+      if (found.value.kind === "note") choices.current.onOpenLinked(found.value.path);
+      else reported(await notes.openLinkedFile(path, link));
+    },
+    open: async (link) => void reported(await notes.openLinkedFile(path, link)),
+    image: (link) => {
+      const key = `${link.wiki}\n${link.target}`;
+      let image = images.get(key);
+      if (!image) images.set(key, (image = notes.readImage(path, link)));
+      return image;
+    },
+    importFiles: async (files) => {
+      const imported = await notes.importAttachments(path, files);
+      return reported(imported) && imported.ok ? imported.value : null;
+    },
+  };
+  const choose = async () => {
+    const chosen = await notes.chooseAttachments(path);
+    return reported(chosen) && chosen.ok ? chosen.value : null;
+  };
+  return { host, choose, close: offChanged };
 }
 
 const labels: Record<SaveStatus, string> = {

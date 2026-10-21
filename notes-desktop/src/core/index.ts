@@ -1,6 +1,7 @@
 export * from "./library";
 export * from "../shared/markdown";
-export type { LinkRewrite, OrganizeOptions, Organizer, Relocation, VetRelocation } from "./organize";
+export type { FollowedLink, LinkRewrite, OrganizeOptions, Organizer, Relocation, VetRelocation } from "./organize";
+export { attachmentFolder } from "./organize";
 export * from "./search";
 export * from "./watcher";
 export * from "./spaces";

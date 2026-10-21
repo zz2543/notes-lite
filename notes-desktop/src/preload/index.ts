@@ -58,6 +58,17 @@ const api: NotesApi = {
   },
   saveCopy: (path, text) => ipcRenderer.invoke(channels.saveCopy, path, text),
   confirm: (question) => ipcRenderer.invoke(channels.confirm, question),
+  followLink: (note, link) => ipcRenderer.invoke(channels.followLink, note, link),
+  openLinkedFile: (note, link) => ipcRenderer.invoke(channels.openLinkedFile, note, link),
+  readImage: (note, link) => ipcRenderer.invoke(channels.readImage, note, link),
+  importAttachments: (note, files) => ipcRenderer.invoke(channels.importAttachments, note, files),
+  chooseAttachments: (note) => ipcRenderer.invoke(channels.chooseAttachments, note),
+  onImportAttachmentsRequest: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(channels.importAttachmentsRequest, handler);
+    return () => ipcRenderer.off(channels.importAttachmentsRequest, handler);
+  },
+  openExternal: (url) => ipcRenderer.invoke(channels.openExternal, url),
   onOperationLogRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.operationLogRequest, handler);

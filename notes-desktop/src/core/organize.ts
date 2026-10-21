@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative as pathFrom, sep } from "node:path";
+import { imageName, linkPath, type Link } from "../shared/markdown";
 import { collator, LibraryError, writeFailures } from "./library";
 import { linkTargets, replaceTargets, type LinkTarget } from "./references";
 import { spaceLibrary } from "./spaces";
@@ -29,7 +30,38 @@ export interface Organizer {
   restoreLastDeleted(): Promise<string>;
   /** Every folder in the library except the root, in folder-tree order: where things can move to. */
   listFolders(): Promise<string[]>;
+  /**
+   * Where a link in `note` leads, found the way renames find it (its target as written, an anchor or
+   * alias after it allowed); refuses one that leads nowhere in the library, or to one of several notes.
+   */
+  followLink(note: string, link: Link): Promise<FollowedLink>;
+  /** The image a link in `note` shows, as a data: URL the page can draw; refuses a file it can't show. */
+  readImage(note: string, link: Link): Promise<string>;
+  /**
+   * Copies a file into 附件 at the library root, numbering its name when it is taken, and returns the
+   * Markdown that links to it from `note`: an image's shown in place (`![…](…)`), anything else's a link.
+   */
+  importAttachment(note: string, name: string, data: Uint8Array): Promise<string>;
 }
+
+/** What a link leads to: a note to open, or another file (an attachment, an image) to show or open. */
+export type FollowedLink = { kind: "note" | "file"; path: string };
+
+/** Where imported images and attachments go, at the library root, as in the old app. */
+export const attachmentFolder = "附件";
+/** The images the page can draw, by extension (the rest of `imageName` are opened, not shown). */
+const shownImages: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  avif: "image/avif",
+};
+/** Larger images are not shown in the note (they can still be opened). */
+const largestImage = 64 * 1024 * 1024;
 
 /** A note whose links a rename or move rewrites: library paths before and after, and its text. */
 export interface LinkRewrite {
@@ -145,6 +177,78 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
   const relativeOf = (real: string) => pathFrom(root, real).split(sep).join("/");
   const inside = (real: string) => real.startsWith(root + sep);
   const realOrNull = (path: string) => realpath(path).catch(() => null);
+
+  const followLink = async (note: string, { target: written, wiki }: Link): Promise<FollowedLink> => {
+    const target = linkPath(written);
+    const { real } = await resolve(note);
+    const named = decode(target);
+    const hasExtension = /\.[^./]+$/.test(named);
+    const kind = (wiki && !hasExtension) || isNoteFile(named) ? "笔记" : "附件";
+    const missing = new LibraryError("not-found", `找不到${kind}“${target}”。`);
+    if (!target) throw missing;
+    const titles = new Map<string, string[]>();
+    if (wiki && !named.includes("/")) {
+      for (const path of await notesUnder(root)) {
+        const key = titleOf(basename(path)).toLowerCase();
+        titles.set(key, [...(titles.get(key) ?? []), path]);
+      }
+    }
+    // `[[报告.pdf]]`, `![[图.png]]`: a file other than a note, by path, or by name in 附件 where imports go.
+    const fileLike = wiki && hasExtension && !isNoteFile(named);
+    const link = (path: string, byTitle: boolean): LinkTarget => ({ from: 0, to: path.length, target: path, wiki: byTitle });
+    const found =
+      (await follow(link(target, wiki && !fileLike), real, titles)) ??
+      (fileLike ? await follow(link(`${attachmentFolder}/${target}`, false), real, titles) : null) ??
+      // `[摘记](阅读/摘记)`: a Markdown link may leave out .md, as the old app let it.
+      (!wiki && !hasExtension ? await follow(link(`${target}.md`, false), real, titles) : null);
+    if (found && (await stat(found.real)).isFile()) return { kind: isNoteFile(found.real) ? "note" : "file", path: relativeOf(found.real) };
+    const same = titles.get(titleOf(named).toLowerCase()) ?? [];
+    if (!found && same.length > 1) {
+      const example = titleOf(relativeOf(same[0]!));
+      throw new LibraryError("not-found", `有多篇笔记叫“${titleOf(named)}”，请在链接里写上文件夹，例如 [[${example}]]。`);
+    }
+    throw missing;
+  };
+
+  const readImage = async (note: string, link: Link) => {
+    const { kind, path } = await followLink(note, link);
+    const name = basename(path);
+    const type = shownImages[name.slice(name.lastIndexOf(".") + 1).toLowerCase()];
+    if (kind !== "file" || !type) throw new LibraryError("not-allowed", `无法在笔记里显示“${name}”，双击可用其他应用打开。`);
+    const file = join(root, ...path.split("/"));
+    try {
+      if ((await stat(file)).size > largestImage) throw new LibraryError("not-allowed", `无法在笔记里显示“${name}”：图片太大，双击可用其他应用打开。`);
+      return `data:${type};base64,${(await readFile(file)).toString("base64")}`;
+    } catch (error) {
+      if (error instanceof LibraryError) throw error;
+      throw new LibraryError("not-found", `无法读取“${name}”：${reasonOf(error)}。`);
+    }
+  };
+
+  const importAttachment = async (note: string, name: string, data: Uint8Array) => {
+    checkName(name);
+    const { real } = await resolve(note);
+    const folder = join(root, attachmentFolder);
+    const dot = name.lastIndexOf(".");
+    const [base, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+    try {
+      await mkdir(folder, { recursive: true });
+      for (let number = 1; ; number += 1) {
+        const file = number === 1 ? name : `${base} ${number}${ext}`;
+        try {
+          // "wx" never replaces a file, even one that appears between choosing the name and writing.
+          await writeFile(join(folder, file), data, { flag: "wx" });
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+          throw error;
+        }
+        const path = pathFrom(dirname(real), join(folder, file)).split(sep).join("/").replace(breaksLink, percentEncode);
+        return `${imageName.test(file) ? "!" : ""}[${file.replace(/[[\]]/g, "")}](${path})`;
+      }
+    } catch (error) {
+      throw new LibraryError("write-failed", `无法导入“${name}”：${reasonOf(error)}。`);
+    }
+  };
 
   const createNote = async (folder: string, title = untitled) => {
     checkName(title);
@@ -351,5 +455,5 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
     return nested.flat();
   };
 
-  return { createNote, createFolder, rename: rename_, move, trash, restoreLastDeleted, listFolders: () => listFolders() };
+  return { createNote, createFolder, rename: rename_, move, trash, restoreLastDeleted, listFolders: () => listFolders(), followLink, readImage, importAttachment };
 }

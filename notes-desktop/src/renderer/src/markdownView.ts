@@ -3,7 +3,7 @@
 import { Compartment, Prec, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { codeTokens, type CodeToken } from "../../shared/codeHighlight";
-import { blockPrefixLength, blockType, displayMath, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../shared/markdown";
+import { blockPrefixLength, blockType, displayMath, literalBlocks, parseLine, shownSpan, type LiteralBlock, type SpanKind } from "../../shared/markdown";
 import { focusTracking, InlineMath, inlineClasses, renderedView } from "./blockView";
 import "./markdown.css";
 
@@ -162,8 +162,10 @@ function typeset(view: EditorView): DecorationSet {
         }
         const style = inlineStyles[span.kind];
         if (!style) continue;
-        out.push(style.range(line.from + span.content.from, line.from + span.content.to));
-        for (const r of span.marks) out.push((isEdited ? syntax : hidden).range(line.from + r.from, line.from + r.to));
+        // A wiki link's target before its |alias is syntax too.
+        const { content, marks } = shownSpan(span);
+        if (content.to > content.from) out.push(style.range(line.from + content.from, line.from + content.to));
+        for (const r of marks) out.push((isEdited ? syntax : hidden).range(line.from + r.from, line.from + r.to));
       }
     }
   }
@@ -188,7 +190,7 @@ function literalLine(index: number, from: number, text: string, block: LiteralBl
 
 const mathSource = mark("cm-md-math-source");
 
-/** Inline markup typeset here (math is drawn apart); links and the rest stay as written until they are rendered too. */
+/** Inline markup typeset here (math is drawn apart); footnotes stay as written. */
 const inlineStyles: Partial<Record<SpanKind, Decoration>> = Object.fromEntries(
   Object.entries(inlineClasses).map(([kind, cls]) => [kind, mark(cls)]),
 );
@@ -224,7 +226,7 @@ const typesetter = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations },
 );
 
-/** The note typeset in place: headings, emphasis, quotes, lists, code, tables and formulas, with their syntax hidden. */
+/** The note typeset in place: headings, emphasis, links, quotes, lists, code, tables, formulas and images, with their syntax hidden. */
 export const typesetView: Extension = [
   literal,
   typesetter,

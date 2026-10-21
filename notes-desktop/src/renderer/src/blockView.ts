@@ -1,13 +1,26 @@
-// Tables and formulas drawn in place (ticket 12). While the caret is elsewhere a table is a grid and a
-// formula is KaTeX's; with the caret in one its Markdown comes back to be edited, a formula keeping its
-// picture below. Only decorations: the text is never changed.
+// Tables and formulas drawn in place (ticket 12), and images on lines of their own (ticket 13). While the
+// caret is elsewhere a table is a grid, a formula is KaTeX's and an image is its picture; with the caret
+// in one its Markdown comes back to be edited, a formula or image keeping its picture below. Only
+// decorations: the text is never changed.
 import { Prec, StateEffect, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from "@codemirror/view";
-import { parseLine, parseTable, renderedBlocks, type LiteralBlock, type RenderedBlock, type SpanKind } from "../../shared/markdown";
+import { linkOf, linkPath, parseLine, parseTable, renderedBlocks, shownSpan, type Link, type LiteralBlock, type RenderedBlock, type SpanKind } from "../../shared/markdown";
+import { followsLink, linkHost, pressImage } from "./linkHost";
 import { renderTex } from "./tex";
 
 /** The class of each kind of inline markup typeset, in the lines and in table cells alike. */
-export const inlineClasses: Partial<Record<SpanKind, string>> = { bold: "cm-md-bold", italic: "cm-md-italic", code: "cm-md-code" };
+export const inlineClasses: Partial<Record<SpanKind, string>> = {
+  bold: "cm-md-bold",
+  italic: "cm-md-italic",
+  code: "cm-md-code",
+  strike: "cm-md-strike",
+  highlight: "cm-md-highlight",
+  wikilink: "cm-md-link",
+  link: "cm-md-link",
+  embed: "cm-md-link cm-md-embed",
+  image: "cm-md-link cm-md-embed",
+  tag: "cm-md-tag",
+};
 
 /** Whether a press on a block widget is on its sideways scrollbar, to scroll it rather than open it. */
 const onScrollbar = (wrap: HTMLElement, event: MouseEvent) =>
@@ -20,10 +33,12 @@ function caretInto(view: EditorView, dom: HTMLElement, offset: number) {
   view.focus();
 }
 
-/** One line of Markdown (a table cell) as typeset text: emphasis, code and formulas, the marks hidden. */
+/** One line of Markdown (a table cell) as typeset text: emphasis, code, links and formulas, the marks
+ *  hidden. A link's text carries where it leads, for ⌘ / Ctrl-click. */
 function inlineMarkdown(text: string, into: HTMLElement, view: EditorView) {
   // One list per UTF-16 unit, as the spans count them (an emoji is two).
   const classes = Array.from({ length: text.length }, (): string[] => []);
+  const links: (Link | undefined)[] = [];
   const hidden = new Set<number>();
   const formulas = new Map<number, { tex: string; end: number }>();
   for (const span of parseLine(text, "p").spans) {
@@ -35,14 +50,24 @@ function inlineMarkdown(text: string, into: HTMLElement, view: EditorView) {
     }
     const cls = inlineClasses[span.kind];
     if (cls) {
-      for (let i = span.content.from; i < span.content.to; i++) classes[i]!.push(cls);
-      for (const r of span.marks) for (let i = r.from; i < r.to; i++) hidden.add(i);
+      const { content, marks } = shownSpan(span);
+      const link = linkOf(span) ?? undefined;
+      for (let i = content.from; i < content.to; i++) {
+        classes[i]!.push(cls);
+        if (link) links[i] = link;
+      }
+      for (const r of marks) for (let i = r.from; i < r.to; i++) hidden.add(i);
     }
   }
   let run = "";
   let runClass = "";
+  let runLink: Link | undefined;
   const flush = () => {
-    if (run) into.append(runClass ? Object.assign(document.createElement("span"), { className: runClass, textContent: run }) : run);
+    if (run && (runClass || runLink)) {
+      const el = Object.assign(document.createElement("span"), { className: runClass, textContent: run });
+      if (runLink) Object.assign(el.dataset, { target: runLink.target, wiki: String(runLink.wiki) });
+      into.append(el);
+    } else if (run) into.append(run);
     run = "";
   };
   for (let i = 0; i < text.length; i++) {
@@ -58,11 +83,21 @@ function inlineMarkdown(text: string, into: HTMLElement, view: EditorView) {
     }
     if (hidden.has(i)) continue;
     const cls = classes[i]!.join(" ");
-    if (cls !== runClass) flush();
+    if (cls !== runClass || links[i] !== runLink) flush();
     runClass = cls;
+    runLink = links[i];
     run += text[i];
   }
   flush();
+}
+
+/** The link a table cell's text carries under a ⌘ / Ctrl-click, followed; false when there is none. */
+function followFromCell(view: EditorView, event: MouseEvent): boolean {
+  const el = (event.target as HTMLElement).closest<HTMLElement>("[data-target]");
+  const host = view.state.facet(linkHost);
+  if (!el || !host || !followsLink(event)) return false;
+  host.follow({ target: el.dataset.target!, wiki: el.dataset.wiki === "true" });
+  return true;
 }
 
 /** A table as a grid. A click in a cell puts the caret at the end of that cell's text. */
@@ -103,6 +138,7 @@ class TableWidget extends WidgetType {
     wrap.append(grid);
     wrap.addEventListener("mousedown", (event) => {
       if (onScrollbar(wrap, event)) return;
+      if (event.button === 0 && followFromCell(view, event)) return event.preventDefault();
       const cell = (event.target as HTMLElement).closest<HTMLElement>("th, td");
       event.preventDefault();
       caretInto(view, wrap, cell ? Number(cell.dataset.offset) : 0);
@@ -139,6 +175,58 @@ class MathWidget extends WidgetType {
         caretInto(view, el, caret);
       });
     }
+    return el;
+  }
+}
+
+/** An image on a line of its own, as large as it is up to the column's width and 480px high. Drawn for
+ *  its line, a click puts the caret at the line's end (its Markdown comes back above it); as the preview
+ *  under the Markdown being edited, it is only a picture. A double click opens it either way. */
+class ImageWidget extends WidgetType {
+  constructor(
+    readonly link: Link,
+    /** Where a click puts the caret, from the line's start; null for the preview. */
+    readonly caret: number | null,
+  ) {
+    super();
+  }
+  eq(other: ImageWidget) {
+    return other.link.target === this.link.target && other.link.wiki === this.link.wiki && other.caret === this.caret;
+  }
+  get estimatedHeight() {
+    return 240;
+  }
+  toDOM(view: EditorView) {
+    const el = document.createElement("div");
+    el.className = this.caret === null ? "cm-md-image cm-md-image-preview" : "cm-md-image";
+    el.dataset.target = this.link.target;
+    const note = (text: string, failed: boolean) => {
+      const label = Object.assign(document.createElement("span"), { className: failed ? "cm-md-image-note cm-md-image-failed" : "cm-md-image-note", textContent: text });
+      el.replaceChildren(label);
+      view.requestMeasure();
+    };
+    const name = linkPath(this.link.target);
+    note(`正在载入 ${name}…`, false);
+    const host = view.state.facet(linkHost);
+    void host?.image(this.link).then((result) => {
+      if (!result.ok) return note(result.message, true);
+      const img = new Image();
+      img.alt = name;
+      img.draggable = false;
+      img.onload = () => {
+        el.replaceChildren(img);
+        view.requestMeasure();
+      };
+      img.onerror = () => note(`无法显示图片：${name}`, true);
+      img.src = result.value;
+    });
+    el.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      if (event.detail >= 2 || followsLink(event)) return host?.open(this.link);
+      pressImage(view, this.link);
+      if (this.caret !== null) caretInto(view, el, this.caret);
+    });
     return el;
   }
 }
@@ -190,13 +278,16 @@ function draw(state: EditorState, blocks: readonly RenderedBlock[], open: readon
     const to = doc.line(block.last + 1).to;
     if (open[i]) {
       if (block.kind === "math") out.push(Decoration.widget({ widget: new MathWidget(block.tex, null), block: true, side: 1 }).range(to));
+      if (block.kind === "image") out.push(Decoration.widget({ widget: new ImageWidget(block.image!, null), block: true, side: 1 }).range(to));
       continue;
     }
     const widget =
       block.kind === "table"
         ? new TableWidget(Array.from({ length: block.last - block.first + 1 }, (_, i) => doc.line(block.first + 1 + i).text))
-        : // Into the TeX: past "$$" on a one-line formula, at the start of its first line in a block.
-          new MathWidget(block.tex, block.first === block.last ? 2 : doc.line(block.first + 1).length + 1);
+        : block.kind === "image"
+          ? new ImageWidget(block.image!, doc.line(block.first + 1).length)
+          : // Into the TeX: past "$$" on a one-line formula, at the start of its first line in a block.
+            new MathWidget(block.tex, block.first === block.last ? 2 : doc.line(block.first + 1).length + 1);
     out.push(Decoration.replace({ widget, block: true }).range(from, to));
   }
   return Decoration.set(out, true);
@@ -219,7 +310,7 @@ function stepInto(blocks: StateField<RenderedBlock[]>, forward: boolean) {
   };
 }
 
-/** Tables and formulas drawn in place, given the note's literal blocks (which hold `$$` math). */
+/** Tables, formulas and images drawn in place, given the note's literal blocks (which hold `$$` math). */
 export function renderedView(literal: StateField<LiteralBlock[]>): Extension {
   const find = (state: EditorState) =>
     renderedBlocks({ length: state.doc.lines, line: (i) => state.doc.line(i + 1).text }, state.field(literal));

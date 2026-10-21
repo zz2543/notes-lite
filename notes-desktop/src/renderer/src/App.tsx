@@ -464,6 +464,8 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
             fresh={note !== null && note === fresh}
             onOpenCopy={openCopy}
             onLetGo={letGo}
+            onOpenLinked={openCopy}
+            notify={notify}
             headEnd={cardHeadEnd}
           />
         )}

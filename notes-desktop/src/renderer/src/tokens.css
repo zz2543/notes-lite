@@ -251,6 +251,21 @@
   --table-stripe: rgba(0, 0, 0, 0.018);
   /* KaTeX draws at 1.21em; beside body text the old editor's 1.12em. */
   --math-size: 1.12em;
+  /* Links, tags and images (ticket 13), as in the old editor: links system blue whatever the accent
+     (the accent is kept for the caret, selection and controls), underlined at 30%; tags purple;
+     strikethrough dimmed; highlights yellow at 40%; an image no taller than 480px. */
+  --link: var(--accent-blue);
+  --link-underline: color-mix(in srgb, var(--link) 30%, transparent);
+  --link-underline-offset: 0.18em;
+  --tag: var(--accent-purple);
+  --strike: var(--card-muted);
+  --highlight: rgba(255, 214, 10, 0.4);
+  --image-height: 480px;
+  --image-radius: 6px;
+  --highlight-radius: 2px;
+  /* The note in an image's place while it loads, or why it can't be shown. */
+  --image-note-inset: 8px 12px;
+  --image-note-size: 12px;
   /* Code colours, after Xcode's default themes, as in the old editor. */
   --code-keyword: #9b2393;
   --code-string: #c41a16;

@@ -278,4 +278,40 @@
     font-family: var(--code-font);
     font-size: var(--code-size);
   }
+  /* Links, tags and images (ticket 13). ⌘ / Ctrl-click follows a link; an ordinary click edits. */
+  & .cm-md-link {
+    color: var(--link);
+    text-decoration: underline;
+    text-decoration-color: var(--link-underline);
+    text-underline-offset: var(--link-underline-offset);
+  }
+  & .cm-md-tag {
+    color: var(--tag);
+  }
+  & .cm-md-strike {
+    color: var(--strike);
+    text-decoration: line-through;
+  }
+  & .cm-md-highlight {
+    background: var(--highlight);
+    border-radius: var(--highlight-radius);
+  }
+  & .cm-md-image {
+    padding: 0.2em 0 var(--para-gap);
+    cursor: default;
+    & img {
+      display: block;
+      max-width: 100%;
+      max-height: var(--image-height);
+      border-radius: var(--image-radius);
+    }
+  }
+  & .cm-md-image-note {
+    display: inline-block;
+    padding: var(--image-note-inset);
+    border-radius: var(--image-radius);
+    background: var(--code-bg);
+    color: var(--card-muted);
+    font-size: var(--image-note-size);
+  }
 }
