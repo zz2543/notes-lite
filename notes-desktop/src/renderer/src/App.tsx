@@ -13,11 +13,11 @@ import { useFolderFallback } from "./libraryChanges";
 import { useNarrowWindow, useNavigationTier } from "./navigationTier";
 import { NoteEditor } from "./NoteEditor";
 import { useOperationLog } from "./OperationLog";
-import { saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
+import { openNoteText, saveOpenNote, useOpenNoteFollowsDisk } from "./noteDraft";
 import { listenForSourceView } from "./sourceView";
 import { useOrganize } from "./Organize";
 import { usePreferences } from "./preferences";
-import { useSettingsPanel } from "./SettingsPanel";
+import { useSettingsShortcut } from "./SettingsPanel";
 import { SpaceContents, SpaceHome, useSpace } from "./SpacePage";
 import { SidePages, SideSwitch, SpacePanel, type SideMode } from "./Spaces";
 import { icon } from "./tokens";
@@ -29,7 +29,9 @@ const noticeDuration = 6000;
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "starting" });
   const [error, setError] = useState<string>();
-  const settings = useSettingsPanel();
+  useSettingsShortcut();
+  // 排版's preview in the 设置 window shows the note open here.
+  useEffect(() => window.notes.provideOpenNoteText(openNoteText), []);
 
   // A notice, not a dialog: it fades on its own and never blocks what is under it.
   useEffect(() => {
@@ -86,7 +88,6 @@ export function App() {
       {phase.kind === "open" && (
         <LibraryView key={phase.library.root} library={phase.library} place={phase.place} onSwitch={choose} saveFirst={saveFirst} notify={setError} />
       )}
-      {settings}
       {error && (
         <div className="toast" role="alert">
           {error}

@@ -1,21 +1,18 @@
 import { ChatsCircle, FadersHorizontal, ListBullets, Sparkle, TextAa, type Icon } from "@phosphor-icons/react";
-import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { AssistantPage } from "./AssistantSettings";
 import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
-import { useMotion } from "./MotionProvider";
-import { useOverlay } from "./Organize";
 import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
 import { TypographyPage } from "./TypographySettings";
 import { SelectedIcon } from "./SelectedIcon";
 
-// 设置: a glass panel floating over the window. Categories on the left, each a page of groups on the
-// right; every group has a title and a short description, and its rows line up label | control.
+// 设置: a window of its own. Categories on the left, each a page of groups on the right; every group
+// has a title and a short description, and its rows line up label | control.
 
 /** One category of the settings panel. Later settings (排版, 导航) add a page here or a group to one. */
 interface SettingsPage {
@@ -146,95 +143,74 @@ function MotionPage() {
   );
 }
 
-function SettingsPanel({ onClose }: { onClose(): void }) {
-  useOverlay();
+/**
+ * 设置 as its own window (2026-10-21 用户反馈): the categories on the window's material with the window
+ * controls above them, the page beside on the list's surface, as in the main window. It moves and closes
+ * like any window; Esc closes it too.
+ */
+export function SettingsWindow() {
   const [page, setPage] = useState(pages[0]!.id);
-  const panel = useRef<HTMLDivElement>(null);
+  const nav = useRef<HTMLElement>(null);
   const current = pages.find((p) => p.id === page) ?? pages[0]!;
 
-  // Focus moves into the panel, and back where it was once the panel closes.
   useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    panel.current?.querySelector<HTMLElement>("[aria-selected=true]")?.focus();
-    return () => before?.focus();
+    document.title = "设置";
+    nav.current?.querySelector<HTMLElement>("[aria-selected=true]")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || event.defaultPrevented) return;
+      window.close();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // 浮现: the panel grows into place out of a blur over a fading scrim, and shrinks away when it closes.
-  const { emerge, overlay } = useMotion();
   return (
-    <motion.div
-      className="scrim"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: overlay.exit.transition }}
-      transition={emerge}
-      onPointerDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <motion.div
-        ref={panel}
-        initial={overlay.initial}
-        animate={overlay.animate}
-        exit={overlay.exit}
-        transition={emerge}
-        className="settings"
-        role="dialog"
-        aria-modal="true"
-        aria-label="设置"
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
-          event.stopPropagation();
-          onClose();
-        }}
-      >
-        <nav className="settings-nav" role="tablist" aria-label="设置分类" aria-orientation="vertical">
-          <h2>设置</h2>
-          {pages.map((p) => {
-            const PageIcon = p.icon;
-            const on = p.id === current.id;
-            return (
-              <button
-                key={p.id}
-                className="settings-tab"
-                role="tab"
-                id={`settings-tab-${p.id}`}
-                aria-selected={on}
-                aria-controls="settings-page"
-                tabIndex={on ? 0 : -1}
-                onClick={() => setPage(p.id)}
-              >
-                <SelectedIcon off={PageIcon} selected={on} />
-                <span className="label">{p.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className="settings-page" id="settings-page" role="tabpanel" aria-labelledby={`settings-tab-${current.id}`}>
-          <h2>{current.label}</h2>
-          {current.content()}
-        </div>
-      </motion.div>
-    </motion.div>
+    <main className="settings settings-window" aria-label="设置">
+      <nav ref={nav} className="settings-nav" role="tablist" aria-label="设置分类" aria-orientation="vertical">
+        {/* The window is moved by its top, where the window controls are. */}
+        <div className="drag" />
+        <h2>设置</h2>
+        {pages.map((p) => {
+          const PageIcon = p.icon;
+          const on = p.id === current.id;
+          return (
+            <button
+              key={p.id}
+              className="settings-tab"
+              role="tab"
+              id={`settings-tab-${p.id}`}
+              aria-selected={on}
+              aria-controls="settings-page"
+              tabIndex={on ? 0 : -1}
+              onClick={() => setPage(p.id)}
+            >
+              <SelectedIcon off={PageIcon} selected={on} />
+              <span className="label">{p.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="settings-page" id="settings-page" role="tabpanel" aria-labelledby={`settings-tab-${current.id}`}>
+        <div className="settings-page-drag drag" />
+        <h2>{current.label}</h2>
+        {current.content()}
+      </div>
+    </main>
   );
 }
 
 const isSettingsShortcut = (event: KeyboardEvent) =>
   (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.code === "Comma" || event.key === ",");
 
-/** ⌘, / Ctrl+, (or the menu's 设置…) opens the panel; the result is what to render. */
-export function useSettingsPanel(): ReactNode {
-  const [open, setOpen] = useState(false);
+/** ⌘, / Ctrl+, opens 设置 in its window (the menu's 设置… does too, from main). */
+export function useSettingsShortcut() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isSettingsShortcut(event)) return;
       event.preventDefault();
-      setOpen(true);
+      window.notes.openSettings();
     };
     window.addEventListener("keydown", onKeyDown, true);
-    const offMenu = window.notes.onSettingsRequest(() => setOpen(true));
-    return () => {
-      window.removeEventListener("keydown", onKeyDown, true);
-      offMenu();
-    };
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
-  return <AnimatePresence>{open && <SettingsPanel key="settings" onClose={() => setOpen(false)} />}</AnimatePresence>;
 }

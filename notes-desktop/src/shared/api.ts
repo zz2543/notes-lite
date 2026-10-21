@@ -101,14 +101,20 @@ export interface NotesApi {
   openExternal(url: string): Promise<Organized<null>>;
 
   // 设置 (ticket 15).
-  /** The menu's 设置… asks the page to open the settings panel. */
-  onSettingsRequest(listener: () => void): () => void;
+  /** 设置 opens in a window of its own (2026-10-21 用户反馈), or comes to the front if it is open. */
+  openSettings(): void;
+  /** The text of the note open in the main window, as typed (null when none is): 排版's preview in 设置. */
+  openNoteText(): Promise<string | null>;
+  /** The main window answers openNoteText with this. */
+  provideOpenNoteText(provider: () => string | null): () => void;
   /** 笔记 › 操作记录… in the menu. */
   onOperationLogRequest(listener: () => void): () => void;
   /** The preferences as stored when the page loaded, so its first frame already shows them. */
   readonly preferences: Preferences;
   /** Stores a change and applies what the main process owns (外观); answers with all preferences. */
   setPreferences(change: Partial<Preferences>): Promise<Preferences>;
+  /** The preferences changed in another window (设置, or the main one): all of them, as they now are. */
+  onPreferencesChanged(listener: (preferences: Preferences) => void): () => void;
   /** The system accent colour changed while the app runs (#rrggbb, or null when the system does not say). */
   onSystemAccentChanged(listener: (accent: string | null) => void): () => void;
   // 空间 (ticket 18). The space files live in the library's `.notes/空间/`.
@@ -268,7 +274,11 @@ export const channels = {
   chooseAttachments: "library:choose-attachments",
   importAttachmentsRequest: "menu:import-attachments",
   openExternal: "window:open-external",
-  settingsRequest: "menu:settings",
+  openSettings: "settings:open",
+  openNoteText: "settings:open-note-text",
+  openNoteTextRequest: "settings:open-note-text-request",
+  openNoteTextReply: "settings:open-note-text-reply",
+  preferencesChanged: "settings:changed",
   operationLogRequest: "menu:operation-log",
   preferences: "settings:preferences",
   setPreferences: "settings:set-preferences",

@@ -45,10 +45,11 @@
 /* The preview: the editor's own rules, drawn at half size on a card that stays in view. */
 .typeset-preview {
   position: sticky;
-  top: 0;
+  top: var(--titlebar-height);
   flex: 1;
   min-width: 0;
-  height: calc(var(--settings-height) - var(--settings-padding) * 4);
+  /* The window's height, less its top and the page's margin below. */
+  height: calc(100vh - var(--titlebar-height) - var(--settings-padding) * 2);
   margin: 0;
   overflow: hidden;
   border-radius: var(--item-radius);

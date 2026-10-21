@@ -1,67 +1,41 @@
 import type { Page } from "@playwright/test";
 import { readdir, utimes } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launch, launchWith, library, test } from "./fixtures";
+import { closeSettings, expect, launch, launchWith, library, openSettings, test } from "./fixtures";
 
-test("⌘, / Ctrl+, opens the settings panel and Esc closes it", async ({ scratch }) => {
+test("⌘, / Ctrl+, opens the settings window and Esc closes it", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "一.md": "一" });
   const { app, page } = await launchWith(scratch, root);
 
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  await expect(panel).toBeVisible();
+  const panel = await openSettings(app, page);
   // 左侧分类，右侧分组：each group has a title and a short description.
   await expect(panel.getByRole("tablist", { name: "设置分类" }).getByRole("tab")).toHaveText(["通用", "排版", "笔记列表", "动画", "助手"]);
   await expect(panel.getByRole("tab", { name: "通用" })).toHaveAttribute("aria-selected", "true");
   await expect(panel.getByRole("group", { name: "外观" })).toBeVisible();
 
-  await page.keyboard.press("Escape");
-  await expect(panel).toBeHidden();
+  await closeSettings(app, panel);
+  // The main window stays as it was.
+  await expect(page.getByRole("list", { name: "当前目录内容" })).toBeVisible();
   await app.close();
 });
 
-test("the panel emerges: it grows into place out of a blur", async ({ scratch }) => {
+test("设置 opens as its own window, movable and closable; asked again it comes to the front, still one", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "一.md": "一" });
   const { app, page } = await launchWith(scratch, root);
-  type Frame = { t: number; scale: number; blur: number };
-  // Every frame of the panel drawn in its first second, with the time it was drawn.
-  await page.evaluate(() => {
-    const w = window as unknown as { frames: Frame[] };
-    w.frames = [];
-    const frame = (t: number) => {
-      const panel = document.querySelector<HTMLElement>('[role="dialog"][aria-label="设置"]');
-      if (panel) {
-        const style = getComputedStyle(panel);
-        const blur = /blur\(([\d.]+)px\)/.exec(style.filter);
-        w.frames.push({ t, scale: new DOMMatrix(style.transform).a, blur: blur ? Number(blur[1]) : 0 });
-      }
-      if (!w.frames.length || t - w.frames[0]!.t < 1000) requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  });
+  await openSettings(app, page);
+  const windows = () =>
+    app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), movable: w.isMovable(), closable: w.isClosable(), modal: w.isModal() })),
+    );
+  await expect.poll(async () => (await windows()).length).toBe(2);
+  const settings = (await windows()).find((w) => w.title === "设置");
+  expect(settings).toEqual({ title: "设置", movable: true, closable: true, modal: false });
+
+  // Asked again from the main window, the one 设置 window is focused rather than a second opened.
+  await page.bringToFront();
   await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  await expect(panel).toBeVisible();
-  // It comes to rest at full size, sharp.
-  const settled = () =>
-    panel.evaluate((element) => {
-      const style = getComputedStyle(element);
-      const blur = /blur\(([\d.]+)px\)/.exec(style.filter);
-      return { scale: new DOMMatrix(style.transform).a, blur: blur ? Number(blur[1]) : 0 };
-    });
-  await expect.poll(settled).toEqual({ scale: 1, blur: 0 });
-  const filmed = () => page.evaluate(() => (window as unknown as { frames: Frame[] }).frames);
-  await expect.poll(async () => ((f) => f.at(-1)!.t - f[0]!.t)(await filmed())).toBeGreaterThanOrEqual(1000);
-  const frames = await filmed();
-  // Its first frame is small and blurred: it grows out of a blur rather than appearing.
-  expect(frames[0]!.scale).toBeLessThan(0.95);
-  expect(frames[0]!.blur).toBeGreaterThan(0);
-  // 浮现 at 强 overshoots a little before settling (its spring is checked in tests/core/motion.test.ts). The
-  // overshoot lasts a fraction of the spring, so it is only asked of a runner that drew frames enough to
-  // show it; a slow one may jump from the first frame straight past it.
-  const during = frames.filter((f) => f.t - frames[0]!.t < 550).length;
-  if (during >= 15) expect(Math.max(...frames.map((f) => f.scale))).toBeGreaterThan(1);
-  else test.info().annotations.push({ type: "few frames", description: `${during} frames drawn in the panel's first 550 ms` });
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.getTitle())).toBe("设置");
+  expect((await windows()).length).toBe(2);
   await app.close();
 });
 
@@ -71,19 +45,12 @@ async function dark(page: Page) {
   return page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches);
 }
 
-async function openSettings(page: Page, category?: string) {
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  if (category) await panel.getByRole("tab", { name: category }).click();
-  return panel;
-}
-
 test("appearance can be fixed to light or dark; it is kept with the app, not in the library", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "一.md": "一" });
   const before = await readdir(root, { recursive: true });
   const first = await launchWith(scratch, root);
 
-  const appearance = (await openSettings(first.page)).getByRole("radiogroup", { name: "外观" });
+  const appearance = (await openSettings(first.app, first.page)).getByRole("radiogroup", { name: "外观" });
   await expect(appearance.getByRole("radio")).toHaveText(["跟随系统", "浅色", "深色"]);
   await expect(appearance.getByRole("radio", { name: "跟随系统" })).toHaveAttribute("aria-checked", "true");
   await appearance.getByRole("radio", { name: "深色" }).click();
@@ -96,7 +63,7 @@ test("appearance can be fixed to light or dark; it is kept with the app, not in 
   const again = await launch(scratch);
   await expect.poll(() => dark(again.page)).toBe(true);
   await expect(again.page.getByRole("list", { name: "当前目录内容" })).toBeVisible();
-  const reopened = (await openSettings(again.page)).getByRole("radiogroup", { name: "外观" });
+  const reopened = (await openSettings(again.app, again.page)).getByRole("radiogroup", { name: "外观" });
   await expect(reopened.getByRole("radio", { name: "深色" })).toHaveAttribute("aria-checked", "true");
   await again.app.close();
   expect(await readdir(root, { recursive: true })).toEqual(before);
@@ -119,10 +86,10 @@ test("the list shows 简洁, 标准 or 详细 rows, chosen in settings or the li
   await expect(row).toContainText("小路上青苔很滑。");
   await expect(row).toContainText("2024年3月1日");
 
-  const detail = (await openSettings(page, "笔记列表")).getByRole("radiogroup", { name: "详细程度" });
+  const detail = (await openSettings(app, page, "笔记列表")).getByRole("radiogroup", { name: "详细程度" });
   await expect(detail.getByRole("radio", { name: "详细" })).toHaveAttribute("aria-checked", "true");
   await detail.getByRole("radio", { name: "标准" }).click();
-  await page.keyboard.press("Escape");
+  await closeSettings(app, detail);
   await expect(row).toContainText("2024年3月1日");
   await expect(row).not.toContainText("青苔");
 
@@ -138,7 +105,7 @@ test("motion intensity is 强 by default and 轻 or 标准 calm every spring at 
   const root = await library(scratch, "笔记库", { "一.md": "一" });
   const first = await launchWith(scratch, root);
   const strong = await emergeSpring(first.page);
-  const intensity = (await openSettings(first.page, "动画")).getByRole("radiogroup", { name: "动效强度" });
+  const intensity = (await openSettings(first.app, first.page, "动画")).getByRole("radiogroup", { name: "动效强度" });
   await expect(intensity.getByRole("radio")).toHaveText(["轻", "标准", "强"]);
   await expect(intensity.getByRole("radio", { name: "强" })).toHaveAttribute("aria-checked", "true");
 
@@ -167,7 +134,7 @@ const accent = (page: Page) =>
 test("the accent follows the system as it changes, or is one of the presets", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "一.md": "一" });
   const { app, page } = await launchWith(scratch, root);
-  const accents = (await openSettings(page)).getByRole("radiogroup", { name: "强调色" });
+  const accents = (await openSettings(app, page)).getByRole("radiogroup", { name: "强调色" });
   await expect(accents.getByRole("radio")).toHaveCount(6);
   expect(await accents.getByRole("radio").evaluateAll((swatches) => swatches.map((s) => s.getAttribute("aria-label")))).toEqual([
     "跟随系统",

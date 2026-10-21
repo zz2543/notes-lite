@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { channels, type CloseCheck, type NotesApi, type SpacePageEvent } from "../shared/api";
+import type { Preferences } from "../shared/preferences";
 import { readAppearance } from "../shared/appearance";
 
 const api: NotesApi = {
@@ -74,14 +75,21 @@ const api: NotesApi = {
     ipcRenderer.on(channels.operationLogRequest, handler);
     return () => ipcRenderer.off(channels.operationLogRequest, handler);
   },
-  onSettingsRequest: (listener) => {
-    const handler = () => listener();
-    ipcRenderer.on(channels.settingsRequest, handler);
-    return () => ipcRenderer.off(channels.settingsRequest, handler);
+  openSettings: () => ipcRenderer.send(channels.openSettings),
+  openNoteText: () => ipcRenderer.invoke(channels.openNoteText),
+  provideOpenNoteText: (provider) => {
+    const handler = (_: unknown, id: number) => ipcRenderer.send(channels.openNoteTextReply, id, provider());
+    ipcRenderer.on(channels.openNoteTextRequest, handler);
+    return () => ipcRenderer.off(channels.openNoteTextRequest, handler);
   },
   // Asked once, synchronously, before any script runs: the answer is already in memory in the main process.
   preferences: ipcRenderer.sendSync(channels.preferences),
   setPreferences: (change) => ipcRenderer.invoke(channels.setPreferences, change),
+  onPreferencesChanged: (listener) => {
+    const handler = (_: unknown, preferences: Preferences) => listener(preferences);
+    ipcRenderer.on(channels.preferencesChanged, handler);
+    return () => ipcRenderer.off(channels.preferencesChanged, handler);
+  },
   onSystemAccentChanged: (listener) => {
     const handler = (_: unknown, accent: string | null) => listener(accent);
     ipcRenderer.on(channels.systemAccentChanged, handler);

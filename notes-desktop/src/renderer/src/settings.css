@@ -1,15 +1,11 @@
-/* 设置: a design-system 浮层 (in-app blur over the window). Values are the variables in tokens.css. */
+/* 设置: a window of its own (2026-10-21 用户反馈). The categories sit on the window's material like the
+   side panel, the page on the list's surface beside them, as in the main window. Values are the variables
+   in tokens.css. */
 
 .settings {
-  width: min(var(--settings-width), calc(100vw - var(--settings-margin) * 2));
-  height: min(var(--settings-height), calc(100vh - var(--settings-margin) * 2));
+  height: 100%;
   display: flex;
   overflow: hidden;
-  border: 0.5px solid var(--glass-border);
-  border-radius: var(--settings-radius);
-  background: var(--glass);
-  box-shadow: var(--overlay-shadow);
-  backdrop-filter: var(--overlay-blur);
   color: var(--side-fg);
   font-size: var(--text-side-row);
 }
@@ -20,8 +16,16 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: var(--settings-padding) var(--row-padding);
-  border-right: 1px solid var(--line);
+  padding: 0 var(--row-padding) var(--settings-padding);
+}
+/* The window's top, under the window controls, moves it. */
+.settings-nav > .drag {
+  margin: 0 calc(-1 * var(--row-padding));
+}
+.settings-page-drag {
+  position: sticky;
+  top: 0;
+  margin: 0 calc(-1.5 * var(--settings-padding));
 }
 .settings-nav h2 {
   margin: 0 0 var(--inline-gap);
@@ -55,7 +59,10 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: var(--settings-padding) calc(var(--settings-padding) * 1.5);
+  padding: 0 calc(var(--settings-padding) * 1.5) var(--settings-padding);
+  background: var(--list-bg);
+  color: var(--list-fg);
+  border-left: 1px solid var(--line);
 }
 .settings-page > h2 {
   margin: 0 0 var(--settings-group-gap);

@@ -72,6 +72,10 @@ const settings = settingsStore(app.getPath("userData"));
 const mac = process.platform === "darwin";
 let library: Library | null = null;
 let window: BrowserWindow | null = null;
+/** 设置, in a window of its own while it is open. */
+let settingsWindow: BrowserWindow | null = null;
+/** The app's own windows that are open: the main one and 设置. */
+const appWindows = () => [window, settingsWindow].filter((w): w is BrowserWindow => w !== null && !w.isDestroyed());
 // Each homepage's own storage, kept with the app (spaces-spec #51).
 const homepageStorage = spaceStorage(join(app.getPath("userData"), "space-storage.json"));
 // Space homepages, each in its own sandbox laid over the card.
@@ -223,12 +227,14 @@ function applyPreferences() {
   nativeTheme.themeSource = preferences.colorScheme;
   // An opaque window's own colour shows before the page paints (on resize, say); it follows too.
   const { backgroundColor } = materialWindowOptions(material, nativeTheme.shouldUseDarkColors);
-  if (backgroundColor && window && !window.isDestroyed()) window.setBackgroundColor(backgroundColor);
+  if (backgroundColor) appWindows().forEach((w) => w.setBackgroundColor(backgroundColor));
 }
 
-async function changePreferences(change: unknown): Promise<Preferences> {
+async function changePreferences(change: unknown, from?: WebContents): Promise<Preferences> {
   preferences = readPreferences(change, preferences);
   applyPreferences();
+  // The other window shows them at once too.
+  for (const w of appWindows()) if (w.webContents !== from) w.webContents.send(channels.preferencesChanged, preferences);
   pages.settingsChanged();
   await settings.update({ preferences });
   return preferences;
@@ -453,9 +459,11 @@ function registerIpc() {
       return { ok: false, code: "not-allowed", message: `无法打开“${url}”：${(error as Error).message}` };
     }
   });
-  ipcMain.handle(channels.confirm, async (_, { message, detail, action }: Confirmation) => {
+  ipcMain.handle(channels.confirm, async ({ sender }, { message, detail, action }: Confirmation) => {
     const options = { type: "warning" as const, message, detail, buttons: ["取消", action], defaultId: 0, cancelId: 0 };
-    const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
+    // On the window that asks: the main one, or 设置.
+    const over = BrowserWindow.fromWebContents(sender) ?? window;
+    const { response } = over ? await dialog.showMessageBox(over, options) : await dialog.showMessageBox(options);
     return response === 1;
   });
   // 空间: the core library does the work; a refusal reaches the page as a result it can show.
@@ -543,7 +551,29 @@ function registerIpc() {
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
-  ipcMain.handle(channels.setPreferences, (_, change: unknown) => changePreferences(change));
+  ipcMain.handle(channels.setPreferences, ({ sender }, change: unknown) => changePreferences(change, sender));
+  ipcMain.on(channels.openSettings, () => openSettings());
+  // 排版's preview in 设置 shows the note open in the main window, asked of that page (a second at most).
+  let noteTextAsks = 0;
+  ipcMain.handle(
+    channels.openNoteText,
+    () =>
+      new Promise<string | null>((resolve) => {
+        const main = window;
+        if (!main || main.isDestroyed()) return resolve(null);
+        const id = ++noteTextAsks;
+        const done = (text: string | null) => {
+          clearTimeout(timer);
+          ipcMain.off(channels.openNoteTextReply, reply);
+          resolve(text);
+        };
+        const reply = (event: IpcMainEvent, answered: number, text: unknown) =>
+          event.sender === main.webContents && answered === id && done(typeof text === "string" ? text : null);
+        const timer = setTimeout(() => done(null), 1000);
+        ipcMain.on(channels.openNoteTextReply, reply);
+        main.webContents.send(channels.openNoteTextRequest, id);
+      }),
+  );
   ipcMain.on(channels.openLibraryListening, (event) => {
     if (!openLibraryPending) return;
     openLibraryPending = false;
@@ -632,12 +662,12 @@ function buildMenu() {
     accelerator: "CmdOrCtrl+N",
     click: () => reveal() && window?.webContents.send(channels.newNoteRequest),
   };
-  // The page handles ⌘, / Ctrl+, itself (the welcome page opens the panel too); the menu only shows it.
+  // The page handles ⌘, / Ctrl+, itself (the welcome page opens 设置 too); the menu only shows it.
   const settingsItem: MenuItemConstructorOptions = {
     label: "设置…",
     accelerator: "CmdOrCtrl+,",
     registerAccelerator: false,
-    click: () => window?.webContents.send(channels.settingsRequest),
+    click: () => openSettings(),
   };
   const appMenu: MenuItemConstructorOptions = {
     role: "appMenu",
@@ -725,6 +755,8 @@ function createWindow() {
   window.on("closed", () => {
     pages.closeAll();
     window = null;
+    // 设置 belongs to the main window: it does not stay behind on its own.
+    settingsWindow?.close();
   });
   // The page only ever shows the app itself.
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -734,10 +766,54 @@ function createWindow() {
   else void window.loadFile(join(__dirname, "../renderer/index.html"));
 }
 
+/**
+ * 设置 (2026-10-21 用户反馈): a window of its own on the same material as the main one, moved and closed
+ * like any window; asked for again while open, it comes to the front. Its page is the app's, at #settings.
+ */
+function openSettings() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    if (settingsWindow.isMinimized()) settingsWindow.restore();
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  const win = (settingsWindow = new BrowserWindow({
+    title: "设置",
+    // --settings-width and --settings-height (tokens.css).
+    width: 920,
+    height: 600,
+    minWidth: 720,
+    minHeight: 440,
+    show: false,
+    fullscreenable: false,
+    ...materialWindowOptions(material, nativeTheme.shouldUseDarkColors),
+    ...(mac ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: true,
+      contextIsolation: true,
+      additionalArguments: appearanceArguments(systemAppearance()),
+    },
+  }));
+  win.setMenuBarVisibility(false);
+  win.once("ready-to-show", () => {
+    if (!win.isDestroyed()) win.show();
+  });
+  // The page's <title> is the app's; this window keeps 设置.
+  win.on("page-title-updated", (event) => event.preventDefault());
+  win.on("closed", () => {
+    if (settingsWindow === win) settingsWindow = null;
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (event) => event.preventDefault());
+  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}#settings`);
+  else void win.loadFile(join(__dirname, "../renderer/index.html"), { hash: "settings" });
+}
+
 /** 强调色 follows the system while the app runs. */
 function followSystemAccent() {
   const changed = () => {
-    if (window && !window.isDestroyed()) window.webContents.send(channels.systemAccentChanged, systemAppearance().accent);
+    for (const w of appWindows()) w.webContents.send(channels.systemAccentChanged, systemAppearance().accent);
     pages.settingsChanged();
   };
   systemPreferences.on("accent-color-changed", changed);

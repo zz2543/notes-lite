@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { installFakeAgent } from "../support/fakeAgent";
-import { expect, launchWith, library, test } from "./fixtures";
+import { closeSettings, expect, launchWith, library, openSettings, test } from "./fixtures";
 
 // 写入审查 (assistant-spec, ticket 29) with a fake Claude Code: after a turn that changed anything, one
 // card lists it; 全部保留 is the default, a note can be opened and taken back alone, or the whole turn.
@@ -100,17 +100,14 @@ test("in 直接保留 mode no card shows, and the turn is still undone from 操�
   await installFakeAgent(join(scratch, "agents"), "claude", {
     steps: [{ tool: "Write", input: { file_path: join(root, "随记.md") }, write: { path: "随记.md", text: "随记\n助手写的\n" } }, { say: "写好了。" }],
   });
-  const { page } = await launchWith(scratch, root);
+  const { app, page } = await launchWith(scratch, root);
   await page.getByRole("button", { name: "打开助手栏" }).click();
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  await panel.getByRole("tab", { name: "助手" }).click();
+  const panel = await openSettings(app, page, "助手");
   const review = panel.getByRole("group", { name: "写入审查" }).getByRole("radiogroup", { name: "审查方式" });
   await expect(review.getByRole("radio", { name: "每轮结束后审查" })).toBeChecked();
   await review.getByRole("radio", { name: "直接保留" }).click();
   await expect(review.getByRole("radio", { name: "直接保留" })).toBeChecked();
-  await page.keyboard.press("Escape");
-  await expect(panel).toBeHidden();
+  await closeSettings(app, panel);
 
   await ask(page, "写点东西");
   await expect(conversation(page)).toContainText("已保留本轮改动（1 个文件）。");

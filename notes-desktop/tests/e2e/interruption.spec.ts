@@ -1,4 +1,4 @@
-import { expect, launchWith, library, test } from "./fixtures";
+import { closeSettings, expect, launchWith, library, openSettings, test } from "./fixtures";
 
 // Interrupted motion (ticket 23): whatever is asked again mid-way ends as last asked, never after a queue.
 
@@ -21,15 +21,14 @@ test("panels opened and shut in quick succession end as last asked, with nothing
   for (let i = 0; i < 3; i += 1) await page.keyboard.press("ControlOrMeta+KeyJ");
   await expect(column).toBeHidden();
 
-  // 设置, opened, shut and opened again at once: one panel, fully in place.
-  await page.keyboard.press("ControlOrMeta+Comma");
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  await expect(panel).toHaveCount(1);
-  await expect.poll(() => panel.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a)).toBe(1);
-  await page.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
+  // 设置, asked for three times at once: one window; shut, and opened again at once.
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press("ControlOrMeta+Comma");
+  const panel = await openSettings(app, page);
+  expect(app.windows().filter((w) => w.url().endsWith("#settings"))).toHaveLength(1);
+  await closeSettings(app, panel);
+  const again = await openSettings(app, page);
+  expect(app.windows().filter((w) => w.url().endsWith("#settings"))).toHaveLength(1);
+  await closeSettings(app, again);
 
   // 专注模式 in and out at once: out, the columns back.
   await page.getByLabel("笔记正文").click();

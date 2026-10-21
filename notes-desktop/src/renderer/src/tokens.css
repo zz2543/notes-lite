@@ -107,12 +107,11 @@
   --menu-padding: 5px;
   --menu-radius: 12px;
   --menu-item-height: 30px;
+  /* 设置's window opens at this size (main/index.ts uses the same numbers). */
   --settings-width: 920px;
   --settings-height: 600px;
-  --settings-radius: 20px;
   --settings-nav-width: 190px;
-  /* Inside the settings panel; the design system gives only its outer size, so these follow its rows. */
-  --settings-margin: 24px;
+  /* Inside the settings window; the design system gives only its outer size, so these follow its rows. */
   --settings-padding: 20px;
   --settings-group-gap: 24px;
   --settings-row-height: 44px;

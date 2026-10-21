@@ -1,4 +1,4 @@
-import { _electron as electron, test as base, type ElectronApplication, type Page } from "@playwright/test";
+import { _electron as electron, expect, test as base, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -20,7 +20,7 @@ export const test = base.extend<{ scratch: string }>({
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect };
 
 export async function library(scratch: string, name: string, files: Record<string, string>): Promise<string> {
   const root = join(scratch, name);
@@ -130,4 +130,26 @@ export const sideSwitch = (page: Page) => page.getByRole("switch", { name: "空�
 export async function showSide(page: Page, side: "资料库" | "空间") {
   const on = side === "空间";
   if ((await sideSwitch(page).getAttribute("aria-checked")) !== String(on)) await sideSwitch(page).click();
+}
+
+const isSettings = (window: Page) => window.url().endsWith("#settings");
+
+/**
+ * Opens 设置 with ⌘, / Ctrl+, in `page`, and answers it: the page of its own window (on `category`, if
+ * given). Asked again while it is open, the same window comes to the front.
+ */
+export async function openSettings(app: ElectronApplication, page: Page, category?: string): Promise<Locator> {
+  await page.keyboard.press("ControlOrMeta+Comma");
+  await expect.poll(() => app.windows().some(isSettings)).toBe(true);
+  const settings = app.windows().find(isSettings)!;
+  const panel = settings.getByRole("main", { name: "设置" });
+  await expect(panel).toBeVisible();
+  if (category) await panel.getByRole("tab", { name: category }).click();
+  return panel;
+}
+
+/** Closes the 设置 window with Esc, and waits until it has gone. */
+export async function closeSettings(app: ElectronApplication, panel: Locator) {
+  await panel.page().keyboard.press("Escape");
+  await expect.poll(() => app.windows().some(isSettings)).toBe(false);
 }

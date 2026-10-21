@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launchWith, library, test } from "./fixtures";
+import { closeSettings, expect, launchWith, library, openSettings, test } from "./fixtures";
 
 // 助手栏 (assistant-spec): docked to the right of the card, opened and closed with ⌘J / Ctrl+J.
 
@@ -219,11 +219,9 @@ test("with 单栏导航 chosen in 设置, the open 助手栏 never brings back �
   const root = await library(scratch, "笔记库", { "随记.md": "随记" });
   const { app, page } = await launchWith(scratch, root);
   await setWindowWidth(app, page, 1300);
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
+  const panel = await openSettings(app, page);
   await panel.getByRole("radiogroup", { name: "导航模式" }).getByRole("radio", { name: "单栏" }).click();
-  await page.keyboard.press("Escape");
-  await expect(panel).toBeHidden();
+  await closeSettings(app, panel);
   await page.keyboard.press("ControlOrMeta+KeyJ");
   await expect(page.getByRole("complementary", { name: "助手栏" })).toBeVisible();
   await expect(page.getByRole("tree", { name: "文件夹与笔记" })).toBeVisible();

@@ -15,7 +15,6 @@ import {
 } from "../../shared/typography";
 import { PreviewChoices, Slider, Switch, type PreviewChoice } from "./controls";
 import { typesetView } from "./markdownView";
-import { openNoteText } from "./noteDraft";
 import { usePreferences } from "./preferences";
 import { SettingRow, SettingsGroup } from "./SettingsPanel";
 import "./typography.css";
@@ -110,11 +109,19 @@ const sample = "# 排版预览\n\n打开一篇笔记，这里就用它来预览�
 /** The open note (or a sample when none is open), typeset by the same rules as the editor. */
 function TypesetPreview() {
   const host = useRef<HTMLDivElement>(null);
+  // 设置 is a window of its own: the open note is asked of the main one.
+  const [doc, setDoc] = useState<string>();
   useEffect(() => {
+    let live = true;
+    void window.notes.openNoteText().then((text) => live && setDoc(text ?? sample));
+    return () => void (live = false);
+  }, []);
+  useEffect(() => {
+    if (doc === undefined) return;
     const view = new EditorView({
       parent: host.current!,
       state: EditorState.create({
-        doc: openNoteText() ?? sample,
+        doc,
         extensions: [EditorState.readOnly.of(true), EditorView.editable.of(false), EditorView.lineWrapping, typesetView],
       }),
     });
@@ -122,7 +129,7 @@ function TypesetPreview() {
     const settled = () => view.requestMeasure();
     view.dom.addEventListener("transitionend", settled);
     return () => view.destroy();
-  }, []);
+  }, [doc]);
   return (
     <figure className="typeset-preview" aria-label="排版预览">
       <div className="typeset-page editor" ref={host} />

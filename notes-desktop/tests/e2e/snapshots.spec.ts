@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launchWith, library, test } from "./fixtures";
+import { expect, launchWith, library, openSettings, test } from "./fixtures";
 
 // 快照 (assistant-spec): the library is snapshotted in the background once the 助手栏 opens, so the
 // first turn starts from it; 设置 › 助手 shows the disk they take and clears them on request.
@@ -9,12 +9,10 @@ import { expect, launchWith, library, test } from "./fixtures";
 const files = async (folder: string) =>
   (await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => [])).filter((entry) => entry.isFile()).length;
 
-async function openAssistantSettings(page: Page) {
+async function openAssistantSettings(app: ElectronApplication, page: Page) {
   await page.keyboard.press("ControlOrMeta+KeyJ");
   await expect(page.getByRole("complementary", { name: "助手栏" })).toBeVisible();
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  await panel.getByRole("tab", { name: "助手" }).click();
+  const panel = await openSettings(app, page, "助手");
   return panel.getByRole("group", { name: "快照" });
 }
 
@@ -30,7 +28,7 @@ test("opening the 助手栏 snapshots the library; 设置 shows the disk it take
   const store = join(scratch, "profile", "snapshots");
   expect(await files(store), "nothing is snapshotted before the 助手栏 opens").toBe(0);
 
-  const group = await openAssistantSettings(page);
+  const group = await openAssistantSettings(app, page);
   await expect(group).toContainText("笔记库以外的文件不在快照范围内，无法撤销");
   await expect(group).toContainText("30 天");
   const usage = group.getByLabel("快照占用");
@@ -46,8 +44,8 @@ test("opening the 助手栏 snapshots the library; 设置 shows the disk it take
 
 test("past the copy limit, 设置 says attachments are only noted", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "随记.md": "随记", "图.png": "x".repeat(4000) });
-  const { page } = await launchWith(scratch, root, { NOTES_DESKTOP_SNAPSHOT_COPY_LIMIT: "1000" });
+  const { app, page } = await launchWith(scratch, root, { NOTES_DESKTOP_SNAPSHOT_COPY_LIMIT: "1000" });
   await expect(page.getByRole("treeitem", { name: "笔记库" })).toBeVisible();
-  const group = await openAssistantSettings(page);
+  const group = await openAssistantSettings(app, page);
   await expect(group).toContainText("附件只记录大小和修改时间，助手改动的附件无法撤回");
 });

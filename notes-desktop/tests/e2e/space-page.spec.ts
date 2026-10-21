@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launch, launchWith, library, showSide, test } from "./fixtures";
+import { closeSettings, expect, launch, launchWith, library, openSettings, showSide, test } from "./fixtures";
 
 // The space page loop (ticket 19), after the old SpaceWorkflowTests: the built app, a real
 // temporary library, and the space homepage running in its own sandbox. Records the page writes
@@ -230,14 +230,11 @@ test("in 单栏导航 an open space shows 主页 and its notes under the spaces"
   await expect(home.getByText("训练 3 次")).toBeVisible();
   await expect.poll(() => shownPages(app)).toBe(1);
 
-  // 设置 floats over the homepage too, so the homepage steps aside while it is open.
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const settings = page.getByRole("dialog", { name: "设置" });
-  await expect(settings).toBeVisible();
-  await expect.poll(() => shownPages(app)).toBe(0);
+  // 设置 is a window of its own: the homepage stays where it is meanwhile.
+  const settings = await openSettings(app, page);
+  await expect.poll(() => shownPages(app)).toBe(1);
   await settings.getByRole("radiogroup", { name: "导航模式" }).getByRole("radio", { name: "单栏" }).click();
-  await page.keyboard.press("Escape");
-  await expect(settings).toBeHidden();
+  await closeSettings(app, settings);
   await expect(page.locator("section.list")).toHaveCount(0);
 
   const contents = page.getByRole("complementary").getByRole("list", { name: "空间内容" });

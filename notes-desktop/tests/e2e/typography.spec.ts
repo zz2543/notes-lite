@@ -1,7 +1,7 @@
-import type { Locator, Page } from "@playwright/test";
+import type { ElectronApplication, Locator, Page } from "@playwright/test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launch, launchWith, library, test } from "./fixtures";
+import { closeSettings, expect, launch, launchWith, library, openSettings, test } from "./fixtures";
 
 const note = "# 雨后\n\n小路上的青苔很滑，我们走了3公里才到Lakeside。\n\n第二段。\n";
 
@@ -10,12 +10,7 @@ async function openNote(page: Page, title: string) {
   await expect(page.getByRole("textbox", { name: "笔记正文" })).toContainText(title);
 }
 
-async function openTypography(page: Page) {
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
-  await panel.getByRole("tab", { name: "排版" }).click();
-  return panel;
-}
+const openTypography = ({ app, page }: { app: ElectronApplication; page: Page }) => openSettings(app, page, "排版");
 
 /** A computed style of the first element inside `scope` that matches `selector`. */
 const style = (scope: Locator, selector: string, property: string) =>
@@ -38,7 +33,7 @@ test("body and heading fonts come from presets, the bundled serifs, or the fonts
   expect(await bundled(page, "Noto Serif SC", 600, "永")).toBe(true);
   expect(await bundled(page, "Source Serif 4 Variable", 400, "A")).toBe(true);
 
-  const panel = await openTypography(page);
+  const panel = await openTypography({ app, page });
   const body = panel.getByRole("radiogroup", { name: "正文字体" });
   expect(await body.getByRole("radio").evaluateAll((radios) => radios.map((r) => r.getAttribute("aria-label")))).toEqual(["系统", "思源宋体", "Source Serif", "等宽"]);
   await expect(body.getByRole("radio", { name: "系统" })).toHaveAttribute("aria-checked", "true");
@@ -85,7 +80,7 @@ test("中英文自动间距 widens the gap between Chinese and Latin on screen o
       return -1;
     });
   const spaced = await gap();
-  const panel = await openTypography(page);
+  const panel = await openTypography({ app, page });
   const autospace = panel.getByRole("switch", { name: "中英文自动间距" });
   await expect(autospace).toHaveAttribute("aria-checked", "true");
   await autospace.click();
@@ -100,7 +95,7 @@ test("sliders set the size, leading, gap, measure and heading ratio; the preview
   const before = await readdir(root, { recursive: true });
   const first = await launchWith(scratch, root);
   await openNote(first.page, "雨后");
-  const panel = await openTypography(first.page);
+  const panel = await openTypography(first);
 
   // The defaults are the design system's 正文排版.
   const slider = (name: string) => panel.getByRole("slider", { name });
@@ -119,26 +114,27 @@ test("sliders set the size, leading, gap, measure and heading ratio; the preview
   for (const property of ["font-size", "line-height"]) expect(transitions).toContain(property);
   expect(await style(preview, ".cm-content", "transition-property")).toContain("max-width");
 
+  const keys = panel.page().keyboard;
   await slider("字号").focus();
-  await first.page.keyboard.press("ArrowRight");
-  await first.page.keyboard.press("ArrowRight");
+  await keys.press("ArrowRight");
+  await keys.press("ArrowRight");
   await expect(slider("字号")).toHaveAttribute("aria-valuetext", "18px");
   await expect.poll(() => style(preview, ".cm-scroller", "font-size")).toBe("18px");
   // H1 = 字号 × 比例 × 1.25.
   await expect.poll(() => style(preview, ".cm-md-h1", "font-size")).toBe("36px");
   await slider("标题大小比例").focus();
-  await first.page.keyboard.press("End");
+  await keys.press("End");
   await expect(slider("标题大小比例")).toHaveAttribute("aria-valuetext", "2");
   await expect.poll(() => style(preview, ".cm-md-h1", "font-size")).toBe("45px");
   await slider("版心宽度").focus();
-  await first.page.keyboard.press("Home");
+  await keys.press("Home");
   await expect.poll(() => style(preview, ".cm-content", "max-width")).toBe("480px");
   await slider("行距").focus();
-  await first.page.keyboard.press("End");
+  await keys.press("End");
   await expect.poll(() => style(preview, ".cm-scroller", "line-height")).toBe("39.6px");
 
-  // The editor behind the panel takes the same values at once.
-  await first.page.keyboard.press("Escape");
+  // The editor in the main window takes the same values at once.
+  await closeSettings(first.app, panel);
   const editor = first.page.getByRole("group", { name: "编辑器" });
   expect(await style(editor, ".cm-scroller", "font-size")).toBe("18px");
   expect(await style(editor, ".cm-content", "max-width")).toBe("480px");
@@ -147,7 +143,7 @@ test("sliders set the size, leading, gap, measure and heading ratio; the preview
   // Kept with the app, not in the library, and the note is untouched.
   const again = await launch(scratch);
   await expect(again.page.getByRole("list", { name: "当前目录内容" })).toBeVisible();
-  const reopened = await openTypography(again.page);
+  const reopened = await openTypography(again);
   await expect(reopened.getByRole("slider", { name: "字号" })).toHaveAttribute("aria-valuetext", "18px");
   await expect(reopened.getByRole("slider", { name: "版心宽度" })).toHaveAttribute("aria-valuetext", "480px");
   await again.app.close();

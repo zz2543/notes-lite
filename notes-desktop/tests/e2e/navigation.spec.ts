@@ -1,14 +1,12 @@
-import type { Page } from "@playwright/test";
-import { expect, launch, launchWith, library, test } from "./fixtures";
+import type { ElectronApplication, Page } from "@playwright/test";
+import { closeSettings, expect, launch, launchWith, library, openSettings, test } from "./fixtures";
 
 // 单栏导航 and 双栏导航, chosen in 设置 › 通用.
 
-async function chooseNavigation(page: Page, mode: "单栏" | "双栏") {
-  await page.keyboard.press("ControlOrMeta+Comma");
-  const panel = page.getByRole("dialog", { name: "设置" });
+async function chooseNavigation({ app, page }: { app: ElectronApplication; page: Page }, mode: "单栏" | "双栏") {
+  const panel = await openSettings(app, page);
   await panel.getByRole("radiogroup", { name: "导航模式" }).getByRole("radio", { name: mode }).click();
-  await page.keyboard.press("Escape");
-  await expect(panel).toBeHidden();
+  await closeSettings(app, panel);
 }
 
 const sidePill = '[role="tree"] [data-testid="selection-pill"]';
@@ -23,7 +21,7 @@ test("单栏导航 shows folders and notes in one tree: subfolders first, the op
   const list = page.getByRole("list", { name: "当前目录内容" });
   await expect(list).toBeVisible();
 
-  await chooseNavigation(page, "单栏");
+  await chooseNavigation({ app, page }, "单栏");
   // The list column goes; the tree alone browses the library.
   await expect(list).toHaveCount(0);
   const tree = page.getByRole("tree", { name: "文件夹与笔记" });
@@ -60,7 +58,7 @@ test("单栏导航 searches in place: the field and results stand in for the tre
     "清单.md": "# 清单\n\n牛奶\n",
   });
   const { app, page } = await launchWith(scratch, root);
-  await chooseNavigation(page, "单栏");
+  await chooseNavigation({ app, page }, "单栏");
   const side = page.getByRole("complementary");
   const tree = page.getByRole("tree", { name: "文件夹与笔记" });
 
@@ -98,7 +96,7 @@ test("switching 导航模式 keeps the open note, where its caret is and the fol
   await expect(page.getByRole("treeitem", { name: "旧的" })).toHaveCount(0);
   await editor.focus();
 
-  await chooseNavigation(page, "单栏");
+  await chooseNavigation(first, "单栏");
   // The tree unfolds down to the open note; typing carries on where it stopped.
   const tree = page.getByRole("tree", { name: "文件夹与笔记" });
   await expect(tree.getByRole("treeitem", { name: "去年" })).toHaveAttribute("aria-selected", "true");
@@ -109,17 +107,16 @@ test("switching 导航模式 keeps the open note, where its caret is and the fol
   // A note opened from the tree makes its folder the one browsed.
   await tree.getByRole("treeitem", { name: "随记" }).click();
   await expect(editor).toHaveText("随记", { useInnerText: true });
-  await chooseNavigation(page, "双栏");
+  await chooseNavigation(first, "双栏");
   await expect(page.getByRole("heading", { name: "笔记库" })).toBeVisible();
   await expect(page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "随记" })).toHaveAttribute("aria-current", "true");
 
-  await chooseNavigation(page, "单栏");
+  await chooseNavigation(first, "单栏");
   await first.app.close();
   const again = await launch(scratch);
   await expect(again.page.getByRole("tree", { name: "文件夹与笔记" }).getByRole("treeitem", { name: "随记" })).toHaveAttribute("aria-selected", "true");
   await expect(again.page.getByRole("list", { name: "当前目录内容" })).toHaveCount(0);
-  await again.page.keyboard.press("ControlOrMeta+Comma");
-  const choice = again.page.getByRole("radiogroup", { name: "导航模式" });
+  const choice = (await openSettings(again.app, again.page)).getByRole("radiogroup", { name: "导航模式" });
   await expect(choice.getByRole("radio", { name: "单栏" })).toHaveAttribute("aria-checked", "true");
   await again.app.close();
 });

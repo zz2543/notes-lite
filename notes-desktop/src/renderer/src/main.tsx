@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { SettingsWindow } from "./SettingsPanel";
 import { applyAppearance } from "./appearance";
 import { MotionProvider } from "./MotionProvider";
 import { PreferencesProvider } from "./preferences";
@@ -15,7 +16,8 @@ createRoot(document.getElementById("root")!).render(
     <PreferencesProvider>
       {(preferences) => (
         <MotionProvider intensity={preferences.motion}>
-          <App />
+          {/* The 设置 window loads the same page, at #settings. */}
+          {location.hash === "#settings" ? <SettingsWindow /> : <App />}
         </MotionProvider>
       )}
     </PreferencesProvider>

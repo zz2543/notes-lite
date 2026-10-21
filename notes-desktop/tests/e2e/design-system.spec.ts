@@ -326,7 +326,6 @@ const sizes: [string, string][] = [
   ["--menu-item-height", "30px"],
   ["--settings-width", "920px"],
   ["--settings-height", "600px"],
-  ["--settings-radius", "20px"],
   ["--settings-nav-width", "190px"],
 ];
 
