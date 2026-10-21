@@ -30,7 +30,7 @@ async function setup() {
   const events: Array<[string, TurnEvent]> = [];
   const ends = (id: string) => events.filter(([to, e]) => to === id && e.kind === "end").length;
   /** Runs a turn to its end and answers its conversation's id. */
-  const turn = async (request: { conversation?: string; agent?: AgentId; folder?: string; text: string }, at = root) => {
+  const turn = async (request: { conversation?: string; agent?: AgentId; folder?: string; model?: string; text: string }, at = root) => {
     const started = await turns.start(at, { conversation: null, agent: "claude", folder: "", notes: [], ...request }, (id, e) => events.push([id, e]));
     if (!started.ok) throw new Error(started.message);
     const id = started.conversation.id;
@@ -82,6 +82,25 @@ describe("对话历史", () => {
     expect(await realpath(run!.cwd)).toBe(await realpath(join(lib.root, "日记")));
     expect(await lib.claude.runs()).toEqual([]);
     await expect.poll(async () => (await lib.conversations.read(id)).messages.at(-1)).toMatchObject({ done: true, parts: [{ text: "收到。" }] });
+  });
+
+  it("keeps the model chosen when a conversation begins and passes it on every turn; none leaves it to the agent (模型选择)", async () => {
+    const lib = await setup();
+    const id = await lib.turn({ text: "用 opus", model: " opus " });
+    expect(await lib.conversations.read(id)).toMatchObject({ model: "opus" });
+    // Continuing it with another model asked for keeps the one it began with.
+    await lib.turn({ conversation: id, text: "继续", model: "haiku" });
+    const runs = await lib.claude.runs();
+    expect(runs.map((r) => r.argv.slice(r.argv.indexOf("--model"), r.argv.indexOf("--model") + 2))).toEqual([
+      ["--model", "opus"],
+      ["--model", "opus"],
+    ]);
+    const plain = await lib.turn({ text: "默认" });
+    expect((await lib.conversations.read(plain)).model).toBeUndefined();
+    expect((await lib.claude.runs()).at(-1)!.argv).not.toContain("--model");
+    // One that cannot go on a command line as a single word is not passed.
+    const odd = await lib.turn({ text: "怪名字", model: "--dangerous thing" });
+    expect((await lib.conversations.read(odd)).model).toBeUndefined();
   });
 
   it("opens nothing from another library or that is not there", async () => {

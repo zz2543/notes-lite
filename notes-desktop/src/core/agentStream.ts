@@ -7,8 +7,8 @@ export type { AgentActivity, AgentEvent, TurnEvent } from "../shared/conversatio
 
 /** How one agent is run and read. */
 export interface AgentAdapter {
-  /** The command line after the command; the prompt goes in on stdin. */
-  args(session?: string): string[];
+  /** The command line after the command; the prompt goes in on stdin. `model`, when chosen, overrides the agent's own. */
+  args(session?: string, model?: string): string[];
   /** What it needs in its environment besides what the app passes on. */
   env?: Record<string, string>;
   /** Reads its output a line at a time. */
@@ -111,13 +111,14 @@ interface ClaudeLine {
  * a reply that streams, and --dangerously-skip-permissions so it never stops to ask (assistant-spec).
  */
 export const claudeCode: AgentAdapter = {
-  args: (session) => [
+  args: (session, model) => [
     "-p",
     "--output-format",
     "stream-json",
     "--verbose",
     "--include-partial-messages",
     "--dangerously-skip-permissions",
+    ...(model ? ["--model", model] : []),
     ...(session ? ["--resume", session] : []),
   ],
   reader: (cwd) => {
@@ -194,8 +195,8 @@ interface CodexLine {
  * `exec resume <id>`. Replies come whole, not streamed.
  */
 export const codex: AgentAdapter = {
-  args: (session) => {
-    const options = ["--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox"];
+  args: (session, model) => {
+    const options = ["--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", ...(model ? ["-m", model] : [])];
     return session ? ["exec", "resume", ...options, session, "-"] : ["exec", ...options, "-"];
   },
   reader: (cwd) => {
@@ -263,7 +264,7 @@ interface PiLine {
  * `stopReason` says so. A session goes on with `--session <id>`.
  */
 export const pi: AgentAdapter = {
-  args: (session) => ["--mode", "json", ...(session ? ["--session", session] : [])],
+  args: (session, model) => ["--mode", "json", ...(model ? ["--model", model] : []), ...(session ? ["--session", session] : [])],
   reader: (cwd) => {
     let failed: string | undefined;
     return (raw) => {
@@ -319,6 +320,7 @@ interface DshLine {
  * environment, as the profile reads it. A session goes on with `--session-id`. Replies come whole.
  */
 export const deepseekHarness: AgentAdapter = {
+  // No model on the command line: DeepSeek Harness takes it from its settings alone.
   args: (session) => ["--profile", "headless", "--json", ...(session ? ["--session-id", session] : []), "-"],
   env: { DSH_PERMISSION_MODE: "danger-full-access" },
   explainExit: (stderr) => (/unknown option '--(json|session-id)'/.test(stderr) ? dshTooOld : undefined),

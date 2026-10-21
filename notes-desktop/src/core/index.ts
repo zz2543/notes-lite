@@ -14,6 +14,7 @@ export { serialized } from "./serialized";
 export * from "./agents";
 export * from "./snapshots";
 export * from "./agentStream";
+export * from "./agentModels";
 export * from "./turns";
 export * from "./assistantTurns";
 export * from "../shared/conversation";

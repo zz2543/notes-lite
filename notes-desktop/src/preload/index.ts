@@ -106,6 +106,7 @@ const api: NotesApi = {
   },
   copySpaceError: (name, problem) => ipcRenderer.invoke(channels.copySpaceError, name, problem),
   detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
+  agentModels: (agent) => ipcRenderer.invoke(channels.agentModels, agent),
   prepareSnapshots: () => ipcRenderer.send(channels.prepareSnapshots),
   snapshotUsage: () => ipcRenderer.invoke(channels.snapshotUsage),
   clearSnapshots: () => ipcRenderer.invoke(channels.clearSnapshots),

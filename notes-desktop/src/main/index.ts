@@ -8,6 +8,7 @@ import {
   assistantTurns,
   conversationStore,
   createSearchIndex,
+  agentModels,
   detectAgents,
   LibraryError,
   type LibraryErrorCode,
@@ -56,6 +57,7 @@ import {
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
 import { isHidden } from "../shared/paths";
+import { agents as agentKinds, type AgentId } from "../shared/agentKinds";
 import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
@@ -528,6 +530,10 @@ function registerIpc() {
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
   ipcMain.handle(channels.detectAgents, async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }));
+  ipcMain.handle(channels.agentModels, (_, agent: AgentId) =>
+    // NOTES_DESKTOP_AGENT_HOME (tests) stands in for the home folder the agents' settings are read from.
+    agentKinds.some((a) => a.id === agent) ? agentModels(agent, { home: process.env.NOTES_DESKTOP_AGENT_HOME || homedir() }) : { models: [], choosable: false },
+  );
   ipcMain.handle(channels.startTurn, ({ sender }, request: TurnStart) =>
     turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
   );

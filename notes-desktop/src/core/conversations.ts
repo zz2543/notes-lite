@@ -8,7 +8,7 @@ import type { Conversation, ConversationSummary } from "../shared/conversation";
 
 export interface ConversationStore {
   /** A new conversation, not yet kept. */
-  start(begin: { agent: AgentId; root: string; folder: string }): Conversation;
+  start(begin: { agent: AgentId; root: string; folder: string; model?: string }): Conversation;
   save(conversation: Conversation): Promise<void>;
   read(id: string): Promise<Conversation>;
   /** 对话历史: the library's kept conversations, the latest kept first. */
@@ -18,7 +18,7 @@ export interface ConversationStore {
 export function conversationStore(base: string, now: () => Date = () => new Date()): ConversationStore {
   const fileOf = (id: string) => join(base, `${id.replace(/[^\w-]/g, "")}.json`);
   return {
-    start: ({ agent, root, folder }) => ({ id: randomUUID(), agent, root, folder, created: now().toISOString(), messages: [] }),
+    start: ({ agent, root, folder, model }) => ({ id: randomUUID(), agent, root, folder, ...(model ? { model } : {}), created: now().toISOString(), messages: [] }),
     save: async (conversation) => {
       await mkdir(base, { recursive: true });
       const file = fileOf(conversation.id);

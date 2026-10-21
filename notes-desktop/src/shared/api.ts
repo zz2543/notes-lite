@@ -1,4 +1,4 @@
-import type { AgentId, Conversation, ConversationSummary, FollowedLink, Link, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+import type { AgentId, AgentModels, Conversation, ConversationSummary, FollowedLink, Link, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
 
 export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
@@ -128,6 +128,8 @@ export interface NotesApi {
   // 助手栏 (ticket 26).
   /** The command-line agents installed on this computer, looked for afresh each time. */
   detectAgents(): Promise<InstalledAgent[]>;
+  /** 模型选择: the models to offer beside the agent's name, from its own configuration on this computer. */
+  agentModels(agent: AgentId): Promise<AgentModels>;
   /** The 助手栏 opened: the open library is snapshotted in the background, ahead of the first turn (ticket 27). */
   prepareSnapshots(): void;
   /** How much disk every library's snapshots take, for 设置 › 助手. */
@@ -277,6 +279,7 @@ export const channels = {
   copySpacePrompt: "spaces:copy-prompt",
   revealSpaceSource: "spaces:reveal-source",
   detectAgents: "assistant:detect-agents",
+  agentModels: "assistant:agent-models",
   prepareSnapshots: "assistant:prepare-snapshots",
   snapshotUsage: "assistant:snapshot-usage",
   clearSnapshots: "assistant:clear-snapshots",

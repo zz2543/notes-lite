@@ -1,3 +1,4 @@
+import { agents, modelName, type AgentId } from "./agentKinds";
 import { defaultTypography, readTypography, type Typography } from "./typography";
 
 // 设置: what the user chose in the settings panel. Kept with the app (settings.json in its profile),
@@ -26,10 +27,15 @@ export interface Preferences {
   assistantReview: ReviewMode;
   /** 排版: a change may carry only the fields it changes; the rest stay. */
   typography: Typography;
+  /**
+   * 模型选择: the model last chosen beside each agent's name, for its next new conversation; an agent
+   * not here runs its own default. A change carries only the agents it changes, "" for back to 默认.
+   */
+  agentModels: Partial<Record<AgentId, string>>;
 }
 
 /** The settings that are one of a few choices. */
-type ChoiceKey = Exclude<keyof Preferences, "typography">;
+type ChoiceKey = Exclude<keyof Preferences, "typography" | "agentModels">;
 
 export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } = {
   colorScheme: ["system", "light", "dark"],
@@ -48,6 +54,7 @@ export const defaultPreferences: Preferences = {
   navigation: "double",
   assistantReview: "review",
   typography: defaultTypography,
+  agentModels: {},
 };
 
 /** Whatever was stored (or sent), as preferences: known keys with known values, the rest from `base`. */
@@ -55,6 +62,17 @@ export function readPreferences(stored: unknown, base: Preferences = defaultPref
   const raw = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
   const pick = <K extends ChoiceKey>(key: K): Preferences[K] =>
     (choices[key] as readonly unknown[]).includes(raw[key]) ? (raw[key] as Preferences[K]) : base[key];
-  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography">;
-  return { ...picked, typography: readTypography(raw.typography, base.typography) };
+  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography" | "agentModels">;
+  return { ...picked, typography: readTypography(raw.typography, base.typography), agentModels: readAgentModels(raw.agentModels, base.agentModels) };
+}
+
+function readAgentModels(stored: unknown, base: Preferences["agentModels"]): Preferences["agentModels"] {
+  const raw = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
+  const models = { ...base };
+  for (const { id } of agents) {
+    const value = raw[id];
+    if (value === "") delete models[id];
+    else if (typeof value === "string" && modelName(value)) models[id] = modelName(value);
+  }
+  return models;
 }

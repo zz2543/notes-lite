@@ -22,6 +22,8 @@ export interface TurnRequest {
   notes: string[];
   /** The agent's conversation to continue, if this is not the first turn. */
   session?: string;
+  /** The model chosen for the conversation; the agent's own when not. */
+  model?: string;
   /** The library's spaces, so a homepage it writes follows the authoring guide. */
   spaces?: TurnSpaces;
   snapshots: TurnSnapshots;
@@ -116,7 +118,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   let failed: string | undefined;
   try {
     failed = await new Promise<string | undefined>((done) => {
-      const child = start(agent.path, adapter.args(request.session), cwd, env);
+      const child = start(agent.path, adapter.args(request.session, request.model), cwd, env);
       const read = adapter.reader(cwd);
       let result: AgentEvent | undefined;
       let stderr = "";

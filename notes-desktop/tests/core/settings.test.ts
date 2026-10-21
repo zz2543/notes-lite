@@ -22,6 +22,14 @@ describe("settings store", () => {
 });
 
 describe("preferences", () => {
+  it("keep the model chosen per agent (模型选择): a change carries only the agents it changes, \"\" back to 默认", () => {
+    expect(defaultPreferences.agentModels).toEqual({});
+    const chosen = readPreferences({ agentModels: { claude: " opus ", codex: "gpt-5.2", nobody: "x", pi: 3 } });
+    expect(chosen.agentModels).toEqual({ claude: "opus", codex: "gpt-5.2" });
+    expect(readPreferences({ agentModels: { codex: "", pi: "a b" } }, chosen).agentModels).toEqual({ claude: "opus" });
+    expect(readPreferences({ agentModels: "opus" }, chosen).agentModels).toEqual({ claude: "opus", codex: "gpt-5.2" });
+  });
+
   it("read missing or unknown values as the defaults: 跟随系统, 简洁, 强, 双栏", () => {
     expect(readPreferences(undefined)).toMatchObject({ colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong", navigation: "double" });
     expect(readPreferences({ colorScheme: "sepia", accent: "purple", motion: 3, navigation: "triple", extra: true })).toEqual({

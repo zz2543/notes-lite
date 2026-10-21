@@ -1,11 +1,13 @@
-import { ClockCounterClockwise, FolderSimple, NotePencil, X } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
-import type { InstalledAgent } from "../../core";
-import { agents, type AgentId } from "../../shared/agentKinds";
+import { CaretDown, ClockCounterClockwise, FolderSimple, NotePencil, X } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import type { AgentModels, InstalledAgent } from "../../core";
+import { agents, modelName, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
 import { Composer, ConversationHistory, ConversationView, folderName, type AssistantState } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
 import { Segmented } from "./controls";
+import { ContextMenu, type Menu } from "./Organize";
+import { usePreferences } from "./preferences";
 import { figureSize, icon } from "./tokens";
 
 // 助手栏 (assistant-spec): the fourth column, docked right of the card on the window material, with its
@@ -22,6 +24,91 @@ export function AssistantToggle({ state, onOpen }: { state: FigureState; onOpen(
     <button className="assistant-toggle" onClick={onOpen} aria-label="打开助手栏" title={`助手 ${assistantShortcut}`}>
       <AssistantFigure size={figureSize.toggle} state={state} />
     </button>
+  );
+}
+
+/** The models offered for an agent, read from its own configuration when the picker shows. */
+function useAgentModels(agent: AgentId) {
+  const [models, setModels] = useState<AgentModels>();
+  useEffect(() => {
+    let live = true;
+    void window.notes.agentModels(agent).then((read) => live && setModels(read));
+    return () => void (live = false);
+  }, [agent]);
+  return models;
+}
+
+/**
+ * 模型选择 (方案 A): beside the agent's name, 默认 (the agent's own settings, named when they say) or a
+ * model from its configuration, or one typed in. "" goes back to 默认. An agent that takes its model only
+ * from its settings (DeepSeek Harness) shows which, without a choice.
+ */
+function ModelPicker({ agent, chosen, onChoose }: { agent: AgentId; chosen?: string; onChoose(model: string): void }) {
+  const models = useAgentModels(agent);
+  const button = useRef<HTMLButtonElement>(null);
+  const [menu, setMenu] = useState<Menu>();
+  const [typing, setTyping] = useState(false);
+  const [typed, setTyped] = useState("");
+  const fallback = models?.current ? `默认（${models.current}）` : "默认";
+  if (models && !models.choosable)
+    return (
+      <span className="assistant-model" title="这个 Agent 的模型在它自己的设置里更改">
+        模型：{fallback}
+      </span>
+    );
+  if (typing) {
+    const typedModel = modelName(typed);
+    return (
+      <form
+        className="assistant-model-typed"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!typedModel) return;
+          onChoose(typedModel);
+          setTyping(false);
+        }}
+      >
+        <input
+          autoFocus
+          aria-label="模型名称"
+          placeholder="模型名称"
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => event.key === "Escape" && setTyping(false)}
+          onBlur={() => setTyping(false)}
+          spellCheck={false}
+        />
+      </form>
+    );
+  }
+  const open = () => {
+    const at = button.current!.getBoundingClientRect();
+    const listed = [...new Set([...(models?.models ?? []), ...(chosen ? [chosen] : [])])];
+    setMenu({
+      x: at.left,
+      y: at.bottom + 4,
+      items: [
+        { label: fallback, checked: !chosen, run: () => onChoose("") },
+        ...listed.map((m) => ({ label: m, checked: chosen === m, run: () => onChoose(m) })),
+        "separator" as const,
+        {
+          label: "手动输入…",
+          run: () => {
+            setTyped(chosen ?? "");
+            setTyping(true);
+          },
+        },
+      ],
+    });
+  };
+  return (
+    <>
+      <button ref={button} className="assistant-model" onClick={open} aria-haspopup="menu" aria-expanded={Boolean(menu)} aria-label={`模型：${chosen ?? fallback}`} title="模型">
+        <span>模型：{chosen ?? fallback}</span>
+        <CaretDown size={icon.caret} />
+      </button>
+      {menu && <ContextMenu {...menu} onClose={() => setMenu(undefined)} />}
+    </>
   );
 }
 
@@ -79,9 +166,13 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
   const conversationAgent = conversation && agents.find((a) => a.id === conversation.agent);
   // A conversation from 对话历史 whose agent is no longer installed cannot go on.
   const agentGone = conversationAgent && installed && !installed.some((a) => a.id === conversationAgent.id);
+  // 模型选择: remembered per agent, for its next new conversation; none is the agent's own default.
+  const { preferences, change } = usePreferences();
+  const model = agent && preferences.agentModels[agent.id];
+  const chooseModel = (id: AgentId, chosen: string) => change({ agentModels: { ...preferences.agentModels, [id]: chosen } });
   const send = async (text: string, notes: string[]) => {
     if (!agent || !(await saveFirst())) return;
-    await assistant.send({ agent: agent.id, folder, text, notes, ...(space ? { space } : {}) });
+    await assistant.send({ agent: agent.id, folder, text, notes, ...(model ? { model } : {}), ...(space ? { space } : {}) });
   };
   return (
     // Always there, so its width can move; closed, it is hidden from everything once it has shut.
@@ -121,11 +212,20 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
           {/* Beside it, who answers and where they work. */}
           <div className="assistant-identity">
             {conversationAgent ? (
-              <span className="assistant-agent">{conversationAgent.name}</span>
+              <span className="assistant-agent">
+                {conversationAgent.name}
+                {/* The model it began with stays for the whole conversation. */}
+                <span className="assistant-model-fixed">{conversation.model ?? "默认模型"}</span>
+              </span>
             ) : (
               installed &&
               installed.length > 0 &&
-              agent && <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
+              agent && (
+                <>
+                  <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
+                  <ModelPicker key={agent.id} agent={agent.id} chosen={model || undefined} onChoose={(chosen) => chooseModel(agent.id, chosen)} />
+                </>
+              )
             )}
             {installed && installed.length > 0 && (
               <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${workingName}`} title="工作目录">

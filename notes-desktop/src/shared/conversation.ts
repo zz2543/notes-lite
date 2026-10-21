@@ -109,6 +109,8 @@ export interface Conversation {
   folder: string;
   /** The agent's own id for it, to continue it. */
   session?: string;
+  /** The model chosen when it began, passed on every turn; none leaves it to the agent's settings. */
+  model?: string;
   /** ISO 8601. */
   created: string;
   /** ISO 8601: when it was last kept. */

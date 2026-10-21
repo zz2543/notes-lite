@@ -157,3 +157,45 @@ test("an agent that fails shows why and the figure turns to 出错", async ({ sc
   await page.keyboard.press("ControlOrMeta+KeyJ");
   await expect(page.getByRole("button", { name: "打开助手栏" }).getByRole("img", { name: "助手形象：出错" })).toBeVisible();
 });
+
+test("模型选择: 默认 names the agent's own model; one chosen goes on the command line and stays with the conversation", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await library(scratch, "home", { ".claude/settings.json": JSON.stringify({ model: "claude-sonnet-4-5" }) });
+  const agent = await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-1", steps: [{ say: "好的。" }] });
+  const { page } = await launchWith(scratch, root);
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+
+  const picker = column(page).getByRole("button", { name: /^模型：/ });
+  await expect(picker).toHaveText("模型：默认（claude-sonnet-4-5）");
+  await picker.click();
+  await expect(page.getByRole("menuitemradio")).toHaveText(["默认（claude-sonnet-4-5）", "claude-sonnet-4-5", "opus", "sonnet", "haiku"]);
+  await page.getByRole("menuitemradio", { name: "opus" }).click();
+  await expect(picker).toHaveText("模型：opus");
+
+  await input(page).fill("你好");
+  await input(page).press("Enter");
+  await expect(column(page).getByRole("log", { name: "对话" })).toContainText("好的。");
+  const [run] = await agent.runs();
+  expect(run!.argv.slice(run!.argv.indexOf("--model"), run!.argv.indexOf("--model") + 2)).toEqual(["--model", "opus"]);
+  // While the conversation lasts its model shows beside the agent's name, not to be changed.
+  await expect(column(page).locator(".assistant-agent")).toHaveText("Claude Codeopus");
+  await expect(picker).toHaveCount(0);
+
+  // A new conversation remembers the choice; a model not listed is typed.
+  await column(page).getByRole("button", { name: "新对话" }).click();
+  await expect(picker).toHaveText("模型：opus");
+  await picker.click();
+  await page.getByRole("menuitem", { name: "手动输入…" }).click();
+  const typed = column(page).getByRole("textbox", { name: "模型名称" });
+  await expect(typed).toHaveValue("opus");
+  await typed.fill("claude-opus-4-1");
+  await typed.press("Enter");
+  await expect(picker).toHaveText("模型：claude-opus-4-1");
+  // 默认 again passes none.
+  await picker.click();
+  await page.getByRole("menuitemradio", { name: "默认（claude-sonnet-4-5）" }).click();
+  await input(page).fill("再来");
+  await input(page).press("Enter");
+  await expect.poll(async () => (await agent.runs()).length).toBe(2);
+  expect((await agent.runs())[1]!.argv).not.toContain("--model");
+});

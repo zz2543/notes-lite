@@ -15,11 +15,26 @@ const read = (id: AgentId, cwd: string, lines: string[]): AgentEvent[] => {
 };
 const replyOf = (events: AgentEvent[]) => events.map((e) => (e.kind === "text" ? e.text : "")).join("");
 
+describe("Claude Code", () => {
+  it("passes a chosen model with --model (模型选择), and none to leave it to its settings", () => {
+    const claude = agentAdapter("claude");
+    expect(claude.args()).not.toContain("--model");
+    expect(claude.args("c-1", "opus")).toEqual(expect.arrayContaining(["--model", "opus", "--resume", "c-1"]));
+    expect(claude.args("c-1", "opus").indexOf("opus")).toBe(claude.args("c-1", "opus").indexOf("--model") + 1);
+  });
+});
+
 describe("Codex", () => {
   it("runs codex exec with JSON events, no sandbox and no approvals, the prompt on stdin", () => {
     const codex = agentAdapter("codex");
     expect(codex.args()).toEqual(["exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-"]);
     expect(codex.args("t-1")).toEqual(["exec", "resume", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "t-1", "-"]);
+  });
+
+  it("passes a chosen model with -m, before the thread it resumes (模型选择)", () => {
+    const codex = agentAdapter("codex");
+    expect(codex.args(undefined, "gpt-5.2")).toEqual(["exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.2", "-"]);
+    expect(codex.args("t-1", "gpt-5.2")).toEqual(["exec", "resume", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.2", "t-1", "-"]);
   });
 
   it("reads the thread, its commands and file changes, the reply and the end", () => {
@@ -66,6 +81,7 @@ describe("Pi", () => {
     const pi = agentAdapter("pi");
     expect(pi.args()).toEqual(["--mode", "json"]);
     expect(pi.args("p-1")).toEqual(["--mode", "json", "--session", "p-1"]);
+    expect(pi.args("p-1", "anthropic/claude-sonnet-4-5")).toEqual(["--mode", "json", "--model", "anthropic/claude-sonnet-4-5", "--session", "p-1"]);
   });
 
   it("reads the session, the streamed reply, the tools and the end", () => {
@@ -93,6 +109,8 @@ describe("DeepSeek Harness", () => {
     const dsh = agentAdapter("dsh");
     expect(dsh.args()).toEqual(["--profile", "headless", "--json", "-"]);
     expect(dsh.args("session-1")).toEqual(["--profile", "headless", "--json", "--session-id", "session-1", "-"]);
+    // Its model comes from its settings alone: a chosen one is not passed.
+    expect(dsh.args(undefined, "deepseek-v4-pro")).toEqual(["--profile", "headless", "--json", "-"]);
     expect(dsh.env).toEqual({ DSH_PERMISSION_MODE: "danger-full-access" });
   });
 

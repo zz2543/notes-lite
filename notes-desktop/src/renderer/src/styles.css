@@ -852,6 +852,28 @@ nav.rail .drag {
   font-size: var(--text-path);
   font-weight: var(--weight-item);
 }
+.assistant-model-fixed {
+  margin-inline-start: var(--inline-gap);
+  font-weight: normal;
+  color: var(--side-muted);
+}
+.assistant-model-typed input {
+  width: 100%;
+  height: var(--icon-button-small);
+  padding: 0 var(--row-padding);
+  border: 1px solid var(--accent);
+  border-radius: var(--icon-button-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-path);
+  outline: none;
+}
+.assistant-model-typed {
+  align-self: stretch;
+}
+/* 模型选择: beside the agent's name, like the working directory under it. */
+.assistant-model,
 .assistant-folder {
   display: inline-flex;
   align-items: center;
@@ -865,11 +887,13 @@ nav.rail .drag {
   font-size: var(--text-path);
   color: var(--side-muted);
 }
+.assistant-model span,
 .assistant-folder span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+button.assistant-model:hover,
 .assistant-folder:hover {
   background: var(--hover);
   color: var(--side-fg);

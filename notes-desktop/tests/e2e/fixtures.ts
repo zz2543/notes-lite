@@ -33,13 +33,14 @@ export async function library(scratch: string, name: string, files: Record<strin
 
 /**
  * Launches the built app with its settings kept in the scratch folder. The command-line agents it finds
- * are those in `scratch/agents` (none unless a test installs one), never the ones on this computer.
+ * are those in `scratch/agents` (none unless a test installs one), never the ones on this computer, and
+ * their settings are read from `scratch/home`.
  */
 export async function launch(scratch: string, env: Record<string, string> = {}): Promise<{ app: ElectronApplication; page: Page }> {
   // A window the runner covers or leaves in the background still draws every frame, so motion can be filmed.
   const app = await electron.launch({
     args: [appDir, "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows"],
-    env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile"), NOTES_DESKTOP_AGENT_PATH: join(scratch, "agents"), ...env },
+    env: { ...process.env, NOTES_DESKTOP_USER_DATA: join(scratch, "profile"), NOTES_DESKTOP_AGENT_PATH: join(scratch, "agents"), NOTES_DESKTOP_AGENT_HOME: join(scratch, "home"), ...env },
   });
   running.add(app);
   app.on("close", () => running.delete(app));
