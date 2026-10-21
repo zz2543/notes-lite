@@ -304,3 +304,18 @@ test("stepping out of a numbered list leaves later numbers alone, and code is le
   await expect.poll(saved(2)).toBe("```\n- 项目\n- \n\n```");
   await app.close();
 });
+
+test("clicking a task box ticks and clears it without showing the line's source", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- [ ] 买伞\n- [ ] 带相机\n\n正文"]);
+  await open(1);
+  const box = page.locator(".cm-md-marker-task").first();
+  await box.click();
+  await expect.poll(saved(1)).toBe("- [x] 买伞\n- [ ] 带相机\n\n正文");
+  // Still drawn as a ticked box, not as "- [x]".
+  await expect(box).toHaveClass(/cm-md-done/);
+  await expect(editor(page).getByText("[x]")).toHaveCount(0);
+  await box.click();
+  await expect.poll(saved(1)).toBe("- [ ] 买伞\n- [ ] 带相机\n\n正文");
+  await expect(box).not.toHaveClass(/cm-md-done/);
+  await app.close();
+});

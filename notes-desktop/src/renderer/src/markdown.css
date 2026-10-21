@@ -30,6 +30,9 @@
     transform: scale(1.4);
   }
   /* A task's box; ticked, it fills and the item's text recedes. */
+  & .cm-md-marker-task {
+    cursor: default;
+  }
   & .cm-md-marker-task::before {
     content: "";
     align-self: center;

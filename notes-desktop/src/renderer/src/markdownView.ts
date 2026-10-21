@@ -65,13 +65,28 @@ class ListMarker extends WidgetType {
     else marker.append(Object.assign(document.createElement("span"), { className: "cm-md-glyph", textContent: this.label }));
     return marker;
   }
-  // A click on the marker places the caret like a click on text.
+  // A click on a bullet or number places the caret like a click on text; a task box is ticked by `taskToggle`.
   ignoreEvent() {
     return false;
   }
 }
 
 const isTaskDone = (text: string) => /^[ \t]*[-*+] \[[xX]\] /.test(text);
+
+/** A click on a task box ticks or clears it, leaving the caret and the box as they were. */
+const taskToggle = EditorView.domEventHandlers({
+  mousedown(event, view) {
+    const box = event.button === 0 && event.target instanceof Element ? event.target.closest(".cm-md-marker-task") : null;
+    if (!box) return false;
+    const line = view.state.doc.lineAt(view.posAtDOM(box));
+    const match = /^[ \t]*[-*+] \[([ xX])\]/.exec(line.text);
+    if (!match) return false;
+    const at = line.from + match[0].length - 2;
+    event.preventDefault();
+    view.dispatch({ changes: { from: at, to: at + 1, insert: match[1] === " " ? "x" : " " }, userEvent: "input.toggle" });
+    return true;
+  },
+});
 
 /** Bullets by nesting level, as in the old editor: filled, hollow, square. */
 const bullets = ["•", "◦", "▪"];
@@ -230,6 +245,7 @@ const typesetter = ViewPlugin.fromClass(
 export const typesetView: Extension = [
   literal,
   typesetter,
+  taskToggle,
   renderedView(literal),
   Prec.high(keymap.of([
     { key: "ArrowUp", run: stepOntoListGap(false) },
