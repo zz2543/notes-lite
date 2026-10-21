@@ -191,6 +191,16 @@ describe.each(others)("一轮，用 $id", ({ id, write, fullPermission, resume }
   });
 });
 
+describe("DeepSeek Harness too old for the app", () => {
+  it("says to update it, with the command, instead of its own error", async () => {
+    const lib = await setup({ "随记.md": "随记\n" }, { tooOld: true, steps: [] }, "dsh");
+    const outcome = await lib.turn({ folder: "", text: "你好" });
+    expect(outcome.failed).toBe(
+      "DeepSeek Harness 版本太旧，用不了助手。请在终端运行 npm install -g @deepseek-ai/dsh@latest 升级，然后再试。",
+    );
+  });
+});
+
 // 空间主页 (assistant-spec 20): whatever the user asks, the agent knows where the library's spaces are and
 // that the authoring guide comes first when it writes one — the space open now named.
 describe("空间主页的编写说明", () => {

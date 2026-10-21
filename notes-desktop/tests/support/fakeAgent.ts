@@ -16,6 +16,8 @@ export interface FakeScript {
   session?: string;
   /** DeepSeek Harness only: the session asked for with --session-id is not there. */
   unknownSession?: boolean;
+  /** DeepSeek Harness only: answer as one too old for JSON events (before 0.1.7) does. */
+  tooOld?: boolean;
   steps: FakeStep[];
 }
 

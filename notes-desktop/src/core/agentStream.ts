@@ -13,6 +13,8 @@ export interface AgentAdapter {
   env?: Record<string, string>;
   /** Reads its output a line at a time. */
   reader(cwd: string): (line: string) => AgentEvent[];
+  /** What to tell the user when it exits in error with this on stderr, if it means more than it says. */
+  explainExit?(stderr: string): string | undefined;
 }
 
 /** One line of JSON output; anything else on stdout (a warning, say) is not the agent's. */
@@ -295,6 +297,9 @@ export const pi: AgentAdapter = {
   },
 };
 
+/** DeepSeek Harness before 0.1.7 has no `--json` (nor `--session-id`), and says so in its own words. */
+const dshTooOld = "DeepSeek Harness 版本太旧，用不了助手。请在终端运行 npm install -g @deepseek-ai/dsh@latest 升级，然后再试。";
+
 interface DshLine {
   type?: string;
   sessionId?: string;
@@ -316,6 +321,7 @@ interface DshLine {
 export const deepseekHarness: AgentAdapter = {
   args: (session) => ["--profile", "headless", "--json", ...(session ? ["--session-id", session] : []), "-"],
   env: { DSH_PERMISSION_MODE: "danger-full-access" },
+  explainExit: (stderr) => (/unknown option '--(json|session-id)'/.test(stderr) ? dshTooOld : undefined),
   reader: (cwd) => {
     const paragraph = paragraphs();
     let ended = false;

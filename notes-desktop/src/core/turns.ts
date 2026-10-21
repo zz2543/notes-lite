@@ -152,7 +152,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
         if (pending) pass(pending);
         if (request.signal?.aborted) return done(stoppedTurn);
         if (result?.kind === "result" && result.failed) return done(result.failed);
-        if (code !== 0) return done(stderr.trim() || `Agent 异常退出（代码 ${code}）。`);
+        if (code !== 0) return done(adapter.explainExit?.(stderr) ?? (stderr.trim() || `Agent 异常退出（代码 ${code}）。`));
         done(undefined);
       });
       child.stdin.on("error", () => {});

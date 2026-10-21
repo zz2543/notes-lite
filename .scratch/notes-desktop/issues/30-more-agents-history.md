@@ -44,3 +44,7 @@
 
 真机验证（接真实模型服务运行 Codex、DeepSeek Harness、Pi 各一轮并续对话）按用户要求留待人工验收。
 
+
+### 2026-10-21 补充（Notion AI）：DeepSeek Harness 版本太旧时的提示
+
+用户真机验收：Codex、Pi 可用；DeepSeek Harness 报 `error: unknown option '--json'`。原因是用户装的 dsh 太旧：0.1.5 及更早的 headless 档案没有 `--json`/`--session-id`（已装 0.1.5-rc.1 复现，退出码 1；0.1.7 起才有）。现在遇到这条报错时，改为提示“DeepSeek Harness 版本太旧，用不了助手。请在终端运行 npm install -g @deepseek-ai/dsh@latest 升级，然后再试。”（适配层 `explainExit`）。测试：`agentStream.test.ts` 1 项、`turns.test.ts` 1 项（假 dsh 的 `tooOld` 脚本按 0.1.5 的报错与退出码作答）。

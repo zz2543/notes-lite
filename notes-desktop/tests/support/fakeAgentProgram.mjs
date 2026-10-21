@@ -16,6 +16,7 @@
 //                                                      file exists
 //   { "waitFor": "/abs/file" }                         holds until that file exists (so a test can look mid-turn)
 //   { "fail": "message" }                              fails as that agent does
+// For "dsh", `"tooOld": true` in the script answers as a DeepSeek Harness too old for JSON events does.
 // When FAKE_AGENT_SCRIPT names a JSON array, each run takes the next script (by how many runs the log holds).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -173,6 +174,11 @@ const dialects = {
     let last = "";
     return {
       open: () => {
+        // DeepSeek Harness before 0.1.7 has no JSON events: it stops at the flag, as 0.1.5 does.
+        if (script.tooOld) {
+          process.stderr.write("error: unknown option '--json'\n");
+          process.exit(1);
+        }
         if (after("--session-id") && script.unknownSession) {
           line({ type: "error", message: `session "${session}" does not exist; omit --session-id to start a new Session` });
           process.exit(1);

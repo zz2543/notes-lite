@@ -106,6 +106,13 @@ describe("DeepSeek Harness", () => {
     expect(events.at(-1)).toEqual({ kind: "result" });
   });
 
+  it("too old for JSON events (before 0.1.7), it is to be updated, the command given", () => {
+    const update = /版本太旧.*npm install -g @deepseek-ai\/dsh@latest/;
+    expect(agentAdapter("dsh").explainExit!("error: unknown option '--json'\n")).toMatch(update);
+    expect(agentAdapter("dsh").explainExit!("error: unknown option '--session-id'\n")).toMatch(update);
+    expect(agentAdapter("dsh").explainExit!("dsh: model service unreachable\n")).toBeUndefined();
+  });
+
   it("a turn that ended in error says why; an error outside a turn too", () => {
     expect(read("dsh", "/tmp/ds1", fixture("dsh-failed.jsonl")).at(-1)).toEqual({ kind: "result", failed: "Invalid API key" });
     const unknown = JSON.stringify({ type: "error", message: 'session "s-x" does not exist; omit --session-id to start a new Session' });
