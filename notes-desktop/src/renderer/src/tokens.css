@@ -84,7 +84,7 @@
   --space-problem: var(--accent-orange);
   --titlebar-height: 52px;
   /* macOS: room in the side panel's title bar row for the window's three buttons (placed at 18, 18). */
-  --traffic-lights-inset: 72px;
+  --traffic-lights-inset: 84px;
   --row-height: 32px;
   --row-padding: 10px;
   --row-radius: 9px;

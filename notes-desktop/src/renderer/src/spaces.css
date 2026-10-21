@@ -4,7 +4,7 @@
 /* “资料库 | 空间”: the side shown named beside a knob; on 空间 the two change ends, the knob sliding (滑移). */
 .side-switch {
   flex: none;
-  align-self: flex-start;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: var(--inline-gap);
