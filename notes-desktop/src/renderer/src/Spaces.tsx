@@ -1,6 +1,7 @@
 import { Books, DotsThree, Plus, SquaresFour } from "@phosphor-icons/react";
 import { AnimatePresence, motion, Reorder } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { SpaceDraft, SpaceScope } from "../../core";
 import type { SpaceInfo } from "../../shared/api";
 import { scopeLabel } from "../../shared/spaceScope";
@@ -101,6 +102,8 @@ function useSpaceList(): [SpaceInfo[] | undefined, (spaces: SpaceInfo[]) => void
 }
 
 interface SpacePanelProps {
+  /** The place in the title bar's row for 更多新建方式 and 新建空间. */
+  tools: HTMLElement | null;
   libraryName: string;
   /** The space last clicked, if any. */
   selected: string | null;
@@ -110,7 +113,7 @@ interface SpacePanelProps {
   onGenerate(name: string): void;
 }
 
-export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate }: SpacePanelProps) {
+export function SpacePanel({ tools, libraryName, selected, onSelect, notify, onGenerate }: SpacePanelProps) {
   const [spaces, setSpaces, reload] = useSpaceList();
   const [menu, setMenu] = useState<Menu>();
   const [dialog, setDialog] = useState<ReactNode>();
@@ -216,17 +219,18 @@ export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate
 
   return (
     <>
-      <div className="side-label">
-        <span className="label">空间</span>
-        <div className="side-label-tools">
-          <button className="icon-button small" onClick={openNewMenu} aria-label="更多新建方式" title="更多新建方式">
-            <DotsThree size={icon.small} weight="bold" />
-          </button>
-          <button className="icon-button small" onClick={create} aria-label="新建空间" title="新建空间">
-            <Plus size={icon.small} />
-          </button>
-        </div>
-      </div>
+      {tools &&
+        createPortal(
+          <>
+            <button className="icon-button small" onClick={openNewMenu} aria-label="更多新建方式" title="更多新建方式">
+              <DotsThree size={icon.small} weight="bold" />
+            </button>
+            <button className="icon-button small" onClick={create} aria-label="新建空间" title="新建空间">
+              <Plus size={icon.small} />
+            </button>
+          </>,
+          tools,
+        )}
       <div className="space-scroll">
         {spaces && spaces.length > 0 && (
           <Reorder.Group

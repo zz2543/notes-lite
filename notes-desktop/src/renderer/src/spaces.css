@@ -9,7 +9,7 @@
   align-items: center;
   gap: var(--inline-gap);
   height: calc(var(--segmented-height) + 2 * var(--segmented-padding));
-  margin: 0 2px var(--card-gap);
+  margin: 0;
   padding: var(--segmented-padding);
   padding-inline-start: var(--row-padding);
   border-radius: var(--segmented-radius);
@@ -53,10 +53,23 @@
   flex-direction: column;
 }
 
-/* 更多新建方式 and 新建空间, side by side at the label's end. */
-.side-label-tools {
+/* The title bar's row of the side panel: “资料库 | 空间” level with the window's buttons (on macOS after
+   them), the search or 更多新建方式 / 新建空间 at its end. */
+.side-top {
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  padding-inline-start: 2px;
+}
+:root.mac .side-top {
+  padding-inline-start: var(--traffic-lights-inset);
+}
+.side-top-tools,
+.side-top-slot {
+  margin-inline-start: auto;
   display: flex;
   gap: 2px;
+  -webkit-app-region: no-drag;
 }
 
 .space-scroll {

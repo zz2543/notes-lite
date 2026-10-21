@@ -339,6 +339,8 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
 
   // 就地搜索 takes the place of whatever browses the library: the list's header and rows in 双栏导航,
   // the side panel's label and tree in 单栏导航.
+  // Where the space list puts 更多新建方式 and 新建空间: the title bar's row.
+  const [sideTools, setSideTools] = useState<HTMLSpanElement | null>(null);
   const searchHead = search && (
     <SearchHead
       state={search}
@@ -386,22 +388,23 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         </nav>
       ) : (
         <aside className={`side ${single ? "single" : ""}`} onKeyDown={single ? closeOnEscape : undefined}>
-          <div className="drag" />
-          <SideSwitch mode={sideMode} onChange={setSideMode} />
+          {/* The title bar's row: “资料库 | 空间” level with the window's buttons, the side's tools at its end. */}
+          <div className="drag side-top">
+            <SideSwitch mode={sideMode} onChange={setSideMode} />
+            <div className="side-top-tools">
+              {/* In 双栏导航 the search is the bar atop the list instead. */}
+              {single && sideMode === "library" && (
+                <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+                  <MagnifyingGlass size={icon.small} />
+                </button>
+              )}
+              <span className="side-top-slot" ref={setSideTools} />
+            </div>
+          </div>
           <SidePages mode={sideMode}>
             {sideMode === "library" ? (
               <>
-                {(single && searchHead) || (
-                  <div className="side-label">
-                    <span className="label">{single ? "笔记" : "文件夹"}</span>
-                    {/* In 双栏导航 the search is the bar atop the list instead. */}
-                    {single && (
-                      <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
-                        <MagnifyingGlass size={icon.small} />
-                      </button>
-                    )}
-                  </div>
-                )}
+                {single && searchHead}
                 {(single && searchResults) || (
                   <FolderTree
                     libraryName={library.name}
@@ -431,7 +434,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
               </>
             ) : (
               <>
-                <SpacePanel libraryName={library.name} selected={space} onSelect={selectSpace} notify={notify} onGenerate={(name) => void generateHomepage(name)} />
+                <SpacePanel tools={sideTools} libraryName={library.name} selected={space} onSelect={selectSpace} notify={notify} onGenerate={(name) => void generateHomepage(name)} />
                 {single && inSpace && (
                   <div className="space-files">
                     <SpaceContents
