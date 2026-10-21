@@ -17,9 +17,10 @@ import { serialized } from "./serialized";
 const retention = 30 * 86_400_000;
 
 import type { TurnChange } from "../shared/conversation";
-import { lineDiff, textLines } from "./lineDiff";
+import { lineDiff, textLines, type DiffLine } from "./lineDiff";
 
 export type { ChangeKind, TurnChange } from "../shared/conversation";
+export type { DiffLine } from "./lineDiff";
 
 export class SnapshotError extends Error {
   constructor(
@@ -86,6 +87,8 @@ export interface TurnSnapshots {
   revert(id: string, path?: string): Promise<Turn>;
   /** A finished turn and what it changed. */
   turn(id: string): Promise<Turn>;
+  /** What the turn did to one of the files it changed, line by line; null for an attachment. */
+  diff(id: string, path: string): Promise<DiffLine[] | null>;
   /** How much disk the snapshots take. */
   usage(): Promise<SnapshotUsage>;
   /** Lets turns begun more than 30 days ago go, with whatever only they kept. Each turn's start does this too. */
@@ -381,6 +384,13 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     return { id, date: found.date, changes: found.changes };
   };
 
+  const diff = async (id: string, path: string): Promise<DiffLine[] | null> => {
+    const { turn: found, before, after } = await loadTurn(id);
+    if (!found.changes.some((change) => change.path === path)) throw new SnapshotError("not-found", `这一轮没有改动 ${path}。`);
+    if (!isText(path)) return null;
+    return lineDiff(await linesOf(before.files[path]), await linesOf(after.files[path]));
+  };
+
   /** Drops expired turns, every snapshot but the newest that no turn left needs, and what nothing refers to any more. */
   const expire = async () => {
     const cutoff = now().getTime() - retention;
@@ -430,6 +440,7 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
     appWrote,
     revert: queued(revert),
     turn: queued(turn),
+    diff: queued(diff),
     usage: queued(usage),
     clean: queued(expire),
     clear: queued(clear),
