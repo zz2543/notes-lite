@@ -111,10 +111,16 @@ function TypesetPreview() {
   const host = useRef<HTMLDivElement>(null);
   // 设置 is a window of its own: the open note is asked of the main one.
   const [doc, setDoc] = useState<string>();
+  // Asked again whenever 设置 comes to the front, as another note may have been opened meanwhile.
   useEffect(() => {
     let live = true;
-    void window.notes.openNoteText().then((text) => live && setDoc(text ?? sample));
-    return () => void (live = false);
+    const ask = () => void window.notes.openNoteText().then((text) => live && setDoc(text ?? sample));
+    ask();
+    window.addEventListener("focus", ask);
+    return () => {
+      live = false;
+      window.removeEventListener("focus", ask);
+    };
   }, []);
   useEffect(() => {
     if (doc === undefined) return;

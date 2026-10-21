@@ -63,6 +63,11 @@ describe("模型选择", () => {
     expect(await agentModels("dsh", { home: inline, env: {} })).toMatchObject({ current: "deepseek-v4-pro" });
   });
 
+  it("offers only models that can go on the command line as they are", async () => {
+    const at = await home({ ".pi/agent/settings.json": JSON.stringify({ defaultModel: "qwen3", enabledModels: ["has space", "--flag", "gpt-5.2"] }) });
+    expect(await agentModels("pi", { home: at, env: {} })).toMatchObject({ models: ["qwen3", "gpt-5.2"] });
+  });
+
   it("reads broken settings as none", async () => {
     const at = await home({ ".claude/settings.json": "{ not json", ".pi/agent/settings.json": "[]" });
     expect(await agentModels("claude", { home: at, env: {} })).toEqual({ models: ["opus", "sonnet", "haiku"], choosable: true });
@@ -75,5 +80,9 @@ describe("模型选择", () => {
     expect(modelName("")).toBeUndefined();
     expect(modelName("two words")).toBeUndefined();
     expect(modelName("x;rm")).toBeUndefined();
+    // Never read as an option, nor anything but text.
+    expect(modelName("--resume")).toBeUndefined();
+    expect(modelName("-x")).toBeUndefined();
+    expect(modelName(42)).toBeUndefined();
   });
 });

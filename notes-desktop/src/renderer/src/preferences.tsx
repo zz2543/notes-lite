@@ -26,7 +26,8 @@ export function PreferencesProvider({ children }: { children(preferences: Prefer
   useEffect(() => window.notes.onPreferencesChanged(setPreferences), []);
   const change = (change: Partial<Preferences>) => {
     setPreferences((now) => ({ ...now, ...change }));
-    void window.notes.setPreferences(change);
+    // What the main process kept, other windows' changes included: the other window is not told of this one.
+    void window.notes.setPreferences(change).then(setPreferences);
   };
   return <Context.Provider value={{ preferences, change }}>{children(preferences)}</Context.Provider>;
 }

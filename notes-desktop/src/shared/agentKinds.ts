@@ -17,8 +17,12 @@ export const agents: readonly AgentKind[] = [
   { id: "pi", name: "Pi", command: "pi" },
 ];
 
-/** A model name as typed: trimmed, and only if it can go on a command line as one word. */
-export function modelName(typed: string): string | undefined {
+/** A model name as typed: trimmed, and only if it can go on a command line as one word, never read as an option. */
+export function modelName(typed: unknown): string | undefined {
+  if (typeof typed !== "string") return undefined;
   const name = typed.trim();
-  return /^[\w.:/@[\]-]{1,120}$/.test(name) ? name : undefined;
+  return /^[\w.:/@[\]][\w.:/@[\]-]{0,119}$/.test(name) ? name : undefined;
 }
+
+/** Whether a turn can be given its model; DeepSeek Harness takes it only from its own settings. */
+export const modelChoosable = (agent: AgentId) => agent !== "dsh";

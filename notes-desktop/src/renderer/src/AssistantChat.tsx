@@ -55,7 +55,10 @@ export function useAssistant() {
   const send = async ({ fresh, ...start }: { agent: AgentId; folder: string; model?: string; text: string; notes: string[]; space?: string; fresh?: boolean }) => {
     setProblem(undefined);
     const started = await window.notes.startTurn({ conversation: fresh ? null : (conversation?.id ?? null), ...start });
-    if (!started.ok) return setProblem(started.message);
+    if (!started.ok) {
+      setProblem(started.message);
+      return false;
+    }
     const id = started.conversation.id;
     current.current = id;
     setConversation(started.conversation);
@@ -63,6 +66,7 @@ export function useAssistant() {
     const waiting = early.current.filter(([to]) => to === id);
     early.current = [];
     for (const [, event] of waiting) apply(event);
+    return true;
   };
   /** Shows a kept conversation (对话历史), to read and continue. */
   const open = async (id: string) => {

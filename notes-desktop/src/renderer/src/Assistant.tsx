@@ -50,7 +50,9 @@ function ModelPicker({ agent, chosen, onChoose }: { agent: AgentId; chosen?: str
   const [typing, setTyping] = useState(false);
   const [typed, setTyped] = useState("");
   const fallback = models?.current ? `默认（${models.current}）` : "默认";
-  if (models && !models.choosable)
+  // Nothing to choose from until its settings are read.
+  if (!models) return <span className="assistant-model">模型：默认</span>;
+  if (!models.choosable)
     return (
       <span className="assistant-model" title="这个 Agent 的模型在它自己的设置里更改">
         模型：{fallback}
@@ -74,7 +76,14 @@ function ModelPicker({ agent, chosen, onChoose }: { agent: AgentId; chosen?: str
           placeholder="模型名称"
           value={typed}
           onChange={(event) => setTyped(event.target.value)}
-          onKeyDown={(event) => event.key === "Escape" && setTyping(false)}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+            // Esc puts the field away, and goes no further (专注模式 keeps).
+            event.preventDefault();
+            event.stopPropagation();
+            setTyping(false);
+          }}
+          aria-invalid={typed.trim() !== "" && !typedModel}
           onBlur={() => setTyping(false)}
           spellCheck={false}
         />
@@ -132,6 +141,9 @@ function useInstalledAgents(open: boolean) {
   return { installed, detect };
 }
 
+/** What became of a request from elsewhere: begun, no agent here, the last turn still going, or not begun. */
+export type RequestOutcome = "sent" | "no-agent" | "busy" | "failed";
+
 export interface AssistantColumnProps {
   open: boolean;
   onClose(): void;
@@ -150,7 +162,7 @@ export interface AssistantColumnProps {
   /** Asked of 助手 from elsewhere in the app (a space's homepage to write): a new conversation, sent at once. */
   request: AssistantRequest | null;
   /** The request was sent, or could not be: no agent is installed, or a turn is still running. */
-  onRequestTaken(request: AssistantRequest, sent: "sent" | "no-agent" | "busy"): void;
+  onRequestTaken(request: AssistantRequest, sent: RequestOutcome): void;
 }
 
 export interface AssistantRequest {
@@ -189,13 +201,22 @@ export function AssistantColumn(props: AssistantColumnProps) {
   };
   // A request from elsewhere: once the agents are known, a new conversation in the library itself, with
   // the agent and model the switch shows.
+  // Taken once: it is answered only after the turn has started (or not), and the effect may run again meanwhile.
+  const taken = useRef<AssistantRequest | null>(null);
   useEffect(() => {
-    if (!open || !request || !installed) return;
+    if (!open || !request || !installed || taken.current === request) return;
+    taken.current = request;
     if (!agent) return onRequestTaken(request, "no-agent");
     if (assistant.running) return onRequestTaken(request, "busy");
-    onRequestTaken(request, "sent");
     setHistory(false);
-    void assistant.send({ fresh: true, agent: agent.id, folder: "", text: request.text, notes: [], ...(model ? { model } : {}), ...(request.space ? { space: request.space } : {}) });
+    void (async () => {
+      // The agent reads the library from the disk: the open note is saved first.
+      const started =
+        (await saveFirst()) &&
+        (await assistant.send({ fresh: true, agent: agent.id, folder: "", text: request.text, notes: [], ...(model ? { model } : {}), ...(request.space ? { space: request.space } : {}) }));
+      onRequestTaken(request, started ? "sent" : "failed");
+    })();
+    // Run as the request comes, the column opens or the agents are known; what else it reads is that moment's.
   }, [open, request, installed]);
   return (
     // Always there, so its width can move; closed, it is hidden from everything once it has shut.

@@ -101,6 +101,18 @@ describe("对话历史", () => {
     // One that cannot go on a command line as a single word is not passed.
     const odd = await lib.turn({ text: "怪名字", model: "--dangerous thing" });
     expect((await lib.conversations.read(odd)).model).toBeUndefined();
+    // Nor one read as an option.
+    const option = await lib.turn({ text: "选项", model: "--resume" });
+    expect((await lib.conversations.read(option)).model).toBeUndefined();
+    expect((await lib.claude.runs()).at(-1)!.argv).not.toContain("--resume");
+  });
+
+  it("keeps no model for DeepSeek Harness, which takes it only from its own settings (模型选择)", async () => {
+    const lib = await setup();
+    const dsh = await installFakeAgent(join(lib.data, "agents"), "dsh", { session: "d-1", steps: [{ say: "好。" }] });
+    const id = await lib.turn({ text: "你好", agent: "dsh", model: "deepseek-v4-pro" });
+    expect((await lib.conversations.read(id)).model).toBeUndefined();
+    expect((await dsh.runs()).at(-1)!.argv).not.toContain("deepseek-v4-pro");
   });
 
   it("opens nothing from another library or that is not there", async () => {

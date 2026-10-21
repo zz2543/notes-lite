@@ -536,10 +536,13 @@ function registerIpc() {
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
   ipcMain.handle(channels.detectAgents, async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }));
-  ipcMain.handle(channels.agentModels, (_, agent: AgentId) =>
-    // NOTES_DESKTOP_AGENT_HOME (tests) stands in for the home folder the agents' settings are read from.
-    agentKinds.some((a) => a.id === agent) ? agentModels(agent, { home: process.env.NOTES_DESKTOP_AGENT_HOME || homedir() }) : { models: [], choosable: false },
-  );
+  ipcMain.handle(channels.agentModels, (_, agent: AgentId) => {
+    if (!agentKinds.some((a) => a.id === agent)) return { models: [], choosable: false };
+    // NOTES_DESKTOP_AGENT_HOME (tests) stands in for the home folder the agents' settings are read from,
+    // and for their environment too, so none of this machine's settings come through.
+    const testHome = process.env.NOTES_DESKTOP_AGENT_HOME;
+    return agentModels(agent, testHome ? { home: testHome, env: {} } : { home: homedir() });
+  });
   ipcMain.handle(channels.startTurn, ({ sender }, request: TurnStart) =>
     turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
   );
@@ -552,15 +555,15 @@ function registerIpc() {
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
   ipcMain.handle(channels.setPreferences, ({ sender }, change: unknown) => changePreferences(change, sender));
-  ipcMain.on(channels.openSettings, () => openSettings());
+  ipcMain.on(channels.openSettings, ({ sender }) => sender === window?.webContents && openSettings());
   // 排版's preview in 设置 shows the note open in the main window, asked of that page (a second at most).
   let noteTextAsks = 0;
   ipcMain.handle(
     channels.openNoteText,
-    () =>
+    ({ sender }) =>
       new Promise<string | null>((resolve) => {
         const main = window;
-        if (!main || main.isDestroyed()) return resolve(null);
+        if (!main || main.isDestroyed() || sender !== settingsWindow?.webContents) return resolve(null);
         const id = ++noteTextAsks;
         const done = (text: string | null) => {
           clearTimeout(timer);
@@ -605,6 +608,8 @@ async function finishClose(id: number | null, check: CloseCheck) {
   // Input the user chose to drop goes with a window that really closes.
   if (mac && !quitting && check.saved) {
     win.hide();
+    // 设置 goes with it, as it does when the window really closes.
+    settingsWindow?.close();
     return;
   }
   closeAllowed = true;

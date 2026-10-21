@@ -25,6 +25,9 @@
 .settings-page-drag {
   position: sticky;
   top: 0;
+  z-index: 1;
+  /* The page scrolls under it, not through it. */
+  background: var(--list-bg);
   margin: 0 calc(-1.5 * var(--settings-padding));
 }
 .settings-nav h2 {

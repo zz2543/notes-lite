@@ -2,7 +2,7 @@ import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass, Sideba
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
-import { AssistantColumn, AssistantToggle, isAssistantShortcut, type AssistantRequest } from "./Assistant";
+import { AssistantColumn, AssistantToggle, isAssistantShortcut, type AssistantRequest, type RequestOutcome } from "./Assistant";
 import { useAssistant } from "./AssistantChat";
 import { FocusToggle, useFocusMode } from "./FocusMode";
 import { FolderContentsList } from "./FolderContentsList";
@@ -227,13 +227,14 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     setAssistantOpen(true);
     setAssistantRequest({ id: Date.now(), text: prompt.value, space: name });
   };
-  const requestTaken = async (request: AssistantRequest, sent: "sent" | "no-agent" | "busy") => {
+  const requestTaken = async (request: AssistantRequest, sent: RequestOutcome) => {
     setAssistantRequest(null);
     if (sent === "busy") return notify("助手还在进行上一轮，结束后再让它生成主页。");
-    if (sent === "no-agent" && request.space) {
-      // Without an agent here, the prompt is copied for one used elsewhere.
+    if ((sent === "no-agent" || sent === "failed") && request.space) {
+      // Without an agent here, or one that could not begin, the prompt is copied for one used elsewhere.
       const copied = await window.notes.copySpacePrompt(request.space);
-      notify(copied.ok ? "没有找到本机的命令行 Agent。提示词已复制到剪贴板，可以粘贴给外部 agent 生成空间主页。" : copied.message);
+      const why = sent === "no-agent" ? "没有找到本机的命令行 Agent。" : "助手没能开始生成主页。";
+      notify(copied.ok ? `${why}提示词已复制到剪贴板，可以粘贴给外部 agent 生成空间主页。` : copied.message);
     }
   };
   const operationLog = useOperationLog(notify);

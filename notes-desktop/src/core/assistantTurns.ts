@@ -1,10 +1,9 @@
 // 助手栏 turns as the app runs them (assistant-spec): a conversation is begun or continued, a turn
 // at a time; its events are folded into it (shared/conversation's one rule) and passed on as they
 // come, and it is kept with the app (对话记录) once the turn is over.
-import type { AgentId } from "../shared/agentKinds";
+import { modelChoosable, modelName, type AgentId } from "../shared/agentKinds";
 import { canRevert, emptyReply, stoppedTurn, withEvent, type Conversation, type ConversationSummary, type Message, type Reply, type ReviewChoice, type TurnChange, type TurnEvent } from "../shared/conversation";
 import type { ReviewMode } from "../shared/preferences";
-import { modelName } from "./agentModels";
 import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
 import { OperationLogError, type OperationLog } from "./operationLog";
@@ -106,7 +105,9 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
   const start: AssistantTurns["start"] = async (root, request, send) => {
     if (!root) return { ok: false, message: "请先打开笔记库。" };
     const known = request.conversation ? await loaded(request.conversation) : undefined;
-    let conversation = known ?? conversations.start({ agent: request.agent, root, folder: request.folder, model: request.model && modelName(request.model) });
+    // 模型选择: a model only for an agent that takes one per turn, and only as one word.
+    const model = modelChoosable(request.agent) ? modelName(request.model) : undefined;
+    let conversation = known ?? conversations.start({ agent: request.agent, root, folder: request.folder, model });
     if (conversation.root !== root) return { ok: false, message: "这个对话属于另一个笔记库。" };
     if (running.has(conversation.id)) return { ok: false, message: "上一轮还没有结束。" };
     const agent = (await options.agents()).find((a) => a.id === conversation.agent);

@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AgentId } from "../shared/agentKinds";
+import { modelName, type AgentId } from "../shared/agentKinds";
 
 export interface AgentModels {
   /** The model the agent's own settings pick, when they say; what 默认 runs. */
@@ -36,7 +36,8 @@ const json = async (path: string): Promise<Record<string, unknown>> => {
   }
 };
 const named = (value: unknown): string | undefined => (typeof value === "string" && value.trim() ? value.trim() : undefined);
-const unique = (models: (string | undefined)[]) => [...new Set(models.filter((m): m is string => Boolean(m)))];
+// Only names that can go on the command line as they are: one chosen is the one used.
+const unique = (models: (string | undefined)[]) => [...new Set(models.map(modelName).filter((m): m is string => Boolean(m)))];
 
 async function claude(home: string, env: NodeJS.ProcessEnv): Promise<AgentModels> {
   const folder = env.CLAUDE_CONFIG_DIR || join(home, ".claude");
@@ -90,7 +91,7 @@ async function dsh(home: string, env: NodeJS.ProcessEnv): Promise<AgentModels> {
   const source = (await text(join(env.DSH_HOME || join(home, ".dsh"), "settings.yaml"))) ?? "";
   // agent-default-model: { provider, model }, as a block or on one line.
   const block = /^agent-default-model:[^\n]*(?:\n[ \t]+[^\n]*)*/m.exec(source)?.[0] ?? "";
-  const current = /\bmodel:\s*["']?([^"'\s,}]+)/.exec(block.replace(/^agent-default-model:/, ""))?.[1];
+  const current = /(?:^|[\s{,])model:\s*["']?([^"'\s,}]+)/.exec(block.replace(/^agent-default-model:/, ""))?.[1];
   return { current, models: [], choosable: false };
 }
 
@@ -101,4 +102,4 @@ export function agentModels(agent: AgentId, { home = homedir(), env = process.en
   return readers[agent](home, env);
 }
 
-export { modelName } from "../shared/agentKinds";
+export { modelChoosable, modelName } from "../shared/agentKinds";

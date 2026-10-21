@@ -4,7 +4,7 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
-import type { AgentId } from "../shared/agentKinds";
+import { modelName, type AgentId } from "../shared/agentKinds";
 import { stoppedTurn } from "../shared/conversation";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
@@ -118,7 +118,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   let failed: string | undefined;
   try {
     failed = await new Promise<string | undefined>((done) => {
-      const child = start(agent.path, adapter.args(request.session, request.model), cwd, env);
+      const child = start(agent.path, adapter.args(request.session, modelName(request.model)), cwd, env);
       const read = adapter.reader(cwd);
       let result: AgentEvent | undefined;
       let stderr = "";

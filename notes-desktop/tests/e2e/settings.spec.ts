@@ -30,12 +30,24 @@ test("设置 opens as its own window, movable and closable; asked again it comes
   await expect.poll(async () => (await windows()).length).toBe(2);
   const settings = (await windows()).find((w) => w.title === "设置");
   expect(settings).toEqual({ title: "设置", movable: true, closable: true, modal: false });
+  // Not attached to the main window: it moves on its own.
+  const moved = await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.getTitle() === "设置")!;
+    win.setPosition(40, 60);
+    return { parent: win.getParentWindow(), at: win.getPosition() };
+  });
+  expect(moved).toEqual({ parent: null, at: [40, 60] });
 
   // Asked again from the main window, the one 设置 window is focused rather than a second opened.
   await page.bringToFront();
   await page.keyboard.press("ControlOrMeta+Comma");
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.getTitle())).toBe("设置");
   expect((await windows()).length).toBe(2);
+
+  // Closed like any window, it leaves the main one alone.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === "设置")!.close());
+  await expect.poll(async () => (await windows()).length).toBe(1);
+  await expect(page.getByRole("list", { name: "当前目录内容" })).toBeVisible();
   await app.close();
 });
 
@@ -95,6 +107,14 @@ test("the list shows 简洁, 标准 or 详细 rows, chosen in settings or the li
 
   await page.getByRole("button", { name: "列表选项" }).click();
   await expect(page.getByRole("menu").getByRole("menuitemradio", { name: "标准" })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+
+  // Chosen in the main window while 设置 is open, 设置 shows it at once.
+  const open = (await openSettings(app, page, "笔记列表")).getByRole("radiogroup", { name: "详细程度" });
+  await page.getByRole("button", { name: "列表选项" }).click();
+  await page.getByRole("menu").getByRole("menuitemradio", { name: "简洁" }).click();
+  await expect(open.getByRole("radio", { name: "简洁" })).toHaveAttribute("aria-checked", "true");
+  await expect(row).toHaveText("雨后");
   await app.close();
 });
 
