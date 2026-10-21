@@ -1,4 +1,4 @@
-import { ClockCounterClockwise, FolderSimple, X } from "@phosphor-icons/react";
+import { ClockCounterClockwise, FolderSimple, NotePencil, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { InstalledAgent } from "../../core";
 import { agents, type AgentId } from "../../shared/agentKinds";
@@ -88,6 +88,19 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
     <aside className={`assistant ${open ? "open" : ""}`} aria-label="助手栏" aria-hidden={!open} inert={!open}>
       <div className="assistant-inner">
         <div className="assistant-bar">
+          {/* 新对话 sits with 对话历史 at the top; the composer's corner is left for attachments. */}
+          <button
+            className="icon-button small"
+            onClick={() => {
+              setHistory(false);
+              assistant.reset();
+            }}
+            disabled={assistant.running || conversation === null}
+            aria-label="新对话"
+            title="新对话"
+          >
+            <NotePencil size={icon.small} />
+          </button>
           <button
             className="icon-button small"
             onClick={() => setHistory(!history)}
@@ -148,10 +161,6 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
             hasConversation={conversation !== null}
             onSend={(text, notes) => void send(text, notes)}
             onStop={assistant.stop}
-            onNew={() => {
-              setHistory(false);
-              assistant.reset();
-            }}
           />
         )}
       </div>

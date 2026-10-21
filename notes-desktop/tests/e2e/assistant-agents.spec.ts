@@ -38,6 +38,13 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
   expect(chosen.x).toBeGreaterThanOrEqual(figure.x + figure.width);
   expect(folder.y).toBeGreaterThanOrEqual(chosen.y + chosen.height);
   expect(chosen.y).toBeLessThan(figure.y + figure.height);
+  // 新对话 sits at the top, left of 对话历史; the composer holds only the message and send.
+  const [fresh, history] = await column(page).evaluate((el) =>
+    ["新对话", "对话历史"].map((name) => el.querySelector(`[aria-label="${name}"]`)!.getBoundingClientRect().toJSON() as DOMRect),
+  );
+  expect(fresh!.x + fresh!.width).toBeLessThanOrEqual(history!.x);
+  expect(Math.abs(fresh!.y - history!.y)).toBeLessThan(1);
+  await expect(column(page).getByRole("button", { name: "新对话" })).toBeDisabled();
 
   for (const [name, agent] of Object.entries(agents)) {
     await choice.getByRole("radio", { name }).click();

@@ -1,4 +1,4 @@
-import { ArrowUp, CaretRight, Plus, Stop, X } from "@phosphor-icons/react";
+import { ArrowUp, CaretRight, Stop, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
@@ -242,12 +242,11 @@ export interface ComposerProps {
   disabled: boolean;
   onSend(text: string, notes: string[]): void;
   onStop(): void;
-  onNew(): void;
   hasConversation: boolean;
 }
 
 /** The input: what to ask, with the open note attached (it can be taken off) and notes mentioned with @. */
-export function Composer({ note, running, disabled, onSend, onStop, onNew, hasConversation }: ComposerProps) {
+export function Composer({ note, running, disabled, onSend, onStop, hasConversation }: ComposerProps) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [dropped, setDropped] = useState<string | null>(null);
@@ -353,9 +352,6 @@ export function Composer({ note, running, disabled, onSend, onStop, onNew, hasCo
         onKeyDown={onKeyDown}
       />
       <div className="composer-actions">
-        <button className="icon-button small" onClick={onNew} disabled={running || !hasConversation} aria-label="新对话" title="新对话">
-          <Plus size={icon.small} />
-        </button>
         {running ? (
           <button className="icon-button small" onClick={onStop} aria-label="停止" title="停止">
             <Stop size={icon.small} weight="fill" />
