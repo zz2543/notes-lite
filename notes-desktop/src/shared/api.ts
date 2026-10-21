@@ -1,4 +1,4 @@
-import type { AgentId, Conversation, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+import type { AgentId, Conversation, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
 
 export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
@@ -127,6 +127,10 @@ export interface NotesApi {
   stopTurn(conversation: string): void;
   /** An event of a running turn, by conversation. */
   onTurnEvent(listener: (conversation: string, event: TurnEvent) => void): () => void;
+  /** What the review card asks (ticket 29): keep the turn, or take back one note or all of it. */
+  reviewTurn(request: TurnReviewRequest): Promise<TurnReviewed>;
+  /** One note's changed lines in a turn, for the review card; null for an attachment. */
+  turnDiff(turn: string, path: string): Promise<TurnDiff>;
 
   // 空间主页 (ticket 19). The homepage runs in a sandbox main lays over the card.
   /** The notes inside a space's scope, by path. */
@@ -154,7 +158,7 @@ export type SpacePageEvent =
   /** The page wrote through `space`: `changes` operation-log entries, `records` of them records. */
   | { space: string; kind: "wrote"; changes: number; records: number };
 
-export type { TurnStart } from "../core";
+export type { TurnStart, TurnReviewRequest } from "../core";
 
 export interface SpaceNote {
   path: string;
@@ -246,6 +250,8 @@ export const channels = {
   startTurn: "assistant:start-turn",
   stopTurn: "assistant:stop-turn",
   turnEvent: "assistant:turn-event",
+  reviewTurn: "assistant:review-turn",
+  turnDiff: "assistant:turn-diff",
   spaceNotes: "spaces:notes",
   showSpacePage: "spaces:show-page",
   hideSpacePage: "spaces:hide-page",

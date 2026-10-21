@@ -14,6 +14,8 @@ export type ListDetail = "compact" | "standard" | "detailed";
 export type MotionIntensity = "light" | "standard" | "strong";
 /** 导航模式: 双栏导航 (folder tree, then 当前目录内容) or 单栏导航 (folders and notes in one tree). */
 export type Navigation = "double" | "single";
+/** 写入审查: 每轮结束后审查 (a card after each assistant turn) or 直接保留. */
+export type ReviewMode = "review" | "keep";
 
 export interface Preferences {
   colorScheme: ColorScheme;
@@ -21,6 +23,7 @@ export interface Preferences {
   listDetail: ListDetail;
   motion: MotionIntensity;
   navigation: Navigation;
+  assistantReview: ReviewMode;
   /** 排版: a change may carry only the fields it changes; the rest stay. */
   typography: Typography;
 }
@@ -34,6 +37,7 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   listDetail: ["compact", "standard", "detailed"],
   motion: ["light", "standard", "strong"],
   navigation: ["double", "single"],
+  assistantReview: ["review", "keep"],
 };
 
 export const defaultPreferences: Preferences = {
@@ -42,6 +46,7 @@ export const defaultPreferences: Preferences = {
   listDetail: "compact",
   motion: "strong",
   navigation: "double",
+  assistantReview: "review",
   typography: defaultTypography,
 };
 

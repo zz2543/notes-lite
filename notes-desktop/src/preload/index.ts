@@ -100,6 +100,8 @@ const api: NotesApi = {
   clearSnapshots: () => ipcRenderer.invoke(channels.clearSnapshots),
   startTurn: (request) => ipcRenderer.invoke(channels.startTurn, request),
   stopTurn: (conversation) => ipcRenderer.send(channels.stopTurn, conversation),
+  reviewTurn: (request) => ipcRenderer.invoke(channels.reviewTurn, request),
+  turnDiff: (turn, path) => ipcRenderer.invoke(channels.turnDiff, turn, path),
   onTurnEvent: (listener) => {
     const handler = (_: unknown, conversation: string, event: Parameters<typeof listener>[1]) => listener(conversation, event);
     ipcRenderer.on(channels.turnEvent, handler);

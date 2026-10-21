@@ -2,11 +2,12 @@
 // at a time; its events are folded into it (shared/conversation's one rule) and passed on as they
 // come, and it is kept with the app (对话记录) once the turn is over.
 import type { AgentId } from "../shared/agentKinds";
-import { emptyReply, withEvent, type Conversation, type TurnEvent } from "../shared/conversation";
+import { emptyReply, withEvent, type Conversation, type Message, type Reply, type TurnChange, type TurnEvent } from "../shared/conversation";
+import type { ReviewMode } from "../shared/preferences";
 import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
-import type { OperationLog } from "./operationLog";
-import type { SnapshotStore } from "./snapshots";
+import { OperationLogError, type OperationLog } from "./operationLog";
+import { SnapshotError, type DiffLine, type SnapshotStore } from "./snapshots";
 import { runTurn } from "./turns";
 
 export interface TurnStart {
@@ -22,6 +23,19 @@ export interface TurnStart {
 
 export type TurnStarted = { ok: true; conversation: Conversation } | { ok: false; message: string };
 
+/** What the review card asks of a turn: keep it all, or take back one note or the whole turn. */
+export interface TurnReviewRequest {
+  conversation: string;
+  turn: string;
+  action: "keep" | "revert";
+  /** The note to take back alone (library-relative); none takes back the whole turn. */
+  path?: string;
+}
+
+export type TurnReviewed = { ok: true; conversation: Conversation } | { ok: false; message: string };
+
+export type TurnDiff = { ok: true; lines: DiffLine[] | null } | { ok: false; message: string };
+
 export interface AssistantTurnsOptions {
   conversations: ConversationStore;
   snapshots: SnapshotStore;
@@ -31,6 +45,8 @@ export interface AssistantTurnsOptions {
   agents(): Promise<InstalledAgent[]>;
   /** What an agent runs with. */
   env(): Promise<NodeJS.ProcessEnv>;
+  /** The 写入审查 setting now: a card after each turn, or keep it all. */
+  review(): ReviewMode;
 }
 
 export interface AssistantTurns {
@@ -43,6 +59,22 @@ export interface AssistantTurns {
   stop(conversation: string): void;
   /** Stops every running turn, as when the app quits. */
   stopAll(): void;
+  /** Does what the review card asks and answers with the conversation as it now stands. */
+  review(root: string | null, request: TurnReviewRequest): Promise<TurnReviewed>;
+  /** One note's lines as the turn changed them; null for an attachment. */
+  diff(root: string | null, turn: string, path: string): Promise<TurnDiff>;
+}
+
+/** A turn with something to review gets a card, unless the setting keeps it all. */
+const reviewOf = (end: { changes: TurnChange[]; outside?: string[] }, mode: ReviewMode) =>
+  end.changes.length === 0 && !end.outside?.length ? undefined : mode === "keep" ? "kept" : "pending";
+
+/** Going on with the conversation keeps what earlier turns left waiting: 全部保留 is the default. */
+const keepWaiting = (message: Message): Message => (message.role === "assistant" && message.review === "pending" ? { ...message, review: "kept" } : message);
+
+const reasonOf = (error: unknown) => {
+  if (error instanceof SnapshotError || error instanceof OperationLogError) return error.message;
+  throw error;
 }
 
 export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
@@ -61,13 +93,18 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     if (running.has(conversation.id)) return { ok: false, message: "上一轮还没有结束。" };
     const agent = (await options.agents()).find((a) => a.id === conversation.agent);
     if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
-    conversation = { ...conversation, messages: [...conversation.messages, { role: "user", text: request.text, notes: request.notes }, emptyReply()] };
+    conversation = {
+      ...conversation,
+      messages: [...conversation.messages.map(keepWaiting), { role: "user", text: request.text, notes: request.notes }, emptyReply()],
+    };
     const id = conversation.id;
     open.set(id, conversation);
     await conversations.save(conversation);
     const stop = new AbortController();
     running.set(id, stop);
-    const pass = (event: TurnEvent) => {
+    const pass = (turnEvent: TurnEvent) => {
+      const review = turnEvent.kind === "end" ? reviewOf(turnEvent, options.review()) : undefined;
+      const event: TurnEvent = review && turnEvent.kind === "end" ? { ...turnEvent, review } : turnEvent;
       open.set(id, withEvent(open.get(id)!, event));
       send(id, event);
     };
@@ -97,9 +134,53 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     return { ok: true, conversation };
   };
 
+  const review: AssistantTurns["review"] = async (root, request) => {
+    if (!root) return { ok: false, message: "请先打开笔记库。" };
+    const conversation = open.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined));
+    if (!conversation || conversation.root !== root) return { ok: false, message: "找不到这个对话。" };
+    const at = conversation.messages.findIndex((m) => m.role === "assistant" && m.turn === request.turn);
+    const reply = conversation.messages[at] as Reply | undefined;
+    if (!reply) return { ok: false, message: "找不到这一轮。" };
+    let next: Reply;
+    try {
+      next = request.action === "keep" ? { ...reply, review: "kept" } : await revert(root, reply, request.path);
+    } catch (error) {
+      return { ok: false, message: reasonOf(error) };
+    }
+    const updated = { ...conversation, messages: conversation.messages.map((m, i) => (i === at ? next : m)) };
+    open.set(updated.id, updated);
+    await conversations.save(updated);
+    return { ok: true, conversation: updated };
+  };
+
+  // Taking back the whole turn is undoing its operation-log entry, so the log says so too; taking
+  // back the last note left does the same.
+  const revert = async (root: string, reply: Reply, path?: string): Promise<Reply> => {
+    const turns = options.snapshots.library(root);
+    const log = options.log(root);
+    const entry = reply.entry ? (await log.entries()).find((e) => e.id === reply.entry && !e.undone) : undefined;
+    if (path !== undefined) await turns.revert(reply.turn!, path);
+    else if (!entry) await turns.revert(reply.turn!);
+    const left = (await turns.turn(reply.turn!)).changes.some((c) => c.restorable && !c.reverted);
+    if (entry && (path === undefined || !left)) await log.undo(entry.id);
+    const { changes } = await turns.turn(reply.turn!);
+    return { ...reply, changes, review: changes.some((c) => c.restorable && !c.reverted) ? "pending" : "reverted" };
+  };
+
+  const diff: AssistantTurns["diff"] = async (root, turn, path) => {
+    if (!root) return { ok: false, message: "请先打开笔记库。" };
+    try {
+      return { ok: true, lines: await options.snapshots.library(root).diff(turn, path) };
+    } catch (error) {
+      return { ok: false, message: reasonOf(error) };
+    }
+  };
+
   return {
     start,
     stop: (id) => running.get(id)?.abort(),
     stopAll: () => running.forEach((turn) => turn.abort()),
+    review,
+    diff,
   };
 }

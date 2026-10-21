@@ -49,6 +49,7 @@ import {
   type SpaceDone,
   type SpaceInfo,
   type SpaceNote,
+  type TurnReviewRequest,
   type TurnStart,
 } from "../shared/api";
 import { appearanceArguments, type Appearance } from "../shared/appearance";
@@ -169,6 +170,8 @@ const turns = assistantTurns({
   log: (root) => operationLog(root, { ...libraryOptions, turns: snapshots.library(root) }),
   agents: async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }),
   env: agentEnvironment,
+  // Declared further down; read at the end of each turn.
+  review: () => preferences.assistantReview,
 });
 
 /**
@@ -480,6 +483,8 @@ function registerIpc() {
     turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
   );
   ipcMain.on(channels.stopTurn, (_, id: string) => turns.stop(id));
+  ipcMain.handle(channels.reviewTurn, (_, request: TurnReviewRequest) => turns.review(library?.root ?? null, request));
+  ipcMain.handle(channels.turnDiff, (_, turn: string, path: string) => turns.diff(library?.root ?? null, turn, path));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));
