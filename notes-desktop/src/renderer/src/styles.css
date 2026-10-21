@@ -125,7 +125,7 @@ aside.side {
   height: var(--row-height);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--row-gap);
   padding: 0 var(--row-padding) 0 calc(var(--row-padding) + var(--depth, 0) * var(--row-indent));
   border-radius: var(--row-radius);
   font-size: var(--text-side-row);
@@ -640,6 +640,24 @@ section.list {
 }
 .pill.list {
   background: var(--list-pill);
+}
+/* The folder tree's tile (RowTile): around the icon, after the caret; on the chosen row, the whole row. */
+.pill.tile {
+  --tile-left: calc(var(--row-padding) + var(--depth, 0) * var(--row-indent) + var(--caret-width) + var(--row-gap) - var(--tile-pad));
+  inset: var(--tile-inset) calc(100% - var(--tile-left) - var(--tile-size)) var(--tile-inset) var(--tile-left);
+  border-radius: var(--tile-radius);
+  transition:
+    inset var(--spring-slide),
+    border-radius var(--spring-slide);
+}
+.pill.tile.on {
+  inset: 0;
+  border-radius: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pill.tile {
+    transition: none;
+  }
 }
 
 

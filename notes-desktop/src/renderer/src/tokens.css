@@ -89,6 +89,12 @@
   --row-padding: 10px;
   --row-radius: 9px;
   --row-indent: 16px;
+  --row-gap: 6px;
+  /* The tile under a tree row's icon (RowTile): the 17px icon with this much round it. */
+  --tile-pad: 4px;
+  --tile-size: calc(17px + 2 * var(--tile-pad));
+  --tile-inset: calc((var(--row-height) - var(--tile-size)) / 2);
+  --tile-radius: 7px;
   --item-padding: 9px 12px;
   --item-radius: 10px;
   --list-head-height: 52px;
