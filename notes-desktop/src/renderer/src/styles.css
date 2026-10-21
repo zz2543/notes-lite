@@ -570,6 +570,10 @@ section.list {
 }
 .segmented button {
   flex: 1;
+  /* Turning bolder when chosen eases, as the icons do, instead of jumping. */
+  transition:
+    color var(--fade-pop) ease-out,
+    font-weight var(--fade-pop) ease-out;
   min-width: 0;
   height: var(--segmented-height);
   display: flex;
@@ -638,6 +642,20 @@ section.list {
   background: var(--list-pill);
 }
 
+
+/* A chosen row's icon turns from outline to fill by cross-fading the two (SelectedIcon). */
+.selected-icon {
+  display: inline-grid;
+  flex: none;
+}
+.selected-icon > svg {
+  grid-area: 1 / 1;
+  transition: opacity var(--fade-pop) ease-out;
+}
+.selected-icon[data-selected="true"] > .off,
+.selected-icon[data-selected="false"] > .on {
+  opacity: 0;
+}
 
 /* 悬停与按压 (轻弹): hover only adds the --hover tint, never lifts; pressing shrinks, release springs back. */
 .row,

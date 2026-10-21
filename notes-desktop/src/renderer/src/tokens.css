@@ -25,9 +25,10 @@
   --card-fg: #1d1d1f;
   --card-muted: rgba(29, 29, 31, 0.42);
   --card-path: color-mix(in srgb, var(--card-fg) 62%, transparent);
-  --side-pill: rgba(255, 255, 255, 0.72);
-  --list-pill: rgba(255, 255, 255, 0.85);
-  --pill-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.12);
+  --side-pill: rgba(255, 255, 255, 0.9);
+  --list-pill: #ffffff;
+  /* A hairline edge, a tight contact shadow and a soft lift: crisp rather than a blurred white patch. */
+  --pill-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 0.5px 1px rgba(0, 0, 0, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.08);
   --hover: rgba(0, 0, 0, 0.045);
   --line: rgba(0, 0, 0, 0.08);
   --glass: rgba(250, 250, 252, 0.72);
@@ -195,9 +196,9 @@
     --card-bg: #1e1e21;
     --card-fg: #ececef;
     --card-muted: rgba(236, 236, 239, 0.4);
-    --side-pill: rgba(255, 255, 255, 0.14);
-    --list-pill: rgba(255, 255, 255, 0.16);
-    --pill-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 1px 4px rgba(0, 0, 0, 0.3);
+    --side-pill: rgba(255, 255, 255, 0.11);
+    --list-pill: rgba(255, 255, 255, 0.13);
+    --pill-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.09), 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.28);
     --hover: rgba(255, 255, 255, 0.06);
     --line: rgba(255, 255, 255, 0.08);
     --glass: rgba(40, 40, 46, 0.72);

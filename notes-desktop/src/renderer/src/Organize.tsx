@@ -6,6 +6,7 @@ import { libraryChanged } from "./ipc";
 import { useMotion } from "./MotionProvider";
 import "./organize.css";
 import { icon } from "./tokens";
+import { SelectedIcon } from "./SelectedIcon";
 
 // 整理笔记与文件夹: the menus, dialogs and steps behind creating, renaming, moving, deleting and
 // restoring. The library does the work; this decides what the view shows afterwards.
@@ -429,7 +430,7 @@ function MoveDialog({ item, libraryName, onSubmit, onClose }: MoveDialogProps) {
                 onClick={() => setTarget(folder)}
                 onDoubleClick={() => submit(folder)}
               >
-                <Folder size={icon.regular} weight={target === folder ? "fill" : "regular"} />
+                <SelectedIcon off={Folder} selected={target === folder} />
                 <span className="label">{parts.at(-1) ?? libraryName}</span>
               </button>
             );

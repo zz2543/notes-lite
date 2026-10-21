@@ -166,6 +166,7 @@
 }
 .preview-choice .label {
   text-align: center;
+  transition: font-weight var(--fade-pop) ease-out;
   font-size: var(--text-meta);
 }
 .preview-choice[aria-checked="true"] .label {

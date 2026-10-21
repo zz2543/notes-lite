@@ -42,6 +42,14 @@ export const travel = {
   noticeRise: 3,
 } as const;
 
+/**
+ * 切换笔记 (2026-10-21): the selection pill slides to a row at most `farRows` of its rows away. Further, the
+ * old pill fades out over `fadeOut` s where it was and the new one fades in over `fadeIn` s from `scale`
+ * smaller (幅度), so it never sweeps across a long list. The note's text fades in over `textIn` s, rising
+ * `textRise` px (幅度).
+ */
+export const noteSwitch = { farRows: 5, fadeOut: 0.12, fadeIn: 0.18, scale: 0.04, textIn: 0.12, textRise: 4 } as const;
+
 /** 菜单 grow on 展开 from this much smaller, at 标准 (幅度), as they fade in (ticket 23). */
 export const menuEnter = { scale: 0.02 } as const;
 

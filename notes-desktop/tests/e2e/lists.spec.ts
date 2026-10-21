@@ -19,6 +19,8 @@ async function openLibrary(scratch: string, sources: string[]) {
     async open(n: number) {
       await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: String(n), exact: true }).click();
       await expect(editor(page)).toBeFocused();
+      // Measured once the newly opened text has finished rising into place (切换笔记).
+      await expect(page.locator(".editor")).toHaveCSS("transform", "none");
       await page.keyboard.press("ControlOrMeta+End");
     },
     /** Note `n` as saved on disk. */

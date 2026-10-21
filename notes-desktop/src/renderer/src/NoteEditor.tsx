@@ -1,7 +1,8 @@
 import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { animate } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { countWords, isAddress, linkPath } from "../../shared/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
@@ -10,6 +11,8 @@ import { inlineTitle } from "./inlineTitle";
 import { importChosen, linkHandling } from "./links";
 import { listEditing } from "./listEditing";
 import { markdownDisplay, switchMarkdownView } from "./markdownView";
+import { noteSwitch } from "./motion";
+import { useMotion, usePrefersReducedMotion } from "./MotionProvider";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
 import { setShowSource, useShowSource } from "./sourceView";
 
@@ -177,6 +180,21 @@ function Editor({
       view.destroy();
     };
   }, [path, source]);
+
+  // 切换笔记: the newly opened note's text fades in, rising a little, so the switch is not a hard cut.
+  const { amplitude } = useMotion();
+  const reduced = usePrefersReducedMotion();
+  const entering = useRef({ amplitude, reduced });
+  useLayoutEffect(() => {
+    const { amplitude, reduced } = entering.current;
+    const rise = reduced ? 0 : noteSwitch.textRise * amplitude;
+    const text = host.current!;
+    // Faint from the first frame drawn, before the animation's own first frame.
+    text.style.opacity = "0";
+    text.style.transform = `translateY(${rise}px)`;
+    const running = animate(text, { opacity: [0, 1], y: [rise, 0] }, { duration: noteSwitch.textIn, ease: "easeOut" });
+    return () => running.stop();
+  }, []);
 
   // The same document shown another way: the state (text, selection, undo, composition) stays.
   useEffect(() => {

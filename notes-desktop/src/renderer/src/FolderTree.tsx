@@ -4,6 +4,7 @@ import type { FolderEntry, NoteEntry } from "../../core";
 import { useFolder } from "./ipc";
 import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
+import { SelectedIcon } from "./SelectedIcon";
 
 interface TreeProps {
   libraryName: string;
@@ -97,7 +98,7 @@ function NoteRow({ note, depth, open, onOpen, onMenu }: NoteRows & { note: NoteE
     >
       {isOpen && <SelectionPill group="side" />}
       <span className="caret" />
-      <FileText size={icon.regular} weight={isOpen ? "fill" : "regular"} />
+      <SelectedIcon off={FileText} selected={isOpen} />
       <span className="label">{note.title}</span>
     </div>
   );
@@ -118,7 +119,6 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
   // In 单栏导航 the open note holds the pill; the folder being browsed keeps its open icon.
   const hasPill = isSelected && !notes?.open;
   const isOpen = expandable && expanded.has(path);
-  const Icon = isSelected ? FolderOpen : Folder;
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -156,7 +156,7 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
       >
         <CaretRight size={icon.caret} weight="bold" />
       </span>
-      <Icon size={icon.regular} weight={isSelected ? "fill" : "regular"} />
+      <SelectedIcon off={Folder} on={FolderOpen} selected={isSelected} />
       <span className="label">{name}</span>
       {onNewNote && (
         <button

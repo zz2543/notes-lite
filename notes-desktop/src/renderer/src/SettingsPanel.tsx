@@ -12,6 +12,7 @@ import { usePreferences } from "./preferences";
 import "./settings.css";
 import { icon } from "./tokens";
 import { TypographyPage } from "./TypographySettings";
+import { SelectedIcon } from "./SelectedIcon";
 
 // 设置: a glass panel floating over the window. Categories on the left, each a page of groups on the
 // right; every group has a title and a short description, and its rows line up label | control.
@@ -201,7 +202,7 @@ function SettingsPanel({ onClose }: { onClose(): void }) {
                 tabIndex={on ? 0 : -1}
                 onClick={() => setPage(p.id)}
               >
-                <PageIcon size={icon.regular} weight={on ? "fill" : "regular"} />
+                <SelectedIcon off={PageIcon} selected={on} />
                 <span className="label">{p.label}</span>
               </button>
             );

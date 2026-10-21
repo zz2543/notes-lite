@@ -43,6 +43,58 @@ test("the selection pill slides to the chosen folder", async ({ scratch }) => {
   await app.close();
 });
 
+test("switching notes: a near pill slides, a far one fades out there and in here; the text fades in, rising", async ({ scratch }) => {
+  const notes = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`${String(i + 1).padStart(2, "0")}.md`, `第 ${i + 1} 篇`]));
+  const { app, page } = await launchWith(scratch, await library(scratch, "笔记库", notes));
+  const list = page.getByRole("list", { name: "当前目录内容" });
+  const listPill = 'section.list [data-testid="selection-pill"]';
+  // By place in the list, whatever order it sorts them in.
+  const row = (n: number) => list.getByRole("button").nth(n);
+  await row(0).click();
+  const first = await top(row(0));
+  const near = row(2);
+  const nearTop = await top(near);
+  const slid = await film(page, listPill, () => near.click(), 600);
+  const between = slid.some((f) => f.top > Math.min(first, nearTop) + 2 && f.top < Math.max(first, nearTop) - 2);
+  // It starts where it was, never drawn a frame early on the new row.
+  expect(Math.abs(slid[0]!.top - first)).toBeLessThan(2);
+  if (process.env.CI && !between) test.info().annotations.push({ type: "slide not filmed", description: `${slid.length} frames` });
+  else expect(between).toBe(true);
+
+  // Nine rows on: it never sweeps across the rows between; it appears on the new row, faint and a little small.
+  const far = row(11);
+  const farTop = await top(far);
+  const jumped = await film(page, listPill, () => far.click(), 600);
+  expect(jumped.every((f) => Math.abs(f.top - nearTop) < 2 || Math.abs(f.top - farTop) < 2)).toBe(true);
+  const arrived = jumped.filter((f) => Math.abs(f.top - farTop) < 2);
+  if (!(process.env.CI && arrived.length < 2)) {
+    expect(Math.min(...arrived.map((f) => f.opacity))).toBeLessThan(1);
+    expect(Math.min(...arrived.map((f) => f.scale))).toBeLessThan(1);
+  }
+  await expect.poll(() => page.locator(listPill).evaluate((pill) => getComputedStyle(pill).opacity)).toBe("1");
+  // The old one is gone from its row once it has faded.
+  await expect(page.locator("section.list .pill")).toHaveCount(1);
+
+  // The note's text comes in over a moment rather than at once.
+  const text = await film(page, ".editor", () => row(5).click(), 400);
+  if (!(process.env.CI && text.length < 2)) expect(Math.min(...text.map((f) => f.opacity))).toBeLessThan(1);
+  await expect(page.locator(".editor")).toHaveCSS("opacity", "1");
+  await app.close();
+});
+
+test("a chosen row's icon cross-fades from outline to fill instead of swapping at once", async ({ scratch }) => {
+  const { app, page } = await launchWith(scratch, await library(scratch, "笔记库", { "日记/散步.md": "散步" }));
+  const row = page.getByRole("tree", { name: "文件夹" }).getByRole("treeitem", { name: "日记" });
+  const icons = row.locator(".selected-icon > svg");
+  await expect(icons).toHaveCount(2);
+  expect(await transitionOf(page, '[aria-label="日记"] .selected-icon > svg', "opacity")).toMatchObject({ duration: expect.any(Number) });
+  expect((await transitionOf(page, '[aria-label="日记"] .selected-icon > svg', "opacity"))!.duration).toBeGreaterThan(0);
+  await row.click();
+  await expect(row.locator(".selected-icon > .on")).toHaveCSS("opacity", "1");
+  await expect(row.locator(".selected-icon > .off")).toHaveCSS("opacity", "0");
+  await app.close();
+});
+
 test("the list's selection pill covers exactly its row, all four corners round", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "短.md": "一", [`${"很长的标题".repeat(12)}.md`]: "二" });
   const { app, page } = await launchWith(scratch, root);
@@ -215,8 +267,8 @@ const colours: [string, string, string][] = [
   ["--card-fg", "#1d1d1f", "#ececef"],
   ["--card-muted", "rgba(29,29,31,.42)", "rgba(236,236,239,.4)"],
   ["--card-path", "color-mix(in srgb, #1d1d1f 62%, transparent)", "color-mix(in srgb, #ececef 62%, transparent)"],
-  ["--side-pill", "rgba(255,255,255,.72)", "rgba(255,255,255,.14)"],
-  ["--list-pill", "rgba(255,255,255,.85)", "rgba(255,255,255,.16)"],
+  ["--side-pill", "rgba(255,255,255,.9)", "rgba(255,255,255,.11)"],
+  ["--list-pill", "#ffffff", "rgba(255,255,255,.13)"],
   ["--hover", "rgba(0,0,0,.045)", "rgba(255,255,255,.06)"],
   ["--line", "rgba(0,0,0,.08)", "rgba(255,255,255,.08)"],
   ["--glass", "rgba(250,250,252,.72)", "rgba(40,40,46,.72)"],
@@ -232,7 +284,11 @@ const colours: [string, string, string][] = [
   ["--accent-green", "#30d158", "#30d158"],
 ];
 const shadows: [string, string, string][] = [
-  ["--pill-shadow", "0 0 0 .5px rgba(0,0,0,.1), 0 1px 4px rgba(0,0,0,.12)", "0 0 0 .5px rgba(255,255,255,.12), 0 1px 4px rgba(0,0,0,.3)"],
+  [
+    "--pill-shadow",
+    "0 0 0 .5px rgba(0,0,0,.06), 0 .5px 1px rgba(0,0,0,.07), 0 2px 6px -1px rgba(0,0,0,.08)",
+    "inset 0 .5px 0 rgba(255,255,255,.09), 0 0 0 .5px rgba(255,255,255,.06), 0 1px 3px rgba(0,0,0,.28)",
+  ],
   ["--card-shadow", "0 1px 2px rgba(0,0,0,.06), 0 8px 28px rgba(0,0,0,.08)", "0 0 0 1px rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.35)"],
   ["--overlay-shadow", "0 30px 90px rgba(0,0,0,.28), 0 0 0 .5px rgba(0,0,0,.08)", "0 30px 90px rgba(0,0,0,.28), 0 0 0 .5px rgba(0,0,0,.08)"],
 ];
