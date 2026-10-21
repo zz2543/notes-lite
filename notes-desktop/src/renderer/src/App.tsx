@@ -469,6 +469,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
             onLetGo={letGo}
             onOpenLinked={openCopy}
             notify={notify}
+            onRename={organize.renameNote}
             headEnd={cardHeadEnd}
           />
         )}

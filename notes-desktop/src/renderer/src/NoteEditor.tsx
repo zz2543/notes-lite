@@ -6,6 +6,7 @@ import { countWords, isAddress, linkPath } from "../../shared/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
 import { linkHost, type LinkHost } from "./linkHost";
+import { inlineTitle } from "./inlineTitle";
 import { importChosen, linkHandling } from "./links";
 import { listEditing } from "./listEditing";
 import { markdownDisplay, switchMarkdownView } from "./markdownView";
@@ -21,6 +22,8 @@ interface Choices {
   onOpenLinked(path: string): void;
   /** Something to tell the user: a link that leads nowhere, a file that couldn't be imported. */
   notify(message: string): void;
+  /** Renames the open note from its title (the file's name); the reason when it could not. */
+  onRename(path: string, name: string): Promise<string | undefined>;
 }
 
 // 卡片顶部操作按钮 appear on hover and leave once typing starts (ticket 23): the card says which, by
@@ -61,7 +64,8 @@ export function NoteEditor({
   return (
     <article className="card" data-kind="note" aria-label="卡片" onKeyDownCapture={startTyping} onPointerMove={stopTyping}>
       <header className="card-head">
-        <span className="card-path">{path?.split("/").join(" / ")}</span>
+        {/* The note's name is its title, above its text; the head keeps only the tools. */}
+        <span className="card-head-gap" />
         <button
           className="card-tool"
           aria-pressed={showSource}
@@ -98,6 +102,7 @@ function Editor({
   onLetGo,
   onOpenLinked,
   notify,
+  onRename,
 }: { path: string; source: string; fresh: boolean; showSource: boolean } & Choices) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>(null);
@@ -108,6 +113,8 @@ function Editor({
   // The latest callbacks, for the editor made once per note.
   const linkChoices = useRef({ onOpenLinked, notify });
   linkChoices.current = { onOpenLinked, notify };
+  const renameTo = useRef(onRename);
+  renameTo.current = onRename;
 
   useEffect(() => {
     let countTimer: ReturnType<typeof setTimeout> | undefined;
@@ -124,6 +131,7 @@ function Editor({
           // Redo answers to ⌘⇧Z / Ctrl+Shift+Z everywhere, and to Ctrl+Y on Windows as usual.
           keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
+          inlineTitle(path, (name) => renameTo.current(path, name)),
           markdownDisplay(shown.current),
           listEditing,
           linkHost.of(links.host),

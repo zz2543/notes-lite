@@ -9,7 +9,7 @@ test("panels opened and shut in quick succession end as last asked, with nothing
 
   // Notes switched faster than any transition: the last one is open.
   for (const name of ["一", "二", "三", "二"]) await list.getByRole("button", { name }).click();
-  await expect(page.locator(".card-path")).toHaveText("二.md");
+  await expect(page.getByLabel("笔记标题")).toHaveValue("二");
   await expect(page.getByLabel("笔记正文")).toContainText("二");
 
   // 助手栏, ⌘J three times: open, its width the design system's.

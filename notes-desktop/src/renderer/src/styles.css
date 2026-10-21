@@ -284,6 +284,42 @@ section.list {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.card-head-gap {
+  flex: 1;
+}
+/* The note's title above its text: its file name, edited in place, set as a first-level heading. */
+.editor .cm-note-title {
+  flex: none;
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding-bottom: 0.6em;
+}
+.editor .cm-note-title input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--card-fg);
+  font-family: var(--heading-font);
+  font-size: var(--h1-size);
+  font-weight: var(--heading-weight);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  caret-color: var(--accent);
+  user-select: text;
+}
+.editor .cm-note-title input:focus-visible {
+  box-shadow: none;
+}
+.editor .cm-note-title-problem {
+  margin: 0.3em 0 0;
+  color: var(--card-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  line-height: 1.4;
+}
 .card-tool {
   flex: none;
   height: var(--icon-button-small);
@@ -319,12 +355,16 @@ section.list {
   }
 }
 .editor .cm-scroller {
+  /* The title, then the text, one above the other. */
+  flex-direction: column;
   padding: var(--card-padding);
   font-family: var(--body-font);
   font-size: var(--body-size);
   line-height: var(--body-leading);
 }
 .editor .cm-content {
+  width: 100%;
+  min-height: 0;
   max-width: var(--measure);
   margin: 0 auto;
   padding: 0;

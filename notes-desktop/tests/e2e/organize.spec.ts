@@ -80,7 +80,7 @@ test("renaming and moving notes and folders keeps links working; a taken name is
   await page.getByRole("dialog", { name: "重命名文件夹" }).getByLabel("名称").fill("存档");
   await page.keyboard.press("Enter");
   await expect(tree(page).getByRole("treeitem", { name: "存档" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("article")).toContainText("存档 / 雨后散步");
+  await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "存档 / 雨后散步.md");
   expect(await note("入口.md")).toBe("见 [[存档/雨后散步]]\n\n`[[日记/散步]]`\n");
 
   // The open note is linked from one being renamed: it shows what is now on disk, and edits save.
@@ -97,6 +97,43 @@ test("renaming and moving notes and folders keeps links working; a taken name is
   await expect(page.getByRole("status", { name: "保存状态" })).toHaveText("已保存");
   expect(await note("入口.md")).toBe("见 [[归档/雨后散步]]\n\n`[[日记/散步]]`\n完");
 
+  await app.close();
+});
+
+test("the title above a note's text is its file name; editing it renames the note, and a taken or empty name is refused", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/散步.md": "雨后", "日记/读书.md": "书单", "入口.md": "[[日记/散步]]" });
+  const { app, page } = await launchWith(scratch, root);
+  await tree(page).getByRole("treeitem", { name: "日记" }).click();
+  await contents(page).getByRole("button", { name: "散步" }).click();
+  const title = page.getByLabel("笔记标题");
+  await expect(title).toHaveValue("散步");
+  // The card's head no longer shows the path; the title's tooltip says where the note lives.
+  await expect(title).toHaveAttribute("title", "日记 / 散步.md");
+
+  await title.fill("雨后散步");
+  await title.press("Enter");
+  await expect(contents(page).getByRole("button", { name: "雨后散步" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByLabel("笔记标题")).toHaveValue("雨后散步");
+  expect(await readFile(join(root, "日记/雨后散步.md"), "utf8")).toBe("雨后");
+  // Links follow, as with 重命名….
+  await expect.poll(() => readFile(join(root, "入口.md"), "utf8")).toBe("[[日记/雨后散步]]");
+
+  // A taken name says why and the old one comes back; so does an empty one, on leaving the field.
+  await page.getByLabel("笔记标题").fill("读书");
+  await page.getByLabel("笔记标题").press("Enter");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("笔记标题")).toHaveValue("雨后散步");
+  await page.getByLabel("笔记标题").fill("");
+  await page.getByLabel("笔记正文").click();
+  await expect(page.getByRole("alert")).toHaveText("标题不能为空。");
+  await expect(page.getByLabel("笔记标题")).toHaveValue("雨后散步");
+  await expect(contents(page).getByRole("button")).toHaveText(["读书", "雨后散步"]);
+
+  // Esc puts the name back and goes into the text.
+  await page.getByLabel("笔记标题").fill("别的");
+  await page.getByLabel("笔记标题").press("Escape");
+  await expect(page.getByLabel("笔记标题")).toHaveValue("雨后散步");
+  await expect(page.getByLabel("笔记正文")).toBeFocused();
   await app.close();
 });
 

@@ -118,6 +118,14 @@ export function useOrganize(view: OrganizeView) {
       />,
     );
 
+  /** The open note renamed from its title above its text: by the same rules as 重命名…, saved first. */
+  const renameNote = async (path: string, name: string): Promise<string | undefined> => {
+    if (!(await live.current.saveFirst())) return "笔记还没有保存，暂时不能重命名。";
+    const renamed = await window.notes.rename(path, name);
+    if (!renamed.ok) return renamed.message;
+    followed(path, renamed.value.path, renamed.value.updated);
+  };
+
   const move = (item: ListedItem) =>
     setDialog(
       <MoveDialog
@@ -188,7 +196,7 @@ export function useOrganize(view: OrganizeView) {
     </>
   );
 
-  return { newNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
+  return { newNote, renameNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
 }
 
 // Menus and dialogs float over the whole window. A space homepage is laid over the card by main,

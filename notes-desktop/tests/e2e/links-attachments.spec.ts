@@ -46,11 +46,11 @@ test("⌘ / Ctrl-click follows a link to a note or a web page; a plain click edi
   // A plain click only places the caret: the link's Markdown shows on that line, nothing opens.
   await link.click();
   await expect(editor(page)).toContainText("[[阅读/摘记|读书摘记]]");
-  await expect(page.locator(".card-path")).toHaveText("入口.md");
+  await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "入口.md");
 
   await page.keyboard.press("ControlOrMeta+End");
   await link.click({ modifiers: ["ControlOrMeta"] });
-  await expect(page.locator(".card-path")).toHaveText("阅读 / 摘记.md");
+  await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "阅读 / 摘记.md");
   await expect(editor(page)).toContainText("内容");
 
   await page.getByRole("tree").getByRole("treeitem", { name: "笔记库" }).click();
@@ -58,7 +58,7 @@ test("⌘ / Ctrl-click follows a link to a note or a web page; a plain click edi
   await page.keyboard.press("ControlOrMeta+End");
   await editor(page).locator(".cm-md-link", { hasText: "不存在" }).click({ modifiers: ["ControlOrMeta"] });
   await expect(page.getByRole("alert")).toHaveText("找不到笔记“不存在”。");
-  await expect(page.locator(".card-path")).toHaveText("入口.md");
+  await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "入口.md");
 
   await editor(page).locator(".cm-md-link", { hasText: "网页" }).click({ modifiers: ["ControlOrMeta"] });
   await expect.poll(opened).toEqual(["https://example.com/页"]);
