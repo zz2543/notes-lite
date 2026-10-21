@@ -1207,9 +1207,12 @@ nav.rail .drag {
   opacity: 0.6;
 }
 
-/* 专注模式: the navigation and the list fade and slide a few px left while the card, on the 专注
-   spring, grows over the room they give up (a negative margin, so their own width never changes and
-   nothing in them reflows). The window material behind dims. The 助手栏 stays docked. */
+/* 专注模式 (方案 B, 2026-10-21): the side panel and the list slide out left whole, like a drawer, while the
+   card, on the same 专注 spring, grows over the room they give up. Each column gives up its width (a negative
+   margin, so its own width never changes and nothing in it reflows) and moves left by its width and the
+   widths after it, so the side panel stays joined to the list and the list to the card all the way. They
+   do not fade, except under 减弱动态效果, where nothing moves (--focus-hidden). The window material behind
+   dims. The 助手栏 stays docked. */
 .app {
   position: relative;
   isolation: isolate;
@@ -1230,6 +1233,7 @@ nav.rail .drag {
 aside.side,
 section.list,
 nav.rail {
+  --columns-after: 0px;
   transition:
     margin-right var(--focus-move),
     translate var(--focus-move),
@@ -1247,10 +1251,13 @@ section.list {
 nav.rail {
   --column-width: var(--rail-width);
 }
+.app:has(> section.list) aside.side {
+  --columns-after: var(--list-width);
+}
 .app.focused :is(aside.side, section.list, nav.rail) {
   margin-right: calc(-1 * var(--column-width));
-  translate: calc(-1 * var(--focus-shift)) 0;
-  opacity: 0;
+  translate: calc(-1 * (var(--column-width) + var(--columns-after))) 0;
+  opacity: var(--focus-hidden);
   visibility: hidden;
   transition:
     margin-right var(--focus-move),

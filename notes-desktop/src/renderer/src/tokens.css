@@ -57,10 +57,10 @@
   /* 助手栏开关: the column's width moves without a bounce. */
   --assistant-toggle-duration: 0.26s;
   --assistant-toggle: var(--assistant-toggle-duration) cubic-bezier(0.32, 0.72, 0, 1);
-  /* 专注模式: the navigation and the list fade, sliding only this far left, as the card fills their
-     room on the 专注 spring (--spring-focus). What fades eases over --focus-fade-duration, the
-     spring's visual duration (--fade-focus, written beside the springs). */
-  --focus-shift: 5px;
+  /* 专注模式: the navigation and the list slide out left whole, without fading (--focus-hidden), as
+     the card fills their room on the 专注 spring (--spring-focus). The dimming eases over
+     --focus-fade-duration, the spring's visual duration (--fade-focus, written beside the springs). */
+  --focus-hidden: 1;
   --focus-move: var(--spring-focus);
   --focus-fade-duration: var(--fade-focus);
   /* 动效审查 (ticket 23). Disclosure carets turn on 展开; menus grow on 展开 from the corner they open
@@ -230,6 +230,7 @@
     --press-scale-icon: 1;
     --assistant-toggle-duration: 0s;
     --focus-move: 0s;
+    --focus-hidden: 0;
     --caret-turn: 0s;
     --menu-enter-scale: 1;
     --card-tool-rise: 0px;

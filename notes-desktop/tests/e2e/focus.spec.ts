@@ -107,20 +107,37 @@ const transitions = (page: Page, selector: string) =>
   );
 const dimming = (page: Page) => page.locator(".app").evaluate((el) => getComputedStyle(el, "::before").opacity);
 
-test("the card fills on the 专注 spring while the columns fade and slide 5px left over a dimming window", async ({ scratch }) => {
+test("the side panel and the list slide out left together like a drawer, unfaded, as the card fills on the 专注 spring", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "随记.md": "随记" });
   const { app, page } = await launchWith(scratch, root);
   await openNote(page, "随记");
   expect(await dimming(page)).toBe("0");
+  const right = (selector: string) => page.locator(selector).evaluate((el) => el.getBoundingClientRect().right);
+  // The gaps between the side panel and the list, and between the list and the card, in one frame.
+  const gaps = () =>
+    page.evaluate(() => {
+      const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+      const [side, list, card] = [box("aside.side"), box("section.list"), box(".card")];
+      return [Math.abs(list.left - side.right), Math.abs(card.left - list.right - 10)];
+    });
+  const card = page.getByRole("article", { name: "卡片" });
 
   await page.keyboard.press(focusShortcut);
   // 强 (the default): 0.46s with a 0.12 bounce, which Motion's spring curve takes 600ms to settle.
   const side = await transitions(page, "aside.side");
   expect(side).toContainEqual(["margin-right", 600, expect.stringMatching(/^linear\(/)]);
   expect(side).toContainEqual(["translate", 600, expect.stringMatching(/^linear\(/)]);
-  expect(side).toContainEqual(["opacity", 460, "ease-out"]);
+  // They are pushed out whole: nothing fades.
+  expect(side.map(([property]) => property)).not.toContain("opacity");
   expect(await transitions(page, "section.list")).toContainEqual(["margin-right", 600, expect.stringMatching(/^linear\(/)]);
-  await expect.poll(() => page.locator("aside.side").evaluate((el) => getComputedStyle(el).translate)).toBe("-5px");
+  // On the way the side panel stays joined to the list, and the list to the card.
+  const joined: number[] = [];
+  for (let frame = 0; frame < 6; frame++) joined.push(...(await gaps()));
+  expect(Math.max(...joined)).toBeLessThan(3);
+  await expect.poll(() => right("section.list")).toBeLessThanOrEqual(0);
+  expect(await right("aside.side")).toBeLessThanOrEqual(0);
+  expect(await page.locator("aside.side").evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+  await expect.poll(async () => (await card.boundingBox())!.x).toBeLessThanOrEqual(12);
   await expect.poll(() => dimming(page)).toBe("1");
   await app.close();
 });
