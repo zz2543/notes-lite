@@ -1,12 +1,11 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launchWith, library, test } from "./fixtures";
+import { expect, launchWith, library, showSide, test } from "./fixtures";
 
 // Space homepage components, style kit and interface names (ticket 20): the built app, a real
 // temporary library, a homepage in its sandbox. Homepages written for the old app (lb-*) run as they are.
 
-const sideTab = (page: Page, name: "资料库" | "空间") => page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name });
 const spaceList = (page: Page) => page.getByRole("list", { name: "空间", exact: true });
 
 const training =
@@ -24,7 +23,7 @@ async function spacePage(app: ElectronApplication, name: string): Promise<Page> 
 async function openSpace(scratch: string, files: Record<string, string>, name: string) {
   const root = await library(scratch, "笔记库", files);
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name }).click();
   return { root, app, page, home: await spacePage(app, name) };
 }

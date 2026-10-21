@@ -670,12 +670,23 @@ nav.rail .drag {
 .assistant-bar button {
   -webkit-app-region: no-drag;
 }
+/* The figure on the left; beside it the agent (or the choice of one) above the working folder. */
 .assistant-head {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: var(--card-gap);
-  padding-bottom: var(--card-gap);
+  padding: 0 0 var(--card-gap) var(--card-gap);
+}
+.assistant-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.assistant-identity .segmented {
+  align-self: stretch;
 }
 .assistant-figure {
   display: block;
@@ -757,7 +768,9 @@ nav.rail .drag {
   display: inline-flex;
   align-items: center;
   gap: var(--inline-gap);
-  max-width: 100%;
+  max-width: calc(100% + var(--row-padding));
+  /* Its text lines up with the agent's name; the hover tint reaches out past it. */
+  margin-inline-start: calc(-1 * var(--row-padding));
   padding: 0 var(--row-padding);
   height: var(--icon-button-small);
   border-radius: var(--icon-button-radius);

@@ -1,13 +1,12 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launch, launchWith, library, test } from "./fixtures";
+import { expect, launch, launchWith, library, showSide, test } from "./fixtures";
 
 // The space page loop (ticket 19), after the old SpaceWorkflowTests: the built app, a real
 // temporary library, and the space homepage running in its own sandbox. Records the page writes
 // reach the Markdown on disk and the operation log, and can be undone one by one.
 
-const sideTab = (page: Page, name: "资料库" | "空间") => page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name });
 const spaceList = (page: Page) => page.getByRole("list", { name: "空间", exact: true });
 
 const training = "# 训练记录\n\n## 卧推\n| 日期 | 动作 | 重量 |\n|---|---|---|\n| 2026-10-12 | 卧推 | 55 |\n| 2026-10-14 | 卧推 | 57.5 |\n| 2026-10-16 | 卧推 | 60 |\n";
@@ -59,7 +58,7 @@ test("a space homepage writes a record to the Markdown, logged and undone one by
   });
   const note = join(root, "健身/训练记录.md");
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "健身" }).click();
 
   // The middle column holds 主页 and the notes in scope, nothing else.
@@ -106,7 +105,7 @@ test("the homepage runs sandboxed: no Node, no app interface, only its own scope
     ".notes/空间/全局.html": '<meta name="lb-scope" content="*">\n<p id="global">全局主页</p>',
   });
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "健身" }).click();
   const home = await spacePage(app, "健身");
   await expect(home.getByText("训练 3 次")).toBeVisible();
@@ -144,7 +143,7 @@ test("the homepage runs sandboxed: no Node, no app interface, only its own scope
 test("a homepage's own storage stays with its space when the space is renamed, after a restart too", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "健身/训练记录.md": training, ".notes/空间/健身.html": homepage });
   const first = await launchWith(scratch, root);
-  await sideTab(first.page, "空间").click();
+  await showSide(first.page, "空间");
   await spaceList(first.page).getByRole("button", { name: "健身" }).click();
   const home = await spacePage(first.app, "健身");
   await expect(home.getByText("训练 3 次")).toBeVisible();
@@ -162,7 +161,7 @@ test("a homepage's own storage stays with its space when the space is renamed, a
   await first.app.close();
 
   const { app, page } = await launch(scratch);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "力量" }).click();
   const again = await spacePage(app, "力量");
   await expect(again.getByText("训练 3 次")).toBeVisible();
@@ -178,7 +177,7 @@ test("a note in the space opens in the editor, and 主页 brings the same page b
     ".notes/空间/空白.html": '<meta name="lb-scope" content="健身">\n',
   });
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "健身" }).click();
   const home = await spacePage(app, "健身");
   await expect(home.getByText("训练 3 次")).toBeVisible();
@@ -210,7 +209,7 @@ test("a note in the space opens in the editor, and 主页 brings the same page b
   // Back in 资料库, no homepage covers the editor.
   await spaceList(page).getByRole("button", { name: "健身" }).click();
   await expect.poll(() => shownPages(app)).toBe(1);
-  await sideTab(page, "资料库").click();
+  await showSide(page, "资料库");
   await expect.poll(() => shownPages(app)).toBe(0);
   await app.close();
 });
@@ -222,7 +221,7 @@ test("in 单栏导航 an open space shows 主页 and its notes under the spaces"
     ".notes/空间/健身.html": homepage,
   });
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "健身" }).click();
   const home = await spacePage(app, "健身");
   await expect(home.getByText("训练 3 次")).toBeVisible();

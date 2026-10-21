@@ -1,13 +1,12 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launchWith, library, test } from "./fixtures";
+import { expect, launchWith, library, showSide, test } from "./fixtures";
 
 // Space homepages stay current and say when they break (ticket 21): the built app, a real temporary
 // library, a homepage in its sandbox. Changes to notes in scope reach `space.on("change")` and the
 // components whoever made them; a rewritten space file shows at once; errors show in a bar above the page.
 
-const sideTab = (page: Page, name: "资料库" | "空间") => page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name });
 const spaceList = (page: Page) => page.getByRole("list", { name: "空间", exact: true });
 
 const training = "# 训练记录\n\n## 卧推\n| 日期 | 动作 | 重量 |\n|---|---|---|\n| 2026-10-12 | 卧推 | 55 |\n| 2026-10-14 | 卧推 | 57.5 |\n\n备注\n";
@@ -42,7 +41,7 @@ async function spacePage(app: ElectronApplication, name: string): Promise<Page> 
 async function openSpace(scratch: string, files: Record<string, string>, name: string) {
   const root = await library(scratch, "笔记库", files);
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name }).click();
   return { root, app, page, home: await spacePage(app, name) };
 }

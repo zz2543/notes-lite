@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { installFakeAgent } from "../support/fakeAgent";
-import { expect, launch, launchWith, library, test } from "./fixtures";
+import { expect, launch, launchWith, library, showSide, test } from "./fixtures";
 
 // Codex, DeepSeek Harness and Pi in the 助手栏, and 对话历史 (ticket 30), with fake agents on the app's
 // search path that speak each one's output: none reaches a model.
@@ -29,6 +29,15 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
   const choice = column(page).getByRole("radiogroup", { name: "Agent" });
   // Every one installed can be chosen: none is waiting to be supported.
   await expect(choice.getByRole("radio")).toHaveText(["Codex", "DeepSeek Harness", "Pi"]);
+  // Side by side: the figure on the left; the choice above the working folder on its right. Measured in one
+  // go, as the column may still be sliding open.
+  const [figure, chosen, folder] = await column(page).evaluate((el) => {
+    const box = (selector: string) => el.querySelector(selector)!.getBoundingClientRect().toJSON() as DOMRect;
+    return [box('[role="img"]'), box('[role="radiogroup"]'), box(".assistant-folder")] as const;
+  });
+  expect(chosen.x).toBeGreaterThanOrEqual(figure.x + figure.width);
+  expect(folder.y).toBeGreaterThanOrEqual(chosen.y + chosen.height);
+  expect(chosen.y).toBeLessThan(figure.y + figure.height);
 
   for (const [name, agent] of Object.entries(agents)) {
     await choice.getByRole("radio", { name }).click();
@@ -128,7 +137,7 @@ test("with a space open, the agent is told the spaces' authoring guide and which
   });
   const agent = await installFakeAgent(join(scratch, "agents"), "claude", { steps: [{ say: "好的。" }] });
   const { page, app } = await launchWith(scratch, root);
-  await page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name: "空间" }).click();
+  await showSide(page, "空间");
   await page.getByRole("list", { name: "空间", exact: true }).getByRole("button", { name: "健身" }).click();
   await page.getByRole("button", { name: "打开助手栏" }).click();
   await say(page, "把主页改成按周统计");

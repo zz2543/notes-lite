@@ -1,4 +1,4 @@
-import { Plus, SquaresFour } from "@phosphor-icons/react";
+import { Books, Plus, SquaresFour } from "@phosphor-icons/react";
 import { AnimatePresence, motion, Reorder } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { SpaceDraft, SpaceScope } from "../../core";
@@ -16,22 +16,31 @@ import { icon } from "./tokens";
 
 export type SideMode = "library" | "spaces";
 
-/** “资料库 | 空间”: which of the two the side panel shows; the pill slides with 滑移. */
+/**
+ * “资料库 | 空间”: one switch, pressed to go to the other. It names the side shown, beside a knob that
+ * slides (滑移) to the other end on each press, the way TRAE's SOLO | IDE switch does. As a switch it is
+ * 空间, on while the spaces show.
+ */
 export function SideSwitch({ mode, onChange }: { mode: SideMode; onChange(mode: SideMode): void }) {
   const { slide } = useMotion();
-  const tabs: Array<[SideMode, string]> = [
-    ["library", "资料库"],
-    ["spaces", "空间"],
-  ];
+  const spaces = mode === "spaces";
+  const Icon = spaces ? SquaresFour : Books;
   return (
-    <div className="side-switch" role="tablist" aria-label="侧栏">
-      {tabs.map(([value, label]) => (
-        <button key={value} role="tab" aria-selected={mode === value} onClick={() => onChange(value)}>
-          {mode === value && <motion.span layoutId="side-switch-pill" transition={slide} className="pill" aria-hidden />}
-          {label}
-        </button>
-      ))}
-    </div>
+    <button
+      className={`side-switch ${spaces ? "on" : ""}`}
+      role="switch"
+      aria-checked={spaces}
+      aria-label="空间"
+      title={spaces ? "回到资料库" : "切换到空间"}
+      onClick={() => onChange(spaces ? "library" : "spaces")}
+    >
+      <motion.span key={mode} layout="position" transition={slide} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="side-switch-label">
+        {spaces ? "空间" : "资料库"}
+      </motion.span>
+      <motion.span layout="position" transition={slide} className="side-switch-knob" aria-hidden>
+        <Icon size={icon.small} weight="fill" />
+      </motion.span>
+    </button>
   );
 }
 

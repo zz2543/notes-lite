@@ -1,11 +1,10 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { answerFolderPicker, expect, launch, launchWith, library, test } from "./fixtures";
+import { answerFolderPicker, expect, launch, launchWith, library, showSide, sideSwitch, test } from "./fixtures";
 
 const tree = (page: Page) => page.getByRole("tree", { name: "文件夹" });
 const spaceList = (page: Page) => page.getByRole("list", { name: "空间", exact: true });
-const sideTab = (page: Page, name: "资料库" | "空间") => page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name });
 const exists = (path: string) => stat(path).then(() => true, () => false);
 
 /** On CI the real system trash is used; locally, a folder stands in so test files stay out of yours. */
@@ -35,10 +34,12 @@ test("an old library's .留白/ moves into .notes/ on first open, the old folder
   await answerFolderPicker(app, root);
   await page.getByRole("button", { name: "选择笔记库…" }).click();
 
-  await expect(sideTab(page, "资料库")).toHaveAttribute("aria-selected", "true");
+  await expect(sideSwitch(page)).not.toBeChecked();
+  await expect(sideSwitch(page)).toHaveText("资料库");
   await expect(tree(page).getByRole("treeitem")).toHaveText(["笔记库", "健身"]);
-  await sideTab(page, "空间").click();
-  await expect(sideTab(page, "空间")).toHaveAttribute("aria-selected", "true");
+  await showSide(page, "空间");
+  await expect(sideSwitch(page)).toBeChecked();
+  await expect(sideSwitch(page)).toHaveText("空间");
   await expect(spaceList(page).getByRole("button")).toHaveText(["📚雅思", "🏋️健身"]);
   await expect(tree(page)).toHaveCount(0);
 
@@ -48,8 +49,30 @@ test("an old library's .留白/ moves into .notes/ on first open, the old folder
   expect(await readFile(join(root, ".notes/空间/编写说明.md"), "utf8"), "the guide is installed for this version").toContain(".notes/空间/");
   expect(await readFile(join(root, "健身/训练.md"), "utf8")).toBe(training);
 
-  await sideTab(page, "资料库").click();
+  await showSide(page, "资料库");
   await expect(tree(page).getByRole("treeitem")).toHaveText(["笔记库", "健身"]);
+  await app.close();
+});
+
+test("“资料库 | 空间” is one switch: it names the side shown, and its knob slides to the other end on each press", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "一.md": "一" });
+  const { app, page } = await launchWith(scratch, root);
+  const knob = sideSwitch(page).locator(".side-switch-knob");
+  const label = sideSwitch(page).locator(".side-switch-label");
+  const x = async (locator: typeof knob) => (await locator.boundingBox())!.x;
+
+  await expect(sideSwitch(page)).toHaveText("资料库");
+  expect(await x(knob)).toBeGreaterThan(await x(label));
+  await sideSwitch(page).click();
+  await expect(sideSwitch(page)).toBeChecked();
+  await expect(sideSwitch(page)).toHaveText("空间");
+  await expect(tree(page)).toHaveCount(0);
+  await expect.poll(async () => (await x(knob)) < (await x(label))).toBe(true);
+  // Pressed again: back to 资料库, the knob at the right end.
+  await sideSwitch(page).click();
+  await expect(sideSwitch(page)).not.toBeChecked();
+  await expect(tree(page)).toBeVisible();
+  await expect.poll(async () => (await x(knob)) > (await x(label))).toBe(true);
   await app.close();
 });
 
@@ -67,7 +90,7 @@ test("creating a space copies the prompt; spaces can be renamed, reordered by dr
   const root = await library(scratch, "笔记库", { "健身/训练.md": training, "日记/今天.md": "# 今天" });
   const { app, page } = await launchWith(scratch, root);
   await standInTrash(app, join(scratch, "废纸篓"));
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
 
   await page.getByRole("button", { name: "新建空间" }).first().click();
   const form = page.getByRole("dialog", { name: "新建空间" });
@@ -135,7 +158,7 @@ test("显示源文件 in a space's menu shows its HTML file in the system file m
     (globalThis as { shown?: string[] }).shown = shown;
     shell.showItemInFolder = (path) => void shown.push(path);
   });
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "显示源文件" }).click();
 
@@ -146,7 +169,7 @@ test("显示源文件 in a space's menu shows its HTML file in the system file m
 test("a space file written by another program shows up in the list", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "健身/训练.md": training });
   const { app, page } = await launchWith(scratch, root);
-  await sideTab(page, "空间").click();
+  await showSide(page, "空间");
   await expect(page.getByText("空间围绕一个主题")).toBeVisible();
 
   await library(scratch, "笔记库", { ".notes/空间/外部.html": '<meta name="lb-scope" content="*">\n<meta name="lb-icon" content="🌍">\n' });

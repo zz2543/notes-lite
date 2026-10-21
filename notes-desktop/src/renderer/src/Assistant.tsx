@@ -105,19 +105,22 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
         <header className="assistant-head">
           {/* One figure at a time: the column's only while it is open. */}
           {open && <AssistantFigure size={figureSize.column} state={assistant.figure} />}
-          {conversationAgent ? (
-            <span className="assistant-agent">{conversationAgent.name}</span>
-          ) : (
-            installed &&
-            installed.length > 0 &&
-            agent && <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
-          )}
-          {installed && installed.length > 0 && (
-            <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${workingName}`} title="工作目录">
-              <FolderSimple size={icon.small} />
-              <span>{workingName}</span>
-            </button>
-          )}
+          {/* Beside it, who answers and where they work. */}
+          <div className="assistant-identity">
+            {conversationAgent ? (
+              <span className="assistant-agent">{conversationAgent.name}</span>
+            ) : (
+              installed &&
+              installed.length > 0 &&
+              agent && <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
+            )}
+            {installed && installed.length > 0 && (
+              <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${workingName}`} title="工作目录">
+                <FolderSimple size={icon.small} />
+                <span>{workingName}</span>
+              </button>
+            )}
+          </div>
         </header>
         {installed?.length === 0 && <InstallGuide onDetect={detect} />}
         {history ? (

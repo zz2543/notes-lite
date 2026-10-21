@@ -121,3 +121,12 @@ export const transitionOf = (page: Page, selector: string, property: string) =>
     },
     { selector, property },
   );
+
+/** The side panel's “资料库 | 空间” switch: on while the spaces show. */
+export const sideSwitch = (page: Page) => page.getByRole("switch", { name: "空间", exact: true });
+
+/** Shows `side` in the side panel, pressing the switch only if the other side shows. */
+export async function showSide(page: Page, side: "资料库" | "空间") {
+  const on = side === "空间";
+  if ((await sideSwitch(page).getAttribute("aria-checked")) !== String(on)) await sideSwitch(page).click();
+}

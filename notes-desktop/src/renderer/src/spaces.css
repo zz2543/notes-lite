@@ -1,31 +1,40 @@
 /* 空间 in the side panel: the “资料库 | 空间” switch, the space list and the space form. Values are the
    variables in tokens.css. */
 
-/* 分段控件: the pill slides (滑移) between the two halves. */
+/* “资料库 | 空间”: the side shown named beside a knob; on 空间 the two change ends, the knob sliding (滑移). */
 .side-switch {
-  display: flex;
   flex: none;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  height: calc(var(--segmented-height) + 2 * var(--segmented-padding));
   margin: 0 2px var(--card-gap);
   padding: var(--segmented-padding);
+  padding-inline-start: var(--row-padding);
   border-radius: var(--segmented-radius);
   background: var(--hover);
+  color: var(--side-fg);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-group);
   -webkit-app-region: no-drag;
+  transition: scale var(--spring-pop);
 }
-.side-switch button {
-  position: relative;
-  isolation: isolate;
-  flex: 1;
+.side-switch.on {
+  flex-direction: row-reverse;
+  padding-inline: var(--segmented-padding) var(--row-padding);
+}
+.side-switch:active {
+  scale: var(--press-scale);
+}
+.side-switch-knob {
+  display: grid;
+  place-items: center;
+  width: calc(var(--segmented-height) + 4px);
   height: var(--segmented-height);
   border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
-  color: var(--side-muted);
-  font-size: var(--text-meta);
-}
-.side-switch button[aria-selected="true"] {
-  color: var(--side-fg);
-  font-weight: var(--weight-group);
-}
-.side-switch .pill {
   background: var(--side-pill);
+  color: var(--side-fg);
 }
 
 /* The two side pages share one place; the one leaving is lifted out while it slides away. */
