@@ -1,5 +1,6 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { AgentId } from "../../src/shared/agentKinds";
 
 // Installs the fake command-line agent (fakeAgentProgram.mjs) as `command` in `dir`: a shell script, or a
 // .cmd shim on Windows, that runs it with this Node and says where its script and log are, and which
@@ -35,11 +36,8 @@ export interface FakeAgent {
 
 const agentScript = join(__dirname, "fakeAgentProgram.mjs");
 
-/** The agents it can stand in for, by their command. */
-export type AgentCommand = "claude" | "codex" | "dsh" | "pi";
-
 /** `scripts`: one per run in order (the last repeats), or one for every run. */
-export async function installFakeAgent(dir: string, command: AgentCommand, scripts: FakeScript | FakeScript[]): Promise<FakeAgent> {
+export async function installFakeAgent(dir: string, command: AgentId, scripts: FakeScript | FakeScript[]): Promise<FakeAgent> {
   await mkdir(dir, { recursive: true });
   const script = join(dir, `${command}.script.json`);
   const log = join(dir, `${command}.log`);

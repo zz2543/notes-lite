@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { InstalledAgent } from "../../core";
 import { agents, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
-import { Composer, ConversationHistory, ConversationView, folderName as nameOf, type AssistantState } from "./AssistantChat";
+import { Composer, ConversationHistory, ConversationView, folderName, type AssistantState } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
 import { Segmented } from "./controls";
 import { figureSize, icon } from "./tokens";
@@ -69,7 +69,7 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
   const { conversation } = assistant;
   // Fixed when the conversation begins; until then it follows the selection.
   const workingFolder = conversation?.folder ?? folder;
-  const folderName = nameOf(workingFolder, libraryName);
+  const workingName = folderName(workingFolder, libraryName);
   // 对话历史 shows in place of the conversation until one is picked.
   const [history, setHistory] = useState(false);
   const pick = (id: string) => {
@@ -77,6 +77,8 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
     void assistant.open(id);
   };
   const conversationAgent = conversation && agents.find((a) => a.id === conversation.agent);
+  // A conversation from 对话历史 whose agent is no longer installed cannot go on.
+  const agentGone = conversationAgent && installed && !installed.some((a) => a.id === conversationAgent.id);
   const send = async (text: string, notes: string[]) => {
     if (!agent || !(await saveFirst())) return;
     await assistant.send({ agent: agent.id, folder, text, notes, ...(space ? { space } : {}) });
@@ -111,9 +113,9 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
             agent && <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
           )}
           {installed && installed.length > 0 && (
-            <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${folderName}`} title="工作目录">
+            <button className="assistant-folder" onClick={() => onOpenFolder(workingFolder)} aria-label={`工作目录：${workingName}`} title="工作目录">
               <FolderSimple size={icon.small} />
-              <span>{folderName}</span>
+              <span>{workingName}</span>
             </button>
           )}
         </header>
@@ -125,6 +127,11 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
         ) : (
           <div className="assistant-messages" />
         )}
+        {agentGone && (
+          <p className="assistant-problem" role="alert">
+            这个对话用的 {conversationAgent.name} 没有安装，不能继续。
+          </p>
+        )}
         {assistant.problem && (
           <p className="assistant-problem" role="alert">
             {assistant.problem}
@@ -134,7 +141,7 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, space,
           <Composer
             note={note}
             running={assistant.running}
-            disabled={!agent}
+            disabled={!agent || Boolean(agentGone)}
             hasConversation={conversation !== null}
             onSend={(text, notes) => void send(text, notes)}
             onStop={assistant.stop}

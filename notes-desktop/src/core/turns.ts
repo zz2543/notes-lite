@@ -48,7 +48,7 @@ export interface TurnSpaces {
   /** The authoring guide (编写说明). */
   guide: string;
   /** Each space by name, with its file. */
-  spaces: Array<{ name: string; path: string }>;
+  list: Array<{ name: string; path: string }>;
   /** The space open in the app, if any. */
   open?: string;
 }
@@ -63,7 +63,7 @@ export async function turnSpaces(library: SpaceLibrary, open?: string): Promise<
   await library.installGuide();
   return {
     guide: spacesGuidePath,
-    spaces: spaces.map(({ name, path }) => ({ name, path })),
+    list: spaces.map(({ name, path }) => ({ name, path })),
     ...(open && spaces.some((space) => space.name === open) ? { open } : {}),
   };
 }
@@ -78,15 +78,15 @@ export function turnPrompt({ root, folder, text, notes, spaces }: Pick<TurnReque
   const cwd = at(root, folder);
   const rel = (path: string) => relative(cwd, at(root, path)).split("\\").join("/");
   const parts = [text];
-  if (notes.length > 0) parts.push(`附带的笔记（路径相对于当前工作目录）：\n${notes.map((note) => `- ${rel(note)}`).join("\n")}\n`);
+  if (notes.length > 0) parts.push(`附带的笔记（路径相对于当前工作目录）：\n${notes.map((note) => `- ${rel(note)}`).join("\n")}`);
   if (spaces)
     parts.push(
       [
         `笔记库的空间主页（路径相对于当前工作目录）。编写或修改空间主页前，请先完整阅读并遵守编写说明：${rel(spaces.guide)}`,
-        ...spaces.spaces.map(({ name, path }) => `- ${name}：${rel(path)}${name === spaces.open ? "（当前打开）" : ""}`),
-      ].join("\n") + "\n",
+        ...spaces.list.map(({ name, path }) => `- ${name}：${rel(path)}${name === spaces.open ? "（当前打开）" : ""}`),
+      ].join("\n"),
     );
-  return parts.length === 1 ? text : parts.join("\n\n");
+  return parts.length === 1 ? text : `${parts.join("\n\n")}\n`;
 }
 
 /** Runs the command; a Windows .cmd or .bat shim goes through the shell, which Node requires. */

@@ -1,15 +1,14 @@
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readFile } from "node:fs/promises";
-import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, spaceLibrary, turnSpaces, type TurnEvent, type TurnSpaces } from "../../src/core";
-import { installFakeAgent, type AgentCommand, type FakeScript } from "../support/fakeAgent";
+import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, spaceLibrary, turnSpaces, type AgentId, type TurnEvent, type TurnSpaces } from "../../src/core";
+import { installFakeAgent, type FakeScript } from "../support/fakeAgent";
 import { contents, fakeTrash, library, scratchFolder } from "../support/library";
 
 // 一轮 (assistant-spec): the library is snapshotted, the agent runs in the working directory with full
 // permissions, its replies and tool calls stream out, and what it changed becomes one operation-log entry.
 
-async function setup(files: Record<string, string>, script: FakeScript | FakeScript[], id: AgentCommand = "claude") {
+async function setup(files: Record<string, string>, script: FakeScript | FakeScript[], id: AgentId = "claude") {
   const root = await library(files);
   const data = await scratchFolder("notes-desktop-data-");
   const trash = await fakeTrash();
@@ -169,7 +168,7 @@ describe("空间主页的编写说明", () => {
     const spaces = await turnSpaces(spaceLibrary(root), "健身");
     expect(spaces).toEqual({
       guide: ".notes/空间/编写说明.md",
-      spaces: [
+      list: [
         { name: "读书", path: ".notes/空间/读书.html" },
         { name: "健身", path: ".notes/空间/健身.html" },
       ],

@@ -14,8 +14,6 @@ import { icon } from "./tokens";
 
 /** How long the figure shows 完成 before it goes back to 待命. */
 const doneFor = 1600;
-/** What a turn the user stopped ends with: no error for the figure. */
-const stopped = stoppedTurn;
 
 const titleOf = noteTitle;
 
@@ -33,7 +31,7 @@ export function useAssistant() {
     setConversation((now) => now && withEvent(now, event));
     if (event.kind === "tool") setFigure(event.activity);
     else if (event.kind === "text" || event.kind === "toolDone") setFigure("thinking");
-    else if (event.kind === "end") setFigure(event.failed && event.failed !== stopped ? "error" : "done");
+    else if (event.kind === "end") setFigure(event.failed && event.failed !== stoppedTurn ? "error" : "done");
   };
   useEffect(
     () =>

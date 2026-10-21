@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { realpath } from "node:fs/promises";
+import { realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { installFakeAgent } from "../support/fakeAgent";
 import { expect, launch, launchWith, library, test } from "./fixtures";
@@ -36,7 +36,7 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
     const reply = name === "DeepSeek Harness" ? "DSH" : name;
     await expect(conversation(page)).toContainText(`${reply} 收到。`);
     // Its conversation keeps it: the switch gives way to its name.
-    await expect(column(page).locator(".assistant-agent")).toHaveText(name);
+    await expect(column(page).getByText(name, { exact: true })).toBeVisible();
     await say(page, "再来");
     await expect(conversation(page).getByText(`${reply} 收到。`)).toHaveCount(2);
     await expect(column(page).getByRole("img", { name: /助手形象：(完成|待命)/ })).toBeVisible();
@@ -51,7 +51,7 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
   }
 });
 
-test("对话历史 lists the library's conversations; one opened again is continued with its agent and working directory, after a restart too", async ({ scratch }) => {
+test("对话历史 lists the library's conversations; one opened again is continued with its agent and working directory, after a restart too, and only read once its agent is gone", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "日记/周一.md": "# 周一\n", "读书/书单.md": "# 书单\n" });
   const codex = await installFakeAgent(join(scratch, "agents"), "codex", { session: "x-1", steps: [{ say: "整理好了。" }] });
   const claude = await installFakeAgent(join(scratch, "agents"), "claude", { session: "c-1", steps: [{ say: "写好了。" }] });
@@ -81,7 +81,7 @@ test("对话历史 lists the library's conversations; one opened again is contin
   await history().click();
   // The latest used first, each by its first message, its agent and its working directory.
   const items = list().getByRole("button");
-  await expect(items.locator(".history-title")).toHaveText(["写书单", "整理日记"]);
+  await expect(items).toHaveText([/^写书单/, /^整理日记/]);
   await expect(items.nth(0)).toContainText("Claude Code · 读书");
   await expect(items.nth(1)).toContainText("Codex · 日记");
 
@@ -91,7 +91,7 @@ test("对话历史 lists the library's conversations; one opened again is contin
   await expect(conversation(page)).toContainText("整理好了。");
   // Wherever the user is now, it goes on with Codex in 日记.
   await page.getByRole("treeitem", { name: "读书" }).click();
-  await expect(column(page).locator(".assistant-agent")).toHaveText("Codex");
+  await expect(column(page).getByText("Codex", { exact: true })).toBeVisible();
   await expect(column(page).getByRole("button", { name: "工作目录：日记" })).toBeVisible();
   await say(page, "再细一点");
   await expect(conversation(page).getByText("整理好了。")).toHaveCount(2);
@@ -103,9 +103,22 @@ test("对话历史 lists the library's conversations; one opened again is contin
 
   // It is the latest used now, and marked as the one shown.
   await history().click();
-  await expect(items.locator(".history-title")).toHaveText(["整理日记", "写书单"]);
+  await expect(items).toHaveText([/^整理日记/, /^写书单/]);
   await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
   await again.app.close();
+
+  // With Codex gone, its conversation can still be read, but not continued.
+  await rm(codex.path);
+  const last = await launch(scratch);
+  page = last.page;
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await history().click();
+  await list().getByRole("button").nth(0).click();
+  await expect(conversation(page)).toContainText("再细一点");
+  await expect(column(page).getByRole("alert")).toHaveText("这个对话用的 Codex 没有安装，不能继续。");
+  await input(page).fill("还在吗");
+  await expect(column(page).getByRole("button", { name: "发送" })).toBeDisabled();
+  await last.app.close();
 });
 
 test("with a space open, the agent is told the spaces' authoring guide and which space it is", async ({ scratch }) => {

@@ -80,6 +80,18 @@ function detailOf(input: Record<string, unknown>, cwd: string): string {
   return text("command") ?? text("pattern") ?? text("query") ?? text("url") ?? text("description") ?? "";
 }
 
+/** A tool call began: what the figure shows of it, and what it works on. */
+const toolEvent = (id: string, name: string, input: Record<string, unknown>, cwd: string): AgentEvent => ({
+  kind: "tool",
+  id,
+  name,
+  activity: activities[name] ?? "thinking",
+  detail: detailOf(input, cwd),
+});
+
+/** Why a turn failed when the agent does not say. */
+const unfinishedTurn = "Agent 没有完成这一轮。";
+
 interface ClaudeLine {
   type?: string;
   subtype?: string;
@@ -130,14 +142,14 @@ export const claudeCode: AgentAdapter = {
           if (block.type === "text" && block.text && !(id && streamed.has(id))) events.push({ kind: "text", text: block.text });
           if (block.type === "tool_use" && block.id && block.name) {
             const input = block.input ?? {};
-            events.push({ kind: "tool", id: block.id, name: block.name, activity: activities[block.name] ?? "thinking", detail: detailOf(input, cwd) });
+            events.push(toolEvent(block.id, block.name, input, cwd));
           }
         }
       } else if (line.type === "user") {
         for (const block of line.message?.content ?? [])
           if (block.type === "tool_result" && block.tool_use_id) events.push({ kind: "toolDone", id: block.tool_use_id, failed: Boolean(block.is_error) });
       } else if (line.type === "result") {
-        events.push(line.is_error ? { kind: "result", failed: line.result || "Agent 没有完成这一轮。" } : { kind: "result" });
+        events.push(line.is_error ? { kind: "result", failed: line.result || unfinishedTurn } : { kind: "result" });
       }
       return events;
     };
@@ -216,7 +228,7 @@ export const codex: AgentAdapter = {
           events.push({ kind: "toolDone", id: item.id, failed });
         }
       } else if (line.type === "turn.completed") events.push({ kind: "result" });
-      else if (line.type === "turn.failed") events.push({ kind: "result", failed: line.error?.message || "Agent 没有完成这一轮。" });
+      else if (line.type === "turn.failed") events.push({ kind: "result", failed: line.error?.message || unfinishedTurn });
       // A top-level `error` is also how Codex says it is reconnecting; the turn's end says whether it failed.
       return events.map(paragraph);
     };
@@ -262,12 +274,12 @@ export const pi: AgentAdapter = {
         case "message_end":
           // The last word on a reply: it ended as asked, or with an error (which a retry may still clear).
           if (line.message?.role === "assistant")
-            failed = line.message.stopReason === "error" ? line.message.errorMessage || "Agent 没有完成这一轮。" : undefined;
+            failed = line.message.stopReason === "error" ? line.message.errorMessage || unfinishedTurn : undefined;
           return [];
         case "tool_execution_start": {
           if (!line.toolCallId || !line.toolName) return [];
           const name = line.toolName;
-          return [{ kind: "tool", id: line.toolCallId, name, activity: activities[name] ?? "thinking", detail: detailOf(line.args ?? {}, cwd) }];
+          return [toolEvent(line.toolCallId, name, line.args ?? {}, cwd)];
         }
         case "tool_execution_end":
           return line.toolCallId ? [{ kind: "toolDone", id: line.toolCallId, failed: Boolean(line.isError) }] : [];
@@ -312,15 +324,15 @@ export const deepseekHarness: AgentAdapter = {
       else if (line.type === "text" && line.text) events.push({ kind: "text", text: line.text });
       else if (line.type === "tool_call" && line.callId && line.tool) {
         const input = typeof line.input === "object" && line.input !== null ? (line.input as Record<string, unknown>) : {};
-        events.push({ kind: "tool", id: line.callId, name: line.tool, activity: activities[line.tool] ?? "thinking", detail: detailOf(input, cwd) });
+        events.push(toolEvent(line.callId, line.tool, input, cwd));
       } else if (line.type === "tool_result" && line.callId) events.push({ kind: "toolDone", id: line.callId, failed: line.status === "error" });
       else if (line.type === "status" && line.phase === "turn_end" && !ended) {
         ended = true;
         const kind = line.reason?.kind;
-        events.push(kind === "completed" ? { kind: "result" } : { kind: "result", failed: line.reason?.error?.message || "Agent 没有完成这一轮。" });
+        events.push(kind === "completed" ? { kind: "result" } : { kind: "result", failed: line.reason?.error?.message || unfinishedTurn });
       } else if (line.type === "error" && !ended) {
         ended = true;
-        events.push({ kind: "result", failed: line.message || "Agent 没有完成这一轮。" });
+        events.push({ kind: "result", failed: line.message || unfinishedTurn });
       }
       return events.map(paragraph);
     };

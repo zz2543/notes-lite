@@ -1,7 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { assistantTurns, conversationStore, detectAgents, emptyReply, operationLog, snapshotStore, type AgentId, type TurnEvent } from "../../src/core";
+import { assistantTurns, conversationStore, detectAgents, operationLog, snapshotStore, type AgentId, type TurnEvent } from "../../src/core";
 import { installFakeAgent } from "../support/fakeAgent";
 import { fakeTrash, library, scratchFolder } from "../support/library";
 
@@ -39,7 +39,7 @@ async function setup() {
     await expect.poll(async () => (await conversations.read(id)).messages.at(-1)).toMatchObject({ done: true });
     return id;
   };
-  return { root, options, conversations, turns, claude, codex, turn };
+  return { root, data, options, conversations, turns, claude, codex, turn };
 }
 
 describe("对话历史", () => {
@@ -80,6 +80,7 @@ describe("对话历史", () => {
     expect(run!.argv).toContain("x-1");
     expect(await realpath(run!.cwd)).toBe(await realpath(join(lib.root, "日记")));
     expect(await lib.claude.runs()).toEqual([]);
+    await expect.poll(async () => (await lib.conversations.read(id)).messages.at(-1)).toMatchObject({ done: true, parts: [{ text: "收到。" }] });
   });
 
   it("opens nothing from another library or that is not there", async () => {
@@ -90,17 +91,22 @@ describe("对话历史", () => {
     expect(await lib.turns.open(null, id)).toBeNull();
   });
 
-  it("a turn the app quit in the middle of opens as stopped", async () => {
+  it("keeps the agent's id for a conversation as soon as it comes, and one the app quit in the middle of opens as stopped", async () => {
     const lib = await setup();
-    const conversation = lib.conversations.start({ agent: "claude", root: lib.root, folder: "" });
-    conversation.messages.push({ role: "user", text: "写到一半", notes: [] }, { ...emptyReply(), parts: [{ kind: "text", text: "开始" }] });
-    await lib.conversations.save(conversation);
-    expect((await lib.turns.open(lib.root, conversation.id))!.messages.at(-1)).toEqual({
-      role: "assistant",
-      parts: [{ kind: "text", text: "开始" }],
-      done: true,
-      changes: [],
-      failed: "已停止。",
-    });
+    const hold = join(lib.root, "..", "never");
+    await installFakeAgent(join(lib.data, "agents"), "claude", { session: "c-9", steps: [{ say: "开始" }, { waitFor: hold }] });
+    const started = await lib.turns.start(lib.root, { conversation: null, agent: "claude", folder: "", notes: [], text: "写到一半" }, () => {});
+    if (!started.ok) throw new Error(started.message);
+    const id = started.conversation.id;
+    await expect.poll(async () => (await lib.conversations.read(id)).session).toBe("c-9");
+
+    // As the app finds it after quitting mid-turn: kept with the reply not yet done.
+    const again = assistantTurns(lib.options);
+    const opened = (await again.open(lib.root, id))!;
+    expect(opened.session).toBe("c-9");
+    // What the turn changed is not known, so nothing is said of it.
+    expect(opened.messages.at(-1)).toEqual({ role: "assistant", parts: [], done: true, failed: "已停止。" });
+    lib.turns.stopAll();
+    await expect.poll(async () => (await lib.conversations.read(id)).messages.at(-1)).toMatchObject({ done: true });
   });
 });

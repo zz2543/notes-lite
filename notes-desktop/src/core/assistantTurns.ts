@@ -57,13 +57,18 @@ export interface AssistantTurns {
 export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
   const { conversations } = options;
   // The conversations of this run stay in memory too.
-  const open = new Map<string, Conversation>();
+  const live = new Map<string, Conversation>();
   const running = new Map<string, AbortController>();
+  // Kept one save at a time, each the conversation as it stands then.
+  let saving = Promise.resolve();
+  const keep = (id: string) => {
+    saving = saving.then(() => conversations.save(live.get(id)!)).catch(() => undefined);
+  };
 
   const start: AssistantTurns["start"] = async (root, request, send) => {
     if (!root) return { ok: false, message: "请先打开笔记库。" };
     const known = request.conversation
-      ? (open.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined)))
+      ? (live.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined)))
       : undefined;
     let conversation = known ?? conversations.start({ agent: request.agent, root, folder: request.folder });
     if (conversation.root !== root) return { ok: false, message: "这个对话属于另一个笔记库。" };
@@ -72,12 +77,15 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
     conversation = { ...conversation, messages: [...conversation.messages, { role: "user", text: request.text, notes: request.notes }, emptyReply()] };
     const id = conversation.id;
-    open.set(id, conversation);
+    live.set(id, conversation);
     await conversations.save(conversation);
     const stop = new AbortController();
     running.set(id, stop);
     const pass = (event: TurnEvent) => {
-      open.set(id, withEvent(open.get(id)!, event));
+      const before = live.get(id)!;
+      live.set(id, withEvent(before, event));
+      // The agent's id for it is kept at once, so it can be continued even if the app quits mid-turn.
+      if (event.kind === "session" && event.id !== before.session) keep(id);
       send(id, event);
     };
     const turns = options.snapshots.library(root);
@@ -98,29 +106,32 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     })
       .catch((error: Error) => {
         // The snapshots themselves failed: the turn ends saying why.
-        const reply = open.get(id)!.messages.at(-1);
+        const reply = live.get(id)!.messages.at(-1);
         if (reply?.role === "assistant" && !reply.done) pass({ kind: "end", changes: [], failed: error.message });
       })
       .finally(() => {
         running.delete(id);
-        void conversations.save(open.get(id)!).catch(() => undefined);
+        keep(id);
       });
     return { ok: true, conversation };
   };
 
-  const open_: AssistantTurns["open"] = async (root, id) => {
-    const conversation = open.get(id) ?? (await conversations.read(id).catch(() => undefined));
+  const open: AssistantTurns["open"] = async (root, id) => {
+    const conversation = live.get(id) ?? (await conversations.read(id).catch(() => undefined));
     if (!root || !conversation || conversation.root !== root) return null;
     const reply = conversation.messages.at(-1);
-    // A turn the app quit in the middle of ended there.
-    if (!running.has(id) && reply?.role === "assistant" && !reply.done) return withEvent(conversation, { kind: "end", changes: [], failed: stoppedTurn });
+    // A turn the app quit in the middle of ended there; what it changed is not known.
+    if (!running.has(id) && reply?.role === "assistant" && !reply.done) {
+      const messages = [...conversation.messages.slice(0, -1), { ...reply, done: true, failed: stoppedTurn }];
+      return { ...conversation, messages };
+    }
     return conversation;
   };
 
   return {
     start,
     history: async (root) => (root ? conversations.list(root) : []),
-    open: open_,
+    open,
     stop: (id) => running.get(id)?.abort(),
     stopAll: () => running.forEach((turn) => turn.abort()),
   };
