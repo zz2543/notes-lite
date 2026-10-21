@@ -248,16 +248,21 @@ export interface ComposerProps {
   onSend(text: string, notes: string[]): void;
   onStop(): void;
   hasConversation: boolean;
+  /** Each new value puts the caret in the message field (让助手修改 on a space's title). */
+  focusRequest?: number;
 }
 
 /** The input: what to ask, with the open note attached (it can be taken off) and notes mentioned with @. */
-export function Composer({ note, running, disabled, onSend, onStop, hasConversation }: ComposerProps) {
+export function Composer({ note, running, disabled, onSend, onStop, hasConversation, focusRequest = 0 }: ComposerProps) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [dropped, setDropped] = useState<string | null>(null);
   const [mentioned, setMentioned] = useState<string[]>([]);
   const [highlight, setHighlight] = useState(0);
   const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focusRequest > 0) field.current?.focus();
+  }, [focusRequest]);
   const query = mentionAt(text, caret);
   const hits = useMentions(query);
   const choices = query === null ? [] : hits;

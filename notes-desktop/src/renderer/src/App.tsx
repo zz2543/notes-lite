@@ -227,6 +227,12 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     setAssistantOpen(true);
     setAssistantRequest({ id: Date.now(), text: prompt.value, space: name });
   };
+  // 让助手修改: the column opens on its message field; the open space goes with what is asked.
+  const [messageFocus, setMessageFocus] = useState(0);
+  const askAssistant = () => {
+    setAssistantOpen(true);
+    setMessageFocus((n) => n + 1);
+  };
   const requestTaken = async (request: AssistantRequest, sent: RequestOutcome) => {
     setAssistantRequest(null);
     if (sent === "busy") return notify("助手还在进行上一轮，结束后再让它生成主页。");
@@ -478,7 +484,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
       )}
       <main className="card-wrap" ref={cardWrap}>
         {inSpace && showingHome ? (
-          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} onGenerate={() => void generateHomepage(inSpace.name)} headEnd={cardHeadEnd} />
+          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} onGenerate={() => void generateHomepage(inSpace.name)} onAsk={askAssistant} headEnd={cardHeadEnd} />
         ) : (
           <NoteEditor
             key={reloads}
@@ -506,6 +512,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         saveFirst={saveFirst}
         request={assistantRequest}
         onRequestTaken={(request, sent) => void requestTaken(request, sent)}
+        focusMessage={messageFocus}
       />
       {organize.overlay}
       {operationLog.dialog}

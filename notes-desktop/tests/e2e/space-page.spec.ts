@@ -207,7 +207,7 @@ test("a note in the space opens in the editor, and 主页 brings the same page b
   await page.getByRole("button", { name: "让助手生成主页" }).click();
   await expect(page.getByRole("alert")).toContainText("提示词");
   await page.keyboard.press("ControlOrMeta+KeyJ");
-  await page.getByRole("button", { name: "复制提示词" }).click();
+  await page.getByRole("paragraph").filter({ hasText: "交给外部 agent" }).getByRole("button", { name: "复制提示词" }).click();
   await expect(page.getByRole("alert")).toContainText("提示词");
   expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toContain("空白.html");
 

@@ -53,6 +53,12 @@
   flex-direction: column;
 }
 
+/* 更多新建方式 and 新建空间, side by side at the label's end. */
+.side-label-tools {
+  display: flex;
+  gap: 2px;
+}
+
 .space-scroll {
   flex: 1;
   overflow-y: auto;
@@ -230,8 +236,8 @@
   justify-content: center;
   color: var(--card-muted);
 }
-/* 复制提示词, for an agent used elsewhere: a word in the sentence, in the accent. */
-.space-no-page .link-button {
+/* 复制提示词 and 新建示例空间: a word in the sentence, in the accent. */
+:is(.space-no-page, .space-empty) .link-button {
   padding: 0 2px;
   border: none;
   background: none;
@@ -239,7 +245,7 @@
   font: inherit;
   cursor: pointer;
 }
-.space-no-page .link-button:hover {
+:is(.space-no-page, .space-empty) .link-button:hover {
   text-decoration: underline;
 }
 
@@ -282,4 +288,64 @@
   color: var(--side-muted);
   font-family: var(--code-font);
   font-size: var(--text-meta);
+}
+
+/* 空间外壳 (ticket 31): a space's card is one surface with its homepage, the title area over it. */
+.card[data-kind="space"] {
+  background: var(--space-surface);
+}
+.space-title {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  padding: var(--space-title-padding);
+}
+.space-title-text {
+  flex: 1;
+  min-width: 0;
+}
+.space-title h1 {
+  margin: 0;
+  font-size: var(--space-title-size);
+  font-weight: var(--heading-weight);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.space-title-icon {
+  margin-right: var(--space-2);
+}
+.space-title-scope {
+  margin: var(--space-1) 0 0;
+  color: var(--space-muted);
+  font-size: var(--text-path);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.space-title-tools {
+  flex: none;
+  display: flex;
+  gap: var(--space-1);
+}
+.space-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-label-gap);
+  height: var(--icon-button);
+  padding: 0 var(--inline-gap);
+  border: none;
+  border-radius: var(--icon-button-radius);
+  background: none;
+  color: var(--space-muted);
+  font: inherit;
+  font-size: var(--text-path);
+  cursor: pointer;
+}
+.space-title-button:hover {
+  background: var(--hover);
+  color: var(--card-fg);
 }

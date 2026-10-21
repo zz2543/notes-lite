@@ -97,6 +97,7 @@ const api: NotesApi = {
   },
   listSpaces: () => ipcRenderer.invoke(channels.listSpaces),
   createSpace: (draft) => ipcRenderer.invoke(channels.createSpace, draft),
+  createExampleSpace: () => ipcRenderer.invoke(channels.createExampleSpace),
   updateSpace: (name, draft) => ipcRenderer.invoke(channels.updateSpace, name, draft),
   deleteSpace: (name) => ipcRenderer.invoke(channels.deleteSpace, name),
   reorderSpaces: (names) => ipcRenderer.invoke(channels.reorderSpaces, names),

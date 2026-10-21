@@ -99,12 +99,14 @@ test("the five components, the space interface and the style kit under the new n
   await expect(home.locator("space-records li")).toHaveCount(2);
   await expect(home.locator("space-records li").first()).toContainText("2026-10-16");
 
-  // The kit is the app's design system: the note card's colours and radius, the notes' typography.
-  expect(await resolved(home, "var(--space-bg)")).toBe("rgb(255, 255, 255)");
+  // The kit is the app's design system (组件 2.0): widgets the note card's colour on a page a shade off
+  // it, the widget radius, the notes' typography.
+  expect(await resolved(home, "var(--space-card)")).toBe("rgb(255, 255, 255)");
+  expect(await resolved(home, "var(--space-bg)")).not.toBe("rgb(255, 255, 255)");
   expect(await resolved(home, "var(--space-text)")).toBe("rgb(29, 29, 31)");
-  expect(await rootStyle(home, "--space-radius")).toBe("12px");
+  expect(await rootStyle(home, "--space-radius")).toBe("18px");
   const card = home.locator("#record-card");
-  expect(await card.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("12px");
+  expect(await card.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("18px");
   expect(await home.evaluate(() => getComputedStyle(document.body).fontSize)).toBe("17px");
 
   const add = home.locator("space-quick-add");

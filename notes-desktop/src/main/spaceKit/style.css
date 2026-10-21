@@ -3,15 +3,14 @@
    light and dark, exactly as the app does. Every --space-* variable is one of those values; the old
    app's --lb-* names stay as aliases for good. */
 :root {
-  --space-bg: var(--card-bg);
+  --space-bg: var(--space-surface);
   --space-text: var(--card-fg);
-  --space-muted: var(--card-muted);
   --space-line: var(--line);
   --space-hover: var(--hover);
-  /* A card on the page: the page colour with a trace of the text colour, as the old kit had. */
-  --space-card: color-mix(in srgb, var(--card-fg) 2.5%, var(--card-bg));
-  --space-shadow: var(--pill-shadow);
-  --space-radius: var(--card-radius);
+  /* A card on the page (组件 2.0): no outline; light, a faint shadow; dark, a fine light edge. */
+  --space-card: var(--space-widget);
+  --space-shadow: var(--space-widget-shadow);
+  --space-radius: var(--space-widget-radius);
   --space-control-radius: var(--icon-button-radius);
   --space-accent: var(--accent);
   --space-on-accent: var(--on-accent);
@@ -61,43 +60,45 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--space-bg); color: var(--space-text); }
+/* 滚动条: the app's own, thin and quiet, not the system's default. */
+html { scrollbar-width: thin; scrollbar-color: var(--space-scrollbar) transparent; }
 body.space-page {
   font-family: var(--space-font);
   font-size: var(--space-font-size);
   line-height: var(--space-leading);
   text-autospace: var(--text-autospace);
-  padding: var(--card-padding);
+  padding: var(--space-4) var(--space-page-inline) var(--space-8);
   margin: 0 auto;
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3 { font-family: var(--space-heading-font); font-weight: var(--heading-weight); letter-spacing: -0.01em; margin: 0 0 0.6em; }
+h1, h2, h3 { font-family: var(--space-heading-font); font-weight: var(--heading-weight); letter-spacing: -0.01em; margin: 0 0 var(--space-2); }
 h1 { font-size: 1.6em; } h2 { font-size: 1.15em; } h3 { font-size: 1em; }
-p { margin: 0 0 0.6em; }
+p { margin: 0 0 var(--space-2); }
 a { color: var(--space-accent); }
 code { font-family: var(--space-mono); font-size: var(--code-size); }
 
 .space-card, .lb-card {
   background: var(--space-card);
-  border: 1px solid var(--space-line);
+  border: 0;
   border-radius: var(--space-radius);
   box-shadow: var(--space-shadow);
-  padding: 1.1em 1.25em;
-  margin: 0 0 1em;
+  padding: var(--space-4) var(--space-5);
+  margin: 0 0 var(--space-3);
 }
 .space-grid, .lb-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10em, 1fr));
-  gap: 1em;
-  margin: 0 0 1em;
+  grid-template-columns: repeat(auto-fit, minmax(var(--space-grid-min), 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
 }
 .space-grid > .space-card, .space-grid > .lb-card, .lb-grid > .space-card, .lb-grid > .lb-card { margin: 0; }
-.space-row, .lb-row { display: flex; gap: 0.75em; align-items: center; flex-wrap: wrap; }
+.space-row, .lb-row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 .space-muted, .lb-muted { color: var(--space-muted); }
 
 .space-button, .lb-button {
   font: inherit; font-weight: 500;
   color: var(--space-on-accent); background: var(--space-accent);
-  border: 0; border-radius: var(--space-control-radius); padding: 0.4em 1em; cursor: pointer;
+  border: 0; border-radius: var(--space-control-radius); padding: var(--space-1) var(--space-4); cursor: pointer;
   transition: transform var(--space-pop-duration) var(--space-pop-easing), opacity var(--space-pop-duration) var(--space-ease);
 }
 .space-button:hover, .lb-button:hover { opacity: 0.88; }
@@ -110,7 +111,7 @@ code { font-family: var(--space-mono); font-size: var(--code-size); }
   font: inherit; color: var(--space-text);
   background: var(--space-bg);
   border: 1px solid var(--space-line); border-radius: var(--space-control-radius);
-  padding: 0.4em 0.6em; outline: none;
+  padding: var(--space-1) var(--space-2); outline: none;
   transition: border-color var(--space-pop-duration) var(--space-ease), box-shadow var(--space-pop-duration) var(--space-ease);
 }
 :is(.space-input, .lb-input, .space-card input, .space-card select, .space-card textarea, .lb-card input, .lb-card select, .lb-card textarea):focus {

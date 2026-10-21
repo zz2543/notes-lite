@@ -1,7 +1,9 @@
-import { Check, Copy, House, ListChecks, PencilSimpleLine, Warning, X } from "@phosphor-icons/react";
+import { Check, Code, Copy, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import type { SpaceScope } from "../../core";
 import type { SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
+import { scopeLabel } from "../../shared/spaceScope";
 import { useMotion } from "./MotionProvider";
 import { useOverlayOpen } from "./Organize";
 import { SelectionPill } from "./SelectionPill";
@@ -109,18 +111,20 @@ interface SpaceHomeProps {
   onShowLog(): void;
   /** 让助手生成主页: has 助手 write it. */
   onGenerate(): void;
+  /** 让助手修改: opens 助手栏 to say what to change; the open space goes with it. */
+  onAsk(): void;
   /** At the head's right end, as on a note's card. */
   headEnd?: ReactNode;
 }
 
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
-export function SpaceHome({ space, notify, onShowLog, onGenerate, headEnd }: SpaceHomeProps) {
+export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, headEnd }: SpaceHomeProps) {
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。" : copied.message);
   };
   return (
-    <article className="card" aria-label="卡片">
+    <article className="card" data-kind="space" aria-label="卡片">
       <header className="card-head">
         <span className="card-path">{space.name} · 主页</span>
         <button className="card-tool" onClick={onShowLog}>
@@ -129,6 +133,7 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, headEnd }: Spa
         </button>
         {headEnd}
       </header>
+      <SpaceTitle space={space} onAsk={space.hasPage ? onAsk : onGenerate} onCopyPrompt={() => void copyPrompt()} notify={notify} />
       {space.hasPage ? (
         <>
           <PageBars name={space.name} onShowLog={onShowLog} />
@@ -150,6 +155,55 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, headEnd }: Spa
         </div>
       )}
     </article>
+  );
+}
+
+/** 范围：健身/、日记/, or 范围：整个笔记库. */
+const scopeLine = (scope: SpaceScope) => `范围：${scopeLabel(scope, { asFolders: true })}`;
+
+interface SpaceTitleProps {
+  space: SpaceInfo;
+  /** 让助手修改: the assistant on this page, or, while there is no page yet, 让助手生成主页. */
+  onAsk(): void;
+  onCopyPrompt(): void;
+  notify(message: string): void;
+}
+
+/** Over the homepage: the space's icon, name and scope, and what can be done to its page. */
+function SpaceTitle({ space, onAsk, onCopyPrompt, notify }: SpaceTitleProps) {
+  // 查看源码: the space file, shown where it lies.
+  const showSource = async () => {
+    const shown = await window.notes.revealSpaceSource(space.name);
+    if (!shown.ok) notify(shown.message);
+  };
+  return (
+    <section className="space-title" aria-label="空间标题">
+      <div className="space-title-text">
+        <h1>
+          {space.icon && (
+            <span className="space-title-icon" aria-hidden>
+              {space.icon}
+            </span>
+          )}
+          {space.name}
+        </h1>
+        <p className="space-title-scope">{scopeLine(space.scope)}</p>
+      </div>
+      <div className="space-title-tools">
+        <button className="space-title-button" onClick={onAsk}>
+          <Sparkle size={icon.small} aria-hidden />
+          让助手修改
+        </button>
+        <button className="space-title-button" onClick={onCopyPrompt}>
+          <Copy size={icon.small} aria-hidden />
+          复制提示词
+        </button>
+        <button className="space-title-button" onClick={() => void showSource()}>
+          <Code size={icon.small} aria-hidden />
+          查看源码
+        </button>
+      </div>
+    </section>
   );
 }
 

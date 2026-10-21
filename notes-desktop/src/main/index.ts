@@ -481,6 +481,7 @@ function registerIpc() {
   ipcMain.handle(channels.listSpaces, async () => (await spaces().spaces()).map(info));
   // Its homepage is then written by 助手, asked by the page (spacePrompt).
   space(channels.createSpace, async (draft: SpaceDraft) => info(await spaces().create(draft)));
+  space(channels.createExampleSpace, async () => info(await spaces().createExample()));
   // A homepage's own storage goes with its space when renamed, and a deleted space's is let go.
   space(channels.updateSpace, async (name: string, draft: SpaceDraft) => {
     const updated = await spaces().update(name, draft);

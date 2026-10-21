@@ -182,6 +182,27 @@
   --dialog-radius: 16px;
   --dialog-list-height: 260px;
   --disabled-opacity: 0.45;
+
+  /* 空间主页 (组件 2.0, ticket 31): the page under the widgets is a shade off the card, the widgets the card's
+     own colour with a faint shadow and no outline; grey text is opaque, at least 4.5:1 on both. */
+  --space-surface: color-mix(in srgb, var(--card-fg) 4%, var(--card-bg));
+  --space-widget: var(--card-bg);
+  --space-widget-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 10px rgba(0, 0, 0, 0.045);
+  --space-widget-radius: 18px;
+  --space-muted: color-mix(in srgb, var(--card-fg) 64%, var(--space-widget));
+  --space-scrollbar: color-mix(in srgb, var(--card-fg) 24%, transparent);
+  /* Spacing in steps of 4 and 8. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-page-inline: 40px;
+  --space-grid-min: 176px;
+  --space-title-size: 24px;
+  --space-title-padding: var(--space-6) var(--space-page-inline) var(--space-1);
 }
 
 /* 颜色 · 深色: its own set, not the light one inverted. */
@@ -208,6 +229,10 @@
     --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.35);
     --figure-ink: #f2f2f4;
     --figure-eye: #1d1d1f;
+    /* The page is the card itself; a widget is a step lighter, ringed with a fine light edge. */
+    --space-surface: var(--card-bg);
+    --space-widget: color-mix(in srgb, var(--card-fg) 6%, var(--card-bg));
+    --space-widget-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
 }
 

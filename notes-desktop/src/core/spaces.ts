@@ -1,9 +1,11 @@
-import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { collator } from "./library";
 import { addressableTables } from "./recordTables";
+import { exampleNotes, examplePage, exampleSpaceIcon, exampleSpaceName } from "./spaceExample";
 import { spaceGuide } from "./spaceGuide";
 import { isHidden, noteTitle } from "../shared/paths";
+import { scopeLabel } from "../shared/spaceScope";
 
 /** The app's own folder inside a note library (spaces, guide, order, operation log). */
 export const notesFolder = ".notes";
@@ -66,10 +68,7 @@ export function scopeContains(scope: SpaceScope, path: string): boolean {
   return scope.library || scope.folders.some((folder) => folder === "" || path === folder || path.startsWith(`${folder}/`));
 }
 
-/** The scope in words, for the prompt and the space form. */
-export function scopeLabel(scope: SpaceScope): string {
-  return scope.library ? "整个笔记库" : scope.folders.map((folder) => folder || "笔记库根目录").join("、");
-}
+export { scopeLabel };
 
 /**
  * Of the paths the library watcher reported, those a homepage hears of through `space.on("change")`:
@@ -256,6 +255,11 @@ export interface SpaceLibrary {
   space(name: string): Promise<Space>;
   /** Writes an empty page carrying the scope and icon, adds it last and installs the guide. */
   create(draft: SpaceDraft): Promise<Space>;
+  /**
+   * 新建示例空间: 组件示例 (or 组件示例 2, …, whichever is free as both a space and a folder) over a new
+   * folder of that name holding four sample notes with records up to `now`, its homepage already written.
+   */
+  createExample(now?: Date): Promise<Space>;
   /** Writes the authoring guide when it is missing or differs from this version's. */
   installGuide(): Promise<void>;
   /** Renames, re-icons and re-scopes a space, keeping its page and its place in the order. */
@@ -345,6 +349,24 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
     return parseSpace(name, html);
   };
 
+  const createExample = async (now = new Date()): Promise<Space> => {
+    let name = exampleSpaceName;
+    for (let n = 2; (await exists(fileOf(name))) || (await exists(join(root, name))); n++) name = `${exampleSpaceName} ${n}`;
+    await mkdir(join(root, name));
+    let created: Space;
+    try {
+      for (const [file, text] of Object.entries(exampleNotes(now))) await writeFile(join(root, name, file), text, { encoding: "utf8", flag: "wx" });
+      created = await create({ name, icon: exampleSpaceIcon, scope: { library: false, folders: [name] } });
+    } catch (error) {
+      // Nothing half made is left behind: the folder was new, and holds only what was just written.
+      await rm(join(root, name), { recursive: true, force: true });
+      throw error;
+    }
+    const html = `${created.html}${examplePage(name)}`;
+    await writeAtomic(fileOf(name), html);
+    return parseSpace(name, html);
+  };
+
   const update = async (name: string, draft: SpaceDraft): Promise<Space> => {
     checkDraft(draft);
     const current = await space(name);
@@ -410,5 +432,5 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
     }
   };
 
-  return { folder, guidePath, spaces, space, create, update, delete: delete_, reorder, installGuide, recordTables: tablesIn, prompt, syncPaths };
+  return { folder, guidePath, spaces, space, create, createExample, update, delete: delete_, reorder, installGuide, recordTables: tablesIn, prompt, syncPaths };
 }

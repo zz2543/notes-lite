@@ -163,6 +163,8 @@ export interface AssistantColumnProps {
   request: AssistantRequest | null;
   /** The request was sent, or could not be: no agent is installed, or a turn is still running. */
   onRequestTaken(request: AssistantRequest, sent: RequestOutcome): void;
+  /** Each new value puts the caret in the message field. */
+  focusMessage?: number;
 }
 
 export interface AssistantRequest {
@@ -174,7 +176,7 @@ export interface AssistantRequest {
 }
 
 export function AssistantColumn(props: AssistantColumnProps) {
-  const { open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst, request, onRequestTaken } = props;
+  const { open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst, request, onRequestTaken, focusMessage } = props;
   const { installed, detect } = useInstalledAgents(open);
   const [chosen, setChosen] = useState<AgentId>();
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
@@ -305,6 +307,7 @@ export function AssistantColumn(props: AssistantColumnProps) {
             hasConversation={conversation !== null}
             onSend={(text, notes) => void send(text, notes)}
             onStop={assistant.stop}
+            focusRequest={focusMessage}
           />
         )}
       </div>

@@ -1,8 +1,9 @@
-import { Books, Plus, SquaresFour } from "@phosphor-icons/react";
+import { Books, DotsThree, Plus, SquaresFour } from "@phosphor-icons/react";
 import { AnimatePresence, motion, Reorder } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { SpaceDraft, SpaceScope } from "../../core";
 import type { SpaceInfo } from "../../shared/api";
+import { scopeLabel } from "../../shared/spaceScope";
 import { travel } from "./motion";
 import { useMotion } from "./MotionProvider";
 import { ContextMenu, Dialog, useStep, type Menu } from "./Organize";
@@ -136,6 +137,19 @@ export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate
       />,
     );
 
+  // 新建示例空间: its homepage is written by the app, so 助手 is not asked for one.
+  const createExample = async () => {
+    const created = await window.notes.createExampleSpace();
+    if (!created.ok) return notify(created.message);
+    reload();
+    onSelect(created.value.name);
+  };
+
+  const openNewMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    const { left, bottom } = event.currentTarget.getBoundingClientRect();
+    setMenu({ x: left, y: bottom + 4, items: [{ label: "新建空间…", run: create }, { label: "新建示例空间", run: () => void createExample() }] });
+  };
+
   const edit = (space: SpaceInfo) =>
     setDialog(
       <SpaceDialog
@@ -204,9 +218,14 @@ export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate
     <>
       <div className="side-label">
         <span className="label">空间</span>
-        <button className="icon-button small" onClick={create} aria-label="新建空间" title="新建空间">
-          <Plus size={icon.small} />
-        </button>
+        <div className="side-label-tools">
+          <button className="icon-button small" onClick={openNewMenu} aria-label="更多新建方式" title="更多新建方式">
+            <DotsThree size={icon.small} weight="bold" />
+          </button>
+          <button className="icon-button small" onClick={create} aria-label="新建空间" title="新建空间">
+            <Plus size={icon.small} />
+          </button>
+        </div>
       </div>
       <div className="space-scroll">
         {spaces && spaces.length > 0 && (
@@ -223,7 +242,7 @@ export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate
                   className={`row space-row ${selected === space.name ? "on" : ""}`}
                   aria-label={space.name}
                   aria-current={selected === space.name ? "true" : undefined}
-                  title={`${space.name} · ${scopeText(space.scope)}`}
+                  title={`${space.name} · ${scopeLabel(space.scope)}`}
                   onClick={() => onSelect(space.name)}
                   onContextMenu={(event) => openMenu(space, event)}
                 >
@@ -243,6 +262,13 @@ export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate
               新建空间
             </button>
             <p>空间围绕一个主题，把相关文件夹放在一起，并有一个由 agent 生成的主页。</p>
+            <p>
+              不知道从哪开始？
+              <button className="link-button" onClick={() => void createExample()}>
+                新建示例空间
+              </button>
+              看看主页能放哪些组件。
+            </p>
           </div>
         )}
       </div>
@@ -252,7 +278,6 @@ export function SpacePanel({ libraryName, selected, onSelect, notify, onGenerate
   );
 }
 
-const scopeText = (scope: SpaceScope) => (scope.library ? "整个笔记库" : scope.folders.map((f) => f || "笔记库根目录").join("、"));
 
 interface SpaceDialogProps {
   title: string;

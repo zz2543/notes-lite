@@ -122,6 +122,8 @@ export interface NotesApi {
   listSpaces(): Promise<SpaceInfo[]>;
   /** Creates the space; the page then has 助手 write its homepage (spacePrompt). */
   createSpace(draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
+  /** 新建示例空间: 组件示例 over a folder of sample notes, its homepage written by the app. */
+  createExampleSpace(): Promise<SpaceDone<SpaceInfo>>;
   updateSpace(name: string, draft: SpaceDraft): Promise<SpaceDone<SpaceInfo>>;
   /** Moves only the space file to the trash. */
   deleteSpace(name: string): Promise<SpaceDone<null>>;
@@ -285,6 +287,7 @@ export const channels = {
   systemAccentChanged: "system:accent-changed",
   listSpaces: "spaces:list",
   createSpace: "spaces:create",
+  createExampleSpace: "spaces:create-example",
   updateSpace: "spaces:update",
   deleteSpace: "spaces:delete",
   reorderSpaces: "spaces:reorder",
