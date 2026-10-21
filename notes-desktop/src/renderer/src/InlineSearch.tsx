@@ -63,6 +63,19 @@ interface HeadProps {
   onClose(): void;
 }
 
+/** 双栏导航's search, always at the top of the list: pressed (or ⌘K), the field opens where it stands. */
+export function SearchBar({ onOpen }: { onOpen(): void }) {
+  return (
+    <div className="list-head search-head">
+      <button className="search-box search-bar" onClick={onOpen} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+        <MagnifyingGlass size={icon.small} />
+        <span className="search-bar-text">搜索</span>
+        <kbd className="search-bar-key">{searchShortcut}</kbd>
+      </button>
+    </div>
+  );
+}
+
 /** The list header while searching: the search field, then the choice of scope. */
 export function SearchHead({ state, folderName, focusRequest, onChange, onSubmit, onClose }: HeadProps) {
   const field = useRef<HTMLInputElement>(null);

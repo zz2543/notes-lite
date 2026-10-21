@@ -503,6 +503,24 @@ section.list {
 .search-box .icon-button {
   color: var(--card-fg);
 }
+/* The bar the field opens from: the same box in the same place, its words where the field's are. */
+.search-bar {
+  width: 100%;
+  padding-right: var(--row-padding);
+  font-size: var(--text-side-row);
+  text-align: left;
+  cursor: text;
+}
+.search-bar:hover {
+  color: var(--card-fg);
+}
+.search-bar-text {
+  flex: 1;
+}
+.search-bar-key {
+  font: inherit;
+  font-size: var(--text-meta);
+}
 .segmented {
   display: flex;
   padding: var(--segmented-padding);

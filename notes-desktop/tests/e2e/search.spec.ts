@@ -53,7 +53,7 @@ test("⌘K turns the list header into a search field whose results stand in for 
   await app.close();
 });
 
-test("the search button beside 文件夹 can narrow to the selected folder; a result opens in its own folder", async ({ scratch }) => {
+test("the search bar atop the list opens the field where it stands, can narrow to the selected folder; a result opens in its own folder", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", {
     "日记/2026/十月.md": "# 十月\n\n秋天的红叶\n",
     "日记/九月.md": "# 九月\n\n红叶还没红\n",
@@ -62,9 +62,17 @@ test("the search button beside 文件夹 can narrow to the selected folder; a re
   const { app, page } = await launchWith(scratch, root);
   await page.getByRole("treeitem", { name: "日记" }).click();
 
-  await page.getByRole("button", { name: "搜索", exact: true }).click();
+  // In 双栏导航 the search lives atop the list only, not beside 文件夹 as well.
+  const bar = page.getByRole("button", { name: "搜索", exact: true });
+  await expect(bar).toHaveCount(1);
+  await expect(page.locator("section.list").getByRole("button", { name: "搜索", exact: true })).toBeVisible();
+  const barBox = (await bar.boundingBox())!;
+  await bar.click();
   const field = searchField(page);
   await expect(field).toBeFocused();
+  const fieldBox = (await page.locator("section.list .search-box").boundingBox())!;
+  expect(Math.abs(fieldBox.y - barBox.y)).toBeLessThan(1);
+  expect(Math.abs(fieldBox.width - barBox.width)).toBeLessThan(1);
   await field.fill("红叶");
   await expect(results(page).getByRole("button")).toHaveCount(3);
   const scope = page.getByRole("group", { name: "搜索范围" });

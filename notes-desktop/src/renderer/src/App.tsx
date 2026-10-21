@@ -7,7 +7,7 @@ import { useAssistant } from "./AssistantChat";
 import { FocusToggle, useFocusMode } from "./FocusMode";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
-import { isSearchShortcut, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
+import { isSearchShortcut, SearchBar, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
 import { errorText, pageShown } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
 import { useNarrowWindow, useNavigationTier } from "./navigationTier";
@@ -369,9 +369,12 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
                 {(single && searchHead) || (
                   <div className="side-label">
                     <span className="label">{single ? "笔记" : "文件夹"}</span>
-                    <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
-                      <MagnifyingGlass size={icon.small} />
-                    </button>
+                    {/* In 双栏导航 the search is the bar atop the list instead. */}
+                    {single && (
+                      <button className="icon-button small" onClick={openSearch} aria-label="搜索" title={`搜索 ${searchShortcut}`}>
+                        <MagnifyingGlass size={icon.small} />
+                      </button>
+                    )}
                   </div>
                 )}
                 {(single && searchResults) || (
@@ -439,7 +442,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
             />
           ) : (
             <>
-              {searchHead}
+              {searchHead ?? <SearchBar onOpen={openSearch} />}
               {searchResults ?? (
                 <FolderContentsList
                   folder={folder}
