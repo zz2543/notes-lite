@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import { expect, launch, launchWith, library, test } from "./fixtures";
+import { expect, film, launch, launchWith, library, test, transitionOf } from "./fixtures";
 
 const windowColor = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
@@ -15,38 +15,6 @@ const computed = (page: Page, property: string, value: string) =>
     },
     { property, value },
   );
-
-interface Frame {
-  top: number;
-  scale: string;
-  filter: string;
-}
-
-/** Films the element matching `selector` once per frame while `act` runs and `ms` after it. */
-async function film(page: Page, selector: string, act: () => Promise<void>, ms = 900): Promise<Frame[]> {
-  await page.evaluate((selector) => {
-    const w = window as unknown as { film: Frame[]; filming: boolean };
-    w.film = [];
-    w.filming = true;
-    const frame = () => {
-      if (!w.filming) return;
-      const element = document.querySelector(selector);
-      if (element) {
-        const style = getComputedStyle(element);
-        w.film.push({ top: element.getBoundingClientRect().top, scale: style.scale, filter: style.filter });
-      }
-      requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  }, selector);
-  await act();
-  await page.waitForTimeout(ms);
-  return page.evaluate(() => {
-    const w = window as unknown as { film: Frame[]; filming: boolean };
-    w.filming = false;
-    return w.film;
-  });
-}
 
 const sidePill = '[role="tree"] [data-testid="selection-pill"]';
 
@@ -90,8 +58,6 @@ const springOf = (locator: Locator) =>
     return duration > 0 && curve !== "linear" && curve !== "step-end";
   });
 
-const scaleOf = (frame: Frame | undefined) => (!frame || frame.scale === "none" ? 1 : Number(frame.scale));
-
 test("hover only tints a row; pressing shrinks it with a spring and it springs back", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "日记/散步.md": "# 散步", "读书.md": "# 读书" });
   const { app, page } = await launchWith(scratch, root);
@@ -114,8 +80,8 @@ test("hover only tints a row; pressing shrinks it with a spring and it springs b
   await app.close();
 });
 
-test("with reduced motion nothing slides, scales or blurs", async ({ scratch }) => {
-  const root = await library(scratch, "笔记库", { "甲/一.md": "一", "乙/二.md": "二", "丙/三.md": "三" });
+test("with reduced motion nothing slides, scales, blurs or turns; menus and dialogs only fade", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "甲/一.md": "一", "乙/二.md": "二", "丙/三.md": "三", "散步.md": "# 散步" });
   const { app, page } = await launchWith(scratch, root);
   // Turned on while the app runs, as the system setting would be.
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -131,8 +97,94 @@ test("with reduced motion nothing slides, scales or blurs", async ({ scratch }) 
   const row = tree.getByRole("treeitem", { name: "乙" });
   await row.evaluate((element) => element.setAttribute("data-filmed", ""));
   const pressed = await film(page, "[data-filmed]", () => row.hover().then(() => page.mouse.down()), 500);
-  expect(pressed.every((f) => scaleOf(f) === 1)).toBe(true);
+  expect(pressed.every((f) => f.scale === 1)).toBe(true);
   await page.mouse.up();
+
+  // Carets jump, and menus and dialogs only fade (ticket 23).
+  await tree.getByRole("treeitem", { name: "笔记库" }).click();
+  expect(await transitionOf(page, '[aria-label="甲"] > .caret svg', "rotate")).toMatchObject({ duration: 0 });
+  const item = page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "散步" });
+  const menu = await film(page, ".menu", () => item.click({ button: "right" }), 600);
+  expect(menu.length).toBeGreaterThan(0);
+  expect(menu.every((f) => f.scale === 1)).toBe(true);
+  expect(Math.min(...menu.map((f) => f.opacity))).toBeLessThan(1);
+  const dialog = await film(page, ".dialog", () => page.getByRole("menuitem", { name: "重命名…" }).click(), 600);
+  await expect(page.getByRole("dialog", { name: "重命名笔记" })).toBeVisible();
+  expect(dialog.length).toBeGreaterThan(0);
+  expect(dialog.every((f) => f.scale === 1 && f.blur === 0)).toBe(true);
+  await app.close();
+});
+
+// 动效专项审查 (ticket 23): carets, menus and dialogs on the design system's presets.
+
+const rotation = (page: Page, name: string) =>
+  page.getByRole("treeitem", { name, exact: true }).locator(".caret svg").evaluate((svg) => getComputedStyle(svg).rotate);
+
+test("a folder's caret turns on 展开, and turns back from where it is when clicked again", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/周一/一.md": "一" });
+  const { app, page } = await launchWith(scratch, root);
+  const caret = page.getByRole("button", { name: "展开日记" });
+  await expect(caret).toBeVisible();
+  expect(await transitionOf(page, '[aria-label="日记"] > .caret svg', "rotate")).toMatchObject({ curve: expect.stringMatching(/^linear\(/) });
+  expect(await rotation(page, "日记")).toBe("none");
+
+  await caret.click();
+  await expect.poll(() => rotation(page, "日记")).toBe("90deg");
+  // Clicked twice in a row: it ends shut, not after a queue of turns.
+  await page.getByRole("button", { name: "收起日记" }).click();
+  await page.getByRole("button", { name: "展开日记" }).click();
+  await page.getByRole("button", { name: "收起日记" }).click();
+  await expect(page.getByRole("treeitem", { name: "周一" })).toHaveCount(0);
+  await expect.poll(() => rotation(page, "日记")).toBe("none");
+  await app.close();
+});
+
+test("a folder row's new-note icon fades in with the hover, without a bounce", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "日记/一.md": "一" });
+  const { app, page } = await launchWith(scratch, root);
+  const row = page.getByRole("treeitem", { name: "日记" });
+  await expect(row).toBeVisible();
+  expect(await transitionOf(page, ".row-new", "opacity")).toMatchObject({ duration: expect.any(Number), curve: "ease-out" });
+  expect((await transitionOf(page, ".row-new", "opacity"))!.duration).toBeGreaterThan(0);
+  await app.close();
+});
+
+test("a menu grows from the pointer's corner on 展开; a dialog emerges out of a blur on 浮现 and shrinks away", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "散步.md": "# 散步" });
+  const { app, page } = await launchWith(scratch, root);
+  const item = page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "散步" });
+
+  const menuFrames = await film(page, ".menu", () => item.click({ button: "right" }));
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  // Below and right of the pointer, so it grows from its top-left corner.
+  expect(await menu.evaluate((el) => getComputedStyle(el).transformOrigin)).toBe("0px 0px");
+  expect(menuFrames.length).toBeGreaterThan(0);
+  expect(Math.min(...menuFrames.map((f) => f.scale))).toBeLessThan(1);
+  expect(Math.min(...menuFrames.map((f) => f.opacity))).toBeLessThan(1);
+  // It settles at full size (the spring's tail is longer than its visual duration).
+  await expect(menu).toHaveCSS("scale", /^(none|1)$/);
+  await expect(menu).toHaveCSS("opacity", "1");
+
+  // Typed into as soon as it shows: typing doesn't wait for it.
+  const dialog = page.getByRole("dialog", { name: "重命名笔记" });
+  const dialogFrames = await film(page, ".dialog", async () => {
+    await page.getByRole("menuitem", { name: "重命名…" }).click();
+    await page.keyboard.type("x");
+  });
+  await expect(dialog.getByRole("textbox")).toHaveValue(/x$/);
+  expect(dialogFrames.length).toBeGreaterThan(0);
+  // Its opacity eases in: it never bounces past 1 and back.
+  expect(dialogFrames.every((f, i) => i === 0 || f.opacity >= dialogFrames[i - 1]!.opacity - 0.001)).toBe(true);
+  expect(Math.min(...dialogFrames.map((f) => f.scale))).toBeLessThan(0.95);
+  expect(Math.max(...dialogFrames.map((f) => f.blur))).toBeGreaterThan(0);
+  await expect.poll(() => dialog.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a)).toBe(1);
+  await expect(dialog).toHaveCSS("filter", /^(none|blur\(0px\))$/);
+
+  // Esc: it shrinks away, and is gone.
+  const closing = await film(page, ".dialog", () => page.keyboard.press("Escape"), 500);
+  expect(closing.some((f) => f.scale < 1)).toBe(true);
+  await expect(dialog).toHaveCount(0);
   await app.close();
 });
 

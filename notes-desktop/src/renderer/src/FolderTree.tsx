@@ -154,7 +154,7 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
           onToggle(path);
         }}
       >
-        <CaretRight size={icon.caret} weight="bold" style={{ transform: isOpen ? "rotate(90deg)" : undefined }} />
+        <CaretRight size={icon.caret} weight="bold" />
       </span>
       <Icon size={icon.regular} weight={isSelected ? "fill" : "regular"} />
       <span className="label">{name}</span>

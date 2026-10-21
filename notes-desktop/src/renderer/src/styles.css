@@ -139,6 +139,13 @@ aside.side {
   place-items: center;
   color: var(--side-muted);
 }
+/* 箭头旋转 (展开): the caret turns with its folder, and turns back from wherever it is if clicked again. */
+.caret svg {
+  transition: rotate var(--caret-turn);
+}
+[aria-expanded="true"] > .caret svg {
+  rotate: 90deg;
+}
 .side-foot {
   height: var(--row-height);
   display: flex;
@@ -293,6 +300,24 @@ aside.side {
   background: var(--hover);
   color: var(--card-fg);
 }
+/* 卡片顶部操作按钮 (ticket 23): with a pointer that hovers, a note card's tools rise into view (浮现) while
+   it is over the card's top (its head), and leave once typing starts until it moves again. One that is on, or has the
+   keyboard's focus, stays. Without hover (a touch screen) they always show. */
+@media (hover: hover) and (pointer: fine) {
+  .card[data-kind="note"] .card-tool {
+    opacity: 0;
+    translate: 0 var(--card-tool-rise);
+    transition:
+      opacity var(--fade-emerge) ease-out,
+      translate var(--spring-emerge),
+      background-color var(--spring-pop);
+  }
+  .app:not(.focused) .card[data-kind="note"]:not(.typing) .card-head:hover .card-tool,
+  .app:not(.focused) .card[data-kind="note"] .card-tool:is(:focus-visible, [aria-pressed="true"]) {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
 .editor .cm-scroller {
   padding: var(--card-padding);
   font-family: var(--body-font);
@@ -354,9 +379,17 @@ aside.side {
   flex: none;
 }
 
-/* 保存冲突: a strip under the card head; the editor below stays usable. */
+/* 保存冲突: a strip under the card head; the editor below stays usable. It comes in on 浮现, from a
+   little above, fading (ticket 23). */
 .conflict {
   flex: none;
+  transition:
+    opacity var(--fade-emerge) ease-out,
+    translate var(--spring-emerge);
+  @starting-style {
+    opacity: 0;
+    translate: 0 calc(-1 * var(--notice-rise));
+  }
   display: flex;
   align-items: center;
   gap: var(--card-gap);
@@ -956,7 +989,7 @@ nav.rail .drag {
   color: var(--side-fg);
 }
 .timeline-caret {
-  transition: rotate var(--spring-pop);
+  transition: rotate var(--caret-turn);
 }
 .timeline-head[aria-expanded="true"] .timeline-caret {
   rotate: 90deg;

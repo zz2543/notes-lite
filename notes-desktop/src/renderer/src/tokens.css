@@ -57,10 +57,24 @@
   --assistant-toggle-duration: 0.26s;
   --assistant-toggle: var(--assistant-toggle-duration) cubic-bezier(0.32, 0.72, 0, 1);
   /* 专注模式: the navigation and the list fade, sliding only this far left, as the card fills their
-     room on the 专注 spring (--spring-focus). What fades eases over --focus-fade-duration, written
-     beside the springs. */
+     room on the 专注 spring (--spring-focus). What fades eases over --focus-fade-duration, the
+     spring's visual duration (--fade-focus, written beside the springs). */
   --focus-shift: 5px;
   --focus-move: var(--spring-focus);
+  --focus-fade-duration: var(--fade-focus);
+  /* 动效审查 (ticket 23). Disclosure carets turn on 展开; menus grow on 展开 from the corner they open
+     at, from this scale, as they fade in over --fade-expand; the card's top buttons rise this far on
+     浮现 as they appear on hover (and leave once typing starts); 保存冲突 comes down this far on 浮现. Written at 标准 and multiplied by the
+     intensity's 幅度 (--motion-amplitude): 强 0.96 and 3px. MotionProvider writes the 标准 values
+     and the 幅度 from shared/motion.ts (menuEnter, travel.cardToolRise, travel.noticeRise); these are fallbacks. */
+  --motion-amplitude: 2;
+  --caret-turn: var(--spring-expand);
+  --menu-enter-shrink: 0.02;
+  --card-tool-travel: 1.5px;
+  --notice-travel: 3px;
+  --menu-enter-scale: calc(1 - var(--menu-enter-shrink) * var(--motion-amplitude));
+  --card-tool-rise: calc(var(--card-tool-travel) * var(--motion-amplitude));
+  --notice-rise: calc(var(--notice-travel) * var(--motion-amplitude));
   /* 助手形象: flat ink, eyes the opposite colour; red when something failed. */
   --figure-ink: #1d1d1f;
   --figure-eye: #ffffff;
@@ -215,6 +229,10 @@
     --press-scale-icon: 1;
     --assistant-toggle-duration: 0s;
     --focus-move: 0s;
+    --caret-turn: 0s;
+    --menu-enter-scale: 1;
+    --card-tool-rise: 0px;
+    --notice-rise: 0px;
   }
 }
 

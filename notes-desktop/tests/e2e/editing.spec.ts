@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { refuseWrites } from "../support/disk";
-import { answerFolderPicker, expect, launch, launchWith, library, test } from "./fixtures";
+import { answerFolderPicker, expect, launch, launchWith, library, test, transitionOf } from "./fixtures";
 
 const saveState = (page: Page) => page.getByRole("status", { name: "保存状态" });
 
@@ -157,3 +157,34 @@ test("closing with a save that failed asks before dropping the input", async ({ 
   await app.close();
 });
 
+test("the card's top tools appear while the pointer is over its top and leave once typing starts", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "散步.md": "# 散步\n\n雨后" });
+  const { app, page } = await launchWith(scratch, root);
+  await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "散步" }).click();
+  const tool = page.getByRole("button", { name: "Markdown 源码" });
+  const body = page.getByLabel("笔记正文");
+  const head = page.locator(".card-head");
+  expect(await transitionOf(page, ".card-tool", "translate")).toMatchObject({ curve: expect.stringMatching(/^linear\(/) });
+
+  // Over the text they stay out of the way; over the card's top they come.
+  await body.click();
+  await expect(tool).toHaveCSS("opacity", "0");
+  await head.hover({ position: { x: 20, y: 10 } });
+  await expect(tool).toHaveCSS("opacity", "1");
+  // Moving the caret isn't typing; keys that write are (Playwright inserts characters off the keyboard
+  // without any).
+  await page.keyboard.press("ArrowLeft");
+  await expect(tool).toHaveCSS("opacity", "1");
+  await page.keyboard.type(" wet");
+  await expect(tool).toHaveCSS("opacity", "0");
+  // Still there for the pointer: moving it brings the tools back, and they still work.
+  await head.hover({ position: { x: 40, y: 12 } });
+  await expect(tool).toHaveCSS("opacity", "1");
+  await tool.click();
+  await expect(tool).toHaveAttribute("aria-pressed", "true");
+  // On, it stays in view while typing, so the mode is never hidden.
+  await body.click();
+  await page.keyboard.type(".");
+  await expect(tool).toHaveCSS("opacity", "1");
+  await app.close();
+});

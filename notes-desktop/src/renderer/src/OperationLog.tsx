@@ -1,3 +1,4 @@
+import { AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import type { LogItem } from "../../shared/api";
 import { Dialog } from "./Organize";
@@ -11,7 +12,7 @@ const time = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric"
 export function useOperationLog(notify: (message: string) => void) {
   const [open, setOpen] = useState(false);
   useEffect(() => window.notes.onOperationLogRequest(() => setOpen(true)), []);
-  const dialog = open ? <OperationLogDialog onClose={() => setOpen(false)} notify={notify} /> : null;
+  const dialog = <AnimatePresence>{open && <OperationLogDialog key="log" onClose={() => setOpen(false)} notify={notify} />}</AnimatePresence>;
   return { show: () => setOpen(true), dialog };
 }
 

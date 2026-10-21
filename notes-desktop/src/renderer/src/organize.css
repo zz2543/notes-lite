@@ -11,6 +11,8 @@
   border-radius: var(--icon-button-small-radius);
   color: var(--side-muted);
   opacity: 0;
+  /* 浮现 (ticket 23): it fades in and out with the hover, without a bounce. */
+  transition: opacity var(--fade-emerge) ease-out;
 }
 .row:hover .row-new {
   opacity: 1;
@@ -38,6 +40,14 @@
   backdrop-filter: var(--menu-blur);
   color: var(--side-fg);
   font-size: var(--text-side-row);
+  /* 展开: it grows from the pointer's corner as it fades in. It goes at once: closing is the app's answer. */
+  transition:
+    opacity var(--fade-expand) ease-out,
+    scale var(--spring-expand);
+  @starting-style {
+    opacity: 0;
+    scale: var(--menu-enter-scale);
+  }
 }
 .menu-item {
   height: var(--menu-item-height);

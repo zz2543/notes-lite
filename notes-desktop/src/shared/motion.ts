@@ -36,7 +36,14 @@ const overlayTravel = { scale: 0.06, rise: 10, blur: 5, exitScale: 0.015, exitBl
 export const travel = {
   /** “资料库 | 空间”切换: the side panel's content slides this far as it fades. */
   sideSwitch: 60,
+  /** 卡片顶部操作按钮 rise this far as they appear on hover (ticket 23). */
+  cardToolRise: 1.5,
+  /** 保存冲突 comes down this far into view (ticket 23). */
+  noticeRise: 3,
 } as const;
+
+/** 菜单 grow on 展开 from this much smaller, at 标准 (幅度), as they fade in (ticket 23). */
+export const menuEnter = { scale: 0.02 } as const;
 
 /**
  * 空间主页卡片 at 标准 (幅度; the design system lists 强, twice these): each card rises this far, from this
@@ -97,7 +104,14 @@ export function motionPresets(intensity: MotionIntensity = defaultIntensity, { r
   const spring = ({ visualDuration, bounce }: Spring, scale: { bounce: number; duration: number }, bounceLimit = maxBounce): Transition => {
     const duration = round(visualDuration * scale.duration);
     if (reduced) return { default: { type: false }, opacity: { duration, ease: "easeOut" } };
-    return { type: "spring", visualDuration: duration, bounce: round(Math.min(bounceLimit, bounce * scale.bounce)), filter };
+    // Opacity never bounces: what fades beside the spring eases out over its visual duration.
+    return {
+      type: "spring",
+      visualDuration: duration,
+      bounce: round(Math.min(bounceLimit, bounce * scale.bounce)),
+      filter,
+      opacity: { duration, ease: "easeOut" },
+    };
   };
   const capped = { bounce: Math.min(factor.bounce, frequent.bounce), duration: Math.min(factor.duration, frequent.duration) };
   return {

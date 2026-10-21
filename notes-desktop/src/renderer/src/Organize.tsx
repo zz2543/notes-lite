@@ -1,7 +1,9 @@
 import { Check, Folder } from "@phosphor-icons/react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { ListedItem } from "./FolderContentsList";
 import { libraryChanged } from "./ipc";
+import { useMotion } from "./MotionProvider";
 import "./organize.css";
 import { icon } from "./tokens";
 
@@ -182,7 +184,7 @@ export function useOrganize(view: OrganizeView) {
   const overlay = (
     <>
       {menu && <ContextMenu {...menu} onClose={() => setMenu(undefined)} />}
-      {dialog}
+      <AnimatePresence>{dialog}</AnimatePresence>
     </>
   );
 
@@ -221,13 +223,18 @@ const menuItemSelector = "[role=menuitem], [role=menuitemradio]";
 export function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }) {
   useOverlay();
   const ref = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState({ left: x, top: y });
+  const [place, setPlace] = useState({ left: x, top: y, transformOrigin: "left top" });
 
-  // Kept inside the window, opening up or to the left when there is no room below or right.
+  // Kept inside the window, opening up or to the left when there is no room below or right; it grows
+  // from the corner at the pointer.
   useLayoutEffect(() => {
     const menu = ref.current!;
-    const { width, height } = menu.getBoundingClientRect();
-    setPlace({ left: x + width > innerWidth ? Math.max(0, x - width) : x, top: y + height > innerHeight ? Math.max(0, y - height) : y });
+    // Its layout size: on screen it is still scaled down as it grows in.
+    const { offsetWidth: width, offsetHeight: height } = menu;
+    const left = x + width > innerWidth;
+    const up = y + height > innerHeight;
+    const at = { left: left ? Math.max(0, x - width) : x, top: up ? Math.max(0, y - height) : y };
+    setPlace({ ...at, transformOrigin: `${x - at.left}px ${y - at.top}px` });
     (menu.querySelector<HTMLElement>("[aria-checked=true]") ?? menu.querySelector<HTMLElement>(menuItemSelector))?.focus();
   }, [x, y]);
 
@@ -283,9 +290,25 @@ interface DialogProps {
 /** A floating panel over a dimmed window: Esc or a click outside closes it. */
 export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
   useOverlay();
+  // 浮现, as the settings panel does: the dialog grows into place out of a blur over a fading scrim, and
+  // shrinks away when it closes, inert by then, so nothing waits on it and nothing in it answers twice.
+  const { emerge, overlay } = useMotion();
+  const present = useIsPresent();
   return (
-    <div className="scrim" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <form
+    <motion.div
+      className="scrim"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: overlay.exit.transition }}
+      transition={emerge}
+      inert={!present}
+      onPointerDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <motion.form
+        initial={overlay.initial}
+        animate={overlay.animate}
+        exit={overlay.exit}
+        transition={emerge}
         className="dialog"
         role="dialog"
         aria-modal="true"
@@ -298,8 +321,8 @@ export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { t
       >
         <h2>{title}</h2>
         {children}
-      </form>
-    </div>
+      </motion.form>
+    </motion.div>
   );
 }
 

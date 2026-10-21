@@ -1,7 +1,7 @@
 import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { countWords, isAddress, linkPath } from "../../shared/markdown";
 import { ConflictNotice } from "./ConflictNotice";
 import { pageShown, useNoteSource } from "./ipc";
@@ -23,10 +23,20 @@ interface Choices {
   notify(message: string): void;
 }
 
+// 卡片顶部操作按钮 appear on hover and leave once typing starts (ticket 23): the card says which, by
+// a class rather than state, so no keystroke renders the card again.
+const startTyping = (event: KeyboardEvent<HTMLElement>) => {
+  // Typing is what writes: a character, a deletion, a new line; not arrows, Tab, Esc or shortcuts.
+  const writes = event.key.length === 1 || event.key === "Backspace" || event.key === "Delete" || event.key === "Enter" || event.key === "Process";
+  if (writes && !event.metaKey && !event.ctrlKey) event.currentTarget.classList.add("typing");
+};
+const stopTyping = (event: PointerEvent<HTMLElement>) => event.currentTarget.classList.remove("typing");
+
 /**
  * The open note on its card: Markdown source edited in place, saved as it is typed. A `fresh` note
  * (just created) opens with the caret after its title, ready to type.
  */
+
 export function NoteEditor({
   path,
   fresh = false,
@@ -49,7 +59,7 @@ export function NoteEditor({
     return window.notes.onImportAttachmentsRequest(() => choices.notify("请先打开一篇笔记，再导入图片或附件。"));
   }, [path]);
   return (
-    <article className="card" aria-label="卡片">
+    <article className="card" data-kind="note" aria-label="卡片" onKeyDownCapture={startTyping} onPointerMove={stopTyping}>
       <header className="card-head">
         <span className="card-path">{path?.split("/").join(" / ")}</span>
         <button

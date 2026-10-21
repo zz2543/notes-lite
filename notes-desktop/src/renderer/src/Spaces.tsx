@@ -234,7 +234,7 @@ export function SpacePanel({ libraryName, selected, onSelect, notify }: SpacePan
         )}
       </div>
       {menu && <ContextMenu {...menu} onClose={() => setMenu(undefined)} />}
-      {dialog}
+      <AnimatePresence>{dialog}</AnimatePresence>
     </>
   );
 }

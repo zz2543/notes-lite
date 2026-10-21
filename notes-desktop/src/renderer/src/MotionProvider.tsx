@@ -1,6 +1,6 @@
 import { MotionConfig, spring, type Transition } from "motion/react";
 import { createContext, useContext, useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { defaultIntensity, motionPresets, type MotionIntensity, type MotionPresets } from "./motion";
+import { defaultIntensity, menuEnter, motionPresets, travel, type MotionIntensity, type MotionPresets } from "./motion";
 
 const reducedMotion = "(prefers-reduced-motion: reduce)";
 
@@ -29,11 +29,19 @@ const cssSpring = ({ visualDuration, bounce }: Transition) => spring(visualDurat
  */
 function useCssSprings(intensity: MotionIntensity) {
   useLayoutEffect(() => {
-    const { pop, slide, expand, emerge, focus } = motionPresets(intensity);
+    const { pop, slide, expand, emerge, focus, amplitude } = motionPresets(intensity);
     const root = document.documentElement.style;
-    for (const [name, preset] of Object.entries({ pop, slide, expand, emerge, focus })) root.setProperty(`--spring-${name}`, cssSpring(preset));
-    // What fades with 专注模式 (the columns, the dimming) eases over the spring's visual duration, without a bounce.
-    root.setProperty("--focus-fade-duration", `${focus.visualDuration}s`);
+    // 幅度 for CSS: distances and scale-ins at 标准 (shared/motion.ts), multiplied by it.
+    root.setProperty("--motion-amplitude", String(amplitude));
+    // Only the 标准 values: tokens.css multiplies them, so its 减弱动态效果 rules still win.
+    root.setProperty("--menu-enter-shrink", String(menuEnter.scale));
+    root.setProperty("--card-tool-travel", `${travel.cardToolRise}px`);
+    root.setProperty("--notice-travel", `${travel.noticeRise}px`);
+    for (const [name, preset] of Object.entries({ pop, slide, expand, emerge, focus })) {
+      root.setProperty(`--spring-${name}`, cssSpring(preset));
+      // What fades beside a spring (a menu, a card button) eases over its visual duration: opacity never bounces.
+      root.setProperty(`--fade-${name}`, `${preset.visualDuration}s`);
+    }
   }, [intensity]);
 }
 

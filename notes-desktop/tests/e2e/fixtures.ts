@@ -66,3 +66,58 @@ export async function launchWith(scratch: string, root: string, env?: Record<str
   await launched.page.getByRole("button", { name: "选择笔记库…" }).click();
   return launched;
 }
+
+export interface Frame {
+  top: number;
+  /** The scale it is drawn at, whether set by `scale` or by a `transform`. */
+  scale: number;
+  blur: number;
+  filter: string;
+  opacity: number;
+}
+
+/** Films the element matching `selector` once per frame while `act` runs and `ms` after it. */
+export async function film(page: Page, selector: string, act: () => Promise<unknown>, ms = 900): Promise<Frame[]> {
+  await page.evaluate((selector) => {
+    const w = window as unknown as { film: Frame[]; filming: boolean };
+    w.film = [];
+    w.filming = true;
+    const frame = () => {
+      if (!w.filming) return;
+      const element = document.querySelector(selector);
+      if (element) {
+        const style = getComputedStyle(element);
+        const blur = /blur\(([\d.]+)px\)/.exec(style.filter);
+        w.film.push({
+          top: element.getBoundingClientRect().top,
+          scale: style.scale === "none" ? new DOMMatrix(style.transform).a : Number(style.scale),
+          blur: blur ? Number(blur[1]) : 0,
+          filter: style.filter,
+          opacity: Number(style.opacity),
+        });
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }, selector);
+  await act();
+  await page.waitForTimeout(ms);
+  return page.evaluate(() => {
+    const w = window as unknown as { film: Frame[]; filming: boolean };
+    w.filming = false;
+    return w.film;
+  });
+}
+
+/** The `transition` the element matching `selector` declares for `property`: its duration in seconds and its curve. */
+export const transitionOf = (page: Page, selector: string, property: string) =>
+  page.evaluate(
+    ({ selector, property }) => {
+      const style = getComputedStyle(document.querySelector(selector)!);
+      const pick = (list: string) => list.split(/,(?![^(]*\))/).map((item) => item.trim());
+      const index = pick(style.transitionProperty).indexOf(property);
+      if (index < 0) return null;
+      return { duration: parseFloat(pick(style.transitionDuration)[index]!), curve: pick(style.transitionTimingFunction)[index]! };
+    },
+    { selector, property },
+  );
