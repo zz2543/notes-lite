@@ -319,3 +319,25 @@ test("clicking a task box ticks and clears it without showing the line's source"
   await expect(box).not.toHaveClass(/cm-md-done/);
   await app.close();
 });
+
+test("Tab nests a list item under the one before it and Shift-Tab brings it back, the caret staying in its text", async ({ scratch }) => {
+  const { app, page, open, saved } = await openLibrary(scratch, ["- 苔藓\n- 蕨", "1. 一\n2. 二"]);
+  await open(1);
+  await page.keyboard.press("Tab");
+  await expect.poll(saved(1)).toBe("- 苔藓\n  - 蕨");
+  await expect(editor(page)).toBeFocused();
+  await page.keyboard.type("类");
+  await expect.poll(saved(1)).toBe("- 苔藓\n  - 蕨类");
+  await page.keyboard.press("Shift+Tab");
+  await expect.poll(saved(1)).toBe("- 苔藓\n- 蕨类");
+  // Undone in one step each.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(saved(1)).toBe("- 苔藓\n  - 蕨类");
+
+  await open(2);
+  await page.keyboard.press("Tab");
+  await expect.poll(saved(2)).toBe("1. 一\n   1. 二");
+  await page.keyboard.press("Shift+Tab");
+  await expect.poll(saved(2)).toBe("1. 一\n2. 二");
+  await app.close();
+});

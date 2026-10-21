@@ -11,7 +11,7 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { closesListGap, listReturn, opensListGap } from "../../shared/lists";
+import { closesListGap, listIndent, listReturn, opensListGap } from "../../shared/lists";
 import { blockPrefixLength } from "../../shared/markdown";
 import { inLiteralBlock, literal } from "./markdownView";
 
@@ -42,6 +42,39 @@ function returnInList(view: EditorView): boolean {
     });
   }
   return true;
+}
+
+/** Tab and Shift-Tab on list items move them a level in or out; elsewhere the keys are left alone. */
+function indentList(outward: boolean) {
+  return (view: EditorView): boolean => {
+    const { state } = view;
+    if (view.composing) return false;
+    const { doc } = state;
+    const changes: { from: number; to: number; insert: string }[] = [];
+    let found = false;
+    for (const range of state.selection.ranges) {
+      const first = doc.lineAt(range.from).number;
+      const last = doc.lineAt(range.to).number;
+      if (inLiteralBlock(state, first)) continue;
+      const moved = listIndent((n) => doc.line(n + 1).text, doc.lines, first - 1, last - 1, outward);
+      if (!moved) continue;
+      found = true;
+      for (const { line: n, text } of moved) {
+        // Only what differs is replaced, so the caret keeps its place in the item's text.
+        const line = doc.line(n + 1);
+        let head = 0;
+        while (head < line.text.length && head < text.length && line.text[head] === text[head]) head++;
+        let tail = 0;
+        while (tail < line.text.length - head && tail < text.length - head && line.text[line.text.length - 1 - tail] === text[text.length - 1 - tail]) tail++;
+        changes.push({ from: line.from + head, to: line.to - tail, insert: text.slice(head, text.length - tail) });
+      }
+    }
+    if (!found) return false;
+    // Overlapping ranges can name a line twice; each line changes once.
+    const unique = changes.filter((c, i) => changes.findIndex((d) => d.from === c.from) === i);
+    if (unique.length > 0) view.dispatch({ changes: unique, scrollIntoView: true, userEvent: outward ? "delete.dedent" : "input.indent" });
+    return true;
+  };
 }
 
 const setGap = StateEffect.define<number | null>();
@@ -115,11 +148,15 @@ const separateComposition = EditorView.domEventHandlers({
   },
 });
 
-/** Return continues, steps out of or ends a list; text after a list is kept apart from it. */
+/** Return continues, steps out of or ends a list; Tab and Shift-Tab nest an item or bring it out; text
+ *  after a list is kept apart from it. */
 export const listEditing: Extension = [
   literal,
   listGap,
   separateFromList,
   separateComposition,
-  Prec.high(keymap.of([{ key: "Enter", run: returnInList }])),
+  Prec.high(keymap.of([
+    { key: "Enter", run: returnInList },
+    { key: "Tab", run: indentList(false), shift: indentList(true) },
+  ])),
 ];

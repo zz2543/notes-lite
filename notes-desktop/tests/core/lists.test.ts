@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closesListGap, listReturn, opensListGap } from "../../src/shared/lists";
+import { closesListGap, listIndent, listReturn, opensListGap } from "../../src/shared/lists";
 
 // Return at the end of a list item, as in the old editor (Markdown.continuation and its parent lookup)
 // and the 退出列表 spec. `above` lists the note's lines above the item, nearest first.
@@ -65,5 +65,49 @@ describe("the blank line that ends a list", () => {
     for (const line of ["", "- ", "* ", "1. ", "2) ", "- [ ] ", "- 新项"]) expect(closesListGap(line)).toBe(true);
     // A dash alone may start a paragraph.
     for (const line of ["-", "1.", "正文", "-正文"]) expect(closesListGap(line)).toBe(false);
+  });
+});
+
+/** The note `source` after Tab (or Shift-Tab) on lines `first`…`last` (0-based), or null when none is a list item. */
+function tab(source: string, first: number, last = first, outward = false): string | null {
+  const lines = source.split("\n");
+  const moved = listIndent((n) => lines[n]!, lines.length, first, last, outward);
+  if (!moved) return null;
+  for (const { line, text } of moved) lines[line] = text;
+  return lines.join("\n");
+}
+
+describe("Tab and Shift-Tab in a list", () => {
+  it("nests an item under the one before it, as far in as that item's text starts", () => {
+    expect(tab("- 苔藓\n- 蕨", 1)).toBe("- 苔藓\n  - 蕨");
+    expect(tab("- [ ] 买伞\n- [x] 带相机", 1)).toBe("- [ ] 买伞\n  - [x] 带相机");
+    expect(tab("1. 一\n2. 二", 1)).toBe("1. 一\n   1. 二");
+    expect(tab("10. 十\n11. 十一", 1)).toBe("10. 十\n    1. 十一");
+  });
+
+  it("numbers a nested ordered item on from the one before it at its new level", () => {
+    expect(tab("1. 一\n   1. 甲\n2. 二", 2)).toBe("1. 一\n   1. 甲\n   2. 二");
+    expect(tab("1. 一\n2. 二\n3. 三", 1, 2)).toBe("1. 一\n   1. 二\n   2. 三");
+  });
+
+  it("brings an item out to its parent's level, numbered on from the parent", () => {
+    expect(tab("- 父\n  - 子", 1, 1, true)).toBe("- 父\n- 子");
+    expect(tab("1. 一\n   1. 甲", 1, 1, true)).toBe("1. 一\n2. 甲");
+    expect(tab("- 父\n  - 子\n    - 孙", 2, 2, true)).toBe("- 父\n  - 子\n  - 孙");
+  });
+
+  it("moves an item's nested lines with it", () => {
+    expect(tab("- 一\n- 二\n  - 子\n- 三", 1)).toBe("- 一\n  - 二\n    - 子\n- 三");
+    expect(tab("- 一\n  - 二\n    - 子", 1, 1, true)).toBe("- 一\n- 二\n  - 子");
+  });
+
+  it("leaves the first item at its level and an outermost item where they are", () => {
+    expect(tab("- 一\n- 二", 0)).toBe("- 一\n- 二");
+    expect(tab("- 一\n- 二", 1, 1, true)).toBe("- 一\n- 二");
+  });
+
+  it("is not for lines that are not list items", () => {
+    expect(tab("段落\n第二段", 1)).toBeNull();
+    expect(tab("- 一\n段落", 1)).toBeNull();
   });
 });
