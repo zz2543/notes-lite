@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { access, chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { lineDiff } from "./lineDiff";
 import { findTable, insertRow, paddedRow, renderRow, rewriteRows } from "./recordTables";
 import { serialized } from "./serialized";
 import type { ChangeKind, Turn } from "./snapshots";
@@ -97,26 +98,6 @@ export async function writeWhole(path: string, text: string) {
 }
 
 const lines = (text: string | undefined) => (text === undefined ? [] : text.split(/\r\n|\r|\n/));
-
-/** Lines removed (`-`) and added (`+`) going from `old` to `now`, in reading order. */
-function lineDiff(old: string[], now: string[]): Array<{ sign: "-" | "+"; text: string }> {
-  // Longest common subsequence, then walked from the start.
-  const lcs = Array.from({ length: old.length + 1 }, () => new Array<number>(now.length + 1).fill(0));
-  for (let i = old.length - 1; i >= 0; i--) {
-    for (let j = now.length - 1; j >= 0; j--) lcs[i]![j] = old[i] === now[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
-  }
-  const out: Array<{ sign: "-" | "+"; text: string }> = [];
-  let i = 0;
-  let j = 0;
-  while (i < old.length || j < now.length) {
-    if (i < old.length && j < now.length && old[i] === now[j]) {
-      i++;
-      j++;
-    } else if (j >= now.length || (i < old.length && lcs[i + 1]![j]! >= lcs[i]![j + 1]!)) out.push({ sign: "-", text: old[i++]! });
-    else out.push({ sign: "+", text: now[j++]! });
-  }
-  return out;
-}
 
 /** What an entry changed, line by line: `-` for what was there before, `+` for what the write left. */
 export function entryChanges(entry: LogEntry): Array<{ sign: "-" | "+"; text: string }> {

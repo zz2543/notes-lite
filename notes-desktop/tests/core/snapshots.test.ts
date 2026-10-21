@@ -39,6 +39,24 @@ describe("按轮快照", () => {
     expect(await contents(lib.root)).toEqual(before);
   });
 
+  it("counts the lines each note gained and lost, for the review card; an attachment has no lines", async () => {
+    const lib = await setup({ "计划.md": "# 计划\n\n- 跑步\n- 读书\n", "旧.md": "一\n二\n", "图.png": Buffer.from([1, 2, 3]) });
+
+    const id = await lib.snapshots.begin();
+    await lib.write("计划.md", "# 计划\n\n- 跑步五公里\n- 读书\n- 早睡\n");
+    await lib.remove("旧.md");
+    await lib.write("新.md", "甲\n乙\n丙");
+    await lib.write("图.png", Buffer.from([4, 5, 6, 7]));
+    const turn = await lib.snapshots.finish(id);
+
+    expect(turn.changes.map(({ path, lines }) => ({ path, lines }))).toEqual([
+      { path: "图.png", lines: undefined },
+      { path: "新.md", lines: { added: 3, removed: 0 } },
+      { path: "旧.md", lines: { added: 0, removed: 2 } },
+      { path: "计划.md", lines: { added: 2, removed: 1 } },
+    ]);
+  });
+
   it("leaves out what the app itself wrote during the turn, so undoing the turn keeps the user's typing", async () => {
     const lib = await setup({ "日记/今天.md": "# 今天\n", "随记.md": "随记\n", "旧.md": "旧\n" });
 

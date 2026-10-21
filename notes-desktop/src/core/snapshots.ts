@@ -16,19 +16,10 @@ import { serialized } from "./serialized";
 
 const retention = 30 * 86_400_000;
 
-import type { ChangeKind } from "../shared/conversation";
+import type { TurnChange } from "../shared/conversation";
+import { lineDiff, textLines } from "./lineDiff";
 
-export type { ChangeKind } from "../shared/conversation";
-
-export interface TurnChange {
-  /** Library-relative, "/"-separated. */
-  path: string;
-  kind: ChangeKind;
-  /** False for an attachment the snapshot could only note the size and time of: it cannot be put back. */
-  restorable: boolean;
-  /** Taken back since, on its own or with the whole turn. */
-  reverted: boolean;
-}
+export type { ChangeKind, TurnChange } from "../shared/conversation";
 
 export class SnapshotError extends Error {
   constructor(
@@ -324,10 +315,18 @@ export function turnSnapshots(store: string, root: string, options: SnapshotOpti
       if (!after.files[path]) changes.push({ path, kind: "deleted", restorable: old.blob !== undefined, reverted: false });
     const agents = changes.filter((change) => !ours(change.path));
     agents.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    for (const change of agents) {
+      if (!isText(change.path)) continue;
+      const diff = lineDiff(await linesOf(before.files[change.path]), await linesOf(after.files[change.path]));
+      change.lines = { added: diff.filter((l) => l.sign === "+").length, removed: diff.filter((l) => l.sign === "-").length };
+    }
     const done: StoredTurn = { ...turn, after: after.id, changes: agents };
     await writeJson(turnAt(id), done);
     return { id, date: done.date, changes: agents };
   };
+
+  /** A text file's lines as a snapshot kept them; none when it was not there. */
+  const linesOf = async (state: FileState | undefined) => (state?.blob ? textLines(await readFile(blobAt(state.blob), "utf8")) : []);
 
   const loadTurn = async (id: string) => {
     const turn = await readJson<StoredTurn>(turnAt(id)).catch(() => null);

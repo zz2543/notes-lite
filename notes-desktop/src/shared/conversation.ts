@@ -6,6 +6,19 @@ import type { AgentId } from "./agentKinds";
 /** What a turn did to one file of the library. */
 export type ChangeKind = "added" | "modified" | "deleted";
 
+/** One file a turn changed, as its review card lists it. */
+export interface TurnChange {
+  /** Library-relative, "/"-separated. */
+  path: string;
+  kind: ChangeKind;
+  /** False for an attachment the snapshot could only note the size and time of: it cannot be put back. */
+  restorable: boolean;
+  /** Taken back since, on its own or with the whole turn. */
+  reverted: boolean;
+  /** For text, the lines it gained and lost. */
+  lines?: { added: number; removed: number };
+}
+
 /** What the figure shows while a tool runs: 思考, 搜索, 读取, 写入 or 运行命令. */
 export type AgentActivity = "thinking" | "searching" | "reading" | "writing" | "running";
 
