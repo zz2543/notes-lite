@@ -367,6 +367,16 @@ aside.side {
 .save.problem {
   color: var(--card-fg);
 }
+/* Saving goes unremarked: "已保存" and "正在保存…" are only announced; a failure or conflict shows. */
+.save:not(.problem) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .retry {
   flex: none;
   margin-left: var(--inline-gap);
@@ -375,8 +385,10 @@ aside.side {
   font-weight: var(--weight-item);
   text-decoration: underline;
 }
+/* The word count keeps to the right whether or not a failure shows. */
 .words {
   flex: none;
+  margin-left: auto;
 }
 
 /* 保存冲突: a strip under the card head; the editor below stays usable. It comes in on 浮现, from a
