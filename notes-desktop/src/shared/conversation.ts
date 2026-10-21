@@ -45,12 +45,18 @@ export interface TurnEnd {
   /** Files it wrote outside the library, by real path: no snapshot has them, so they can't be undone. */
   outside?: string[];
   /** Where its review card stands, when it changed anything. */
-  review?: TurnReview;
+  review?: ReviewState;
   failed?: string;
 }
 
 /** A turn's review (写入审查): waiting on the card, kept, or taken back whole. */
-export type TurnReview = "pending" | "kept" | "reverted";
+export type ReviewState = "pending" | "kept" | "reverted";
+
+/** What the review card asks of a turn: keep it all, or take back (撤回) a note or the turn. */
+export type ReviewChoice = "keep" | "revert";
+
+/** A change the review card can still take back. */
+export const canRevert = (change: TurnChange) => change.restorable && !change.reverted;
 
 /** One turn's events: the agent's, then the end with what the turn changed. */
 export type TurnEvent = AgentEvent | TurnEnd;
@@ -88,7 +94,7 @@ export interface Reply {
   entry?: string;
   /** Files it wrote outside the library, which can't be undone. */
   outside?: string[];
-  review?: TurnReview;
+  review?: ReviewState;
 }
 
 export type Message = UserMessage | Reply;

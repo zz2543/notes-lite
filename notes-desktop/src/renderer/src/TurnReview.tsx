@@ -1,7 +1,7 @@
 import { CaretRight } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { DiffLine } from "../../core";
-import type { ChangeKind, Reply, TurnChange } from "../../shared/conversation";
+import { canRevert, type ChangeKind, type Reply, type ReviewChoice, type TurnChange } from "../../shared/conversation";
 import { icon } from "./tokens";
 
 // 写入审查 (assistant-spec, ticket 29): after a turn that changed anything, one card lists what it
@@ -9,7 +9,7 @@ import { icon } from "./tokens";
 // the whole turn taken back. What it wrote outside the library has no snapshot and can't be.
 
 /** Asks main to keep the turn or take something back; answers why it couldn't, if it couldn't. */
-export type ReviewAction = (action: "keep" | "revert", path?: string) => Promise<string | undefined>;
+export type ReviewAction = (action: ReviewChoice, path?: string) => Promise<string | undefined>;
 
 const verbs: Record<ChangeKind, string> = { added: "新建", modified: "改写", deleted: "删除" };
 
@@ -76,17 +76,21 @@ export function TurnReview({ reply, onReview, onShowLog }: { reply: Reply; onRev
   const changes = reply.changes ?? [];
   const outside = reply.outside ?? [];
   const count = changes.length + outside.length;
-  const act = async (action: "keep" | "revert", path?: string) => {
+  const act = async (action: ReviewChoice, path?: string) => {
     setBusy(true);
     setProblem(await onReview(action, path));
     setBusy(false);
   };
 
-  if (reply.review === "reverted") return <p className="reply-changes">已撤回本轮改动。</p>;
+  // What no snapshot could take back stays, and the line says so.
+  const stayed = changes.filter((c) => !c.restorable).length + outside.length;
+  if (reply.review === "reverted")
+    return <p className="reply-changes">{stayed > 0 ? `已撤回本轮可撤回的改动；${stayed} 个文件无法撤回。` : "已撤回本轮改动。"}</p>;
+  const kept = count - changes.filter((c) => c.reverted).length;
   if (reply.review !== "pending")
     return (
       <p className="reply-changes">
-        {reply.review === "kept" ? `已保留本轮改动（${count} 个文件）。` : `改动了 ${count} 个文件。`}
+        {reply.review === "kept" ? `已保留本轮改动（${kept} 个文件）。` : `改动了 ${count} 个文件。`}
         {reply.entry && (
           <button type="button" className="reply-log" onClick={onShowLog}>
             在操作记录中撤销
@@ -95,7 +99,7 @@ export function TurnReview({ reply, onReview, onShowLog }: { reply: Reply; onRev
       </p>
     );
 
-  const restorable = changes.some((c) => c.restorable && !c.reverted);
+  const restorable = changes.some(canRevert);
   return (
     <section className="turn-review" aria-label="本轮改动">
       <p className="review-head">本轮改动了 {count} 个文件</p>

@@ -1,14 +1,15 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { assistantTurns, conversationStore, detectAgents, operationLog, snapshotStore, type TurnEvent } from "../../src/core";
+import type { ReviewMode } from "../../src/shared/preferences";
 import { installFakeAgent, type FakeScript } from "../support/fakeAgent";
 import { fakeTrash, library, scratchFolder } from "../support/library";
 
 // 助手栏 turns as main runs them: a conversation is begun or continued, the turn's events folded into
 // it and passed on, and it is kept with the app.
 
-async function setup(script: FakeScript | FakeScript[], review: "review" | "keep" = "review") {
+async function setup(script: FakeScript | FakeScript[], review: ReviewMode = "review") {
   const root = await library({ "随记.md": "随记\n" });
   const data = await scratchFolder("notes-desktop-data-");
   const trash = await fakeTrash();
@@ -21,7 +22,7 @@ async function setup(script: FakeScript | FakeScript[], review: "review" | "keep
     log: (at) => operationLog(at, { trash: trash.trash, turns: snapshots.library(at) }),
     agents: () => detectAgents({ path: join(data, "agents"), pathext: process.env.PATHEXT }),
     env: async () => process.env,
-    review: () => review,
+    reviewMode: () => review,
   });
   const events: Array<[string, TurnEvent]> = [];
   const ended = () => new Promise<void>((done) => {
@@ -144,8 +145,7 @@ describe("审查一轮", () => {
   it("says why a note can't be taken back once it changed again, and leaves it as it is", async () => {
     const lib = await setup(edits);
     const { id, turn } = await reviewed(lib);
-    await new Promise((done) => setTimeout(done, 20));
-    const { writeFile } = await import("node:fs/promises");
+    // Another size, so it reads as changed whatever the clock.
     await writeFile(join(lib.root, "随记.md"), "我又改了\n");
 
     const one = await lib.turns.review(lib.root, { conversation: id, turn, action: "revert", path: "随记.md" });

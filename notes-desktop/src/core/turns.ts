@@ -2,7 +2,7 @@
 // full permissions and pass on what it says, snapshot again, and log what it changed as one entry
 // that undoes the whole turn.
 import { spawn } from "node:child_process";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
 import type { AgentId } from "../shared/agentKinds";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
@@ -73,7 +73,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   const noteWrite = (path: string) => {
     const file = resolve(cwd, path);
     const inLibrary = relative(root, file);
-    if (inLibrary.startsWith("..") || isAbsolute(inLibrary)) outside.add(file);
+    if (inLibrary === ".." || inLibrary.startsWith(`..${sep}`) || isAbsolute(inLibrary)) outside.add(file);
   };
   let failed: string | undefined;
   try {

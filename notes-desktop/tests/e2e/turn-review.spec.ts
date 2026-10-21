@@ -51,6 +51,24 @@ test("the card lists each note the turn changed with its lines, and 全部保留
   expect(await read(root, "新.md")).toBe("# 新\n\n正文\n");
 });
 
+test("going on with the conversation keeps what the last turn left on its card", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await installFakeAgent(join(scratch, "agents"), "claude", [
+    { steps: [{ tool: "Write", input: { file_path: join(root, "随记.md") }, write: { path: "随记.md", text: "随记\n补一行\n" } }] },
+    { steps: [{ say: "好的。" }] },
+  ]);
+  const { page } = await launchWith(scratch, root);
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await ask(page, "改一改");
+  await expect(card(page)).toBeVisible();
+
+  await ask(page, "谢谢");
+  await expect(conversation(page)).toContainText("好的。");
+  await expect(card(page)).toHaveCount(0);
+  await expect(conversation(page)).toContainText("已保留本轮改动（1 个文件）。");
+  expect(await read(root, "随记.md")).toBe("随记\n补一行\n");
+});
+
 test("a note opens to its changed lines and is taken back alone; 撤回本轮 takes back the rest", async ({ scratch }) => {
   const root = await twoNotes(scratch);
   const { app, page } = await launchWith(scratch, root);
@@ -127,9 +145,9 @@ test("what the turn wrote outside the library is in the card, marked as not undo
   await expect(rows.nth(1)).toContainText("不可撤销");
   await expect(rows.nth(1).getByRole("button")).toHaveCount(0);
 
-  // Taking back the turn leaves it be.
+  // Taking back the turn leaves it be, and says so.
   await card(page).getByRole("button", { name: "撤回本轮" }).click();
-  await expect(conversation(page)).toContainText("已撤回本轮改动。");
+  await expect(conversation(page)).toContainText("已撤回本轮可撤回的改动；1 个文件无法撤回。");
   await expect.poll(() => read(root, "随记.md")).toBe("随记\n");
   expect(await readFile(outside, "utf8")).toBe("库外\n");
 });

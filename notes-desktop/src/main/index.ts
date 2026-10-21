@@ -170,8 +170,8 @@ const turns = assistantTurns({
   log: (root) => operationLog(root, { ...libraryOptions, turns: snapshots.library(root) }),
   agents: async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }),
   env: agentEnvironment,
-  // Declared further down; read at the end of each turn.
-  review: () => preferences.assistantReview,
+  // Read at the end of each turn (the setting is declared further down).
+  reviewMode: () => preferences.assistantReview,
 });
 
 /**

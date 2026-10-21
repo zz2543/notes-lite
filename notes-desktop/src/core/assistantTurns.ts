@@ -2,7 +2,7 @@
 // at a time; its events are folded into it (shared/conversation's one rule) and passed on as they
 // come, and it is kept with the app (对话记录) once the turn is over.
 import type { AgentId } from "../shared/agentKinds";
-import { emptyReply, withEvent, type Conversation, type Message, type Reply, type TurnChange, type TurnEvent } from "../shared/conversation";
+import { canRevert, emptyReply, withEvent, type Conversation, type Message, type Reply, type ReviewChoice, type TurnChange, type TurnEvent } from "../shared/conversation";
 import type { ReviewMode } from "../shared/preferences";
 import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
@@ -27,12 +27,13 @@ export type TurnStarted = { ok: true; conversation: Conversation } | { ok: false
 export interface TurnReviewRequest {
   conversation: string;
   turn: string;
-  action: "keep" | "revert";
+  action: ReviewChoice;
   /** The note to take back alone (library-relative); none takes back the whole turn. */
   path?: string;
 }
 
-export type TurnReviewed = { ok: true; conversation: Conversation } | { ok: false; message: string };
+/** Answered like a turn's start: the conversation as it now stands, or why not. */
+export type TurnReviewed = TurnStarted;
 
 export type TurnDiff = { ok: true; lines: DiffLine[] | null } | { ok: false; message: string };
 
@@ -46,7 +47,7 @@ export interface AssistantTurnsOptions {
   /** What an agent runs with. */
   env(): Promise<NodeJS.ProcessEnv>;
   /** The 写入审查 setting now: a card after each turn, or keep it all. */
-  review(): ReviewMode;
+  reviewMode(): ReviewMode;
 }
 
 export interface AssistantTurns {
@@ -72,7 +73,8 @@ const reviewOf = (end: { changes: TurnChange[]; outside?: string[] }, mode: Revi
 /** Going on with the conversation keeps what earlier turns left waiting: 全部保留 is the default. */
 const keepWaiting = (message: Message): Message => (message.role === "assistant" && message.review === "pending" ? { ...message, review: "kept" } : message);
 
-const reasonOf = (error: unknown) => {
+/** Why the snapshots or the log refused, to tell the user; anything else is a bug and is thrown on. */
+const knownReason = (error: unknown) => {
   if (error instanceof SnapshotError || error instanceof OperationLogError) return error.message;
   throw error;
 }
@@ -82,12 +84,11 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
   // The conversations of this run stay in memory too.
   const open = new Map<string, Conversation>();
   const running = new Map<string, AbortController>();
+  const loaded = async (id: string) => open.get(id) ?? (await conversations.read(id).catch(() => undefined));
 
   const start: AssistantTurns["start"] = async (root, request, send) => {
     if (!root) return { ok: false, message: "请先打开笔记库。" };
-    const known = request.conversation
-      ? (open.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined)))
-      : undefined;
+    const known = request.conversation ? await loaded(request.conversation) : undefined;
     let conversation = known ?? conversations.start({ agent: request.agent, root, folder: request.folder });
     if (conversation.root !== root) return { ok: false, message: "这个对话属于另一个笔记库。" };
     if (running.has(conversation.id)) return { ok: false, message: "上一轮还没有结束。" };
@@ -103,7 +104,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     const stop = new AbortController();
     running.set(id, stop);
     const pass = (turnEvent: TurnEvent) => {
-      const review = turnEvent.kind === "end" ? reviewOf(turnEvent, options.review()) : undefined;
+      const review = turnEvent.kind === "end" ? reviewOf(turnEvent, options.reviewMode()) : undefined;
       const event: TurnEvent = review && turnEvent.kind === "end" ? { ...turnEvent, review } : turnEvent;
       open.set(id, withEvent(open.get(id)!, event));
       send(id, event);
@@ -136,7 +137,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
 
   const review: AssistantTurns["review"] = async (root, request) => {
     if (!root) return { ok: false, message: "请先打开笔记库。" };
-    const conversation = open.get(request.conversation) ?? (await conversations.read(request.conversation).catch(() => undefined));
+    const conversation = await loaded(request.conversation);
     if (!conversation || conversation.root !== root) return { ok: false, message: "找不到这个对话。" };
     const at = conversation.messages.findIndex((m) => m.role === "assistant" && m.turn === request.turn);
     const reply = conversation.messages[at] as Reply | undefined;
@@ -145,7 +146,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     try {
       next = request.action === "keep" ? { ...reply, review: "kept" } : await revert(root, reply, request.path);
     } catch (error) {
-      return { ok: false, message: reasonOf(error) };
+      return { ok: false, message: knownReason(error) };
     }
     const updated = { ...conversation, messages: conversation.messages.map((m, i) => (i === at ? next : m)) };
     open.set(updated.id, updated);
@@ -161,10 +162,10 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     const entry = reply.entry ? (await log.entries()).find((e) => e.id === reply.entry && !e.undone) : undefined;
     if (path !== undefined) await turns.revert(reply.turn!, path);
     else if (!entry) await turns.revert(reply.turn!);
-    const left = (await turns.turn(reply.turn!)).changes.some((c) => c.restorable && !c.reverted);
+    const left = (await turns.turn(reply.turn!)).changes.some(canRevert);
     if (entry && (path === undefined || !left)) await log.undo(entry.id);
     const { changes } = await turns.turn(reply.turn!);
-    return { ...reply, changes, review: changes.some((c) => c.restorable && !c.reverted) ? "pending" : "reverted" };
+    return { ...reply, changes, review: changes.some(canRevert) ? "pending" : "reverted" };
   };
 
   const diff: AssistantTurns["diff"] = async (root, turn, path) => {
@@ -172,7 +173,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     try {
       return { ok: true, lines: await options.snapshots.library(root).diff(turn, path) };
     } catch (error) {
-      return { ok: false, message: reasonOf(error) };
+      return { ok: false, message: knownReason(error) };
     }
   };
 

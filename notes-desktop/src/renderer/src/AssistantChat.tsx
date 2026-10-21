@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
 import type { AgentId } from "../../shared/agentKinds";
-import { withEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
+import { withEvent, type Conversation, type Reply, type ReviewChoice, type Step } from "../../shared/conversation";
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
@@ -67,7 +67,7 @@ export function useAssistant() {
   };
   const stop = () => conversation && window.notes.stopTurn(conversation.id);
   /** What a turn's review card asks; answers why it couldn't be done, if it couldn't. */
-  const review = async (turn: string, action: "keep" | "revert", path?: string) => {
+  const review = async (turn: string, action: ReviewChoice, path?: string) => {
     if (!conversation) return;
     const reviewed = await window.notes.reviewTurn({ conversation: conversation.id, turn, action, ...(path !== undefined ? { path } : {}) });
     if (!reviewed.ok) return reviewed.message;
@@ -138,7 +138,7 @@ function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: Rev
 export interface ConversationViewProps {
   conversation: Conversation;
   /** What a turn's review card asks, by turn. */
-  onReview(turn: string, action: "keep" | "revert", path?: string): Promise<string | undefined>;
+  onReview(turn: string, action: ReviewChoice, path?: string): Promise<string | undefined>;
   onShowLog(): void;
 }
 

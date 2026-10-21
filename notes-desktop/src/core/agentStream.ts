@@ -41,10 +41,9 @@ const textOf = (input: Record<string, unknown>, key: string) => (typeof input[ke
 const pathOf = (input: Record<string, unknown>) => textOf(input, "file_path") ?? textOf(input, "notebook_path") ?? textOf(input, "path");
 
 function detailOf(input: Record<string, unknown>, cwd: string): string {
-  const text = (key: string) => textOf(input, key);
   const path = pathOf(input);
   if (path) return shortPath(path, cwd);
-  return text("command") ?? text("pattern") ?? text("query") ?? text("url") ?? text("description") ?? "";
+  return textOf(input, "command") ?? textOf(input, "pattern") ?? textOf(input, "query") ?? textOf(input, "url") ?? textOf(input, "description") ?? "";
 }
 
 interface ClaudeLine {
