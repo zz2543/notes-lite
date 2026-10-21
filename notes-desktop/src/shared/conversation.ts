@@ -28,13 +28,27 @@ export type AgentEvent =
   /** More of the reply. */
   | { kind: "text"; text: string }
   /** A tool call began: what it is and what it works on. */
-  | { kind: "tool"; id: string; name: string; activity: AgentActivity; detail: string }
+  | { kind: "tool"; id: string; name: string; activity: AgentActivity; detail: string; /** The file it writes, as the agent named it. */ writes?: string }
   | { kind: "toolDone"; id: string; failed: boolean }
   /** The agent finished, or failed with a message. */
   | { kind: "result"; failed?: string };
 
-/** One turn's events: the agent's, then the end with what the turn changed in the library. */
-export type TurnEvent = AgentEvent | { kind: "end"; changes: Array<{ path: string; kind: ChangeKind }>; failed?: string };
+/** How a turn ends: what it changed, to review and take back. */
+export interface TurnEnd {
+  kind: "end";
+  /** Its id among the snapshots. */
+  turn?: string;
+  /** Its operation-log entry, when it changed anything in the library. */
+  entry?: string;
+  /** What it changed in the library. */
+  changes: TurnChange[];
+  /** Files it wrote outside the library, by real path: no snapshot has them, so they can't be undone. */
+  outside?: string[];
+  failed?: string;
+}
+
+/** One turn's events: the agent's, then the end with what the turn changed. */
+export type TurnEvent = AgentEvent | TurnEnd;
 
 /** A tool call, one line of a reply's timeline. */
 export interface Step {
@@ -63,7 +77,12 @@ export interface Reply {
   done: boolean;
   failed?: string;
   /** What the turn changed in the library, once it is over. */
-  changes?: Array<{ path: string; kind: ChangeKind }>;
+  changes?: TurnChange[];
+  /** The turn among the snapshots, and its operation-log entry. */
+  turn?: string;
+  entry?: string;
+  /** Files it wrote outside the library, which can't be undone. */
+  outside?: string[];
 }
 
 export type Message = UserMessage | Reply;
@@ -107,8 +126,10 @@ export function addEvent(reply: Reply, event: TurnEvent): Reply {
           part.kind === "steps" ? { kind: "steps", steps: part.steps.map((s) => (s.id === event.id ? { ...s, done: true, failed: event.failed } : s)) } : part,
         ),
       };
-    case "end":
-      return { ...reply, done: true, changes: event.changes, ...(event.failed ? { failed: event.failed } : {}) };
+    case "end": {
+      const { kind: _, ...end } = event;
+      return { ...reply, ...end, done: true };
+    }
     default:
       return reply;
   }

@@ -49,7 +49,12 @@ describe("一轮", () => {
     expect(text.join("")).toBe("我来补充周一的计划。已经加上了。");
     expect(lib.events).toContainEqual(expect.objectContaining({ kind: "tool", name: "Edit", activity: "writing", detail: "周一.md" }));
     expect(lib.events).toContainEqual(expect.objectContaining({ kind: "toolDone", failed: false }));
-    expect(lib.events.at(-1)).toEqual({ kind: "end", changes: [{ path: "日记/周一.md", kind: "modified" }] });
+    expect(lib.events.at(-1)).toEqual({
+      kind: "end",
+      turn: expect.any(String),
+      entry: outcome.entry?.id,
+      changes: [{ path: "日记/周一.md", kind: "modified", lines: { added: 2, removed: 0 }, restorable: true, reverted: false }],
+    });
 
     expect(outcome.session).toBe("s-1");
     expect(outcome.failed).toBeUndefined();
@@ -59,6 +64,28 @@ describe("一轮", () => {
     // Undoing the entry puts the whole turn back.
     await lib.log.undo(entry!.id);
     expect(await contents(lib.root)).toEqual({ ...before, ".notes/操作记录.json": expect.any(String) });
+  });
+
+  it("ends saying which turn and log entry it was, what each file can do, and what it wrote outside the library, which can't be undone", async () => {
+    const outside = await scratchFolder("notes-desktop-outside-");
+    const elsewhere = join(outside, "草稿.txt");
+    const lib = await setup({ "日记/周一.md": "# 周一\n" }, {
+      steps: [
+        { tool: "Edit", input: { file_path: "周一.md" }, write: { path: "周一.md", text: "# 周一\n\n- 跑步\n" } },
+        { tool: "Write", input: { file_path: elsewhere }, write: { path: elsewhere, text: "库外\n" } },
+      ],
+    });
+
+    await lib.turn({ folder: "日记", text: "补充计划" });
+
+    const [entry] = await lib.log.entries();
+    expect(lib.events.at(-1)).toEqual({
+      kind: "end",
+      turn: entry!.turn,
+      entry: entry!.id,
+      changes: [{ path: "日记/周一.md", kind: "modified", restorable: true, reverted: false, lines: { added: 2, removed: 0 } }],
+      outside: [elsewhere],
+    });
   });
 
   it("continues the agent's conversation on the next turn", async () => {
@@ -78,7 +105,13 @@ describe("一轮", () => {
     });
     const outcome = await lib.turn({ folder: "", text: "写一篇" });
     expect(outcome.failed).toBe("额度已用完");
-    expect(lib.events.at(-1)).toEqual({ kind: "end", changes: [{ path: "新.md", kind: "added" }], failed: "额度已用完" });
+    expect(lib.events.at(-1)).toEqual({
+      kind: "end",
+      turn: expect.any(String),
+      entry: outcome.entry?.id,
+      changes: [{ path: "新.md", kind: "added", lines: { added: 1, removed: 0 }, restorable: true, reverted: false }],
+      failed: "额度已用完",
+    });
     expect(await lib.log.entries()).toHaveLength(1);
   });
 
@@ -116,6 +149,7 @@ describe("对话记录", () => {
     expect(kept.messages[1]).toEqual({
       role: "assistant",
       done: true,
+      turn: expect.any(String),
       changes: [],
       parts: [
         { kind: "text", text: "先看看。" },

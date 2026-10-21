@@ -22,7 +22,7 @@ describe("对话的折叠", () => {
       { kind: "tool", id: "t", name: "Write", activity: "writing", detail: "随记.md" },
       { kind: "toolDone", id: "t", failed: false },
       { kind: "text", text: "写好了。" },
-      { kind: "end", changes: [{ path: "随记.md", kind: "modified" }] },
+      { kind: "end", changes: [{ path: "随记.md", kind: "modified", restorable: true, reverted: false }] },
     ];
     for (const event of events) conversation = withEvent(conversation, event);
 
@@ -30,7 +30,7 @@ describe("对话的折叠", () => {
     expect(conversation.messages[1]).toEqual({
       role: "assistant",
       done: true,
-      changes: [{ path: "随记.md", kind: "modified" }],
+      changes: [{ path: "随记.md", kind: "modified", restorable: true, reverted: false }],
       parts: [
         { kind: "text", text: "好的，" },
         { kind: "steps", steps: [{ id: "t", name: "Write", activity: "writing", detail: "随记.md", done: true, failed: false }] },

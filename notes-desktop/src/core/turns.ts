@@ -2,7 +2,7 @@
 // full permissions and pass on what it says, snapshot again, and log what it changed as one entry
 // that undoes the whole turn.
 import { spawn } from "node:child_process";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
 import type { AgentId } from "../shared/agentKinds";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
@@ -68,6 +68,13 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   const cwd = at(root, folder);
   const id = await snapshots.begin();
   const outcome: TurnOutcome = {};
+  // What it wrote outside the library, as far as its tool calls say: no snapshot has those.
+  const outside = new Set<string>();
+  const noteWrite = (path: string) => {
+    const file = resolve(cwd, path);
+    const inLibrary = relative(root, file);
+    if (inLibrary.startsWith("..") || isAbsolute(inLibrary)) outside.add(file);
+  };
   let failed: string | undefined;
   try {
     failed = await new Promise<string | undefined>((done) => {
@@ -79,6 +86,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
       const pass = (line: string) => {
         for (const event of read(line)) {
           if (event.kind === "session") outcome.session = event.id;
+          if (event.kind === "tool" && event.writes) noteWrite(event.writes);
           if (event.kind === "result") result = event;
           else onEvent(event);
         }
@@ -115,10 +123,16 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   } finally {
     // Whatever happened, what the agent changed is listed and can be undone.
     const turn = await snapshots.finish(id);
-    const changes = turn.changes.map(({ path, kind }) => ({ path, kind }));
-    if (changes.length > 0) [outcome.entry] = await log.record([turnEntry(turn)]);
+    if (turn.changes.length > 0) [outcome.entry] = await log.record([turnEntry(turn)]);
     if (failed) outcome.failed = failed;
-    onEvent({ kind: "end", changes, ...(failed ? { failed } : {}) });
+    onEvent({
+      kind: "end",
+      turn: id,
+      ...(outcome.entry ? { entry: outcome.entry.id } : {}),
+      changes: turn.changes,
+      ...(outside.size > 0 ? { outside: [...outside] } : {}),
+      ...(failed ? { failed } : {}),
+    });
   }
   return outcome;
 }

@@ -37,9 +37,12 @@ function shortPath(path: string, cwd: string): string {
   return file.startsWith(`${base}/`) ? file.slice(base.length + 1) : file;
 }
 
+const textOf = (input: Record<string, unknown>, key: string) => (typeof input[key] === "string" ? (input[key] as string) : undefined);
+const pathOf = (input: Record<string, unknown>) => textOf(input, "file_path") ?? textOf(input, "notebook_path") ?? textOf(input, "path");
+
 function detailOf(input: Record<string, unknown>, cwd: string): string {
-  const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : undefined);
-  const path = text("file_path") ?? text("notebook_path") ?? text("path");
+  const text = (key: string) => textOf(input, key);
+  const path = pathOf(input);
   if (path) return shortPath(path, cwd);
   return text("command") ?? text("pattern") ?? text("query") ?? text("url") ?? text("description") ?? "";
 }
@@ -98,7 +101,9 @@ export const claudeCode: AgentAdapter = {
           if (block.type === "text" && block.text && !(id && streamed.has(id))) events.push({ kind: "text", text: block.text });
           if (block.type === "tool_use" && block.id && block.name) {
             const input = block.input ?? {};
-            events.push({ kind: "tool", id: block.id, name: block.name, activity: activities[block.name] ?? "thinking", detail: detailOf(input, cwd) });
+            const activity = activities[block.name] ?? "thinking";
+            const writes = activity === "writing" ? pathOf(input) : undefined;
+            events.push({ kind: "tool", id: block.id, name: block.name, activity, detail: detailOf(input, cwd), ...(writes ? { writes } : {}) });
           }
         }
       } else if (line.type === "user") {
