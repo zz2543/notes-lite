@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { codeTokens } from "../../src/shared/codeHighlight";
-import { blockType, fenceInfo, isFence, literalBlocks, parseLine, type Range } from "../../src/shared/markdown";
+import {
+  blockType,
+  displayMath,
+  fenceInfo,
+  isFence,
+  isTableSeparator,
+  literalBlocks,
+  parseLine,
+  parseTable,
+  renderedBlocks,
+  type Range,
+} from "../../src/shared/markdown";
 
 const text = (line: string, r: Range) => line.slice(r.from, r.to);
 
@@ -75,6 +86,61 @@ describe("渲染语法", () => {
     expect(math("a $ b $ c")).toEqual([]);
     expect(math("`$x$` in code")).toEqual([]);
     expect(math("单字母$x$也算")).toEqual(["x"]);
+  });
+
+  it("reads a one-line $$ formula, and nothing else as one", () => {
+    expect(displayMath("$$d_{nodal} = d_{proc}$$")).toBe("d_{nodal} = d_{proc}");
+    expect(displayMath("  $$ x $$ ")).toBe(" x ");
+    expect(displayMath("   $$x$$")).toBe("x");
+    expect(displayMath("    $$x$$")).toBeNull(); // four spaces in: code, as in the old editor
+    expect(displayMath("$$")).toBeNull();
+    expect(displayMath("$$ $$")).toBeNull();
+    expect(displayMath("$$a$$ and $$b$$")).toBeNull();
+  });
+
+  it("reads a pipe table: header, alignments and rows, with pipes in code, links and escapes kept", () => {
+    const lines = ["| 名称 | 数量 | 说明 |", "| :--- | ---: | :-: |", "| `a|b` | 3 | [[页|别名]] |", "| x \\| y | 4 |"];
+    const t = parseTable(lines)!;
+    expect(t.header.map((c) => c.text)).toEqual(["名称", "数量", "说明"]);
+    expect(t.aligns).toEqual(["left", "right", "center"]);
+    expect(t.rows[0]!.map((c) => c.text)).toEqual(["`a|b`", "3", "[[页|别名]]"]);
+    expect(t.rows[1]!.map((c) => c.text)).toEqual(["x | y", "4", ""]);
+    // Ranges point at the trimmed cell in its own line.
+    expect(text(lines[0]!, t.header[1]!.range!)).toBe("数量");
+    expect(t.rows[1]![2]!.range).toBeNull();
+    expect(parseTable(["| a | b |", "| c | d |"])).toBeNull();
+    expect(isTableSeparator("|---|---|")).toBe(true);
+    expect(isTableSeparator("| :-- | --: |")).toBe(true);
+    expect(isTableSeparator("| a | - |")).toBe(false);
+    expect(isTableSeparator("| | |")).toBe(false);
+  });
+
+  it("reads a table whose rows don't end with a pipe", () => {
+    expect(parseTable(["| a | b", "|---|---", "| 1 | 2"])!.rows[0]!.map((c) => c.text)).toEqual(["1", "2"]);
+  });
+
+  it("gives every row the table's columns: short rows are padded, cells past the last column left out", () => {
+    const t = parseTable(["| a | b |", "|---|---|", "| 1 |", "| 1 | 2 | 3 |"])!;
+    expect(t.rows.map((row) => row.map((c) => c.text))).toEqual([["1", ""], ["1", "2"]]);
+  });
+
+  it("finds the blocks drawn as a whole: tables and formulas, but not inside code", () => {
+    const lines = [
+      "| a | b |", "|---|---|", "| 1 | 2 |", "", // a table
+      "| not | a table |", "| no | separator |", "",
+      "$$", "x^2", "$$", // a math block
+      "$$e = mc^2$$", // a one-line formula
+      "```", "| a | b |", "|---|---|", "$$y$$", "```",
+      "$$", "never closed",
+      "| a | b |", "|---|---|", // inside the unclosed formula: its TeX, not a table
+    ];
+    expect(renderedBlocks(lines)).toEqual([
+      { kind: "table", first: 0, last: 2, tex: "" },
+      { kind: "math", first: 7, last: 9, tex: "x^2" },
+      { kind: "math", first: 10, last: 10, tex: "e = mc^2" },
+    ]);
+    // Read a line at a time, as the editor hands them over, it finds the same.
+    expect(renderedBlocks({ length: lines.length, line: (i) => lines[i]! })).toEqual(renderedBlocks(lines));
   });
 
   it("reads footnote references and definitions", () => {

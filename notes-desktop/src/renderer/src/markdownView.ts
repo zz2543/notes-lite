@@ -3,7 +3,8 @@
 import { Compartment, Prec, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { codeTokens, type CodeToken } from "../../shared/codeHighlight";
-import { blockPrefixLength, blockType, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../shared/markdown";
+import { blockPrefixLength, blockType, displayMath, literalBlocks, parseLine, type LiteralBlock, type SpanKind } from "../../shared/markdown";
+import { focusTracking, InlineMath, inlineClasses, renderedView } from "./blockView";
 import "./markdown.css";
 
 /** The note's literal blocks (code, math, front matter), kept current as it changes. */
@@ -106,6 +107,11 @@ function typeset(view: EditorView): DecorationSet {
         out.push(...literalLine(line.number - 1, line.from, line.text, block));
         continue;
       }
+      // A one-line $$…$$ formula (drawn by renderedView unless the caret is in it) reads as source.
+      if (line.text.includes("$$") && displayMath(line.text) !== null) {
+        out.push(lineClass("cm-md-codeblock cm-md-codeline cm-md-codeblock-first cm-md-codeblock-last").range(line.from));
+        continue;
+      }
       const type = blockType(line.text);
       const markup = parseLine(line.text, type);
       const isEdited = edited.has(line.number);
@@ -143,6 +149,17 @@ function typeset(view: EditorView): DecorationSet {
         out.push(lineClass(`cm-md-${type}`).range(line.from));
       }
       for (const span of markup.spans) {
+        if (span.kind === "math") {
+          // Drawn as its formula; on the line being edited, its TeX as written.
+          if (isEdited) {
+            out.push(mathSource.range(line.from + span.content.from, line.from + span.content.to));
+            for (const r of span.marks) out.push(syntax.range(line.from + r.from, line.from + r.to));
+          } else {
+            const widget = new InlineMath(span.value ?? "");
+            out.push(Decoration.replace({ widget }).range(line.from + span.marks[0]!.from, line.from + span.marks[1]!.to));
+          }
+          continue;
+        }
         const style = inlineStyles[span.kind];
         if (!style) continue;
         out.push(style.range(line.from + span.content.from, line.from + span.content.to));
@@ -169,12 +186,12 @@ function literalLine(index: number, from: number, text: string, block: LiteralBl
   return out;
 }
 
-/** Inline markup typeset here; links, math and the rest stay as written until they are rendered too. */
-const inlineStyles: Partial<Record<SpanKind, Decoration>> = {
-  bold: mark("cm-md-bold"),
-  italic: mark("cm-md-italic"),
-  code: mark("cm-md-code"),
-};
+const mathSource = mark("cm-md-math-source");
+
+/** Inline markup typeset here (math is drawn apart); links and the rest stay as written until they are rendered too. */
+const inlineStyles: Partial<Record<SpanKind, Decoration>> = Object.fromEntries(
+  Object.entries(inlineClasses).map(([kind, cls]) => [kind, mark(cls)]),
+);
 
 /** ↑ and ↓ stop on a 分隔空行 rather than passing over it for taking no room; there it opens. */
 function stepOntoListGap(forward: boolean) {
@@ -207,10 +224,11 @@ const typesetter = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations },
 );
 
-/** The note typeset in place: headings, emphasis, quotes, lists and code, with their syntax hidden. */
+/** The note typeset in place: headings, emphasis, quotes, lists, code, tables and formulas, with their syntax hidden. */
 export const typesetView: Extension = [
   literal,
   typesetter,
+  renderedView(literal),
   Prec.high(keymap.of([
     { key: "ArrowUp", run: stepOntoListGap(false) },
     { key: "ArrowDown", run: stepOntoListGap(true) },
@@ -225,7 +243,7 @@ const display = new Compartment();
 const viewFor = (showSource: boolean) => (showSource ? sourceView : typesetView);
 
 /** The editor's display, typeset or source, switchable later with `switchMarkdownView`. */
-export const markdownDisplay = (showSource: boolean): Extension => display.of(viewFor(showSource));
+export const markdownDisplay = (showSource: boolean): Extension => [focusTracking, display.of(viewFor(showSource))];
 
 /** Shows the note the other way without rebuilding it. The line being edited stays where it is on
  *  screen when it is in view; otherwise the text at the top of the view stays. */

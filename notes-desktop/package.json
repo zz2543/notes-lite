@@ -29,6 +29,7 @@
     "electron": "44.5.1",
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
+    "katex": "0.18.9",
     "motion": "13.5.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",

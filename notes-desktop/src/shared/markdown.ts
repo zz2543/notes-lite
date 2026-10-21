@@ -296,6 +296,151 @@ function closes(kind: LiteralBlock["kind"], open: string, line: string): boolean
   return fence !== null && fence[0] === open[0] && fence.length >= open.length && line.trim().length === fence.length;
 }
 
+/** The TeX of a formula written on one line as `$$…$$`; null for anything else. */
+export function displayMath(line: string): string | null {
+  // Indented up to three spaces, as other blocks may be; four make it code.
+  if (/^ {0,3}\S/.exec(line) === null) return null;
+  const s = line.trim();
+  if (s.length <= 4 || !s.startsWith("$$") || !s.endsWith("$$")) return null;
+  const inner = s.slice(2, -2);
+  return inner.includes("$$") || inner.trim() === "" ? null : inner;
+}
+
+export type TableAlign = "left" | "center" | "right";
+
+export interface TableCell {
+  /** The cell's Markdown, trimmed, with `\|` unescaped. */
+  text: string;
+  /** Where the trimmed cell sits in its line; null for a cell the row leaves out. */
+  range: Range | null;
+}
+
+/** A GitHub-style pipe table: a header row, a `|---|:-:|` separator, then the body rows. */
+export interface MarkdownTable {
+  header: TableCell[];
+  aligns: TableAlign[];
+  rows: TableCell[][];
+}
+
+/** `| --- | :---: | ---: |`, with or without spaces around the cells. */
+export function isTableSeparator(line: string): boolean {
+  const t = line.trim();
+  if (!t.startsWith("|") || !t.includes("-")) return false;
+  const cells = splitRow(t).map((c) => c.text.trim());
+  return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+}
+
+/** The raw cells of a row. Pipes inside inline code, `[[links|alias]]` or escaped as `\|` don't split. */
+function splitRow(line: string): { text: string; from: number }[] {
+  let i = 0;
+  while (line[i] === " ") i++;
+  if (line[i] !== "|") return [];
+  i++;
+  const out: { text: string; from: number }[] = [];
+  let start = i;
+  let code = false;
+  let wiki = 0;
+  while (i < line.length) {
+    const c = line[i];
+    if (c === "\\" && i + 1 < line.length) {
+      i += 2;
+      continue;
+    }
+    if (c === "`") code = !code;
+    else if (!code && c === "[" && line[i + 1] === "[") {
+      wiki++;
+      i += 2;
+      continue;
+    } else if (!code && wiki > 0 && c === "]" && line[i + 1] === "]") {
+      wiki--;
+      i += 2;
+      continue;
+    } else if (c === "|" && !code && wiki === 0) {
+      out.push({ text: line.slice(start, i), from: start });
+      start = i + 1;
+    }
+    i++;
+  }
+  // A trailing cell only counts when the row doesn't end with a pipe.
+  if (line.slice(start).trim() !== "") out.push({ text: line.slice(start), from: start });
+  return out;
+}
+
+/** The cells of one row, trimmed, each with where it sits in the line. */
+export function tableRow(line: string): TableCell[] {
+  return splitRow(line).map(({ text, from }) => {
+    const lead = text.length - text.replace(/^[ \t]+/, "").length;
+    const trimmed = text.replace(/^[ \t]+|[ \t]+$/g, "");
+    return { text: trimmed.replaceAll("\\|", "|"), range: { from: from + lead, to: from + lead + trimmed.length } };
+  });
+}
+
+/** Reads a table from its lines (header, separator, rows); null when the second line isn't a separator.
+ *  Every row has as many cells as the wider of the header and the separator. */
+export function parseTable(lines: readonly string[]): MarkdownTable | null {
+  if (lines.length < 2 || !isTableSeparator(lines[1]!)) return null;
+  const header = tableRow(lines[0]!);
+  const aligns = tableRow(lines[1]!).map(({ text }): TableAlign =>
+    text.length > 1 && text.startsWith(":") && text.endsWith(":") ? "center" : text.endsWith(":") ? "right" : "left",
+  );
+  const columns = Math.max(header.length, aligns.length);
+  if (columns === 0) return null;
+  const pad = (row: TableCell[]) => Array.from({ length: columns }, (_, i) => row[i] ?? { text: "", range: null });
+  return {
+    header: pad(header),
+    aligns: Array.from({ length: columns }, (_, i) => aligns[i] ?? "left"),
+    rows: lines.slice(2).map((line) => pad(tableRow(line))),
+  };
+}
+
+/** A block drawn as a whole while the caret is elsewhere: a table, or a formula on its own lines. */
+export interface RenderedBlock {
+  kind: "table" | "math";
+  /** Line indices (0-based) of its first and last lines. */
+  first: number;
+  last: number;
+  /** A formula's TeX; "" for a table. */
+  tex: string;
+}
+
+/** A note's lines read one at a time, so an editor needn't copy them all out to have them looked at. */
+export interface LineSource {
+  readonly length: number;
+  /** The line at a 0-based index. */
+  line(index: number): string;
+}
+
+/** The tables, closed `$$` blocks and one-line `$$…$$` formulas of a note, outside code and front matter. */
+export function renderedBlocks(source: readonly string[] | LineSource, literal?: readonly LiteralBlock[]): RenderedBlock[] {
+  const lines: LineSource = "line" in source ? source : { length: source.length, line: (i) => source[i]! };
+  literal ??= literalBlocks("line" in source ? Array.from({ length: lines.length }, (_, i) => lines.line(i)) : source);
+  const out: RenderedBlock[] = [];
+  let next = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const block = literal[next];
+    if (block && i >= block.first) {
+      if (block.kind === "math" && block.closed) {
+        const tex = Array.from({ length: block.last - block.first - 1 }, (_, j) => lines.line(block.first + 1 + j));
+        out.push({ kind: "math", first: block.first, last: block.last, tex: tex.join("\n") });
+      }
+      i = block.last;
+      next++;
+      continue;
+    }
+    const line = lines.line(i);
+    const tex = line.includes("$$") ? displayMath(line) : null;
+    if (tex !== null) {
+      out.push({ kind: "math", first: i, last: i, tex });
+    } else if (line.startsWith("|") && i + 1 < lines.length && lines.line(i + 1).startsWith("|") && isTableSeparator(lines.line(i + 1))) {
+      let last = i + 1;
+      while (last + 1 < lines.length && lines.line(last + 1).startsWith("|")) last++;
+      out.push({ kind: "table", first: i, last, tex: "" });
+      i = last;
+    }
+  }
+  return out;
+}
+
 const isCjk = (code: number) => (code >= 0x4e00 && code <= 0x9fff) || (code >= 0x3400 && code <= 0x4dbf);
 const isWordChar = (code: number) => (code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
 /** Inside a word these keep it going: 2.0, 3,200, 50%. */

@@ -242,6 +242,15 @@
   --code-inset: 14px;
   --code-radius: 8px;
   --code-bg: rgba(0, 0, 0, 0.04);
+  /* Tables, as in the old editor: a shaded header, every other row striped, `--line` rules. */
+  --table-size: calc(var(--body-size) - 1px);
+  --table-radius: 6px;
+  --table-leading: 1.5;
+  --table-cell-inset: 6px 10px;
+  --table-header: rgba(0, 0, 0, 0.045);
+  --table-stripe: rgba(0, 0, 0, 0.018);
+  /* KaTeX draws at 1.21em; beside body text the old editor's 1.12em. */
+  --math-size: 1.12em;
   /* Code colours, after Xcode's default themes, as in the old editor. */
   --code-keyword: #9b2393;
   --code-string: #c41a16;
@@ -256,6 +265,8 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --code-bg: rgba(255, 255, 255, 0.06);
+    --table-header: rgba(255, 255, 255, 0.07);
+    --table-stripe: rgba(255, 255, 255, 0.025);
     --code-keyword: #ff7ab2;
     --code-string: #ff8170;
     --code-comment: #7f8c98;
