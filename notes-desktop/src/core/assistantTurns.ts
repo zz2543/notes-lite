@@ -7,7 +7,8 @@ import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
 import type { OperationLog } from "./operationLog";
 import type { SnapshotStore } from "./snapshots";
-import { runTurn } from "./turns";
+import type { SpaceLibrary } from "./spaces";
+import { runTurn, turnSpaces } from "./turns";
 
 export interface TurnStart {
   /** The conversation to continue; null begins one. */
@@ -18,6 +19,8 @@ export interface TurnStart {
   text: string;
   /** Notes put in the context, library-relative. */
   notes: string[];
+  /** The space open in the app, by name, if any. */
+  space?: string;
 }
 
 export type TurnStarted = { ok: true; conversation: Conversation } | { ok: false; message: string };
@@ -31,6 +34,8 @@ export interface AssistantTurnsOptions {
   agents(): Promise<InstalledAgent[]>;
   /** What an agent runs with. */
   env(): Promise<NodeJS.ProcessEnv>;
+  /** The spaces of the library at `root`, told to the agent with their authoring guide each turn. */
+  spaces?(root: string): SpaceLibrary;
 }
 
 export interface AssistantTurns {
@@ -83,6 +88,8 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
       text: request.text,
       notes: request.notes,
       session: conversation.session,
+      // Without them the turn still runs.
+      spaces: options.spaces ? await turnSpaces(options.spaces(root), request.space).catch(() => undefined) : undefined,
       snapshots: turns,
       log: options.log(root),
       env: await options.env(),

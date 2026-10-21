@@ -474,6 +474,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         assistant={assistant}
         folder={workingFolder}
         note={note}
+        space={inSpace?.name ?? null}
         libraryName={library.name}
         onOpenFolder={openFolder}
         onShowLog={operationLog.show}

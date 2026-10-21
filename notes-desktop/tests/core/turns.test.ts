@@ -1,7 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, type TurnEvent } from "../../src/core";
+import { readFile } from "node:fs/promises";
+import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, spaceLibrary, turnSpaces, type TurnEvent, type TurnSpaces } from "../../src/core";
 import { installFakeAgent, type AgentCommand, type FakeScript } from "../support/fakeAgent";
 import { contents, fakeTrash, library, scratchFolder } from "../support/library";
 
@@ -16,7 +17,7 @@ async function setup(files: Record<string, string>, script: FakeScript | FakeScr
   const log = operationLog(root, { trash: trash.trash, turns: snapshots });
   const agent = await installFakeAgent(join(data, "agents"), id, script);
   const events: TurnEvent[] = [];
-  const turn = (request: { folder: string; text: string; notes?: string[]; session?: string; signal?: AbortSignal }) =>
+  const turn = (request: { folder: string; text: string; notes?: string[]; session?: string; signal?: AbortSignal; spaces?: TurnSpaces }) =>
     runTurn({ agent: { id, path: agent.path }, root, snapshots, log, notes: [], ...request, onEvent: (event) => events.push(event) });
   return { root, agent, events, turn, log };
 }
@@ -150,6 +151,47 @@ describe.each(others)("一轮，用 $id", ({ id, write, fullPermission, resume }
     const outcome = await lib.turn({ folder: "", text: "写一篇" });
     expect(outcome.failed).toBe("额度已用完");
     expect(lib.events.at(-1)).toEqual({ kind: "end", changes: [], failed: "额度已用完" });
+  });
+});
+
+// 空间主页 (assistant-spec 20): whatever the user asks, the agent knows where the library's spaces are and
+// that the authoring guide comes first when it writes one — the space open now named.
+describe("空间主页的编写说明", () => {
+  const files = {
+    "日记/周一.md": "# 周一\n",
+    ".notes/空间/读书.html": '<meta name="space-scope" content="读书">\n',
+    ".notes/空间/健身.html": '<meta name="space-scope" content="健身">\n<p>主页</p>',
+    ".notes/空间/顺序.json": JSON.stringify(["读书", "健身"]),
+  };
+
+  it("lists the spaces, in the user's order, with the guide, installed, and the one open", async () => {
+    const root = await library(files);
+    const spaces = await turnSpaces(spaceLibrary(root), "健身");
+    expect(spaces).toEqual({
+      guide: ".notes/空间/编写说明.md",
+      spaces: [
+        { name: "读书", path: ".notes/空间/读书.html" },
+        { name: "健身", path: ".notes/空间/健身.html" },
+      ],
+      open: "健身",
+    });
+    expect(await readFile(join(root, ".notes", "空间", "编写说明.md"), "utf8")).toContain("空间主页编写说明");
+    // A space that is not there is not open.
+    expect((await turnSpaces(spaceLibrary(root), "没有"))?.open).toBeUndefined();
+  });
+
+  it("says nothing of spaces in a library without any", async () => {
+    expect(await turnSpaces(spaceLibrary(await library({ "随记.md": "随记\n" })))).toBeUndefined();
+  });
+
+  it("puts them in the prompt, relative to the working directory", async () => {
+    const lib = await setup(files, { steps: [{ say: "好的。" }] });
+    await lib.turn({ folder: "日记", text: "改一下健身主页", spaces: (await turnSpaces(spaceLibrary(lib.root), "健身"))! });
+    const [run] = await lib.agent.runs();
+    expect(run!.stdin).toContain("改一下健身主页");
+    expect(run!.stdin).toContain("请先完整阅读并遵守编写说明：../.notes/空间/编写说明.md");
+    expect(run!.stdin).toContain("- 健身：../.notes/空间/健身.html（当前打开）");
+    expect(run!.stdin).toContain("- 读书：../.notes/空间/读书.html\n");
   });
 });
 

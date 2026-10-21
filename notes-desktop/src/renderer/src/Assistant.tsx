@@ -52,6 +52,8 @@ export interface AssistantColumnProps {
   /** Where the user is: the working directory a new conversation gets, and the open note. */
   folder: string;
   note: string | null;
+  /** The space open in the card, told to the agent with the spaces' authoring guide. */
+  space: string | null;
   libraryName: string;
   onOpenFolder(folder: string): void;
   /** Opens 操作记录, where a turn is undone. */
@@ -60,7 +62,7 @@ export interface AssistantColumnProps {
   saveFirst(): Promise<boolean>;
 }
 
-export function AssistantColumn({ open, onClose, assistant, folder, note, libraryName, onOpenFolder, onShowLog, saveFirst }: AssistantColumnProps) {
+export function AssistantColumn({ open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst }: AssistantColumnProps) {
   const { installed, detect } = useInstalledAgents(open);
   const [chosen, setChosen] = useState<AgentId>();
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
@@ -77,7 +79,7 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
   const conversationAgent = conversation && agents.find((a) => a.id === conversation.agent);
   const send = async (text: string, notes: string[]) => {
     if (!agent || !(await saveFirst())) return;
-    await assistant.send({ agent: agent.id, folder, text, notes });
+    await assistant.send({ agent: agent.id, folder, text, notes, ...(space ? { space } : {}) });
   };
   return (
     // Always there, so its width can move; closed, it is hidden from everything once it has shut.

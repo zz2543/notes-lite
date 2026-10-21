@@ -107,3 +107,21 @@ test("对话历史 lists the library's conversations; one opened again is contin
   await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
   await again.app.close();
 });
+
+test("with a space open, the agent is told the spaces' authoring guide and which space it is", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", {
+    "健身/训练.md": "# 训练\n",
+    ".notes/空间/健身.html": '<meta name="space-scope" content="健身">\n<p>健身主页</p>',
+  });
+  const agent = await installFakeAgent(join(scratch, "agents"), "claude", { steps: [{ say: "好的。" }] });
+  const { page, app } = await launchWith(scratch, root);
+  await page.getByRole("tablist", { name: "侧栏" }).getByRole("tab", { name: "空间" }).click();
+  await page.getByRole("list", { name: "空间", exact: true }).getByRole("button", { name: "健身" }).click();
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await say(page, "把主页改成按周统计");
+  await expect(conversation(page)).toContainText("好的。");
+  const [run] = await agent.runs();
+  expect(run!.stdin).toContain("请先完整阅读并遵守编写说明：.notes/空间/编写说明.md");
+  expect(run!.stdin).toContain("- 健身：.notes/空间/健身.html（当前打开）");
+  await app.close();
+});

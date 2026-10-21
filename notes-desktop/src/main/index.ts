@@ -169,6 +169,7 @@ const turns = assistantTurns({
   log: (root) => operationLog(root, { ...libraryOptions, turns: snapshots.library(root) }),
   agents: async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }),
   env: agentEnvironment,
+  spaces: (root) => spaceLibrary(root, libraryOptions),
 });
 
 /**

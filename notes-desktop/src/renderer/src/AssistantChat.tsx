@@ -52,7 +52,7 @@ export function useAssistant() {
 
   const running = conversation?.messages.at(-1)?.role === "assistant" && !(conversation.messages.at(-1) as Reply).done;
 
-  const send = async (start: { agent: AgentId; folder: string; text: string; notes: string[] }) => {
+  const send = async (start: { agent: AgentId; folder: string; text: string; notes: string[]; space?: string }) => {
     setProblem(undefined);
     const started = await window.notes.startTurn({ conversation: conversation?.id ?? null, ...start });
     if (!started.ok) return setProblem(started.message);

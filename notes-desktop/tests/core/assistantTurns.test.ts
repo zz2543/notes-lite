@@ -1,18 +1,18 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { assistantTurns, conversationStore, detectAgents, operationLog, snapshotStore, type TurnEvent } from "../../src/core";
+import { assistantTurns, conversationStore, detectAgents, operationLog, snapshotStore, spaceLibrary, type TurnEvent } from "../../src/core";
 import { installFakeAgent, type FakeScript } from "../support/fakeAgent";
 import { fakeTrash, library, scratchFolder } from "../support/library";
 
 // 助手栏 turns as main runs them: a conversation is begun or continued, the turn's events folded into
 // it and passed on, and it is kept with the app.
 
-async function setup(script: FakeScript | FakeScript[]) {
-  const root = await library({ "随记.md": "随记\n" });
+async function setup(script: FakeScript | FakeScript[], files: Record<string, string> = { "随记.md": "随记\n" }) {
+  const root = await library(files);
   const data = await scratchFolder("notes-desktop-data-");
   const trash = await fakeTrash();
   const snapshots = snapshotStore(join(data, "snapshots"), { trash: trash.trash });
-  await installFakeAgent(join(data, "agents"), "claude", script);
+  const agent = await installFakeAgent(join(data, "agents"), "claude", script);
   const conversations = conversationStore(join(data, "conversations"));
   const turns = assistantTurns({
     conversations,
@@ -20,6 +20,7 @@ async function setup(script: FakeScript | FakeScript[]) {
     log: (at) => operationLog(at, { trash: trash.trash, turns: snapshots.library(at) }),
     agents: () => detectAgents({ path: join(data, "agents"), pathext: process.env.PATHEXT }),
     env: async () => process.env,
+    spaces: (at: string) => spaceLibrary(at),
   });
   const events: Array<[string, TurnEvent]> = [];
   const ended = () => new Promise<void>((done) => {
@@ -30,9 +31,9 @@ async function setup(script: FakeScript | FakeScript[]) {
       }
     }, 20);
   });
-  const start = (request: { conversation?: string | null; text: string; agent?: "claude" | "codex" }, at = root) =>
+  const start = (request: { conversation?: string | null; text: string; agent?: "claude" | "codex"; space?: string }, at = root) =>
     turns.start(at, { conversation: null, agent: "claude", folder: "", notes: [], ...request }, (id, event) => events.push([id, event]));
-  return { root, data, conversations, turns, events, ended, start };
+  return { root, data, agent, conversations, turns, events, ended, start };
 }
 
 describe("助手栏的一轮", () => {
@@ -69,6 +70,15 @@ describe("助手栏的一轮", () => {
     lib.turns.stopAll();
     await expect.poll(async () => (await lib.conversations.read(id)).messages).toHaveLength(4);
     await expect.poll(async () => (await lib.conversations.read(id)).messages.at(-1)).toMatchObject({ done: true, failed: "已停止。" });
+  });
+
+  it("tells the agent of the library's spaces and their authoring guide, and which space is open", async () => {
+    const lib = await setup({ steps: [{ say: "好的。" }] }, { "健身/训练.md": "# 训练\n", ".notes/空间/健身.html": '<meta name="space-scope" content="健身">\n' });
+    await lib.start({ text: "做一个健身主页", space: "健身" });
+    await lib.ended();
+    const [run] = await lib.agent.runs();
+    expect(run!.stdin).toContain("请先完整阅读并遵守编写说明：.notes/空间/编写说明.md");
+    expect(run!.stdin).toContain("- 健身：.notes/空间/健身.html（当前打开）");
   });
 
   it("says so when no library is open or the agent is gone", async () => {
