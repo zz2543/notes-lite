@@ -125,3 +125,27 @@ test("in the Markdown source view tables and formulas are shown as written", asy
   await expect(editor(page).getByRole("table")).toBeVisible();
   await app.close();
 });
+
+test("KaTeX's fonts load from the app, the page's CSP refusing none of them", async ({ scratch }) => {
+  // Big delimiters, operators and the AMS, calligraphic and Fraktur alphabets: most of KaTeX's fonts.
+  const tex = "\\left(\\frac{\\frac{a}{b}}{\\frac{c}{d}}\\right) \\Bigg( x \\Bigg) \\sum_{i=1}^n \\mathbb{R} \\mathcal{L} \\mathfrak{g}";
+  const root = await library(scratch, "笔记库", { "公式.md": `$$\n${tex}\n$$\n\n结尾。` });
+  const { app, page } = await launchWith(scratch, root);
+  const refused: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("Content Security Policy")) refused.push(message.text());
+  });
+  await openNote(page, "公式");
+  await page.keyboard.press("ControlOrMeta+End");
+  await expect(editor(page).locator(".cm-md-math-block .katex-display")).toBeVisible();
+
+  const fonts = () =>
+    page.evaluate(async () => {
+      await document.fonts.ready;
+      return [...document.fonts].filter((f) => f.family.startsWith("KaTeX") && f.status !== "unloaded").map((f) => `${f.family} ${f.status}`);
+    });
+  await expect.poll(fonts).toEqual(expect.arrayContaining(["KaTeX_Size3 loaded", "KaTeX_Size4 loaded", "KaTeX_AMS loaded", "KaTeX_Fraktur loaded"]));
+  expect((await fonts()).filter((f) => !f.endsWith("loaded"))).toEqual([]);
+  expect(refused).toEqual([]);
+  await app.close();
+});
