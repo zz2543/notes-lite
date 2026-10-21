@@ -43,6 +43,22 @@ test("the selection pill slides to the chosen folder", async ({ scratch }) => {
   await app.close();
 });
 
+test("the list's selection pill covers exactly its row, all four corners round", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "短.md": "一", [`${"很长的标题".repeat(12)}.md`]: "二" });
+  const { app, page } = await launchWith(scratch, root);
+  const list = page.getByRole("list", { name: "当前目录内容" });
+  for (const name of ["短", "很长的标题"]) {
+    const row = list.getByRole("button", { name: new RegExp(`^${name}`) });
+    await row.click();
+    const pill = row.getByTestId("selection-pill");
+    await expect.poll(async () => JSON.stringify(await pill.boundingBox())).toBe(JSON.stringify(await row.boundingBox()));
+    // Nothing spills sideways out of the list to be clipped at its edge.
+    expect(await page.locator("section.list .items").evaluate((items) => items.scrollWidth <= items.clientWidth)).toBe(true);
+    expect(await pill.evaluate((element) => getComputedStyle(element).borderLeftWidth)).toBe("0px");
+  }
+  await app.close();
+});
+
 /** Whether a change of `scale` on this element eases on a spring curve rather than jumping. */
 const springOf = (locator: Locator) =>
   locator.evaluate((element) => {

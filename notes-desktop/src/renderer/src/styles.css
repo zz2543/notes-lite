@@ -161,7 +161,7 @@ aside.side {
   background: var(--hover);
 }
 
-.list {
+section.list {
   width: var(--list-width);
   flex: none;
   display: flex;
