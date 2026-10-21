@@ -26,11 +26,11 @@ export function AssistantToggle({ state, onOpen }: { state: FigureState; onOpen(
 }
 
 /** How to install each agent, for the guide shown when none is found. */
-const installs: Record<AgentId, string | null> = {
+const installs: Record<AgentId, string> = {
   claude: "npm install -g @anthropic-ai/claude-code",
   codex: "npm install -g @openai/codex",
-  dsh: null,
-  pi: "npm install -g @mariozechner/pi-coding-agent",
+  dsh: "npm install -g @deepseek-ai/dsh",
+  pi: "npm install -g @earendil-works/pi-coding-agent",
 };
 /** The installed agents, looked for when the column opens and again on request; undefined while looking. */
 function useInstalledAgents(open: boolean) {
@@ -132,7 +132,7 @@ function InstallGuide({ onDetect }: { onDetect(): void }) {
           <li key={agent.id}>
             <span className="guide-name">{agent.name}</span>
             <code>{agent.command}</code>
-            {installs[agent.id] && <code className="guide-install">{installs[agent.id]}</code>}
+            <code className="guide-install">{installs[agent.id]}</code>
           </li>
         ))}
       </ul>

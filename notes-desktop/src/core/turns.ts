@@ -60,18 +60,14 @@ function start(path: string, args: string[], cwd: string, env: NodeJS.ProcessEnv
 export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   const { agent, root, folder, snapshots, log, onEvent } = request;
   const adapter = agentAdapter(agent.id);
-  if (!adapter) {
-    const failed = "这个 Agent 还不能在助手栏里使用。";
-    onEvent({ kind: "end", changes: [], failed });
-    return { failed };
-  }
+  const env = adapter.env ? { ...(request.env ?? process.env), ...adapter.env } : request.env;
   const cwd = at(root, folder);
   const id = await snapshots.begin();
   const outcome: TurnOutcome = {};
   let failed: string | undefined;
   try {
     failed = await new Promise<string | undefined>((done) => {
-      const child = start(agent.path, adapter.args(request.session), cwd, request.env);
+      const child = start(agent.path, adapter.args(request.session), cwd, env);
       const read = adapter.reader(cwd);
       let result: AgentEvent | undefined;
       let stderr = "";
