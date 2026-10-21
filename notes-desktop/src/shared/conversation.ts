@@ -67,8 +67,24 @@ export interface Conversation {
   session?: string;
   /** ISO 8601. */
   created: string;
+  /** ISO 8601: when it was last kept. */
+  updated?: string;
   messages: Message[];
 }
+
+/** A conversation as 对话历史 lists it. */
+export interface ConversationSummary {
+  id: string;
+  agent: AgentId;
+  folder: string;
+  /** The first line of its first message. */
+  title: string;
+  /** ISO 8601: when it was last kept. */
+  updated: string;
+}
+
+/** What a turn ends with when the user stopped it, or the app quit in the middle of it. */
+export const stoppedTurn = "已停止。";
 
 export const emptyReply = (): Reply => ({ role: "assistant", parts: [], done: false });
 

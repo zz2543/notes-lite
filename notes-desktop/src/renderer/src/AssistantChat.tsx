@@ -2,8 +2,8 @@ import { ArrowUp, CaretRight, Plus, Stop, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
-import type { AgentId } from "../../shared/agentKinds";
-import { withEvent, type Conversation, type Reply, type Step } from "../../shared/conversation";
+import { agents, type AgentId } from "../../shared/agentKinds";
+import { stoppedTurn, withEvent, type Conversation, type ConversationSummary, type Reply, type Step } from "../../shared/conversation";
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
@@ -15,7 +15,7 @@ import { icon } from "./tokens";
 /** How long the figure shows 完成 before it goes back to 待命. */
 const doneFor = 1600;
 /** What a turn the user stopped ends with: no error for the figure. */
-const stopped = "已停止。";
+const stopped = stoppedTurn;
 
 const titleOf = noteTitle;
 
@@ -64,13 +64,25 @@ export function useAssistant() {
     early.current = [];
     for (const [, event] of waiting) apply(event);
   };
+  /** Shows a kept conversation (对话历史), to read and continue. */
+  const open = async (id: string) => {
+    setProblem(undefined);
+    const kept = await window.notes.openConversation(id);
+    if (!kept) return setProblem("找不到这个对话了。");
+    // Events that came before the answer are in it already.
+    early.current = early.current.filter(([to]) => to !== id);
+    current.current = id;
+    setConversation(kept);
+    const last = kept.messages.at(-1);
+    setFigure(last?.role === "assistant" && !last.done ? "thinking" : "idle");
+  };
   const stop = () => conversation && window.notes.stopTurn(conversation.id);
   const reset = () => {
     setConversation(null);
     setProblem(undefined);
     setFigure("idle");
   };
-  return { conversation, figure, running, problem, send, stop, reset };
+  return { conversation, figure, running, problem, send, open, stop, reset };
 }
 
 export type AssistantState = ReturnType<typeof useAssistant>;
@@ -155,6 +167,42 @@ export function ConversationView({ conversation, onShowLog }: { conversation: Co
     </div>
   );
 }
+
+const historyTime = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/** 对话历史: the library's kept conversations, the latest first; picking one shows it. */
+export function ConversationHistory({ current, libraryName, onPick }: { current: string | null; libraryName: string; onPick(id: string): void }) {
+  const [items, setItems] = useState<ConversationSummary[]>();
+  useEffect(() => {
+    let live = true;
+    void window.notes.conversations().then((list) => live && setItems(list));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return (
+    <nav className="assistant-messages assistant-history" aria-label="对话历史">
+      {items?.length === 0 && <p className="history-empty">还没有对话。</p>}
+      {items && items.length > 0 && (
+        <ul>
+          {items.map((item) => (
+            <li key={item.id}>
+              <button className="history-item" aria-current={item.id === current || undefined} onClick={() => onPick(item.id)}>
+                <span className="history-title">{item.title || "（空）"}</span>
+                <span className="history-meta">
+                  {[agents.find((a) => a.id === item.agent)?.name ?? item.agent, folderName(item.folder, libraryName), historyTime.format(new Date(item.updated))].join(" · ")}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </nav>
+  );
+}
+
+/** A working directory as the 助手栏 names it: its last folder, or the library's name at the top. */
+export const folderName = (folder: string, libraryName: string) => (folder ? folder.slice(folder.lastIndexOf("/") + 1) : libraryName);
 
 /** The note being mentioned after an @, up to the caret; null when none is. */
 const mentionAt = (text: string, caret: number) => /(?:^|\s)@([^\s@]*)$/.exec(text.slice(0, caret))?.[1] ?? null;

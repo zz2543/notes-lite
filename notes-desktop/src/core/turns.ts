@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { join, relative } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
 import type { AgentId } from "../shared/agentKinds";
+import { stoppedTurn } from "../shared/conversation";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
 
@@ -100,7 +101,7 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
       child.on("close", (code) => {
         request.signal?.removeEventListener("abort", stop);
         if (pending) pass(pending);
-        if (request.signal?.aborted) return done("已停止。");
+        if (request.signal?.aborted) return done(stoppedTurn);
         if (result?.kind === "result" && result.failed) return done(result.failed);
         if (code !== 0) return done(stderr.trim() || `Agent 异常退出（代码 ${code}）。`);
         done(undefined);

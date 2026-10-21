@@ -2,7 +2,7 @@
 // at a time; its events are folded into it (shared/conversation's one rule) and passed on as they
 // come, and it is kept with the app (对话记录) once the turn is over.
 import type { AgentId } from "../shared/agentKinds";
-import { emptyReply, withEvent, type Conversation, type TurnEvent } from "../shared/conversation";
+import { emptyReply, stoppedTurn, withEvent, type Conversation, type ConversationSummary, type TurnEvent } from "../shared/conversation";
 import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
 import type { OperationLog } from "./operationLog";
@@ -39,6 +39,10 @@ export interface AssistantTurns {
    * at once with the conversation as it now stands; `send` gets the turn's events as they come.
    */
   start(root: string | null, request: TurnStart, send: (conversation: string, event: TurnEvent) => void): Promise<TurnStarted>;
+  /** 对话历史: the kept conversations of the library at `root`, the latest first. */
+  history(root: string | null): Promise<ConversationSummary[]>;
+  /** A conversation of the library at `root` as it stands, to show and continue; null when there is none. */
+  open(root: string | null, conversation: string): Promise<Conversation | null>;
   /** Stops the conversation's running turn. */
   stop(conversation: string): void;
   /** Stops every running turn, as when the app quits. */
@@ -97,8 +101,19 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     return { ok: true, conversation };
   };
 
+  const open_: AssistantTurns["open"] = async (root, id) => {
+    const conversation = open.get(id) ?? (await conversations.read(id).catch(() => undefined));
+    if (!root || !conversation || conversation.root !== root) return null;
+    const reply = conversation.messages.at(-1);
+    // A turn the app quit in the middle of ended there.
+    if (!running.has(id) && reply?.role === "assistant" && !reply.done) return withEvent(conversation, { kind: "end", changes: [], failed: stoppedTurn });
+    return conversation;
+  };
+
   return {
     start,
+    history: async (root) => (root ? conversations.list(root) : []),
+    open: open_,
     stop: (id) => running.get(id)?.abort(),
     stopAll: () => running.forEach((turn) => turn.abort()),
   };

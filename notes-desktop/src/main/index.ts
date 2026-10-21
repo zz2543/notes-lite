@@ -480,6 +480,8 @@ function registerIpc() {
     turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
   );
   ipcMain.on(channels.stopTurn, (_, id: string) => turns.stop(id));
+  ipcMain.handle(channels.conversations, () => turns.history(library?.root ?? null));
+  ipcMain.handle(channels.openConversation, (_, id: string) => turns.open(library?.root ?? null, id));
   ipcMain.handle(channels.search, (_, query: string, options: SearchOptions) => searchIndex().search(query, options));
   ipcMain.on(channels.closeChecked, (_, check: CloseCheck) => void finishClose(closeCheck, check));
   ipcMain.on(channels.preferences, (event) => (event.returnValue = preferences));

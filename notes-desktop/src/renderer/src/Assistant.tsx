@@ -1,9 +1,9 @@
-import { FolderSimple, X } from "@phosphor-icons/react";
+import { ClockCounterClockwise, FolderSimple, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { InstalledAgent } from "../../core";
 import { agents, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
-import { Composer, ConversationView, type AssistantState } from "./AssistantChat";
+import { Composer, ConversationHistory, ConversationView, folderName as nameOf, type AssistantState } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
 import { Segmented } from "./controls";
 import { figureSize, icon } from "./tokens";
@@ -67,7 +67,13 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
   const { conversation } = assistant;
   // Fixed when the conversation begins; until then it follows the selection.
   const workingFolder = conversation?.folder ?? folder;
-  const folderName = workingFolder ? workingFolder.slice(workingFolder.lastIndexOf("/") + 1) : libraryName;
+  const folderName = nameOf(workingFolder, libraryName);
+  // 对话历史 shows in place of the conversation until one is picked.
+  const [history, setHistory] = useState(false);
+  const pick = (id: string) => {
+    setHistory(false);
+    void assistant.open(id);
+  };
   const conversationAgent = conversation && agents.find((a) => a.id === conversation.agent);
   const send = async (text: string, notes: string[]) => {
     if (!agent || !(await saveFirst())) return;
@@ -78,6 +84,16 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
     <aside className={`assistant ${open ? "open" : ""}`} aria-label="助手栏" aria-hidden={!open} inert={!open}>
       <div className="assistant-inner">
         <div className="assistant-bar">
+          <button
+            className="icon-button small"
+            onClick={() => setHistory(!history)}
+            disabled={assistant.running}
+            aria-label="对话历史"
+            aria-expanded={history}
+            title="对话历史"
+          >
+            <ClockCounterClockwise size={icon.small} />
+          </button>
           <button className="icon-button small" onClick={onClose} aria-label="关闭助手栏" title={`关闭 ${assistantShortcut}`}>
             <X size={icon.small} />
           </button>
@@ -100,7 +116,13 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
           )}
         </header>
         {installed?.length === 0 && <InstallGuide onDetect={detect} />}
-        {conversation ? <ConversationView conversation={conversation} onShowLog={onShowLog} /> : <div className="assistant-messages" />}
+        {history ? (
+          <ConversationHistory current={conversation?.id ?? null} libraryName={libraryName} onPick={pick} />
+        ) : conversation ? (
+          <ConversationView conversation={conversation} onShowLog={onShowLog} />
+        ) : (
+          <div className="assistant-messages" />
+        )}
         {assistant.problem && (
           <p className="assistant-problem" role="alert">
             {assistant.problem}
@@ -114,7 +136,10 @@ export function AssistantColumn({ open, onClose, assistant, folder, note, librar
             hasConversation={conversation !== null}
             onSend={(text, notes) => void send(text, notes)}
             onStop={assistant.stop}
-            onNew={assistant.reset}
+            onNew={() => {
+              setHistory(false);
+              assistant.reset();
+            }}
           />
         )}
       </div>
