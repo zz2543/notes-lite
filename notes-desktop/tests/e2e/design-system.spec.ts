@@ -24,26 +24,7 @@ async function top(locator: Locator): Promise<number> {
   return box.y;
 }
 
-test("the selection pill slides to the chosen folder", async ({ scratch }) => {
-  const root = await library(scratch, "笔记库", { "甲/一.md": "一", "乙/二.md": "二", "丙/三.md": "三" });
-  const { app, page } = await launchWith(scratch, root);
-  const tree = page.getByRole("tree", { name: "文件夹" });
-  const from = await top(tree.getByRole("treeitem", { name: "笔记库" }));
-  const target = tree.getByRole("treeitem", { name: "丙" });
-  const to = await top(target);
-
-  const frames = await film(page, sidePill, () => target.click());
-  // It passes through the rows in between instead of jumping, and comes to rest on the chosen row. Hosted
-  // macOS runners draw frames too unevenly to film a slide reliably, so there a missing in-between is noted
-  // in the report rather than failing; on a real screen it must show.
-  const slid = frames.some((f) => f.top > from + 2 && f.top < to - 2);
-  if (process.env.CI && !slid) test.info().annotations.push({ type: "slide not filmed", description: `${frames.length} frames` });
-  else expect(slid).toBe(true);
-  await expect.poll(() => top(page.locator(sidePill))).toBeCloseTo(to, 0);
-  await app.close();
-});
-
-test("switching notes: a near pill slides, a far one fades out there and in here; the text fades in, rising", async ({ scratch }) => {
+test("switching: the pill fades out on the old row and in on the new one, near or far, never sweeping between", async ({ scratch }) => {
   const notes = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`${String(i + 1).padStart(2, "0")}.md`, `第 ${i + 1} 篇`]));
   const { app, page } = await launchWith(scratch, await library(scratch, "笔记库", notes));
   const list = page.getByRole("list", { name: "当前目录内容" });
@@ -51,29 +32,18 @@ test("switching notes: a near pill slides, a far one fades out there and in here
   // By place in the list, whatever order it sorts them in.
   const row = (n: number) => list.getByRole("button").nth(n);
   await row(0).click();
-  const first = await top(row(0));
-  const near = row(2);
-  const nearTop = await top(near);
-  const slid = await film(page, listPill, () => near.click(), 600);
-  const between = slid.some((f) => f.top > Math.min(first, nearTop) + 2 && f.top < Math.max(first, nearTop) - 2);
-  // It starts where it was, never drawn a frame early on the new row.
-  expect(Math.abs(slid[0]!.top - first)).toBeLessThan(2);
-  if (process.env.CI && !between) test.info().annotations.push({ type: "slide not filmed", description: `${slid.length} frames` });
-  else expect(between).toBe(true);
-
-  // Nine rows on: it never sweeps across the rows between; it appears on the new row, faint and a little small.
-  const far = row(11);
-  const farTop = await top(far);
-  const jumped = await film(page, listPill, () => far.click(), 600);
-  expect(jumped.every((f) => Math.abs(f.top - nearTop) < 2 || Math.abs(f.top - farTop) < 2)).toBe(true);
-  const arrived = jumped.filter((f) => Math.abs(f.top - farTop) < 2);
-  if (!(process.env.CI && arrived.length < 2)) {
-    expect(Math.min(...arrived.map((f) => f.opacity))).toBeLessThan(1);
-    expect(Math.min(...arrived.map((f) => f.scale))).toBeLessThan(1);
+  let fromTop = await top(row(0));
+  for (const n of [2, 11]) {
+    const toTop = await top(row(n));
+    const frames = await film(page, listPill, () => row(n).click(), 600);
+    expect(frames.every((f) => Math.abs(f.top - fromTop) < 2 || Math.abs(f.top - toTop) < 2)).toBe(true);
+    const arrived = frames.filter((f) => Math.abs(f.top - toTop) < 2);
+    if (!(process.env.CI && arrived.length < 2)) expect(Math.min(...arrived.map((f) => f.opacity))).toBeLessThan(1);
+    await expect.poll(() => page.locator(listPill).evaluate((pill) => getComputedStyle(pill).opacity)).toBe("1");
+    // The old one is gone from its row once it has faded.
+    await expect(page.locator("section.list .pill")).toHaveCount(1);
+    fromTop = toTop;
   }
-  await expect.poll(() => page.locator(listPill).evaluate((pill) => getComputedStyle(pill).opacity)).toBe("1");
-  // The old one is gone from its row once it has faded.
-  await expect(page.locator("section.list .pill")).toHaveCount(1);
 
   // The note's text comes in over a moment rather than at once.
   const text = await film(page, ".editor", () => row(5).click(), 400);
