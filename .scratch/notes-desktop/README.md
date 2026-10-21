@@ -36,6 +36,10 @@
 | [28: 一轮对话（Claude Code）](issues/28-assistant-first-turn.md) | 26, 27 |
 | [29: 审查卡片与“直接保留”模式](issues/29-turn-review.md) | 28 |
 | [30: 其余 Agent 与对话历史](issues/30-more-agents-history.md) | 28 |
+| [31: 空间外壳、样式基础与示例空间](issues/31-space-shell-style.md) | 无 |
+| [32: 组件 2.0：图表、日历、记录与快捷录入重做](issues/32-space-components-v2.md) | 31（用户确认方向后） |
+| [33: 新组件与组件里改数据](issues/33-space-new-components.md) | 32 |
+| [34: 编写说明更新与删除旧写法](issues/34-space-guide-drop-lb.md) | 33 |
 
 进度：01–09、14–21、26–28 已完成（CI 两平台通过）；29、30 已完成并合并进 feat/notes-desktop。之后 Notion AI 的工作都在 notion/all 分支（提交以 `[notion] <工单号>:` 开头）：12、13 已完成；23 已完成可确定的部分，余下几项等用户决定（见工单“待决定”）。22 用户要求暂不做（25 依赖 22，也不做）。10、11、24 按用户要求移到最后，届时再问是否做。
 
