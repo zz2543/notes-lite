@@ -1,5 +1,6 @@
 import { ChatsCircle, FadersHorizontal, ListBullets, Sparkle, TextAa, type Icon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { attachmentName, defaultAttachmentFolder, type AttachmentNaming } from "../../shared/attachments";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { AssistantPage } from "./AssistantSettings";
@@ -91,7 +92,62 @@ function GeneralPage() {
           <Segmented label="导航模式" choices={navigations} value={preferences.navigation} onChange={(navigation) => change({ navigation })} />
         </SettingRow>
       </SettingsGroup>
+      <AttachmentsGroup />
     </>
+  );
+}
+
+const namings: Choice<AttachmentNaming>[] = [
+  { value: "original", label: "原名" },
+  { value: "note-number", label: "笔记名-序号" },
+  { value: "note-date", label: "笔记名-日期" },
+  { value: "note-date-number", label: "笔记名-日期-序号" },
+];
+
+/** 附件: where pasted, dropped and imported files go in the library, and what they are called there. */
+function AttachmentsGroup() {
+  const { preferences, change } = usePreferences();
+  const [problem, setProblem] = useState<string | null>(null);
+  const folder = preferences.attachmentFolder;
+  const choose = async () => {
+    const chosen = await window.notes.chooseAttachmentFolder();
+    if (!chosen.ok) return setProblem(chosen.message);
+    setProblem(null);
+    if (chosen.value) change({ attachmentFolder: chosen.value });
+  };
+  const example = (number: number) => attachmentName(preferences.attachmentNaming, "截图.png", "周一", new Date(), number);
+  return (
+    <SettingsGroup
+      title="附件"
+      description="粘贴、拖入或用“导入图片或附件…”加入笔记的文件，复制到笔记库里的这个文件夹，没有时自动新建。重名时自动编号，已有的文件不会被覆盖。"
+    >
+      <SettingRow label="存放位置">
+        <span className="settings-inline">
+          <output className="settings-path" aria-label="附件文件夹">
+            笔记库/{folder}
+          </output>
+          {folder !== defaultAttachmentFolder && (
+            <button className="settings-action" onClick={() => (setProblem(null), change({ attachmentFolder: defaultAttachmentFolder }))}>
+              恢复默认
+            </button>
+          )}
+          <button className="settings-action" onClick={() => void choose()}>
+            选择…
+          </button>
+        </span>
+      </SettingRow>
+      {problem && (
+        <p className="settings-row settings-warning" role="alert">
+          {problem}
+        </p>
+      )}
+      <SettingRow label="命名方式" stacked>
+        <Segmented label="附件命名方式" choices={namings} value={preferences.attachmentNaming} onChange={(attachmentNaming) => change({ attachmentNaming })} />
+      </SettingRow>
+      <p className="settings-row settings-warning" aria-label="命名示例">
+        例：在笔记“周一”里粘贴“截图.png”，存为“{example(1)}”，再一张为“{example(2)}”。
+      </p>
+    </SettingsGroup>
   );
 }
 

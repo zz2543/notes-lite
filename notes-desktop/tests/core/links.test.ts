@@ -1,8 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { openLibrary } from "../../src/core";
 import { library } from "../support/library";
+import { attachmentFolderOf, attachmentName, type AttachmentSettings } from "../../src/shared/attachments";
+import { readPreferences } from "../../src/shared/preferences";
 
 // Ticket 13: following 笔记链接 and links to attachments; importing images and attachments.
 
@@ -92,5 +95,67 @@ describe("导入附件", () => {
     expect(await lib.followLink("归档/图片笔记.md", { target: "../附件/示例.png", wiki: false })).toEqual({ kind: "file", path: "附件/示例.png" });
     expect(await lib.readNote("入口.md")).toBe("见 [[归档/图片笔记]]");
     expect(await lib.followLink("入口.md", { target: "归档/图片笔记", wiki: true })).toEqual({ kind: "note", path: "归档/图片笔记.md" });
+  });
+
+  it("goes to the folder and names the settings choose, numbering the name when it is taken", async () => {
+    const root = await library({ "日记/周一.md": "", "根.md": "" });
+    let settings: AttachmentSettings = { folder: "资料/图片", naming: "note-number" };
+    const lib = await openLibrary(root, { attachments: () => settings, now: () => new Date(2026, 9, 22, 9, 30) });
+
+    // The folder is made on the first import; the note's name, numbered from 1.
+    expect(await lib.importAttachment("日记/周一.md", "图片-0a1b2c3d.png", Buffer.from([1]))).toBe("![周一-1.png](../资料/图片/周一-1.png)");
+    expect(await lib.importAttachment("日记/周一.md", "截图.png", Buffer.from([2]))).toBe("![周一-2.png](../资料/图片/周一-2.png)");
+    expect(await readFile(join(root, "资料/图片/周一-1.png"))).toEqual(Buffer.from([1]));
+    // The numbers run on across kinds of file.
+    expect(await lib.importAttachment("日记/周一.md", "清单.txt", Buffer.from("t"))).toBe("[周一-3.txt](../资料/图片/周一-3.txt)");
+
+    settings = { folder: "资料/图片", naming: "note-date" };
+    expect(await lib.importAttachment("日记/周一.md", "报告.pdf", Buffer.from("a"))).toBe("[周一-2026-10-22.pdf](../资料/图片/周一-2026-10-22.pdf)");
+    expect(await lib.importAttachment("日记/周一.md", "报告.pdf", Buffer.from("b"))).toBe("[周一-2026-10-22 2.pdf](../资料/图片/周一-2026-10-22%202.pdf)");
+
+    settings = { folder: "附件", naming: "note-date-number" };
+    expect(await lib.importAttachment("根.md", "图.png", Buffer.from([3]))).toBe("![根-2026-10-22-1.png](附件/根-2026-10-22-1.png)");
+    expect(await lib.importAttachment("根.md", "图.png", Buffer.from([4]))).toBe("![根-2026-10-22-2.png](附件/根-2026-10-22-2.png)");
+
+    // `![[name]]` finds a file by name in the chosen folder, and still in 附件, where imports went before.
+    settings = { folder: "资料/图片", naming: "original" };
+    expect(await lib.followLink("根.md", { target: "周一-1.png", wiki: true })).toEqual({ kind: "file", path: "资料/图片/周一-1.png" });
+    expect(await lib.followLink("根.md", { target: "根-2026-10-22-1.png", wiki: true })).toEqual({ kind: "file", path: "附件/根-2026-10-22-1.png" });
+  });
+
+  it("refuses an attachment folder that leads out of the library", async () => {
+    const root = await library({ "根.md": "" });
+    const outside = join(tmpdir(), `notes-outside-${Date.now()}`);
+    await mkdir(outside, { recursive: true });
+    await symlink(outside, join(root, "外面"));
+    const lib = await openLibrary(root, { attachments: () => ({ folder: "外面", naming: "original" }) });
+    await expect(lib.importAttachment("根.md", "图.png", Buffer.from([1]))).rejects.toThrow("不在笔记库里");
+  });
+});
+
+describe("附件设置", () => {
+  it("reads a folder as a library-relative path, refusing one that cannot be", () => {
+    expect(attachmentFolderOf(" 资料/图片/ ")).toBe("资料/图片");
+    expect(attachmentFolderOf("/附件")).toBe("附件");
+    expect(attachmentFolderOf("资料\\图片")).toBe("资料/图片");
+    for (const bad of ["", "/", "../外面", "资料/../外面", ".隐藏", "a:b", "资料//图片", "con", "名字.", 42]) expect(attachmentFolderOf(bad)).toBeNull();
+  });
+
+  it("keeps the folder and naming with the other preferences, an unknown value reading as the default", () => {
+    expect(readPreferences({}).attachmentFolder).toBe("附件");
+    expect(readPreferences({}).attachmentNaming).toBe("original");
+    const chosen = readPreferences({ attachmentFolder: "资料/图片", attachmentNaming: "note-date" });
+    expect([chosen.attachmentFolder, chosen.attachmentNaming]).toEqual(["资料/图片", "note-date"]);
+    expect(readPreferences({ attachmentFolder: "../外面", attachmentNaming: "随便" }, chosen)).toMatchObject({ attachmentFolder: "资料/图片", attachmentNaming: "note-date" });
+  });
+
+  it("names a file as each choice says", () => {
+    const day = new Date(2026, 9, 22);
+    expect(attachmentName("original", "截图.png", "周一", day, 1)).toBe("截图.png");
+    expect(attachmentName("original", "截图.png", "周一", day, 2)).toBe("截图 2.png");
+    expect(attachmentName("original", "README", "周一", day, 2)).toBe("README 2");
+    expect(attachmentName("note-number", "截图.png", "周一", day, 1)).toBe("周一-1.png");
+    expect(attachmentName("note-date", "截图.png", "周一", day, 1)).toBe("周一-2026-10-22.png");
+    expect(attachmentName("note-date-number", "截图.png", "周一", day, 3)).toBe("周一-2026-10-22-3.png");
   });
 });

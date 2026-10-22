@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, launchWith, library, test } from "./fixtures";
+import { closeSettings, expect, launchWith, library, openSettings, test } from "./fixtures";
 
 // Ticket 13: ⌘ / Ctrl-click follows links; images and attachments imported (pasted, dropped, chosen from the
 // menu) into 附件 and linked relative to the note; images shown in place and opened with a double click;
@@ -152,6 +152,45 @@ test("笔记 › 导入图片或附件… copies the chosen files in and links t
 
   await expect.poll(() => readFile(join(root, "清单.md"), "utf8")).toBe("第一行\n![图.png](附件/图.png)\n[说明.txt](附件/说明.txt)\n第二行");
   expect(await readFile(join(root, "附件/图.png"))).toEqual(png);
+  await expect(editor(page).locator(".cm-md-image img")).toBeVisible();
+  await app.close();
+});
+
+test("设置 › 附件: imports go to the chosen folder, named after the note; a folder outside the library is refused", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "周一.md": "第一行", "资料/说明.md": "" });
+  const outside = join(scratch, "外面");
+  await library(scratch, "外面", { "说明.txt": "说明" });
+  await writeFile(join(outside, "图.png"), png);
+  const { app, page } = await launchWith(scratch, root);
+
+  const panel = await openSettings(app, page, "通用");
+  const group = panel.getByRole("group", { name: "附件" });
+  await expect(group.getByLabel("附件文件夹")).toHaveText("笔记库/附件");
+  // The dialog answers with a folder outside the library: refused, the setting unchanged.
+  const answer = (path: string) =>
+    app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog;
+    }, path);
+  await answer(outside);
+  await group.getByRole("button", { name: "选择…" }).click();
+  await expect(group.getByRole("alert")).toContainText("请选择笔记库“笔记库”里的一个文件夹");
+  await expect(group.getByLabel("附件文件夹")).toHaveText("笔记库/附件");
+  await answer(join(root, "资料"));
+  await group.getByRole("button", { name: "选择…" }).click();
+  await expect(group.getByLabel("附件文件夹")).toHaveText("笔记库/资料");
+  await expect(group.getByRole("alert")).toHaveCount(0);
+  await group.getByRole("radiogroup", { name: "附件命名方式" }).getByRole("radio", { name: "笔记名-序号" }).click();
+  await expect(group.getByLabel("命名示例")).toContainText("周一-1.png");
+  await closeSettings(app, panel);
+
+  await openNote(page, "周一");
+  await page.keyboard.press("ControlOrMeta+End");
+  await app.evaluate(({ dialog }, paths) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: paths })) as typeof dialog.showOpenDialog;
+  }, [join(outside, "图.png"), join(outside, "说明.txt")]);
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById("import-attachments")!.click());
+  await expect.poll(() => readFile(join(root, "周一.md"), "utf8")).toBe("第一行\n![周一-1.png](资料/周一-1.png)\n[周一-2.txt](资料/周一-2.txt)");
+  expect(await readFile(join(root, "资料/周一-1.png"))).toEqual(png);
   await expect(editor(page).locator(".cm-md-image img")).toBeVisible();
   await app.close();
 });

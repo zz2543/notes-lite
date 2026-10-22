@@ -1,4 +1,5 @@
 import { agents, modelName, type AgentId } from "./agentKinds";
+import { attachmentFolderOf, attachmentNamings, defaultAttachmentSettings, type AttachmentNaming } from "./attachments";
 import { defaultTypography, readTypography, type Typography } from "./typography";
 
 // 设置: what the user chose in the settings panel. Kept with the app (settings.json in its profile),
@@ -32,10 +33,14 @@ export interface Preferences {
    * not here runs its own default. A change carries only the agents it changes, "" for back to 默认.
    */
   agentModels: Partial<Record<AgentId, string>>;
+  /** 附件位置: a library-relative folder, the same in every library (attachments.ts). */
+  attachmentFolder: string;
+  /** 附件命名. */
+  attachmentNaming: AttachmentNaming;
 }
 
 /** The settings that are one of a few choices. */
-type ChoiceKey = Exclude<keyof Preferences, "typography" | "agentModels">;
+type ChoiceKey = Exclude<keyof Preferences, "typography" | "agentModels" | "attachmentFolder">;
 
 export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } = {
   colorScheme: ["system", "light", "dark"],
@@ -44,6 +49,7 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   motion: ["light", "standard", "strong"],
   navigation: ["double", "single"],
   assistantReview: ["review", "keep"],
+  attachmentNaming: attachmentNamings,
 };
 
 export const defaultPreferences: Preferences = {
@@ -55,6 +61,8 @@ export const defaultPreferences: Preferences = {
   assistantReview: "review",
   typography: defaultTypography,
   agentModels: {},
+  attachmentFolder: defaultAttachmentSettings.folder,
+  attachmentNaming: defaultAttachmentSettings.naming,
 };
 
 /** Whatever was stored (or sent), as preferences: known keys with known values, the rest from `base`. */
@@ -62,8 +70,13 @@ export function readPreferences(stored: unknown, base: Preferences = defaultPref
   const raw = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
   const pick = <K extends ChoiceKey>(key: K): Preferences[K] =>
     (choices[key] as readonly unknown[]).includes(raw[key]) ? (raw[key] as Preferences[K]) : base[key];
-  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography" | "agentModels">;
-  return { ...picked, typography: readTypography(raw.typography, base.typography), agentModels: readAgentModels(raw.agentModels, base.agentModels) };
+  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography" | "agentModels" | "attachmentFolder">;
+  return {
+    ...picked,
+    typography: readTypography(raw.typography, base.typography),
+    agentModels: readAgentModels(raw.agentModels, base.agentModels),
+    attachmentFolder: attachmentFolderOf(raw.attachmentFolder) ?? base.attachmentFolder,
+  };
 }
 
 function readAgentModels(stored: unknown, base: Preferences["agentModels"]): Preferences["agentModels"] {

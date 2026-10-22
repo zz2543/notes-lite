@@ -15,7 +15,7 @@ describe("新建", () => {
     expect(await lib.createNote("日记")).toBe("日记/未命名笔记 2.md");
 
     expect(await readFile(join(root, "日记/日记.md"), "utf8")).toBe("今天散步看见了落叶");
-    expect(await readFile(join(root, "日记/日记 2.md"), "utf8")).toBe("# 日记 2\n\n");
+    expect(await readFile(join(root, "日记/日记 2.md"), "utf8")).toBe("");
     expect((await lib.readFolder("日记")).notes.map((n) => n.title).sort()).toEqual(["日记", "日记 2", "未命名笔记", "未命名笔记 2"]);
   });
 

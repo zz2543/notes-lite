@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { agentModels, modelName } from "../../src/core";
+import { agentModels, codexCatalog, commandOutput, modelName, piListing } from "../../src/core";
 import { scratchFolder } from "../support/library";
 
 // 模型选择 (assistant-spec, 方案 A): the models offered beside each agent's name, read from its own
@@ -42,6 +42,65 @@ describe("模型选择", () => {
     });
     expect(await agentModels("codex", { home: at, env: {} })).toEqual({ current: "gpt-5.2", models: ["gpt-5.2", "gpt-5.2-mini"], choosable: true });
     expect(await agentModels("codex", { home: await home({}), env: {} })).toEqual({ models: [], choosable: true });
+  });
+
+  it("offers every model Codex lists (`codex debug models`), by its priority, hidden ones left out", async () => {
+    // 2026-10-22 用户反馈: only the model in config.toml was offered.
+    const at = await home({ ".codex/config.toml": 'model = "gpt-6-luna"\n\n[profiles.fast]\nmodel = "gpt-5.2-mini"\n' });
+    const catalog = JSON.stringify({
+      models: [
+        { slug: "gpt-6-sol", visibility: "list", priority: 2 },
+        { slug: "gpt-6-luna", visibility: "list", priority: 1 },
+        { slug: "codex-auto-review", visibility: "hide", priority: 0 },
+        { slug: "gpt-5.5", priority: 3 },
+      ],
+    });
+    const asked: (readonly string[])[] = [];
+    const list = async (args: readonly string[]) => (asked.push(args), catalog);
+    expect(await agentModels("codex", { home: at, env: {}, list })).toEqual({
+      current: "gpt-6-luna",
+      models: ["gpt-6-luna", "gpt-6-sol", "gpt-5.5", "gpt-5.2-mini"],
+      choosable: true,
+    });
+    expect(asked).toEqual([["debug", "models"]]);
+  });
+
+  it("falls back to Codex's model cache and the catalog it is pointed to when it cannot be asked", async () => {
+    const at = await home({
+      ".codex/config.toml": 'model = "gpt-6-luna"\nmodel_catalog_json = "~/.codex/mine.json"\n',
+      ".codex/mine.json": JSON.stringify({ models: [{ slug: "kimi-k3", visibility: "list", priority: 1 }] }),
+      ".codex/models_cache.json": JSON.stringify({ fetched_at: "2026-10-22T00:00:00Z", models: [{ slug: "gpt-6-sol", visibility: "list", priority: 1 }] }),
+    });
+    expect(await agentModels("codex", { home: at, env: {}, list: async () => undefined })).toEqual({
+      current: "gpt-6-luna",
+      models: ["gpt-6-luna", "kimi-k3", "gpt-6-sol"],
+      choosable: true,
+    });
+    expect(codexCatalog("not json")).toEqual([]);
+    expect(codexCatalog(JSON.stringify([{ slug: "a" }, { slug: 3 }, null]))).toEqual(["a"]);
+  });
+
+  it("offers what `pi --list-models` lists, as provider/model", async () => {
+    const at = await home({ ".pi/agent/settings.json": JSON.stringify({ defaultModel: "anthropic/claude-sonnet-4-5" }) });
+    const table = [
+      "provider  model              context max-out thinking images",
+      "anthropic claude-sonnet-4-5  200K    64K     yes      yes",
+      "openai    gpt-6-sol          400K    128K    yes      yes",
+      "",
+    ].join("\n");
+    expect(await agentModels("pi", { home: at, env: {}, list: async () => table })).toEqual({
+      current: "anthropic/claude-sonnet-4-5",
+      models: ["anthropic/claude-sonnet-4-5", "openai/gpt-6-sol"],
+      choosable: true,
+    });
+    expect(piListing("No models available. Use /login.")).toEqual([]);
+  });
+
+  it("runs a command for its output, answering undefined when it fails", async () => {
+    expect(await commandOutput(process.execPath, ["-e", "process.stdout.write('ok')"])).toBe("ok");
+    expect(await commandOutput(process.execPath, ["-e", "process.exit(2)"])).toBeUndefined();
+    expect(await commandOutput(join(await home({}), "missing"), [])).toBeUndefined();
+    expect(await commandOutput(process.execPath, ["-e", "setTimeout(() => {}, 5000)"], { timeout: 100 })).toBeUndefined();
   });
 
   it("reads Pi's default and enabled models, leaving out patterns, and the models it was told of", async () => {

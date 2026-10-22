@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative as pathFrom, sep } from "node:path";
+import { attachmentName, defaultAttachmentFolder, defaultAttachmentSettings, type AttachmentSettings } from "../shared/attachments";
 import { imageName, linkPath, type Link } from "../shared/markdown";
 import { collator, LibraryError, writeFailures } from "./library";
 import { linkTargets, replaceTargets, type LinkTarget } from "./references";
@@ -38,7 +39,8 @@ export interface Organizer {
   /** The image a link in `note` shows, as a data: URL the page can draw; refuses a file it can't show. */
   readImage(note: string, link: Link): Promise<string>;
   /**
-   * Copies a file into 附件 at the library root, numbering its name when it is taken, and returns the
+   * Copies a file into the attachment folder (附件 at the library root unless the settings say otherwise),
+   * named as the settings say and numbered when the name is taken, and returns the
    * Markdown that links to it from `note`: an image's shown in place (`![…](…)`), anything else's a link.
    */
   importAttachment(note: string, name: string, data: Uint8Array): Promise<string>;
@@ -47,8 +49,8 @@ export interface Organizer {
 /** What a link leads to: a note to open, or another file (an attachment, an image) to show or open. */
 export type FollowedLink = { kind: "note" | "file"; path: string };
 
-/** Where imported images and attachments go, at the library root, as in the old app. */
-export const attachmentFolder = "附件";
+/** Where imported images and attachments go by default, at the library root, as in the old app. */
+export const attachmentFolder = defaultAttachmentFolder;
 /** The images the page can draw, by extension (the rest of `imageName` are opened, not shown). */
 const shownImages: Record<string, string> = {
   png: "image/png",
@@ -80,6 +82,10 @@ export type VetRelocation = (destination: string, rewrites: LinkRewrite[]) => Pr
 export interface OrganizeOptions {
   /** Moves a file or folder, by real location, to the system trash. The app passes Electron's `shell.trashItem`. */
   trash?(path: string): Promise<void>;
+  /** 附件设置, looked up on each import (the app passes the current preferences); 附件, original names by default. */
+  attachments?(): AttachmentSettings;
+  /** Today, for names that carry the date (tests stand in for the clock). */
+  now?(): Date;
 }
 
 /** What organizing needs from the library it works in. */
@@ -173,7 +179,7 @@ interface Change {
   after: string;
 }
 
-export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess): Organizer {
+export function organizer({ root, resolve, trash: sendToTrash, attachments = () => defaultAttachmentSettings, now = () => new Date() }: LibraryAccess): Organizer {
   const relativeOf = (real: string) => pathFrom(root, real).split(sep).join("/");
   const inside = (real: string) => real.startsWith(root + sep);
   const realOrNull = (path: string) => realpath(path).catch(() => null);
@@ -193,12 +199,20 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
         titles.set(key, [...(titles.get(key) ?? []), path]);
       }
     }
-    // `[[报告.pdf]]`, `![[图.png]]`: a file other than a note, by path, or by name in 附件 where imports go.
+    // `[[报告.pdf]]`, `![[图.png]]`: a file other than a note, by path, or by name in the attachment folder
+    // where imports go (or 附件, where they went before it was changed).
     const fileLike = wiki && hasExtension && !isNoteFile(named);
     const link = (path: string, byTitle: boolean): LinkTarget => ({ from: 0, to: path.length, target: path, wiki: byTitle });
+    const inAttachments = async () => {
+      for (const folder of new Set([attachments().folder, attachmentFolder])) {
+        const found = await follow(link(`${folder}/${target}`, false), real, titles);
+        if (found) return found;
+      }
+      return null;
+    };
     const found =
       (await follow(link(target, wiki && !fileLike), real, titles)) ??
-      (fileLike ? await follow(link(`${attachmentFolder}/${target}`, false), real, titles) : null) ??
+      (fileLike ? await inAttachments() : null) ??
       // `[摘记](阅读/摘记)`: a Markdown link may leave out .md, as the old app let it.
       (!wiki && !hasExtension ? await follow(link(`${target}.md`, false), real, titles) : null);
     if (found && (await stat(found.real)).isFile()) return { kind: isNoteFile(found.real) ? "note" : "file", path: relativeOf(found.real) };
@@ -228,24 +242,34 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
   const importAttachment = async (note: string, name: string, data: Uint8Array) => {
     checkName(name);
     const { real } = await resolve(note);
-    const folder = join(root, attachmentFolder);
-    const dot = name.lastIndexOf(".");
-    const [base, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+    const { folder: within, naming } = attachments();
+    const title = titleOf(basename(real));
+    const today = now();
     try {
+      const folder = join(root, ...within.split("/"));
       await mkdir(folder, { recursive: true });
+      // A folder (or a link on the way to it) leading out of the library is refused, as everywhere else.
+      const realFolder = await realpath(folder);
+      if (realFolder !== root && !inside(realFolder)) throw new LibraryError("not-allowed", `附件文件夹“${within}”不在笔记库里，请在设置里换一个。`);
+      // A note's numbers run on across kinds of file: 周一-1.png, then 周一-2.pdf, not 周一-1.pdf.
+      const stem = (file: string) => (file.lastIndexOf(".") > 0 ? file.slice(0, file.lastIndexOf(".")) : file).toLowerCase();
+      const numbered = naming === "note-number" || naming === "note-date-number";
+      const stems = numbered ? new Set((await readdir(realFolder)).map(stem)) : new Set<string>();
       for (let number = 1; ; number += 1) {
-        const file = number === 1 ? name : `${base} ${number}${ext}`;
+        const file = attachmentName(naming, name, title, today, number);
+        if (stems.has(stem(file))) continue;
         try {
           // "wx" never replaces a file, even one that appears between choosing the name and writing.
-          await writeFile(join(folder, file), data, { flag: "wx" });
+          await writeFile(join(realFolder, file), data, { flag: "wx" });
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
           throw error;
         }
-        const path = pathFrom(dirname(real), join(folder, file)).split(sep).join("/").replace(breaksLink, percentEncode);
+        const path = pathFrom(dirname(real), join(realFolder, file)).split(sep).join("/").replace(breaksLink, percentEncode);
         return `${imageName.test(file) ? "!" : ""}[${file.replace(/[[\]]/g, "")}](${path})`;
       }
     } catch (error) {
+      if (error instanceof LibraryError) throw error;
       throw new LibraryError("write-failed", `无法导入“${name}”：${reasonOf(error)}。`);
     }
   };
@@ -257,7 +281,8 @@ export function organizer({ root, resolve, trash: sendToTrash }: LibraryAccess):
       const name = number === 1 ? title : `${title} ${number}`;
       try {
         // "wx" never replaces a note, even one that appears between choosing the name and writing.
-        await writeFile(join(dir, `${name}.md`), `# ${name}\n\n`, { flag: "wx" });
+        // A new note starts empty: its name is the title shown above it, not a heading written into it.
+        await writeFile(join(dir, `${name}.md`), "", { flag: "wx" });
         return childPath(relative, `${name}.md`);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw new LibraryError("write-failed", `无法新建笔记：${reasonOf(error)}。`);

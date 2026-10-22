@@ -778,8 +778,27 @@ nav.rail .drag {
   align-items: flex-start;
   gap: 2px;
 }
-.assistant-identity .segmented {
-  align-self: stretch;
+/* The agent's name, a caret beside it opening the installed agents. */
+.assistant-agent-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  max-width: calc(100% + var(--row-padding));
+  margin-inline-start: calc(-1 * var(--row-padding));
+  padding: 0 var(--row-padding);
+  height: var(--icon-button-small);
+  border-radius: var(--icon-button-radius);
+  color: var(--side-fg);
+  transition: background-color var(--spring-pop);
+}
+.assistant-agent-picker span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assistant-agent-picker:hover,
+.assistant-agent-picker[aria-expanded="true"] {
+  background: var(--hover);
 }
 .assistant-figure {
   display: block;
@@ -996,6 +1015,131 @@ button.assistant-model:hover,
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* An assistant's reply, as Markdown (MarkdownView.tsx). */
+.reply-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reply-text :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0.4em 0 0;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.reply-text h1 {
+  font-size: 1.3em;
+}
+.reply-text h2 {
+  font-size: 1.18em;
+}
+.reply-text h3 {
+  font-size: 1.08em;
+}
+.reply-text :is(h4, h5, h6) {
+  font-size: 1em;
+}
+.reply-text :is(ul, ol) {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.reply-text ul {
+  list-style: disc;
+}
+.reply-text ul ul {
+  list-style: circle;
+}
+.reply-text ol {
+  list-style: decimal;
+}
+.reply-text li + li,
+.reply-text li > :is(ul, ol) {
+  margin-top: 0.2em;
+}
+/* A task's box stands where a bullet would. */
+.reply-text li.md-task {
+  list-style: none;
+}
+.reply-text li.md-task > input {
+  width: 0.9em;
+  margin: 0 0.5em 0 -1.4em;
+  vertical-align: -0.1em;
+}
+.reply-text li.md-task.done {
+  color: var(--side-muted);
+}
+.reply-text blockquote {
+  margin: 0;
+  padding-left: 0.8em;
+  border-left: 3px solid var(--line);
+  color: var(--side-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--inline-gap);
+}
+.reply-text hr {
+  width: 100%;
+  margin: 0.2em 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.reply-text code {
+  padding: 0.1em 0.25em;
+  border-radius: 0.3em;
+  background: var(--code-bg);
+  font-family: var(--code-font);
+  font-size: 0.9em;
+}
+.reply-text pre.md-code {
+  margin: 0;
+  padding: 0.6em 0.75em;
+  border-radius: 6px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  white-space: pre;
+}
+.reply-text pre.md-code code {
+  padding: 0;
+  background: none;
+}
+.reply-text mark {
+  padding: 0 0.1em;
+  border-radius: 0.2em;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+}
+.reply-text .md-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: var(--link-underline-offset);
+  cursor: default;
+}
+.reply-text a.md-link {
+  cursor: pointer;
+}
+.reply-text .md-tag {
+  color: var(--accent);
+}
+.reply-text .md-table {
+  overflow-x: auto;
+}
+.reply-text table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.reply-text :is(th, td) {
+  padding: 0.25em 0.6em;
+  border: 1px solid var(--line);
+}
+.reply-text th {
+  font-weight: 600;
+}
+.reply-text .md-math-block {
+  overflow-x: auto;
+  text-align: center;
 }
 .reply-waiting,
 .reply-changes {

@@ -11,6 +11,13 @@ const column = (page: Page) => page.getByRole("complementary", { name: "助手�
 const input = (page: Page) => column(page).getByRole("textbox", { name: "给助手的消息" });
 const conversation = (page: Page) => column(page).getByRole("log", { name: "对话" });
 
+/** The agent for a new conversation: its name's caret opens the installed agents. */
+async function chooseAgent(page: Page, name: string) {
+  await column(page).getByRole("button", { name: /^Agent：/ }).click();
+  await page.getByRole("menuitemradio", { name }).click();
+  await expect(column(page).getByRole("button", { name: `Agent：${name}` })).toBeVisible();
+}
+
 async function say(page: Page, text: string) {
   await input(page).fill(text);
   await input(page).press("Enter");
@@ -26,14 +33,16 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
   };
   const { page } = await launchWith(scratch, root);
   await page.getByRole("button", { name: "打开助手栏" }).click();
-  const choice = column(page).getByRole("radiogroup", { name: "Agent" });
+  const choice = column(page).getByRole("button", { name: /^Agent：/ });
   // Every one installed can be chosen: none is waiting to be supported.
-  await expect(choice.getByRole("radio")).toHaveText(["Codex", "DeepSeek Harness", "Pi"]);
+  await choice.click();
+  await expect(page.getByRole("menuitemradio")).toHaveText(["Codex", "DeepSeek Harness", "Pi"]);
+  await page.keyboard.press("Escape");
   // Side by side: the figure on the left; the choice above the working folder on its right. Measured in one
   // go, as the column may still be sliding open.
   const [figure, chosen, folder] = await column(page).evaluate((el) => {
     const box = (selector: string) => el.querySelector(selector)!.getBoundingClientRect().toJSON() as DOMRect;
-    return [box('[role="img"]'), box('[role="radiogroup"]'), box(".assistant-folder")] as const;
+    return [box('[role="img"]'), box(".assistant-agent-picker"), box(".assistant-folder")] as const;
   });
   expect(chosen.x).toBeGreaterThanOrEqual(figure.x + figure.width);
   expect(folder.y).toBeGreaterThanOrEqual(chosen.y + chosen.height);
@@ -47,7 +56,7 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
   await expect(column(page).getByRole("button", { name: "新对话" })).toBeDisabled();
 
   for (const [name, agent] of Object.entries(agents)) {
-    await choice.getByRole("radio", { name }).click();
+    await chooseAgent(page, name);
     await say(page, `你好，${name}`);
     const reply = name === "DeepSeek Harness" ? "DSH" : name;
     await expect(conversation(page)).toContainText(`${reply} 收到。`);
@@ -81,12 +90,12 @@ test("对话历史 lists the library's conversations; one opened again is contin
   await expect(list()).toHaveText("还没有对话。");
   await history().click();
 
-  await column(page).getByRole("radiogroup", { name: "Agent" }).getByRole("radio", { name: "Codex" }).click();
+  await chooseAgent(page, "Codex");
   await say(page, "整理日记");
   await expect(conversation(page)).toContainText("整理好了。");
   await column(page).getByRole("button", { name: "新对话" }).click();
   await page.getByRole("treeitem", { name: "读书" }).click();
-  await column(page).getByRole("radiogroup", { name: "Agent" }).getByRole("radio", { name: "Claude Code" }).click();
+  await chooseAgent(page, "Claude Code");
   await say(page, "写书单");
   await expect(conversation(page)).toContainText("写好了。");
 

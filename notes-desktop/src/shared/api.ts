@@ -91,10 +91,15 @@ export interface NotesApi {
   openLinkedFile(note: string, link: Link): Promise<Organized<null>>;
   /** An image a link leads to, as a data: URL the page may show. */
   readImage(note: string, link: Link): Promise<Organized<string>>;
-  /** Copies pasted or dropped files into 附件; answers with the Markdown for each, in order. */
+  /** Copies pasted or dropped files into the attachment folder (设置 › 附件); answers with the Markdown for each, in order. */
   importAttachments(note: string, files: AttachmentFile[]): Promise<Organized<string[]>>;
   /** 笔记 › 导入图片或附件…: the user picks files, imported as above; none when they cancel. */
   chooseAttachments(note: string): Promise<Organized<string[]>>;
+  /**
+   * 设置 › 附件位置 › 选择…: the user picks a folder inside the open library; answers with its
+   * library-relative path, null when they cancel. Refused when it is outside the library or hidden.
+   */
+  chooseAttachmentFolder(): Promise<Organized<string | null>>;
   /** The menu's 导入图片或附件… asks the page, which knows the open note. */
   onImportAttachmentsRequest(listener: () => void): () => void;
   /** Opens a web or mail link in the system's browser or mail app. */
@@ -274,6 +279,7 @@ export const channels = {
   readImage: "library:read-image",
   importAttachments: "library:import-attachments",
   chooseAttachments: "library:choose-attachments",
+  chooseAttachmentFolder: "library:choose-attachment-folder",
   importAttachmentsRequest: "menu:import-attachments",
   openExternal: "window:open-external",
   openSettings: "settings:open",

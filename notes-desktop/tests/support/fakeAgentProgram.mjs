@@ -17,6 +17,7 @@
 //   { "waitFor": "/abs/file" }                         holds until that file exists (so a test can look mid-turn)
 //   { "fail": "message" }                              fails as that agent does
 // For "dsh", `"tooOld": true` in the script answers as a DeepSeek Harness too old for JSON events does.
+// `"models": ["gpt-a", …]` (Codex) or `["provider/id", …]` (Pi) is what listing its models prints.
 // When FAKE_AGENT_SCRIPT names a JSON array, each run takes the next script (by how many runs the log holds).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -33,9 +34,24 @@ const dialect = process.env.FAKE_AGENT_DIALECT ?? "claude";
 const logFile = process.env.FAKE_AGENT_LOG;
 const runs = logFile && existsSync(logFile) ? readFileSync(logFile, "utf8").split("\n").filter(Boolean).length : 0;
 const permissionMode = process.env.DSH_PERMISSION_MODE;
+const loaded = process.env.FAKE_AGENT_SCRIPT ? JSON.parse(readFileSync(process.env.FAKE_AGENT_SCRIPT, "utf8")) : { steps: [] };
+// Listing its models (`codex debug models`, `pi --list-models`) is not a run: it prints the script's
+// "models" as that agent does, or fails when the script has none, and is not logged.
+const listing = (dialect === "codex" && argv[0] === "debug" && argv[1] === "models") || (dialect === "pi" && argv.includes("--list-models"));
+if (listing) {
+  const models = (Array.isArray(loaded) ? loaded[0] : loaded)?.models;
+  if (!models) process.exit(1);
+  if (dialect === "codex") {
+    process.stdout.write(JSON.stringify({ models: models.map((slug, priority) => ({ slug, display_name: slug, visibility: "list", priority })) }, null, 2) + "\n");
+  } else {
+    const width = Math.max(5, ...models.map((m) => m.split("/")[1].length));
+    process.stdout.write(["provider", "model".padEnd(width), "context", "max-out", "thinking", "images"].join(" ") + "\n");
+    for (const m of models) process.stdout.write([m.split("/")[0].padEnd(8), m.split("/")[1].padEnd(width), "200K   ", "64K    ", "yes     ", "yes"].join(" ") + "\n");
+  }
+  process.exit(0);
+}
 if (logFile) appendFileSync(logFile, JSON.stringify({ argv, cwd: process.cwd(), stdin, ...(permissionMode ? { permissionMode } : {}) }) + "\n");
 
-const loaded = process.env.FAKE_AGENT_SCRIPT ? JSON.parse(readFileSync(process.env.FAKE_AGENT_SCRIPT, "utf8")) : { steps: [] };
 const script = Array.isArray(loaded) ? loaded[Math.min(runs, loaded.length - 1)] : loaded;
 const after = (flag) => (argv.indexOf(flag) >= 0 ? argv[argv.indexOf(flag) + 1] : undefined);
 const resumed = {

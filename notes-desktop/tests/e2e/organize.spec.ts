@@ -15,7 +15,7 @@ test("⌘N and a folder row's new-note icon create a note there, ready to type",
   await expect(contents(page).getByRole("button", { name: "未命名笔记" })).toHaveAttribute("aria-current", "true");
   await expect(page.getByLabel("笔记正文")).toBeFocused();
   await page.keyboard.type("雨后");
-  await expect.poll(() => readFile(join(root, "日记/未命名笔记.md"), "utf8")).toBe("# 未命名笔记\n\n雨后");
+  await expect.poll(() => readFile(join(root, "日记/未命名笔记.md"), "utf8")).toBe("雨后");
 
   const rootRow = tree(page).getByRole("treeitem", { name: "笔记库" });
   await rootRow.hover();
@@ -23,7 +23,7 @@ test("⌘N and a folder row's new-note icon create a note there, ready to type",
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
   await expect(contents(page).getByRole("button")).toHaveText(["日记", "未命名笔记"]);
   await expect(page.getByLabel("笔记正文")).toBeFocused();
-  expect(await readFile(join(root, "未命名笔记.md"), "utf8")).toBe("# 未命名笔记\n\n");
+  expect(await readFile(join(root, "未命名笔记.md"), "utf8")).toBe("");
 
   // File > 新建笔记, chosen from the menu: the name taken, it is numbered.
   await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("new-note")?.click());

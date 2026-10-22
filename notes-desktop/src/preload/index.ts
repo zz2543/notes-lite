@@ -64,6 +64,7 @@ const api: NotesApi = {
   readImage: (note, link) => ipcRenderer.invoke(channels.readImage, note, link),
   importAttachments: (note, files) => ipcRenderer.invoke(channels.importAttachments, note, files),
   chooseAttachments: (note) => ipcRenderer.invoke(channels.chooseAttachments, note),
+  chooseAttachmentFolder: () => ipcRenderer.invoke(channels.chooseAttachmentFolder),
   onImportAttachmentsRequest: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(channels.importAttachmentsRequest, handler);

@@ -1,15 +1,19 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences, type Rectangle } from "electron";
 import type { IpcMainEvent, MenuItemConstructorOptions, OpenDialogOptions, WebContents } from "electron";
-import { readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir, release } from "node:os";
-import { basename, delimiter, join } from "node:path";
+import { basename, delimiter, isAbsolute, join, relative as pathRelative, sep } from "node:path";
 import { execFile } from "node:child_process";
 import {
   assistantTurns,
   conversationStore,
   createSearchIndex,
   agentModels,
+  commandOutput,
+  modelListing,
   detectAgents,
+  type InstalledAgent,
   LibraryError,
   type LibraryErrorCode,
   type SpaceErrorCode,
@@ -58,6 +62,7 @@ import {
 import { appearanceArguments, type Appearance } from "../shared/appearance";
 import { isHidden } from "../shared/paths";
 import { agents as agentKinds, type AgentId } from "../shared/agentKinds";
+import { attachmentFolderOf } from "../shared/attachments";
 import { defaultPreferences, readPreferences, type Preferences } from "../shared/preferences";
 import { materialWindowOptions, windowMaterial } from "./material";
 import { settingsStore } from "./settings";
@@ -160,7 +165,11 @@ function systemAppearance(): Appearance {
 const libraryInfo = (lib: Library, notice?: string): LibraryInfo => ({ root: lib.root, name: basename(lib.root), ...(notice ? { notice } : {}) });
 
 // Deleting goes to the system trash. Looked up on each call, so tests can stand in for the trash.
-const libraryOptions: OrganizeOptions = { trash: (path) => shell.trashItem(path) };
+// 附件设置 are read on each import (the preferences are declared further down).
+const libraryOptions: OrganizeOptions = {
+  trash: (path) => shell.trashItem(path),
+  attachments: () => ({ folder: preferences.attachmentFolder, naming: preferences.attachmentNaming }),
+};
 
 // 快照 of every library before each assistant turn, kept with the app (never in a library). macOS clones
 // attachments; elsewhere they are copied, up to about 10 GB. NOTES_DESKTOP_SNAPSHOT_COPY_LIMIT (tests)
@@ -449,6 +458,26 @@ function registerIpc() {
       return importAll(lib, note, files);
     }),
   );
+  ipcMain.handle(channels.chooseAttachmentFolder, ({ sender }) =>
+    withLibrary(async (lib) => {
+      const current = join(lib.root, ...preferences.attachmentFolder.split("/"));
+      const options: OpenDialogOptions = {
+        title: "选择附件文件夹",
+        message: "粘贴、拖入或导入的文件会放进这个文件夹。",
+        buttonLabel: "选择",
+        defaultPath: existsSync(current) ? current : lib.root,
+        properties: ["openDirectory", "createDirectory"],
+      };
+      const over = BrowserWindow.fromWebContents(sender) ?? window;
+      const { canceled, filePaths } = over ? await dialog.showOpenDialog(over, options) : await dialog.showOpenDialog(options);
+      if (canceled || !filePaths[0]) return null;
+      const real = await realpath(filePaths[0]);
+      const relative = pathRelative(await realpath(lib.root), real);
+      const folder = relative && !relative.startsWith("..") && !isAbsolute(relative) ? attachmentFolderOf(relative.split(sep).join("/")) : null;
+      if (!folder) throw new LibraryError("outside-library", `请选择笔记库“${basename(lib.root)}”里的一个文件夹（不能是笔记库本身或隐藏文件夹）。`);
+      return folder;
+    }),
+  );
   ipcMain.handle(channels.openExternal, async (_, url: string): Promise<Organized<null>> => {
     // Only web and mail links leave the app; anything else a note says could run a program.
     if (!/^(https?:|mailto:)/i.test(String(url))) return { ok: false, code: "not-allowed", message: `无法打开“${url}”：只能打开网页和邮件链接。` };
@@ -536,13 +565,33 @@ function registerIpc() {
   });
   ipcMain.handle(channels.snapshotUsage, () => snapshots.usage());
   ipcMain.handle(channels.clearSnapshots, () => snapshots.clear());
-  ipcMain.handle(channels.detectAgents, async () => detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT }));
-  ipcMain.handle(channels.agentModels, (_, agent: AgentId) => {
+  // 模型选择: an agent that can list its models (Codex, Pi) is asked once in a while, in the background as
+  // soon as it is found, so the picker need not wait for it; what it said is kept for ten minutes.
+  const listings = new Map<string, { at: number; output: Promise<string | undefined> }>();
+  const listing = (agent: InstalledAgent) => {
+    const args = modelListing[agent.id];
+    if (!args) return undefined;
+    const key = `${agent.id}\0${agent.path}`;
+    const kept = listings.get(key);
+    if (kept && Date.now() - kept.at < 10 * 60_000) return kept.output;
+    const output = agentEnvironment().then((env) => commandOutput(agent.path, args, { env }));
+    listings.set(key, { at: Date.now(), output });
+    return output;
+  };
+  const installedAgents = async () => {
+    const found = await detectAgents({ path: await agentSearchPath(), pathext: process.env.PATHEXT });
+    for (const agent of found) void listing(agent);
+    return found;
+  };
+  ipcMain.handle(channels.detectAgents, installedAgents);
+  ipcMain.handle(channels.agentModels, async (_, agent: AgentId) => {
     if (!agentKinds.some((a) => a.id === agent)) return { models: [], choosable: false };
+    const installed = (await installedAgents()).find((a) => a.id === agent);
+    const list = installed && modelListing[agent] ? () => listing(installed)! : undefined;
     // NOTES_DESKTOP_AGENT_HOME (tests) stands in for the home folder the agents' settings are read from,
     // and for their environment too, so none of this machine's settings come through.
     const testHome = process.env.NOTES_DESKTOP_AGENT_HOME;
-    return agentModels(agent, testHome ? { home: testHome, env: {} } : { home: homedir() });
+    return agentModels(agent, { ...(testHome ? { home: testHome, env: {} } : { home: homedir() }), ...(list ? { list } : {}) });
   });
   ipcMain.handle(channels.startTurn, ({ sender }, request: TurnStart) =>
     turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),

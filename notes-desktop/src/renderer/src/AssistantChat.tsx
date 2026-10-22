@@ -7,6 +7,7 @@ import { stoppedTurn, withEvent, type Conversation, type ConversationSummary, ty
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
+import { MarkdownView } from "./MarkdownView";
 import { icon } from "./tokens";
 import { TurnReview, type ReviewAction } from "./TurnReview";
 
@@ -130,9 +131,7 @@ function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: Rev
     <div className="assistant-reply">
       {reply.parts.map((part, i) =>
         part.kind === "text" ? (
-          <p key={i} className="reply-text">
-            {part.text}
-          </p>
+          <MarkdownView key={i} className="reply-text" text={part.text} />
         ) : (
           <Timeline key={i} steps={part.steps} live={!reply.done && i === reply.parts.length - 1} />
         ),

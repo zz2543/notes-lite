@@ -112,18 +112,25 @@ test("with no command-line agent installed, the 助手栏 shows how to install o
   ] as const) {
     await expect(guide.getByRole("listitem").filter({ hasText: new RegExp(`^${name}`) })).toContainText(command);
   }
-  await expect(column.getByRole("radiogroup", { name: "Agent" })).toHaveCount(0);
+  await expect(column.getByRole("button", { name: /^Agent：/ })).toHaveCount(0);
 
   await installAgent(scratch, "codex");
   await installAgent(scratch, "claude");
   await guide.getByRole("button", { name: "重新检测" }).click();
   await expect(guide).toBeHidden();
-  // The switch offers what is installed, in the usual order, the first chosen.
-  const agents = column.getByRole("radiogroup", { name: "Agent" });
-  await expect(agents.getByRole("radio")).toHaveText(["Claude Code", "Codex"]);
-  await expect(agents.getByRole("radio", { name: "Claude Code" })).toHaveAttribute("aria-checked", "true");
-  await agents.getByRole("radio", { name: "Codex" }).click();
-  await expect(agents.getByRole("radio", { name: "Codex" })).toHaveAttribute("aria-checked", "true");
+  // One name, the first installed; its caret opens what is installed, in the usual order, the current one checked.
+  const picker = column.getByRole("button", { name: /^Agent：/ });
+  await expect(picker).toHaveAccessibleName("Agent：Claude Code");
+  await expect(picker).toHaveAttribute("aria-haspopup", "menu");
+  await picker.click();
+  await expect(page.getByRole("menuitemradio")).toHaveText(["Claude Code", "Codex"]);
+  await expect(page.getByRole("menuitemradio", { name: "Claude Code" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("menuitemradio", { name: "Codex" }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(picker).toHaveAccessibleName("Agent：Codex");
+  await picker.click();
+  await expect(page.getByRole("menuitemradio", { name: "Codex" })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
   await app.close();
 });
 

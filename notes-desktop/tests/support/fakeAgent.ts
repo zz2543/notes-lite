@@ -18,6 +18,8 @@ export interface FakeScript {
   unknownSession?: boolean;
   /** DeepSeek Harness only: answer as one too old for JSON events (before 0.1.7) does. */
   tooOld?: boolean;
+  /** Codex and Pi: the models it lists when asked (`codex debug models`, `pi --list-models`); asked without, it fails. */
+  models?: string[];
   steps: FakeStep[];
 }
 

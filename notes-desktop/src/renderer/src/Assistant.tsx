@@ -5,7 +5,6 @@ import { agents, modelName, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
 import { Composer, ConversationHistory, ConversationView, folderName, type AssistantState } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
-import { Segmented } from "./controls";
 import { ContextMenu, type Menu } from "./Organize";
 import { usePreferences } from "./preferences";
 import { figureSize, icon } from "./tokens";
@@ -114,6 +113,37 @@ function ModelPicker({ agent, chosen, onChoose }: { agent: AgentId; chosen?: str
     <>
       <button ref={button} className="assistant-model" onClick={open} aria-haspopup="menu" aria-expanded={Boolean(menu)} aria-label={`模型：${chosen ?? fallback}`} title="模型">
         <span>模型：{chosen ?? fallback}</span>
+        <CaretDown size={icon.caret} />
+      </button>
+      {menu && <ContextMenu {...menu} onClose={() => setMenu(undefined)} />}
+    </>
+  );
+}
+
+/**
+ * The agent for a new conversation: its name, and a caret that opens the installed agents to choose from
+ * (2026-10-22 用户反馈: one name, not a row of segments). With only one installed, nothing to choose.
+ */
+function AgentPicker({ installed, current, onChoose }: { installed: InstalledAgent[]; current: { id: AgentId; name: string }; onChoose(agent: AgentId): void }) {
+  const button = useRef<HTMLButtonElement>(null);
+  const [menu, setMenu] = useState<Menu>();
+  if (installed.length < 2) return <span className="assistant-agent">{current.name}</span>;
+  const open = () => {
+    const at = button.current!.getBoundingClientRect();
+    setMenu({ x: at.left, y: at.bottom + 4, items: installed.map((a) => ({ label: a.name, checked: a.id === current.id, run: () => onChoose(a.id) })) });
+  };
+  return (
+    <>
+      <button
+        ref={button}
+        className="assistant-agent assistant-agent-picker"
+        onClick={open}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(menu)}
+        aria-label={`Agent：${current.name}`}
+        title="选择 Agent"
+      >
+        <span>{current.name}</span>
         <CaretDown size={icon.caret} />
       </button>
       {menu && <ContextMenu {...menu} onClose={() => setMenu(undefined)} />}
@@ -268,7 +298,7 @@ export function AssistantColumn(props: AssistantColumnProps) {
               installed.length > 0 &&
               agent && (
                 <>
-                  <Segmented<AgentId> label="Agent" choices={installed.map((a) => ({ value: a.id, label: a.name }))} value={agent.id} onChange={setChosen} />
+                  <AgentPicker installed={installed} current={agent} onChoose={setChosen} />
                   <ModelPicker key={agent.id} agent={agent.id} chosen={model || undefined} onChoose={(chosen) => chooseModel(agent.id, chosen)} />
                 </>
               )
