@@ -92,6 +92,14 @@ describe("空间请求：读取", () => {
     expect(code(await lib.callAs("没有这个空间", "scope"))).toBe("not-found");
   });
 
+  it("open answers the path of a note in the scope, and refuses others", async () => {
+    const lib = await fitnessLibrary();
+    expect(result(await lib.call("open", "健身/训练记录.md"))).toEqual({ path: "健身/训练记录.md" });
+    expect(code(await lib.call("open", "别处/秘密.md"))).toBe("outside-scope");
+    expect(code(await lib.call("open", "健身/没有.md"))).toBe("not-found");
+    expect(code(await lib.call("open", ".notes/空间/健身.html"))).toBe("outside-scope");
+  });
+
   it("page reads the space file itself", async () => {
     const lib = await fitnessLibrary();
     expect(result<string>(await lib.call("page"))).toContain("space-scope");

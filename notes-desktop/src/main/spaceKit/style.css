@@ -126,23 +126,23 @@ code { font-family: var(--space-mono); font-size: var(--code-size); }
 @keyframes space-unblur { from { filter: blur(var(--space-enter-blur)); } }
 @keyframes space-fade { from { opacity: 0; } }
 body.space-page > :not(script, style, meta, link, template),
-:is(.space-grid, .lb-grid) > * {
+:is(.space-grid, .lb-grid, .space-bento) > * {
   --space-order: 0;
   animation:
     space-rise var(--space-emerge-duration) var(--space-emerge-easing) calc(var(--space-order) * var(--space-stagger)) backwards,
     space-unblur var(--space-blur-duration) var(--space-ease) calc(var(--space-order) * var(--space-stagger)) backwards;
 }
-body.space-page > :nth-child(2 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(2) { --space-order: 1; }
-body.space-page > :nth-child(3 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(3) { --space-order: 2; }
-body.space-page > :nth-child(4 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(4) { --space-order: 3; }
-body.space-page > :nth-child(5 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(5) { --space-order: 4; }
-body.space-page > :nth-child(6 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(6) { --space-order: 5; }
-body.space-page > :nth-child(7 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(7) { --space-order: 6; }
-body.space-page > :nth-child(n + 8 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid) > :nth-child(n + 8) { --space-order: 7; }
+body.space-page > :nth-child(2 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(2) { --space-order: 1; }
+body.space-page > :nth-child(3 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(3) { --space-order: 2; }
+body.space-page > :nth-child(4 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(4) { --space-order: 3; }
+body.space-page > :nth-child(5 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(5) { --space-order: 4; }
+body.space-page > :nth-child(6 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(6) { --space-order: 5; }
+body.space-page > :nth-child(7 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(7) { --space-order: 6; }
+body.space-page > :nth-child(n + 8 of :not(script, style, meta, link, template)), :is(.space-grid, .lb-grid, .space-bento) > :nth-child(n + 8) { --space-order: 7; }
 /* 减弱动态效果: nothing moves, scales or blurs; the cards still fade in. */
 @media (prefers-reduced-motion: reduce) {
   body.space-page > :not(script, style, meta, link, template),
-  :is(.space-grid, .lb-grid) > * {
+  :is(.space-grid, .lb-grid, .space-bento) > * {
     animation: space-fade var(--space-emerge-visual) var(--space-ease) calc(var(--space-order) * var(--space-stagger)) backwards;
   }
 }

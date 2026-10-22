@@ -1,7 +1,9 @@
 // The `space` object every space homepage sees, defined in the page before its own scripts run, and
 // the same object under the old app's name `lb`, kept for good. It only shapes requests and replies;
 // the space page's preload carries them to main, and the core library checks and does everything.
-// Ported from the old app's lb.js.
+// Ported from the old app's lb.js. What it offers beyond the notes (theme, charts, toast) is runtime.js.
+import runtime from "./spaceKit/runtime.js?raw";
+
 export const spaceShim = `(() => {
   "use strict";
   const bridge = window.__notesSpace;
@@ -15,6 +17,8 @@ export const spaceShim = `(() => {
   };
   const plain = (value) => (value && typeof value === "object" ? JSON.parse(JSON.stringify(value)) : value);
   const listeners = new Set();
+  ${runtime}
+  const extra = spaceRuntime(call);
 
   const space = {
     scope: () => call("scope"),
@@ -59,8 +63,10 @@ export const spaceShim = `(() => {
     trash: (path) => call("trash", path),
     page: () => call("page"),
     writePage: (html) => call("writePage", String(html)),
+    ...extra.methods,
     on(event, handler) {
-      if (event !== "change" || typeof handler !== "function") throw Object.assign(new Error('只支持 space.on("change", 函数)。'), { code: "invalid" });
+      if ((event !== "change" && event !== "theme") || typeof handler !== "function") throw Object.assign(new Error('只支持 space.on("change", 函数) 和 space.on("theme", 函数)。'), { code: "invalid" });
+      if (event === "theme") return extra.onTheme(handler);
       listeners.add(handler);
       return () => listeners.delete(handler);
     },

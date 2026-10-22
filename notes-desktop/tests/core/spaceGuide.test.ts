@@ -33,12 +33,20 @@ async function compile(script: string): Promise<string> {
 
 describe("空间主页编写说明", () => {
   it("teaches the new names, under .notes/", () => {
-    expect(spaceGuideVersion).toBe(3);
+    expect(spaceGuideVersion).toBe(4);
     expect(spaceGuide).toContain(`版本 ${spaceGuideVersion}`);
     expect(spaceGuide).toContain(".notes/空间/<名称>.html");
     expect(spaceGuide).not.toContain(".留白");
     for (const name of ['<meta name="space-scope"', '<meta name="space-icon"', "space.query(", "space.append(", 'space.on("change"', "<space-stat", "<space-chart", "<space-calendar", "<space-quick-add", "<space-records", "--space-accent", "--space-font", ".space-card"]) {
       expect(spaceGuide, name).toContain(name);
+    }
+  });
+
+  it("teaches design: freedom first, then the foundation's hues, layouts, cards, motion and charts", () => {
+    const design = spaceGuide.slice(spaceGuide.indexOf("## 设计与自定义"), spaceGuide.indexOf("## 小组件"));
+    expect(design.length).toBeGreaterThan(500);
+    for (const name of ["data-hue", ".space-bento", ".space-glow", ".space-glass", ".space-tint", "data-space-count", ".space-spotlight", "prefers-reduced-motion", "space.chart(", "space.theme()", "space.toast(", "space.open("]) {
+      expect(design, name).toContain(name);
     }
   });
 
@@ -67,10 +75,18 @@ describe("空间主页编写说明", () => {
       const same: typeof space = lb;
       const stat: HTMLElement = document.createElement("space-stat");
       try { await space.read("x.md"); } catch (e) { if (e instanceof Error && (e as SpaceError).code === "outside-scope") {} }
-      export { names, row, count, same, stat };
+      const theme = space.theme();
+      const red: string = theme.hues.red.color + theme.accent; const dark: boolean = theme.dark;
+      const chart = await space.chart("#c", (t) => ({ color: [t.accent], series: [] }));
+      chart.resize();
+      space.toast("已保存", { action: "撤销", onAction: () => {} });
+      await space.open("健身/训练记录.md");
+      space.on("theme", (t) => t.text);
+      export { names, row, count, same, stat, red, dark };
     `;
     expect(await compile(page)).toBe("");
     expect(await compile("space.query(1);\nexport {};")).toMatch(/error TS/);
     expect(await compile('space.on("click", () => {});\nexport {};')).toMatch(/error TS/);
+    expect(await compile("space.theme().hues.lime;\nexport {};")).toMatch(/error TS/);
   }, 60_000);
 });

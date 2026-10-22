@@ -1,0 +1,273 @@
+/* 设计地基 (2026-10-22): what a homepage can build its own look from, beyond the components. Colours
+   (the hues, each as a solid colour, a deep card base, a light tint for text on that base and a bright
+   glow), a type scale, radii and elevation; layout (a 4-column bento grid that narrows on small windows,
+   sections); card styles (glow, glass, tint) that recolour with data-hue; small parts (titles, big
+   numbers, segmented control, chips, progress bar and ring); and motion parts that follow 动效强度 and
+   stop under 减弱动态效果. All of it is optional: a page may ignore it and style itself. */
+
+@property --space-value { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+:root {
+  /* 色相 */
+  --space-red: #ff453a;      --space-red-deep: #7a1a17;      --space-red-tint: #ff8f86;      --space-red-glow: #ff5f7e;
+  --space-orange: #ff9f0a;   --space-orange-deep: #8a3a06;   --space-orange-tint: #ffc06b;   --space-orange-glow: #ffab3d;
+  --space-yellow: #ffd60a;   --space-yellow-deep: #6b5200;   --space-yellow-tint: #ffe680;   --space-yellow-glow: #ffe14d;
+  --space-green: #30d158;    --space-green-deep: #2f4f17;    --space-green-tint: #a8e05f;    --space-green-glow: #c8ff7a;
+  --space-teal: #30c7b5;     --space-teal-deep: #0d4a48;     --space-teal-tint: #6ff0d8;     --space-teal-glow: #28e0c0;
+  --space-blue: #0a84ff;     --space-blue-deep: #0c2c66;     --space-blue-tint: #7cc4ff;     --space-blue-glow: #2f8cff;
+  --space-indigo: #5e5ce6;   --space-indigo-deep: #3a3d9e;   --space-indigo-tint: #c6c8ff;   --space-indigo-glow: #8fb0ff;
+  --space-purple: #bf5af2;   --space-purple-deep: #3b1250;   --space-purple-tint: #e7a6ff;   --space-purple-glow: #c45cff;
+  --space-pink: #ff375f;     --space-pink-deep: #6e1236;     --space-pink-tint: #ff8ab0;     --space-pink-glow: #ff5fc8;
+  --space-graphite: #8e8e93; --space-graphite-deep: #1c1c20; --space-graphite-tint: #a8a8b3; --space-graphite-glow: #4a5480;
+
+  /* 字号 */
+  --space-text-xs: 11.5px;
+  --space-text-s: 12.5px;
+  --space-text-m: 14px;
+  --space-text-l: 17px;
+  --space-text-xl: 22px;
+  --space-text-xxl: 30px;
+  --space-text-display: 48px;
+  /* 圆角、间距、阴影 */
+  --space-radius-s: 10px;
+  --space-radius-m: 14px;
+  --space-radius-l: 24px;
+  --space-gap: var(--gap-3);
+  --space-shadow-raised: 0 12px 32px -10px rgba(0, 0, 0, 0.22);
+  --space-motion-amplitude: 1;
+  /* 背景渐变 (body.space-mesh, .space-mesh) */
+  --space-mesh:
+    radial-gradient(60% 50% at 10% 0%, color-mix(in srgb, var(--space-blue) 26%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 95% 10%, color-mix(in srgb, var(--space-purple) 22%, transparent), transparent 70%),
+    radial-gradient(60% 50% at 80% 75%, color-mix(in srgb, var(--space-teal) 20%, transparent), transparent 70%),
+    radial-gradient(60% 40% at 0% 95%, color-mix(in srgb, var(--space-orange) 18%, transparent), transparent 70%);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --space-shadow-raised: 0 12px 32px -10px rgba(0, 0, 0, 0.6); }
+}
+
+/* data-hue: one hue for a card and what it holds. Without one, the accent. */
+:root, [data-hue] {
+  --space-hue: var(--space-accent);
+  --space-hue-deep: color-mix(in srgb, var(--space-accent) 52%, #000);
+  --space-hue-tint: color-mix(in srgb, var(--space-accent) 45%, #fff);
+  --space-hue-glow: var(--space-accent);
+}
+[data-hue="red"] { --space-hue: var(--space-red); --space-hue-deep: var(--space-red-deep); --space-hue-tint: var(--space-red-tint); --space-hue-glow: var(--space-red-glow); }
+[data-hue="orange"] { --space-hue: var(--space-orange); --space-hue-deep: var(--space-orange-deep); --space-hue-tint: var(--space-orange-tint); --space-hue-glow: var(--space-orange-glow); }
+[data-hue="yellow"] { --space-hue: var(--space-yellow); --space-hue-deep: var(--space-yellow-deep); --space-hue-tint: var(--space-yellow-tint); --space-hue-glow: var(--space-yellow-glow); }
+[data-hue="green"] { --space-hue: var(--space-green); --space-hue-deep: var(--space-green-deep); --space-hue-tint: var(--space-green-tint); --space-hue-glow: var(--space-green-glow); }
+[data-hue="teal"] { --space-hue: var(--space-teal); --space-hue-deep: var(--space-teal-deep); --space-hue-tint: var(--space-teal-tint); --space-hue-glow: var(--space-teal-glow); }
+[data-hue="blue"] { --space-hue: var(--space-blue); --space-hue-deep: var(--space-blue-deep); --space-hue-tint: var(--space-blue-tint); --space-hue-glow: var(--space-blue-glow); }
+[data-hue="indigo"] { --space-hue: var(--space-indigo); --space-hue-deep: var(--space-indigo-deep); --space-hue-tint: var(--space-indigo-tint); --space-hue-glow: var(--space-indigo-glow); }
+[data-hue="purple"] { --space-hue: var(--space-purple); --space-hue-deep: var(--space-purple-deep); --space-hue-tint: var(--space-purple-tint); --space-hue-glow: var(--space-purple-glow); }
+[data-hue="pink"] { --space-hue: var(--space-pink); --space-hue-deep: var(--space-pink-deep); --space-hue-tint: var(--space-pink-tint); --space-hue-glow: var(--space-pink-glow); }
+[data-hue="graphite"] { --space-hue: var(--space-graphite); --space-hue-deep: var(--space-graphite-deep); --space-hue-tint: var(--space-graphite-tint); --space-hue-glow: var(--space-graphite-glow); }
+
+/* MARK: 布局 */
+body.space-mesh, .space-mesh { background-image: var(--space-mesh); background-attachment: fixed; }
+.space-bento {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  gap: var(--space-gap);
+  margin: 0 0 var(--space-gap);
+}
+.space-bento > * { grid-column: span 1; margin: 0; min-width: 0; }
+.space-bento > .space-m { grid-column: span 2; }
+.space-bento > .space-l { grid-column: span 3; }
+.space-bento > .space-full { grid-column: 1 / -1; }
+.space-bento > .space-tall { grid-row: span 2; }
+@media (max-width: 720px) {
+  .space-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .space-bento > .space-l { grid-column: 1 / -1; }
+}
+@media (max-width: 440px) {
+  .space-bento { grid-template-columns: minmax(0, 1fr); }
+  .space-bento > * { grid-column: 1 / -1 !important; }
+}
+.space-header { display: flex; align-items: flex-end; gap: var(--gap-4); flex-wrap: wrap; margin: 0 0 var(--gap-6); }
+.space-header > :first-child { flex: 1; min-width: 0; }
+.space-header h1, .space-header-title { font-size: var(--space-text-xxl); font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; margin: 0; }
+.space-header-sub { color: var(--space-muted); font-size: var(--space-text-s); margin-top: 2px; }
+.space-section { margin: var(--gap-6) 0 var(--space-gap); }
+.space-section-title { display: flex; align-items: baseline; gap: var(--gap-2); font-size: var(--space-text-l); font-weight: 700; letter-spacing: -0.01em; margin: 0 var(--gap-1) var(--gap-2); }
+.space-section-hint { color: var(--space-muted); font-size: var(--space-text-s); font-weight: 400; }
+
+/* MARK: 卡片风格 */
+/* 光晕: a deep base with the hue's glow drifting inside, white bold titles, tinted subtitles. What is in
+   it (components too) reads the --space-* colours redefined here, so it follows without its own CSS. */
+.space-glow {
+  --space-text: #fff;
+  --space-muted: color-mix(in srgb, var(--space-hue-tint) 88%, #fff);
+  --space-line: rgba(255, 255, 255, 0.14);
+  --space-hover: rgba(255, 255, 255, 0.1);
+  --space-card: rgba(255, 255, 255, 0.1);
+  --space-bg: rgba(255, 255, 255, 0.1);
+  --space-accent: #fff;
+  --space-on-accent: var(--space-hue-deep);
+  --space-accent-soft: rgba(255, 255, 255, 0.16);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--space-text);
+  background: var(--space-hue-deep);
+  border: 0;
+  border-radius: var(--space-radius-l);
+  padding: var(--gap-5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 12px 32px -12px color-mix(in srgb, var(--space-hue) 55%, transparent);
+}
+.space-glow::before {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(32% 42% at var(--space-glow-x, 55%) var(--space-glow-y, 78%), var(--space-hue-glow), transparent 70%),
+    radial-gradient(28% 36% at 12% 12%, color-mix(in srgb, var(--space-hue-glow) 55%, transparent), transparent 70%),
+    radial-gradient(30% 40% at 92% 20%, color-mix(in srgb, var(--space-hue) 45%, transparent), transparent 70%);
+  filter: blur(26px);
+  opacity: 0.9;
+  animation: space-drift 14s ease-in-out infinite alternate;
+}
+.space-glow :is(.space-subtitle, .space-muted) { color: var(--space-hue-tint); }
+.space-glow .space-title { text-shadow: 0 0 18px rgba(255, 255, 255, 0.32); }
+
+/* 毛玻璃: translucent over whatever is behind it; best on body.space-mesh. */
+.space-glass {
+  --space-card: color-mix(in srgb, var(--card-bg) 55%, transparent);
+  background: var(--space-card);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  border: 0;
+  border-radius: var(--space-radius-l);
+  padding: var(--gap-5);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.7), 0 8px 32px rgba(30, 40, 80, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  .space-glass { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 8px 32px rgba(0, 0, 0, 0.3); }
+}
+/* 柔彩: the card tinted with its hue, the label in it. */
+.space-tint {
+  background: color-mix(in srgb, var(--space-hue) 10%, var(--space-widget));
+  border: 0;
+  border-radius: var(--space-radius-l);
+  padding: var(--gap-5);
+  box-shadow: var(--space-shadow);
+}
+.space-tint :is(.space-label, .space-subtitle) { color: color-mix(in srgb, var(--space-hue) 72%, var(--space-text)); }
+:is(.space-glow, .space-glass, .space-tint) { margin: 0 0 var(--space-gap); }
+:is(.space-bento, .space-grid, .lb-grid) > :is(.space-glow, .space-glass, .space-tint) { margin: 0; }
+
+/* MARK: 文字 */
+.space-title { font-size: var(--space-text-xl); font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+.space-subtitle { font-size: var(--space-text-m); font-weight: 600; color: var(--space-muted); margin: 2px 0 0; }
+.space-label { font-size: var(--space-text-s); font-weight: 500; color: var(--space-muted); display: flex; align-items: center; gap: 6px; }
+.space-big { font-size: var(--space-text-display); font-weight: 750; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.space-big small { font-size: 0.36em; font-weight: 600; letter-spacing: 0; color: var(--space-muted); margin-left: 4px; }
+.space-glow .space-big { text-shadow: 0 0 28px rgba(255, 255, 255, 0.35); }
+.space-num { font-variant-numeric: tabular-nums; }
+.space-up { color: var(--space-good); } .space-down { color: var(--space-bad); }
+.space-glow :is(.space-up, .space-down) { color: #fff; }
+
+/* MARK: 小部件 */
+.space-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--space-radius-s); background: var(--space-hover); }
+.space-segmented > button {
+  font: inherit; font-size: var(--space-text-s); color: var(--space-text);
+  border: 0; background: none; border-radius: 8px; padding: 4px 12px; cursor: pointer;
+  transition: background var(--space-pop-duration) var(--space-ease);
+}
+.space-segmented > :is([aria-pressed="true"], .on) { background: var(--space-widget); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.space-glow .space-segmented > :is([aria-pressed="true"], .on) { background: rgba(255, 255, 255, 0.92); color: var(--space-hue-deep); }
+.space-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--space-text-xs); padding: 1px 8px; border-radius: 7px; background: color-mix(in srgb, var(--space-hue) 14%, transparent); color: color-mix(in srgb, var(--space-hue) 75%, var(--space-text)); }
+.space-glow .space-chip { background: rgba(255, 255, 255, 0.16); color: var(--space-hue-tint); }
+.space-glass-button {
+  font: inherit; font-weight: 650; font-size: var(--space-text-s); color: var(--space-text);
+  border: 0; border-radius: var(--space-radius-m); padding: 7px 16px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transition: transform var(--space-pop-duration) var(--space-pop-easing), background var(--space-pop-duration) var(--space-ease);
+}
+.space-glass-button:hover { background: rgba(255, 255, 255, 0.24); }
+.space-glass-button:active { transform: scale(var(--space-press-scale)); }
+.space-glass-button.space-solid { background: #fff; color: var(--space-hue-deep); }
+:not(.space-glow) > .space-glass-button:not(.space-solid) { background: var(--space-hover); box-shadow: none; }
+/* 进度: style="--space-value: 62" (0–100). The fill grows in on 展开. */
+.space-progress { position: relative; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--space-text) 10%, transparent); overflow: hidden; }
+.space-progress::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; border-radius: inherit;
+  width: calc(clamp(0, var(--space-value), 100) * 1%);
+  background: var(--space-hue);
+  animation: space-value-in calc(var(--space-expand-visual) * 3) var(--space-ease) backwards;
+}
+.space-glow .space-progress { background: rgba(255, 255, 255, 0.18); }
+.space-glow .space-progress::after { background: linear-gradient(90deg, var(--space-hue-tint), #fff); box-shadow: 0 0 16px rgba(255, 255, 255, 0.6); }
+.space-ring {
+  --space-ring-size: 76px; --space-ring-width: 9px;
+  position: relative; display: inline-grid; place-items: center; flex: none;
+  width: var(--space-ring-size); height: var(--space-ring-size); border-radius: 50%;
+  font-weight: 650; font-size: var(--space-text-m); font-variant-numeric: tabular-nums;
+  background: conic-gradient(var(--space-hue) calc(clamp(0, var(--space-value), 100) * 1%), color-mix(in srgb, var(--space-text) 10%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--space-ring-width) - 0.5px), #000 calc(100% - var(--space-ring-width)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--space-ring-width) - 0.5px), #000 calc(100% - var(--space-ring-width)));
+  animation: space-value-in calc(var(--space-expand-visual) * 3) var(--space-ease) backwards;
+}
+.space-glow .space-ring { background: conic-gradient(#fff calc(clamp(0, var(--space-value), 100) * 1%), rgba(255, 255, 255, 0.2) 0); }
+/* A ring's label sits beside it, since the mask hides what is inside: wrap both in .space-ring-wrap. */
+.space-ring-wrap { position: relative; display: inline-grid; place-items: center; }
+.space-ring-wrap > :not(.space-ring) { position: absolute; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* 提示 (space.toast) */
+.space-toasts { position: fixed; left: 50%; bottom: var(--gap-6); transform: translateX(-50%); display: grid; gap: var(--gap-2); z-index: 2147483000; pointer-events: none; }
+.space-toast {
+  pointer-events: auto; display: flex; align-items: center; gap: var(--gap-3);
+  padding: 8px 10px 8px 16px; border-radius: var(--space-radius-m); font-size: var(--space-text-s);
+  color: var(--card-fg); background: color-mix(in srgb, var(--card-bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--space-line), 0 10px 32px rgba(0, 0, 0, 0.18);
+  animation: space-rise var(--space-pop-duration) var(--space-pop-easing) backwards;
+}
+.space-toast button { font: inherit; font-weight: 650; color: var(--space-accent); background: none; border: 0; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+.space-toast button:hover { background: var(--space-hover); }
+.space-toast.space-leaving { opacity: 0; transition: opacity var(--space-pop-visual) var(--space-ease); }
+
+/* MARK: 动效 (幅度 follows 动效强度; nothing here moves under 减弱动态效果) */
+@keyframes space-drift {
+  0% { transform: translate(0, 0) scale(1) rotate(0); }
+  50% { transform: translate(calc(4% * var(--space-motion-amplitude)), calc(-3% * var(--space-motion-amplitude))) scale(calc(1 + 0.06 * var(--space-motion-amplitude))) rotate(5deg); }
+  100% { transform: translate(calc(-3% * var(--space-motion-amplitude)), calc(3% * var(--space-motion-amplitude))) scale(0.97) rotate(-4deg); }
+}
+@keyframes space-value-in { from { --space-value: 0; } }
+@keyframes space-float { 50% { transform: translateY(calc(-5px * var(--space-motion-amplitude))); } }
+@keyframes space-shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@keyframes space-ping { 70%, 100% { box-shadow: 0 0 0 calc(7px * var(--space-motion-amplitude)) transparent; } }
+@keyframes space-breathe { 50% { text-shadow: 0 0 36px color-mix(in srgb, var(--space-hue-glow) 90%, #fff); } }
+.space-lift { transition: transform var(--space-pop-duration) var(--space-pop-easing), box-shadow var(--space-pop-duration) var(--space-ease); }
+.space-lift:hover { transform: translateY(calc(-3px * var(--space-motion-amplitude))); box-shadow: var(--space-shadow-raised); }
+.space-spotlight { position: relative; }
+.space-spotlight::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(260px circle at var(--space-mx, -999px) var(--space-my, -999px), rgba(255, 255, 255, 0.16), transparent 60%);
+}
+.space-float { animation: space-float 4s ease-in-out infinite; }
+.space-shimmer {
+  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  background-size: 250% 100%; background-repeat: no-repeat;
+  animation: space-shimmer 2.8s ease-in-out infinite;
+}
+.space-live { display: inline-flex; align-items: center; gap: 6px; }
+.space-live::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--space-hue-glow); box-shadow: 0 0 0 0 color-mix(in srgb, var(--space-hue-glow) 70%, transparent);
+  animation: space-ping 1.6s ease-out infinite;
+}
+.space-breathe { animation: space-breathe 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .space-glow::before, .space-float, .space-shimmer, .space-live::before, .space-breathe, .space-progress::after, .space-ring { animation: none; }
+  .space-lift:hover { transform: none; }
+}

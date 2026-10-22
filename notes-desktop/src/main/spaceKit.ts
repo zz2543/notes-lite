@@ -8,12 +8,18 @@ import type { Preferences } from "../shared/preferences";
 import { typographyVariables } from "../shared/typography";
 import { spaceShim } from "./spaceShim";
 import components from "./spaceKit/components.js?raw";
+import foundation from "./spaceKit/foundation.css?raw";
 import kit from "./spaceKit/style.css?raw";
 
 /** The id of the style element holding the page settings; the homepage's preload replaces its text. */
 export const settingsStyleId = "space-settings";
 
-export const kitStyle = `${tokens}\n${kit}`;
+export const kitStyle = `${tokens}\n${kit}\n${foundation}`;
+
+/** The libraries the app carries for homepages (space.load), served at their own address on demand. */
+export const kitLibraries: Record<string, () => Promise<string>> = {
+  "/kit/echarts.js": async () => (await import("echarts/dist/echarts.min.js?raw")).default,
+};
 export const kitScripts = [spaceShim, components];
 
 /** The design system's blur ease (动效 · 模糊), which no spring carries. */
@@ -44,6 +50,7 @@ export function spacePageSettings(preferences: Preferences, systemAccent: string
   variables["--space-enter-scale"] = `${round(1 - spaceCardEnter.scale * presets.amplitude)}`;
   variables["--space-enter-blur"] = `${round(spaceCardEnter.blur * presets.amplitude)}px`;
   variables["--space-stagger"] = `${spaceCardEnter.stagger}s`;
+  variables["--space-motion-amplitude"] = `${presets.amplitude}`;
   return `:root {\n${Object.entries(variables)
     .map(([name, value]) => `  ${name}: ${value};`)
     .join("\n")}\n}`;

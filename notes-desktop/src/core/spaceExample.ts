@@ -1,6 +1,8 @@
 // 新建示例空间 (ticket 31): the notes and homepage of 组件示例, which the app writes itself. Four sample
 // notes hold record tables running up to the day it is made; the homepage puts every component to
 // work on them, and under each card shows the markup that draws it, for copying into a page of one's own.
+// Above them, 自定义写法 (设计地基): a section drawn without components, from the style foundation, the
+// built-in charts and space.open, as an agent's own page would be.
 
 /** The sample space's name; a second one is “组件示例 2”, and so on. */
 export const exampleSpaceName = "组件示例";
@@ -98,6 +100,98 @@ export function examplePage(folder: string): string {
     border-radius: var(--space-control-radius); background: var(--space-bg); color: var(--space-muted); font-size: var(--code-size); }
   .space-snippet code { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
+
+<section class="space-section">
+  <h2 class="space-section-title">自定义写法 <span class="space-section-hint">不用组件，用设计地基自己写：光晕卡片、滚动数字、进度条、内置图表、点开笔记</span></h2>
+  <div class="space-bento">
+    <div class="space-glow space-m space-spotlight" data-hue="red">
+      <div class="space-title">本月训练</div>
+      <div class="space-subtitle" id="example-month-note">　</div>
+      <div style="display: flex; gap: var(--gap-8); margin-top: var(--gap-8)">
+        <div><div class="space-label">次数</div><div class="space-big"><span id="example-month-count" data-space-count>0</span><small>次</small></div></div>
+        <div><div class="space-label">最大重量</div><div class="space-big"><span id="example-month-max" data-space-count>0</span><small>kg</small></div></div>
+      </div>
+    </div>
+    <div class="space-glow space-m" data-hue="green">
+      <div class="space-title">本月专注</div>
+      <div class="space-subtitle"><span class="space-live" id="example-focus-note">　</span></div>
+      <div class="space-progress space-shimmer" id="example-focus" style="--space-value: 0; height: 14px; margin-top: var(--gap-8)"></div>
+    </div>
+    <div class="space-card space-m">
+      <div class="space-label">体重 · space.chart</div>
+      <div id="example-weight" style="height: 200px"></div>
+    </div>
+    <div class="space-glow space-m" data-hue="indigo">
+      <div class="space-title">每日页数</div>
+      <div class="space-subtitle">最近 14 天</div>
+      <div id="example-pages" style="height: 170px"></div>
+    </div>
+    <div class="space-tint space-full" data-hue="teal">
+      <div class="space-label">示例笔记 · 点一下用 space.open 打开</div>
+      <div id="example-notes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--gap-2); margin-top: var(--gap-2)"></div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // 自定义写法: everything in the section above, drawn from the notes through space.
+  (() => {
+    const folder = ${JSON.stringify(folder)};
+    const month = space.today().slice(0, 7);
+    const day = (date) => Number(date.slice(5, 7)) + "月" + Number(date.slice(8, 10)) + "日";
+    async function draw() {
+      const workouts = await space.query(folder + "/健身记录.md#训练", { filter: (r) => String(r.日期).startsWith(month) });
+      document.getElementById("example-month-count").setAttribute("data-space-count", workouts.length);
+      document.getElementById("example-month-max").setAttribute("data-space-count", Math.max(0, ...workouts.map((r) => r.重量 || 0)));
+      document.getElementById("example-month-note").textContent = workouts.length ? "最近一次 " + day(workouts[workouts.length - 1].日期) : "这个月还没有训练";
+
+      const focus = await space.query(folder + "/专注时长.md", { filter: (r) => String(r.日期).startsWith(month) });
+      const minutes = focus.reduce((sum, r) => sum + (r["时长（分钟）"] || 0), 0);
+      document.getElementById("example-focus").style.setProperty("--space-value", Math.min(100, (minutes / 1200) * 100));
+      document.getElementById("example-focus-note").textContent = minutes + " / 1200 分钟";
+
+      const weights = await space.query(folder + "/健身记录.md#体重", { sort: "日期" });
+      await space.chart("#example-weight", {
+        tooltip: { trigger: "axis" },
+        grid: { left: 40, right: 12, top: 16, bottom: 24 },
+        xAxis: { type: "time" },
+        yAxis: { type: "value", scale: true },
+        series: [{ name: "体重 kg", type: "line", data: weights.map((r) => [r.日期, r.体重]), areaStyle: { opacity: 0.12 } }],
+      });
+
+      const pages = (await space.query(folder + "/读书进度.md", { sort: "日期" })).slice(-14);
+      await space.chart("#example-pages", (theme) => ({
+        grid: { left: 4, right: 4, top: 20, bottom: 20 },
+        xAxis: { type: "category", data: pages.map((r) => r.日期.slice(5).replace("-", "/")), axisLabel: { color: "rgba(255,255,255,.65)" } },
+        yAxis: { show: false },
+        series: [{ type: "bar", data: pages.map((r) => r.页数), barWidth: "56%",
+          itemStyle: { color: "rgba(255,255,255,.32)", borderRadius: [8, 8, 3, 3] },
+          emphasis: { itemStyle: { color: "#fff", shadowBlur: 16, shadowColor: theme.hues.indigo.glow } },
+          label: { show: true, position: "top", color: "rgba(255,255,255,.8)", fontSize: 10 } }],
+      }));
+
+      const notes = (await space.notes(folder)).sort((a, b) => b.modified.localeCompare(a.modified));
+      document.getElementById("example-notes").replaceChildren(...notes.map((note) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "space-card space-lift";
+        item.style.cssText = "margin:0;text-align:left;font:inherit;color:inherit;cursor:pointer;padding:var(--gap-3) var(--gap-4)";
+        const title = document.createElement("b");
+        title.textContent = note.title;
+        const when = document.createElement("div");
+        when.className = "space-label";
+        when.textContent = "修改于 " + day(note.modified.slice(0, 10));
+        item.append(title, when);
+        item.addEventListener("click", () => space.open(note.path));
+        return item;
+      }));
+    }
+    draw();
+    space.on("change", draw);
+  })();
+</script>
+
+<h2 class="space-section-title">内置组件</h2>
 
 <div class="space-grid">
 ${stats.join("\n")}

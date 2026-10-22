@@ -304,6 +304,16 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   const openSpaceNote = async (path: string) => {
     if (await openNote(path)) setShowingHome(false);
   };
+  // space.open: the homepage on show asks for one of its notes.
+  const openFromPage = useRef(openSpaceNote);
+  openFromPage.current = openSpaceNote;
+  const shownSpace = inSpace?.name ?? null;
+  useEffect(() => {
+    if (!shownSpace) return;
+    return window.notes.onSpacePageEvent((event) => {
+      if (event.kind === "open" && event.space === shownSpace) void openFromPage.current(event.path);
+    });
+  }, [shownSpace]);
   // Said once the library opens, such as the old app's spaces failing to move into `.notes/`.
   useEffect(() => {
     if (library.notice) notify(library.notice);

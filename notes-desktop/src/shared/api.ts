@@ -193,7 +193,9 @@ export type SpacePageEvent =
   | { space: string; kind: "loaded" }
   | { space: string; kind: "problem"; problem: SpacePageProblem }
   /** The page wrote through `space`: `changes` operation-log entries, `records` of them records. */
-  | { space: string; kind: "wrote"; changes: number; records: number };
+  | { space: string; kind: "wrote"; changes: number; records: number }
+  /** The page asked to open a note (space.open), one in its scope that exists. */
+  | { space: string; kind: "open"; path: string };
 
 export type { TurnStart, TurnReviewRequest } from "../core";
 

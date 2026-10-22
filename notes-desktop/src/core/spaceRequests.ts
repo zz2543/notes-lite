@@ -211,6 +211,13 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     return text;
   };
 
+  /** space.open: only a note in scope that is there; the app opens it. */
+  const open = async (raw: string) => {
+    const { path, real } = await resolve(raw);
+    if ((await textAt(real)) === null) throw notFound(raw);
+    return { path };
+  };
+
   const tables = async (raw: unknown) => {
     const only = typeof raw === "string" && raw !== "" ? (await resolve(raw)).path : null;
     const all = await spaces.recordTables(await scope());
@@ -445,6 +452,8 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
         return move(stringArg(args, 0, "path"), args[1], tally);
       case "trash":
         return trash(stringArg(args, 0, "path"), tally);
+      case "open":
+        return open(stringArg(args, 0, "path"));
       case "writePage":
         return writePage(typeof args[0] === "string" ? args[0] : "", tally);
       default:

@@ -7,7 +7,7 @@ import { ipcMain, protocol, session, shell, WebContentsView, type BrowserWindow,
 import { spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope, type SpaceStorage } from "../core";
 import type { SpacePageEvent, SpacePageProblem } from "../shared/api";
 import { spacePageChannels } from "../shared/spacePage";
-import { kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
+import { kitLibraries, kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
 
 export const spaceScheme = "notes-space";
 const pageUrl = `${spaceScheme}://page/`;
@@ -16,6 +16,9 @@ const pageUrl = `${spaceScheme}://page/`;
 export function registerSpaceScheme() {
   protocol.registerSchemesAsPrivileged([{ scheme: spaceScheme, privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 }
+
+const isOpen = (request: unknown) => typeof request === "object" && request !== null && (request as { method?: unknown }).method === "open";
+const isPath = (result: unknown): result is { path: string } => typeof result === "object" && result !== null && typeof (result as { path?: unknown }).path === "string";
 
 const escapeHtml = (s: string) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
@@ -123,7 +126,10 @@ export function spacePages(
     const handled = served.has(ses);
     served.set(ses, { library, name });
     if (handled) return;
-    ses.protocol.handle(spaceScheme, async () => {
+    ses.protocol.handle(spaceScheme, async (request) => {
+      // The libraries the app carries (space.load): the same on every page, offline too.
+      const carried = kitLibraries[new URL(request.url).pathname];
+      if (carried) return new Response(await carried(), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "max-age=31536000, immutable" } });
       const { library, name } = served.get(ses)!;
       const space = await spaceLibrary(library).space(name).catch(() => null);
       const { page, offset } = documentFor(name, space?.html ?? "", settings());
@@ -249,6 +255,8 @@ export function spacePages(
       return { ok: false, error: { code: "outside-scope", message: "只有空间主页本身可以使用 lb。" } };
     }
     const reply = await spaceRequests(library, page.name, { trash, wrote }).handle(request);
+    // space.open: the app opens the note (in scope and there, as the library checked).
+    if (reply.ok && isOpen(request) && isPath(reply.result)) emit({ space: page.name, kind: "open", path: reply.result.path });
     // 写入提示: the app says the homepage wrote, and how much.
     if (reply.ok && reply.changes > 0) emit({ space: page.name, kind: "wrote", changes: reply.changes, records: reply.recordChanges });
     return reply;

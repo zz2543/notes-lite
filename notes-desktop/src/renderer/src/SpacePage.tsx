@@ -234,7 +234,7 @@ function PageBars({ name, onShowLog }: { name: string; onShowLog(): void }) {
       else if (event.kind === "problem") {
         const { problem } = event;
         setProblems((kept) => (kept.some((p) => sameProblem(p, problem)) ? kept : [...kept, problem].slice(-keptProblems)));
-      } else {
+      } else if (event.kind === "wrote") {
         setWrote((now) => ({ changes: (now?.changes ?? 0) + event.changes, onlyRecords: (now?.onlyRecords ?? true) && event.records === event.changes }));
         clearTimeout(hideNotice);
         hideNotice = setTimeout(() => setWrote(null), noticeTime);

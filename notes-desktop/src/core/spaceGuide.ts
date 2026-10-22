@@ -4,7 +4,7 @@
 // interface's TypeScript declarations.
 
 /** Bumped whenever the text changes. */
-export const spaceGuideVersion = 3;
+export const spaceGuideVersion = 4;
 
 /** The page interface and components as TypeScript declarations, as the guide carries them. */
 export const spaceTypes = `/** 字段类型：整列都是数字为 number，整列都是 YYYY-MM-DD 为 date，其余为 text。 */
@@ -34,6 +34,32 @@ type SpaceErrorCode = "outside-scope" | "not-found" | "exists" | "unknown-field"
 /** 失败的调用拒绝 Promise，错误对象带 code。 */
 interface SpaceError extends Error { code: SpaceErrorCode }
 
+/** 解析好的颜色都是 rgb()/rgba() 字符串，可以直接交给画布、SVG 或 ECharts。 */
+interface SpaceHue { color: string; deep: string; tint: string; glow: string }
+type SpaceHueName = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "purple" | "pink" | "graphite";
+interface SpaceTheme {
+  dark: boolean;
+  /** 用户开启了「减弱动态效果」。 */
+  reducedMotion: boolean;
+  /** 动效幅度：轻 0.6、标准 1、强 2。 */
+  amplitude: number;
+  accent: string; onAccent: string; text: string; muted: string; line: string; hover: string;
+  card: string; background: string; good: string; warn: string; bad: string;
+  chart: string[];
+  hues: Record<SpaceHueName, SpaceHue>;
+  font: string; headingFont: string; mono: string;
+  radius: number;
+}
+interface SpaceToastOptions {
+  /** 按钮文字，例如 "撤销"。 */
+  action?: string;
+  onAction?: () => void;
+  /** 显示多久（毫秒）；0 表示一直显示。默认有按钮 6000，没有 3000。 */
+  duration?: number;
+}
+/** ECharts 实例（见 https://echarts.apache.org）。 */
+type SpaceEChartsInstance = any;
+
 interface SpaceApi {
   scope(): Promise<SpaceScope>;
   notes(folder?: string): Promise<SpaceNote[]>;
@@ -50,8 +76,20 @@ interface SpaceApi {
   trash(path: string): Promise<{ path: string }>;
   page(): Promise<string>;
   writePage(html: string): Promise<{ path: string }>;
+  /** 在笔记应用里打开范围内的一篇笔记。 */
+  open(path: string): Promise<{ path: string }>;
+  /** 当前外观下解析好的设计变量（同步）。 */
+  theme(): SpaceTheme;
+  /** 加载笔记应用内置的库（离线可用）；目前有 "echarts"。 */
+  load(name: "echarts"): Promise<any>;
+  /** 在元素里画一张 ECharts 图表，配色字体跟随笔记应用；option 可以是函数，外观变化时用新的 theme 重新调用。 */
+  chart(target: Element | string, option: object | ((theme: SpaceTheme) => object)): Promise<SpaceEChartsInstance>;
+  /** 页面底部的提示，可以带一个按钮。 */
+  toast(message: string, options?: SpaceToastOptions): { close(): void };
   /** 范围内的文件变化时调用 handler；返回取消订阅的函数。 */
   on(event: "change", handler: (paths: string[]) => void): () => void;
+  /** 外观、强调色、排版或动效强度变化时调用 handler。 */
+  on(event: "theme", handler: (theme: SpaceTheme) => void): () => void;
   /** 今天的日期 YYYY-MM-DD（本地时间）。 */
   today(): string;
 }
@@ -100,7 +138,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 
 - 只写 \`<body>\` 里的内容即可（可以包含 \`<style>\`、\`<script>\`），笔记应用会注入样式包、组件和 \`space\` 接口。
 - meta 之后为空表示「还没有主页」。保存文件后，笔记应用会自动刷新显示。
-- 页面可以联网，可以用 \`<script src="https://cdn.jsdelivr.net/...">\` 引用网上的库，也可以 \`fetch\` 外部数据。
+- 页面可以联网，可以用 \`<script src="https://cdn.jsdelivr.net/...">\` 引用网上的库，也可以 \`fetch\` 外部数据。图表请优先用内置的 ECharts（\`space.chart\`，离线可用，见「设计与自定义」）。
 - 网上的 \`<script src>\` 加载完之前，它后面的脚本不会运行。先用组件和 \`space\` 把数据显示出来，再在需要外部库的地方检查它是否已加载（例如 \`if (window.Chart)\`），网络慢时页面也不会空着。
 - 页面里的 JS 报错会显示在页面顶部的错误条上，用户可以把错误复制给你修复。错误里的行号就是空间文件里的行号。
 - 页面不能跳转到别的网址（点击链接会在用户的浏览器里打开）。嵌入的 \`<iframe>\` 里没有 \`space\`。
@@ -165,6 +203,207 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 | \`.space-muted\` | 次要文字 |
 | \`.space-button\` | 按钮（\`.space-button.space-secondary\` 为次要按钮） |
 | \`.space-input\` | 输入框 |
+
+## 设计与自定义
+
+**页面完全由你决定。** 你可以自由编写 HTML、CSS、JS、SVG、\`<canvas>\`，内置组件和下面的样式只是起点，不是限制：可以只用组件，只用自己的写法，或者混用。目标是一个**好看、实用、像原生应用**的主页。
+
+推荐的做法：
+
+1. **先定结构。** 最重要的一两个数字放最上面最大；按主题分组（\`.space-section\`），每组 2–6 张卡片，用 \`.space-bento\` 网格排成大小不一的卡片。
+2. **再定颜色。** 每类数据固定一个色相（\`data-hue\`），同一种数据在整页里颜色一致。整页的强调卡片用光晕（\`.space-glow\`），其余可以用素雅卡片（\`.space-card\`）或柔彩（\`.space-tint\`），不要每张都是光晕。
+3. **然后是图表和动效。** 图表用 \`space.chart\`；数字用 \`data-space-count\` 滚动出现；进行中的状态用 \`.space-live\`。动效要克制：一页里持续动的东西不超过两三处。
+4. **自己写的部分也用设计变量**（\`var(--space-*)\`、\`space.theme()\`），这样浅色、深色、强调色和排版变化时页面跟着变。
+
+### 检查清单
+
+- 浅色和深色模式都好看，文字和背景的对比度足够（次要文字不要太淡）。
+- 没有数据时卡片也有内容：说明 + 一个「记第一笔」之类的入口。
+- 窗口变窄时不挤、不溢出（\`.space-bento\` 会自动变成 2 列、1 列；自己写的布局请用 \`minmax(0, 1fr)\`、\`min-width: 0\`）。
+- 数字照实显示，单位清楚；日期用中文习惯（10月22日）。
+- 动效跟随 \`--space-motion-amplitude\`，并在 \`@media (prefers-reduced-motion: reduce)\` 下停止。
+- 页面不报错（错误会显示在页面顶部）。
+
+### 色相
+
+10 个色相，每个有四个值：\`--space-<色相>\`（纯色）、\`--space-<色相>-deep\`（深色卡片底）、\`--space-<色相>-tint\`（深色底上的浅色文字）、\`--space-<色相>-glow\`（光晕）。色相：\`red\` \`orange\` \`yellow\` \`green\` \`teal\` \`blue\` \`indigo\` \`purple\` \`pink\` \`graphite\`。
+
+在任何元素上写 \`data-hue="green"\`，它和它里面的元素就有 \`--space-hue\`、\`--space-hue-deep\`、\`--space-hue-tint\`、\`--space-hue-glow\`；不写时是强调色。下面的卡片风格和小部件都用它们。
+
+### 其他变量
+
+| 变量 | 含义 |
+|---|---|
+| \`--space-text-xs\` … \`--space-text-display\` | 字号：xs 11.5、s 12.5、m 14、l 17、xl 22、xxl 30、display 48（px） |
+| \`--space-radius-s\` / \`-m\` / \`-l\` | 圆角 10 / 14 / 24 px |
+| \`--space-gap\` | 卡片间距 |
+| \`--space-shadow-raised\` | 抬起时的阴影 |
+| \`--space-mesh\` | 彩色背景渐变（\`body.space-mesh\` 或 \`.space-mesh\` 使用） |
+| \`--space-motion-amplitude\` | 动效幅度（轻 0.6、标准 1、强 2），自己的动画距离乘上它 |
+
+### 布局
+
+\`\`\`html
+<header class="space-header">
+  <div><h1>健身记录</h1><div class="space-header-sub">本月 12 次 · 今天 21:40 更新</div></div>
+  <div class="space-segmented"><button>本周</button><button aria-pressed="true">本月</button><button>全部</button></div>
+</header>
+<section class="space-section">
+  <h2 class="space-section-title">概览 <span class="space-section-hint">与上月相比</span></h2>
+  <div class="space-bento">
+    <div class="space-glow space-m" data-hue="red">…</div>
+    <div class="space-card">…</div>
+    <div class="space-card">…</div>
+  </div>
+</section>
+\`\`\`
+
+- \`.space-bento\`：4 列网格；子元素默认占 1 列，\`.space-m\` 2 列，\`.space-l\` 3 列，\`.space-full\` 整行，\`.space-tall\` 占两行高。窗口窄时自动变成 2 列、1 列。
+- \`.space-header\`（\`.space-header-title\` / \`h1\`、\`.space-header-sub\`）、\`.space-section\`、\`.space-section-title\`、\`.space-section-hint\`。
+- \`.space-grid\`（自动换行、等宽）仍然可用。
+
+### 卡片风格
+
+| class | 样子 |
+|---|---|
+| \`.space-card\` | 素雅卡片（白底 / 深色底，无边框） |
+| \`.space-glow\` | 光晕：色相的深色底，里面有缓慢飘动的光，白色粗标题、同色调浅色副标题。里面的组件和 \`--space-text\`、\`--space-muted\` 等颜色自动换成适合深色底的值 |
+| \`.space-glass\` | 毛玻璃：半透明、模糊背后的内容；配合 \`body.space-mesh\` 最好看 |
+| \`.space-tint\` | 柔彩：带一点色相的浅色卡片 |
+
+光晕的位置可以用 \`--space-glow-x\`、\`--space-glow-y\` 调整（默认 55%、78%）。
+
+### 文字与小部件
+
+| class | 用途 |
+|---|---|
+| \`.space-title\` / \`.space-subtitle\` | 卡片标题 / 副标题（光晕卡片里副标题是同色调的浅色） |
+| \`.space-label\` | 小标签（次要文字） |
+| \`.space-big\` | 大数字，单位写在里面的 \`<small>\` |
+| \`.space-num\` | 等宽数字 |
+| \`.space-up\` / \`.space-down\` | 上升 / 下降 |
+| \`.space-segmented\` | 分段切换，里面放 \`<button>\`，选中的加 \`aria-pressed="true"\` |
+| \`.space-chip\` | 标签（跟随 \`data-hue\`） |
+| \`.space-glass-button\` | 玻璃按钮（光晕卡片上用）；\`.space-glass-button.space-solid\` 是白色实心按钮 |
+| \`.space-progress\` | 进度条：\`<div class="space-progress" style="--space-value: 62"></div>\`（0–100，出现时从 0 长到该值） |
+| \`.space-ring\` | 进度环：\`<div class="space-ring-wrap"><div class="space-ring" style="--space-value: 75"></div><span>75%</span></div>\`；大小用 \`--space-ring-size\`、粗细用 \`--space-ring-width\` |
+
+### 动效
+
+| 写法 | 效果 |
+|---|---|
+| \`data-space-count\` | 数字从 0 滚动到它自己（例如 \`<span data-space-count>540</span>\`）；之后改这个属性的值，会从旧值滚到新值。\`data-space-duration\` 设时长（毫秒） |
+| \`.space-lift\` | 悬停时微微抬起 |
+| \`.space-spotlight\` | 光跟着指针走（光晕卡片上很好看） |
+| \`.space-float\` | 轻轻浮动 |
+| \`.space-shimmer\` | 一道光扫过（进度条、按钮） |
+| \`.space-live\` | 前面有呼吸的小圆点，表示进行中 |
+| \`.space-breathe\` | 文字发光一明一暗（计时器） |
+
+这些都跟随用户的动效强度，开启「减弱动态效果」时自动停止。光晕卡片里的光一直缓慢飘动，不需要另外写。自己写动画时，请用动效变量（见「样式包」）并乘上 \`--space-motion-amplitude\`。
+
+### 图表：\`space.chart\`
+
+笔记应用内置了 [ECharts](https://echarts.apache.org) 6，离线可用，用到时才加载。\`space.chart(元素或选择器, option)\` 画图并返回 ECharts 实例：
+
+- 配色（\`--space-chart-1…6\`）、字体、坐标轴、网格线和毛玻璃提示框都跟随笔记应用，浅色深色切换时自动换色，不需要你写颜色。
+- 元素尺寸变化时自动重绘；元素没有高度时设为 220px。
+- 用户开启「减弱动态效果」时不播放动画。
+- \`option\` 可以是函数 \`(theme) => option\`：外观变化时会用新的 \`theme\` 再调用一次，适合用到色相的图（例如光晕卡片里的白色折线）。
+- 之后要更新数据，直接调用返回实例的 \`setOption\`。
+- 想用 ECharts 的全部能力（\`echarts.graphic\` 渐变等）：\`const echarts = await space.load("echarts")\`。
+
+\`\`\`html
+<div class="space-card space-m">
+  <div class="space-label">体重与训练时长</div>
+  <div id="trend" style="height: 220px"></div>
+</div>
+<script>
+  async function drawTrend() {
+    const rows = await space.query("健身/训练记录.md", { sort: "日期" });
+    const chart = await space.chart("#trend", {
+      tooltip: { trigger: "axis" },
+      legend: { right: 0 },
+      xAxis: { type: "time" },
+      yAxis: [{ type: "value", scale: true }, { type: "value" }],
+      series: [
+        { name: "体重", type: "line", data: rows.map(r => [r.日期, r.体重]), areaStyle: { opacity: 0.15 } },
+        { name: "时长", type: "bar", yAxisIndex: 1, data: rows.map(r => [r.日期, r.时长]) },
+      ],
+    });
+  }
+  drawTrend();
+  space.on("change", drawTrend);
+</script>
+\`\`\`
+
+量级差别大的两组数用两个 y 轴（\`yAxisIndex\`）；日期请用 \`type: "time"\`，不要当作类别。
+
+### 其他接口
+
+- \`space.theme()\`：当前外观下解析好的颜色和字体（\`rgb()\` 字符串，可以直接用在画布、SVG 和 ECharts 里），以及 \`dark\`、\`reducedMotion\`、\`amplitude\`。\`space.on("theme", (theme) => …)\` 在外观、强调色、排版、动效强度变化时触发。
+- \`space.open(path)\`：在笔记应用里打开范围内的一篇笔记（例如点击笔记卡片）。
+- \`space.toast(message, { action, onAction, duration })\`：页面底部的提示，例如删除后 \`space.toast("已删除 1 条", { action: "撤销", onAction: undo })\`。
+
+### 例子：光晕数字卡
+
+\`\`\`html
+<div class="space-bento">
+  <div class="space-glow space-m space-spotlight" data-hue="red">
+    <div class="space-title">本月训练</div>
+    <div class="space-subtitle" id="month-delta">　</div>
+    <div style="display: flex; gap: 32px; margin-top: 40px">
+      <div><div class="space-label">次数</div><div class="space-big"><span data-space-count id="month-count">0</span><small>次</small></div></div>
+      <div><div class="space-label">时长</div><div class="space-big"><span data-space-count id="month-minutes">0</span><small>分钟</small></div></div>
+    </div>
+  </div>
+  <div class="space-glow space-m" data-hue="green">
+    <div class="space-title">本月目标</div>
+    <div class="space-subtitle"><span id="goal-text">　</span></div>
+    <div class="space-progress space-shimmer" id="goal" style="--space-value: 0; height: 14px; margin-top: 48px"></div>
+  </div>
+</div>
+<script>
+  async function drawMonth() {
+    const month = space.today().slice(0, 7);
+    const rows = await space.query("健身/训练记录.md", { filter: r => String(r.日期).startsWith(month) });
+    const minutes = rows.reduce((sum, r) => sum + (r.时长 || 0), 0);
+    document.getElementById("month-count").setAttribute("data-space-count", rows.length);
+    document.getElementById("month-minutes").setAttribute("data-space-count", minutes);
+    document.getElementById("month-delta").textContent = rows.length ? \`最近一次 \${rows.at(-1).日期.slice(5).replace("-", "月")}日\` : "这个月还没有记录";
+    document.getElementById("goal").style.setProperty("--space-value", Math.min(100, rows.length / 16 * 100));
+    document.getElementById("goal-text").textContent = \`\${rows.length} / 16 次\`;
+  }
+  drawMonth();
+  space.on("change", drawMonth);
+</script>
+\`\`\`
+
+### 例子：自己写的组件
+
+需要内置组件没有的东西（清单、计时器、笔记卡片……）时，直接写。数据仍然只经过 \`space\` 读写：
+
+\`\`\`html
+<div class="space-tint" data-hue="teal" id="notes"></div>
+<script>
+  async function drawNotes() {
+    const notes = (await space.notes()).sort((a, b) => b.modified.localeCompare(a.modified)).slice(0, 4);
+    const box = document.getElementById("notes");
+    box.replaceChildren(...notes.map(note => {
+      const item = document.createElement("button");
+      item.className = "space-lift";
+      item.style.cssText = "display:block;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;padding:8px;border-radius:10px;cursor:pointer";
+      item.innerHTML = \`<b></b><div class="space-label"></div>\`;
+      item.querySelector("b").textContent = note.title;
+      item.querySelector(".space-label").textContent = new Date(note.modified).toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
+      item.onclick = () => space.open(note.path);
+      return item;
+    }));
+  }
+  drawNotes();
+  space.on("change", drawNotes);
+</script>
+\`\`\`
 
 ## 小组件
 
@@ -268,9 +507,11 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 ### 其他
 
 - \`space.today()\` → 今天的日期 \`YYYY-MM-DD\`（本地时间，同步返回）。
+- \`space.open(path)\`、\`space.theme()\`、\`space.load(name)\`、\`space.chart(target, option)\`、\`space.toast(message, options?)\`：见「设计与自定义」。
 
 ### 事件
 
+- \`space.on("theme", (theme) => { … })\`：外观、强调色、排版或动效强度变化时触发。
 - \`space.on("change", (paths) => { … })\`：范围内的文件变化时触发（用户在编辑器里保存、外部工具修改、\`space\` 写入都算），\`paths\` 是变化的路径。返回取消订阅的函数。组件已经自动刷新，你自己写的部分需要订阅它。
 
 ### 错误码
