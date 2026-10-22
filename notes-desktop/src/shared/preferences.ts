@@ -17,6 +17,8 @@ export type MotionIntensity = "light" | "standard" | "strong";
 export type Navigation = "double" | "single";
 /** 写入审查: 每轮结束后审查 (a card after each assistant turn) or 直接保留. */
 export type ReviewMode = "review" | "keep";
+/** 界面特效 and each of its effects: on or off. Off is the interface as it was before them. */
+export type Toggle = "on" | "off";
 
 export interface Preferences {
   colorScheme: ColorScheme;
@@ -25,6 +27,14 @@ export interface Preferences {
   motion: MotionIntensity;
   navigation: Navigation;
   assistantReview: ReviewMode;
+  /** 界面特效 (设置 › 动画): all of them; off leaves the interface exactly as without them. */
+  effects: Toggle;
+  /** 流光边框: a beam around the assistant's composer while it works, and on 让助手生成主页. */
+  effectBeam: Toggle;
+  /** 思考光球: an orb beside 正在思考… and beside the step the assistant is on. */
+  effectOrbs: Toggle;
+  /** 液态滑块: the selection in segmented controls and the side switch moves as a liquid drop. */
+  effectGooey: Toggle;
   /** 排版: a change may carry only the fields it changes; the rest stay. */
   typography: Typography;
   /**
@@ -44,6 +54,10 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   motion: ["light", "standard", "strong"],
   navigation: ["double", "single"],
   assistantReview: ["review", "keep"],
+  effects: ["on", "off"],
+  effectBeam: ["on", "off"],
+  effectOrbs: ["on", "off"],
+  effectGooey: ["on", "off"],
 };
 
 export const defaultPreferences: Preferences = {
@@ -53,6 +67,10 @@ export const defaultPreferences: Preferences = {
   motion: "strong",
   navigation: "double",
   assistantReview: "review",
+  effects: "on",
+  effectBeam: "on",
+  effectOrbs: "on",
+  effectGooey: "on",
   typography: defaultTypography,
   agentModels: {},
 };

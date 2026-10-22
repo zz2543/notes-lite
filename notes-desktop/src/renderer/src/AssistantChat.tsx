@@ -7,6 +7,7 @@ import { stoppedTurn, withEvent, type Conversation, type ConversationSummary, ty
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
+import { Beam, Orb, orbFor } from "./effects";
 import { icon } from "./tokens";
 import { TurnReview, type ReviewAction } from "./TurnReview";
 
@@ -110,6 +111,8 @@ function Timeline({ steps, live }: { steps: Step[]; live: boolean }) {
     <div className="assistant-timeline">
       <button className="timeline-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <CaretRight size={icon.caret} className="timeline-caret" />
+        {/* 界面特效 › 思考光球: the step under way, as an orb doing it. */}
+        {live && !last.done && <Orb state={orbFor(last.activity)} className="timeline-orb" />}
         <span>{live && !last.done ? `${steps.length} 个步骤 · ${summary}` : summary}</span>
       </button>
       {open && (
@@ -137,7 +140,10 @@ function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: Rev
           <Timeline key={i} steps={part.steps} live={!reply.done && i === reply.parts.length - 1} />
         ),
       )}
-      {!reply.done && reply.parts.length === 0 && <p className="reply-waiting">正在思考…</p>}
+      {!reply.done && reply.parts.length === 0 && <p className="reply-waiting">
+          <Orb state="breathing" className="waiting-orb" />
+          正在思考…
+        </p>}
       {reply.failed && (
         <p className="reply-failed" role="alert">
           {reply.failed}
@@ -317,61 +323,64 @@ export function Composer({ note, running, disabled, onSend, onStop, hasConversat
   const track = (target: HTMLTextAreaElement) => setCaret(target.selectionStart);
 
   return (
-    <div className="assistant-composer">
-      {choices.length > 0 && (
-        <ul className="mention-list" role="listbox" aria-label="提及笔记">
-          {choices.map((hit, i) => (
-            <li
-              key={hit.path}
-              role="option"
-              aria-selected={i === highlight}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                mention(hit);
-              }}
-            >
-              <span className="mention-title">{hit.title}</span>
-              {hit.folder && <span className="mention-folder">{hit.folder}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {attached.length > 0 && (
-        <ul className="attached-notes" aria-label="附带的笔记">
-          {attached.map((path) => (
-            <li key={path} className="note-chip">
-              <span>{titleOf(path)}</span>
-              <button onClick={() => remove(path)} aria-label={`不附上 ${titleOf(path)}`} title="不附上">
-                <X size={icon.caret} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <textarea
-        ref={field}
-        rows={3}
-        aria-label="给助手的消息"
-        placeholder={hasConversation ? "继续对话，@ 提及笔记" : "问问助手，@ 提及笔记"}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-          track(event.target);
-        }}
-        onSelect={(event) => track(event.currentTarget)}
-        onKeyDown={onKeyDown}
-      />
-      <div className="composer-actions">
-        {running ? (
-          <button className="icon-button small" onClick={onStop} aria-label="停止" title="停止">
-            <Stop size={icon.small} weight="fill" />
-          </button>
-        ) : (
-          <button className="composer-send" onClick={send} disabled={disabled || !text.trim()} aria-label="发送" title="发送">
-            <ArrowUp size={icon.small} weight="bold" />
-          </button>
+    // 界面特效 › 流光边框: a beam runs around the composer while the assistant works.
+    <Beam active={running} size="md" className="composer-beam">
+      <div className="assistant-composer">
+        {choices.length > 0 && (
+          <ul className="mention-list" role="listbox" aria-label="提及笔记">
+            {choices.map((hit, i) => (
+              <li
+                key={hit.path}
+                role="option"
+                aria-selected={i === highlight}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  mention(hit);
+                }}
+              >
+                <span className="mention-title">{hit.title}</span>
+                {hit.folder && <span className="mention-folder">{hit.folder}</span>}
+              </li>
+            ))}
+          </ul>
         )}
+        {attached.length > 0 && (
+          <ul className="attached-notes" aria-label="附带的笔记">
+            {attached.map((path) => (
+              <li key={path} className="note-chip">
+                <span>{titleOf(path)}</span>
+                <button onClick={() => remove(path)} aria-label={`不附上 ${titleOf(path)}`} title="不附上">
+                  <X size={icon.caret} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <textarea
+          ref={field}
+          rows={3}
+          aria-label="给助手的消息"
+          placeholder={hasConversation ? "继续对话，@ 提及笔记" : "问问助手，@ 提及笔记"}
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            track(event.target);
+          }}
+          onSelect={(event) => track(event.currentTarget)}
+          onKeyDown={onKeyDown}
+        />
+        <div className="composer-actions">
+          {running ? (
+            <button className="icon-button small" onClick={onStop} aria-label="停止" title="停止">
+              <Stop size={icon.small} weight="fill" />
+            </button>
+          ) : (
+            <button className="composer-send" onClick={send} disabled={disabled || !text.trim()} aria-label="发送" title="发送">
+              <ArrowUp size={icon.small} weight="bold" />
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </Beam>
   );
 }

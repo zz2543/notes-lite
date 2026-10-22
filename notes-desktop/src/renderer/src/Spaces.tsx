@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { SpaceDraft, SpaceScope } from "../../core";
 import type { SpaceInfo } from "../../shared/api";
 import { scopeLabel } from "../../shared/spaceScope";
+import { LiquidGroup, useVisualEffect } from "./effects";
 import { travel } from "./motion";
 import { useMotion } from "./MotionProvider";
 import { ContextMenu, Dialog, useStep, type Menu } from "./Organize";
@@ -27,21 +28,37 @@ export function SideSwitch({ mode, onChange }: { mode: SideMode; onChange(mode: 
   const { slide } = useMotion();
   const spaces = mode === "spaces";
   const Icon = spaces ? SquaresFour : Books;
+  const liquid = useVisualEffect("effectGooey");
+  const label = (
+    <motion.span key={mode} layout="position" transition={slide} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="side-switch-label">
+      {spaces ? "空间" : "资料库"}
+    </motion.span>
+  );
+  const knob = (
+    <motion.span layout="position" transition={slide} className="side-switch-knob" aria-hidden>
+      <Icon size={icon.small} weight="fill" />
+    </motion.span>
+  );
   return (
     <button
-      className={`side-switch ${spaces ? "on" : ""}`}
+      className={`side-switch ${spaces ? "on" : ""} ${liquid ? "liquid" : ""}`}
       role="switch"
       aria-checked={spaces}
       aria-label="空间"
       title={spaces ? "回到资料库" : "切换到空间"}
       onClick={() => onChange(spaces ? "library" : "spaces")}
     >
-      <motion.span key={mode} layout="position" transition={slide} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="side-switch-label">
-        {spaces ? "空间" : "资料库"}
-      </motion.span>
-      <motion.span layout="position" transition={slide} className="side-switch-knob" aria-hidden>
-        <Icon size={icon.small} weight="fill" />
-      </motion.span>
+      {/* 界面特效 › 液态滑块: the knob drawn as a drop of liquid that trails as it slides. */}
+      {liquid ? (
+        <LiquidGroup className="side-switch-liquid" fill="--side-pill" moving={knob}>
+          {label}
+        </LiquidGroup>
+      ) : (
+        <>
+          {label}
+          {knob}
+        </>
+      )}
     </button>
   );
 }

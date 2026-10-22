@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { SpaceScope } from "../../core";
 import type { SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
 import { scopeLabel } from "../../shared/spaceScope";
+import { Beam } from "./effects";
 import { useMotion } from "./MotionProvider";
 import { useOverlayOpen } from "./Organize";
 import { SelectionPill } from "./SelectionPill";
@@ -142,9 +143,12 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, headEnd
       ) : (
         <div className="space-empty space-no-page">
           <p>这个空间还没有主页。</p>
-          <button className="primary" onClick={onGenerate}>
-            让助手生成主页
-          </button>
+          {/* 界面特效 › 流光边框: the one thing to do here glows softly from inside. */}
+          <Beam active size="pulse-inner" className="generate-beam">
+            <button className="primary" onClick={onGenerate}>
+              让助手生成主页
+            </button>
+          </Beam>
           <p>
             助手栏会打开并开始编写，写好后显示在这里。也可以
             <button className="link-button" onClick={() => void copyPrompt()}>

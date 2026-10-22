@@ -1,0 +1,62 @@
+/* 界面特效 (effects.tsx): where the design libraries' effects meet the app's own styles. Values are the
+   variables in tokens.css. */
+
+/* 界面特效 › 液态滑块: the pill as one drop of liquid under the segments (effects.tsx LiquidPill). The
+   drop itself is transparent; the liquid drawn under it is the pill. */
+.segmented.liquid,
+.side-switch.liquid {
+  position: relative;
+  isolation: isolate;
+}
+.liquid-pill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.liquid-pill-drop {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+/* The side switch's group lays out as the switch did: the side's name beside the knob, the two
+   changing ends on 空间. The knob itself turns transparent; the liquid under it is the knob. */
+.side-switch-liquid {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  flex-direction: inherit;
+}
+.side-switch.liquid .side-switch-knob {
+  background: transparent;
+}
+
+/* 流光边框 around the assistant's composer: the wrapper carries the composer's shadow, so the beam's
+   clipping cannot cut it; idle, it clips nothing, so the @ mention list can rise above it. */
+.composer-beam {
+  flex: none;
+  border-radius: var(--item-radius);
+  box-shadow: var(--pill-shadow);
+}
+.composer-beam > .assistant-composer {
+  box-shadow: none;
+}
+.composer-beam:not([data-active]):not([data-fading]) {
+  overflow: visible;
+}
+
+/* 流光边框 inside 让助手生成主页: the wrapper is the button's size and shape. */
+.generate-beam {
+  display: inline-flex;
+  border-radius: var(--icon-button-radius);
+}
+
+/* 思考光球 beside 正在思考… and beside the step under way. */
+.waiting-orb,
+.timeline-orb {
+  flex: none;
+}
+.reply-waiting:has(.waiting-orb) {
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+}
