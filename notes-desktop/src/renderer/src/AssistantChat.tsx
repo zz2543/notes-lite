@@ -272,6 +272,8 @@ function useMentions(query: string | null) {
 export interface ComposerProps {
   /** The open note, attached each turn unless taken off. */
   note: string | null;
+  /** While a turn runs, the notes it was sent with: shown instead of the open note, which may change. */
+  turnNotes?: string[] | undefined;
   running: boolean;
   /** Something stands in the way of sending, such as no agent installed. */
   disabled: boolean;
@@ -283,7 +285,7 @@ export interface ComposerProps {
 }
 
 /** The input: what to ask, with the open note attached (it can be taken off) and notes mentioned with @. */
-export function Composer({ note, running, disabled, onSend, onStop, hasConversation, focusRequest = 0 }: ComposerProps) {
+export function Composer({ note, turnNotes, running, disabled, onSend, onStop, hasConversation, focusRequest = 0 }: ComposerProps) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [dropped, setDropped] = useState<string | null>(null);
@@ -355,20 +357,36 @@ export function Composer({ note, running, disabled, onSend, onStop, hasConversat
     <div className="composer-stack">
       {/* The notes going with the message float above it as capsules: take one off, or add another. */}
       <div className="composer-chips">
-        {attached.length > 0 && (
-          <ul className="attached-notes" aria-label="附带的笔记">
-            {attached.map((path) => (
-              <li key={path} className="note-chip" title={path}>
-                <FileText size={icon.caret} className="note-chip-icon" aria-hidden />
-                <span className="note-chip-title">{titleOf(path)}</span>
-                <button onClick={() => remove(path)} aria-label={`不附上 ${titleOf(path)}`} title="不附上">
-                  <X size={icon.caret} />
-                </button>
-              </li>
-            ))}
-          </ul>
+        {turnNotes ? (
+          // The turn under way keeps the notes it was sent with, whatever is opened meanwhile.
+          turnNotes.length > 0 && (
+            <ul className="attached-notes" aria-label="这一轮附带的笔记">
+              {turnNotes.map((path) => (
+                <li key={path} className="note-chip locked" title={`${path}（这一轮正在用；结束后换成当前打开的笔记）`}>
+                  <FileText size={icon.caret} className="note-chip-icon" aria-hidden />
+                  <span className="note-chip-title">{titleOf(path)}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : (
+          <>
+            {attached.length > 0 && (
+              <ul className="attached-notes" aria-label="附带的笔记">
+                {attached.map((path) => (
+                  <li key={path} className="note-chip" title={path}>
+                    <FileText size={icon.caret} className="note-chip-icon" aria-hidden />
+                    <span className="note-chip-title">{titleOf(path)}</span>
+                    <button onClick={() => remove(path)} aria-label={`不附上 ${titleOf(path)}`} title="不附上">
+                      <X size={icon.caret} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <NotePicker attached={attached} onPick={add} />
+          </>
         )}
-        <NotePicker attached={attached} onPick={add} />
       </div>
       <div className="assistant-composer">
         {choices.length > 0 && (

@@ -332,6 +332,7 @@ export function AssistantColumn(props: AssistantColumnProps) {
         {installed && installed.length > 0 && (
           <Composer
             note={note}
+            turnNotes={assistant.running ? conversation?.messages.findLast((message) => message.role === "user")?.notes : undefined}
             running={assistant.running}
             disabled={!agent || Boolean(agentGone)}
             hasConversation={conversation !== null}

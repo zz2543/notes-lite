@@ -1458,6 +1458,10 @@ button.assistant-model:hover,
   font-size: var(--text-meta);
   line-height: var(--icon-button-small);
 }
+.note-chip.locked {
+  padding-right: var(--row-padding);
+  color: var(--side-muted);
+}
 .note-chip-icon {
   flex: none;
   color: var(--side-muted);

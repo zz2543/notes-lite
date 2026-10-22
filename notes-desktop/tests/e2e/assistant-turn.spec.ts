@@ -49,10 +49,18 @@ test("a turn with the open note: its folder is the working directory, the reply 
   await timeline.click();
   await expect(conversation.getByRole("list", { name: "时间线" }).getByRole("listitem")).toHaveText(["读取 周一.md", "写入 周一.md"]);
 
+  // Opening another note meanwhile leaves the turn's notes as they were sent; the next turn takes the new one.
+  await openNote(page, "笔记库", "随记");
+  await expect(column(page).getByRole("list", { name: "这一轮附带的笔记" }).getByRole("listitem")).toHaveText(["周一"]);
+  await expect(column(page).getByRole("list", { name: "附带的笔记", exact: true })).toHaveCount(0);
+
   await writeFile(hold, "");
   await expect(conversation).toContainText("已经加上了跑步。");
   await expect(column(page).getByRole("img", { name: /助手形象：(完成|待命)/ })).toBeVisible();
   await expect(column(page).getByRole("img", { name: "助手形象：待命" })).toBeVisible({ timeout: 5000 });
+  await expect(column(page).getByRole("list", { name: "这一轮附带的笔记" })).toHaveCount(0);
+  await expect(attached.getByRole("listitem")).toHaveText(["随记"]);
+  await openNote(page, "日记", "周一");
   // The note shows what the agent wrote.
   await expect(page.getByLabel("笔记正文")).toContainText("跑步");
 
