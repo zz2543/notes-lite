@@ -53,12 +53,3 @@ export function SelectionPill({ group }: { group: "side" | "list" | "space" }) {
 
   return <span ref={ref} className={`pill ${group}`} data-testid="selection-pill" aria-hidden />;
 }
-
-/**
- * 选中底板 in the folder tree (2026-10-22 用户反馈, from the reference video): every row keeps a short white
- * tile under its icon; the chosen row's tile stretches out to the row's end on 滑移 while the one left
- * shrinks back to its icon, both at once.
- */
-export function RowTile({ on }: { on: boolean }) {
-  return <span className={`pill side tile ${on ? "on" : ""}`} data-testid={on ? "selection-pill" : undefined} aria-hidden />;
-}

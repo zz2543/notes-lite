@@ -2,7 +2,7 @@ import { CaretRight, FileText, Folder, FolderOpen, NotePencil } from "@phosphor-
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import type { FolderEntry, NoteEntry } from "../../core";
 import { useFolder } from "./ipc";
-import { RowTile } from "./SelectionPill";
+import { SelectionPill } from "./SelectionPill";
 import { icon } from "./tokens";
 import { SelectedIcon } from "./SelectedIcon";
 
@@ -96,7 +96,7 @@ function NoteRow({ note, depth, open, onOpen, onMenu }: NoteRows & { note: NoteE
         onMenu?.(note.path, note.title, event);
       }}
     >
-      <RowTile on={isOpen} />
+      {isOpen && <SelectionPill group="side" />}
       <span className="caret" />
       <SelectedIcon off={FileText} selected={isOpen} />
       <span className="label">{note.title}</span>
@@ -142,7 +142,7 @@ function TreeRow({ path, name, depth, expandable, selected, expanded, onActivate
         onMenu?.(path, name, event);
       }}
     >
-      <RowTile on={hasPill} />
+      {hasPill && <SelectionPill group="side" />}
       <span
         className="caret"
         role={expandable ? "button" : undefined}
