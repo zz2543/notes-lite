@@ -1,7 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { notesInScope, spaceLibrary, spaceRequests } from "../../src/core";
+import { notesInScope, spaceLibrary, spaceRequests, spacesFolder } from "../../src/core";
 import { library } from "../support/library";
 
 // 新建示例空间 (ticket 31): a space named 组件示例 over a folder of its own with four sample notes, and a
@@ -81,5 +81,17 @@ describe("示例空间", () => {
     const third = await spaces.createExample(now);
     expect(third.name).toBe("组件示例 3");
     expect((await spaces.spaces()).map((s) => s.name)).toEqual(["组件示例 2", "组件示例 3"]);
+  });
+
+  it("leaves nothing behind when its homepage cannot be written: no space, no folder", async () => {
+    const root = await library({});
+    // Where the homepage is written first, before it takes the page's place: a folder, so the write fails.
+    await mkdir(join(root, ...spacesFolder.split("/"), `组件示例.html.${process.pid}.saving`), { recursive: true });
+    const spaces = spaceLibrary(root);
+
+    await expect(spaces.createExample(now)).rejects.toThrow();
+    expect((await spaces.spaces()).map((s) => s.name)).toEqual([]);
+    await expect(access(join(root, ...spacesFolder.split("/"), "组件示例.html"))).rejects.toThrow();
+    await expect(access(join(root, "组件示例"))).rejects.toThrow();
   });
 });

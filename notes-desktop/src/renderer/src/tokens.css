@@ -193,18 +193,18 @@
   --space-widget-radius: 18px;
   --space-muted: color-mix(in srgb, var(--card-fg) 64%, var(--space-widget));
   --space-scrollbar: color-mix(in srgb, var(--card-fg) 24%, transparent);
-  /* Spacing in steps of 4 and 8. */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
+  /* Spacing in steps of 4 and 8: --gap-*, apart from the --space-* names a homepage reads as the space kit's. */
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 20px;
+  --gap-6: 24px;
+  --gap-8: 32px;
   --space-page-inline: 40px;
   --space-grid-min: 176px;
   --space-title-size: 24px;
-  --space-title-padding: var(--space-6) var(--space-page-inline) var(--space-1);
+  --space-title-padding: var(--gap-6) var(--space-page-inline) var(--gap-1);
 }
 
 /* 颜色 · 深色: its own set, not the light one inverted. */

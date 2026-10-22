@@ -93,8 +93,8 @@ export function examplePage(folder: string): string {
 
 <style>
   /* 复制写法: the markup under a card, small and quiet, from the style kit's own values. */
-  .space-snippet { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
-  .space-snippet pre { align-self: stretch; margin: 0; padding: var(--space-2) var(--space-3);
+  .space-snippet { display: flex; flex-direction: column; align-items: flex-end; gap: var(--gap-2); margin-top: var(--gap-3); }
+  .space-snippet pre { align-self: stretch; margin: 0; padding: var(--gap-2) var(--gap-3);
     border-radius: var(--space-control-radius); background: var(--space-bg); color: var(--space-muted); font-size: var(--code-size); }
   .space-snippet code { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

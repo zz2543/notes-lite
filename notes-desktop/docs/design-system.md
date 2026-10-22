@@ -91,11 +91,11 @@
 | `--space-widget-radius` | 18px | 同左 | 组件卡片圆角 |
 | `--space-muted` | `--card-fg` 64% 混入 `--space-widget` | 同左 | 灰字：主页里的说明、标题区的范围与三个操作 |
 | `--space-scrollbar` | `--card-fg` 的 24% | 同左 | 主页滚动条的滑块（`scrollbar-width: thin`，轨道透明） |
-| `--space-1` … `--space-8` | 4、8、12、16、20、24、32px | 同左 | 间距，只取 4 与 8 的倍数；卡片内边距 16 × 20px，网格间距 12px |
+| `--gap-1` … `--gap-8` | 4、8、12、16、20、24、32px | 同左 | 间距，只取 4 与 8 的倍数；卡片内边距 16 × 20px，网格间距 12px |
 | `--space-page-inline` | 40px | 同左 | 主页与标题区的左右留白 |
 | `--space-grid-min` | 176px | 同左 | 网格（`space-grid`）里一格的最小宽度 |
 | `--space-title-size` | 24px | 同左 | 标题区的空间名称（字重 `--heading-weight`，行高 1.25，字距 −0.01em） |
-| `--space-title-padding` | `--space-6` `--space-page-inline` `--space-1` | 同左 | 标题区（图标、名称、范围与三个操作）的内边距 |
+| `--space-title-padding` | `--gap-6` `--space-page-inline` `--gap-1` | 同左 | 标题区（图标、名称、范围与三个操作）的内边距 |
 
 ## 材质
 

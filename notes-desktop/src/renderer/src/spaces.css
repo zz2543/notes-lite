@@ -311,7 +311,7 @@
   flex: none;
   display: flex;
   align-items: flex-end;
-  gap: var(--space-4);
+  gap: var(--gap-4);
   padding: var(--space-title-padding);
 }
 .space-title-text {
@@ -329,10 +329,10 @@
   white-space: nowrap;
 }
 .space-title-icon {
-  margin-right: var(--space-2);
+  margin-right: var(--gap-2);
 }
 .space-title-scope {
-  margin: var(--space-1) 0 0;
+  margin: var(--gap-1) 0 0;
   color: var(--space-muted);
   font-size: var(--text-path);
   overflow: hidden;
@@ -342,7 +342,7 @@
 .space-title-tools {
   flex: none;
   display: flex;
-  gap: var(--space-1);
+  gap: var(--gap-1);
 }
 .space-title-button {
   display: inline-flex;

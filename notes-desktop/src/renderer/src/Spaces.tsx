@@ -282,7 +282,6 @@ export function SpacePanel({ tools, libraryName, selected, onSelect, notify, onG
   );
 }
 
-
 interface SpaceDialogProps {
   title: string;
   confirm: string;

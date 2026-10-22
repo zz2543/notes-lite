@@ -68,8 +68,6 @@ export function scopeContains(scope: SpaceScope, path: string): boolean {
   return scope.library || scope.folders.some((folder) => folder === "" || path === folder || path.startsWith(`${folder}/`));
 }
 
-export { scopeLabel };
-
 /**
  * Of the paths the library watcher reported, those a homepage hears of through `space.on("change")`:
  * visible ones inside its scope. "" (something changed, the system can't say what) always passes.
@@ -353,18 +351,22 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
     let name = exampleSpaceName;
     for (let n = 2; (await exists(fileOf(name))) || (await exists(join(root, name))); n++) name = `${exampleSpaceName} ${n}`;
     await mkdir(join(root, name));
-    let created: Space;
+    let created: Space | undefined;
     try {
       for (const [file, text] of Object.entries(exampleNotes(now))) await writeFile(join(root, name, file), text, { encoding: "utf8", flag: "wx" });
       created = await create({ name, icon: exampleSpaceIcon, scope: { library: false, folders: [name] } });
+      const html = `${created.html}${examplePage(name)}`;
+      await writeAtomic(fileOf(name), html);
+      return parseSpace(name, html);
     } catch (error) {
-      // Nothing half made is left behind: the folder was new, and holds only what was just written.
+      // Nothing half made is left behind: the folder and the space were new, and hold only what was just written.
+      if (created) {
+        await rm(fileOf(name), { force: true });
+        await saveOrder((await order()).filter((n) => n !== name));
+      }
       await rm(join(root, name), { recursive: true, force: true });
       throw error;
     }
-    const html = `${created.html}${examplePage(name)}`;
-    await writeAtomic(fileOf(name), html);
-    return parseSpace(name, html);
   };
 
   const update = async (name: string, draft: SpaceDraft): Promise<Space> => {
