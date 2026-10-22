@@ -4,7 +4,7 @@
 // interface's TypeScript declarations.
 
 /** Bumped whenever the text changes. */
-export const spaceGuideVersion = 4;
+export const spaceGuideVersion = 5;
 
 /** The page interface and components as TypeScript declarations, as the guide carries them. */
 export const spaceTypes = `/** 字段类型：整列都是数字为 number，整列都是 YYYY-MM-DD 为 date，其余为 text。 */
@@ -122,6 +122,13 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 5. **不要修改空间文件开头的 \`space-scope\`。** 范围由用户在笔记应用里设置；页面试图改变范围的写入会被拒绝。
 6. 所有写入都会进入用户可以逐条撤销的操作记录，删除的笔记会进废纸篓。写入要克制：只写用户需要的数据。
 
+## 工作方式
+
+- **只读需要的东西：** 这份说明、空间文件、提示词里列出的进展记录表。想了解主题，最多浏览几篇笔记；不要逐篇读完范围内的笔记。范围内的对比表、速查表等内容表格不是进展记录，不要做成主页内容。
+- **这份说明就是全部接口文档。** 不要打开或解包笔记应用的程序文件去找组件的行为。常被问到的：记录表还不存在时，组件显示空状态，\`space.query\` 返回空数组，第一次写入时自动新建；\`data-space-count\` 在元素出现或属性变化时滚动到新值；\`space.chart\` 跟随主题和窗口大小自动更新。
+- **不要自建测试页面，也不要用浏览器检查。** 写好空间文件后笔记应用会立即显示主页，出错会显示在主页顶部的提示条里，用户会告诉你。
+- **写好空间文件就结束**，简短说明主页包含什么。
+
 ## 空间文件
 
 每个空间是笔记库里的 \`.notes/空间/<名称>.html\`。开头是笔记应用写的 meta，之后是空间主页正文：
@@ -185,6 +192,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 | \`--space-radius\` | 卡片圆角 |
 | \`--space-shadow\` | 卡片阴影 |
 | \`--space-font\` / \`--space-heading-font\` / \`--space-mono\` | 正文字体 / 标题字体 / 等宽字体（跟随排版设置） |
+| \`--space-ui-font\` | 界面字体（无衬线，和笔记应用的界面一致）；正文字体可能是衬线体，仪表盘式的主页可以在 \`body\` 上改用它 |
 | \`--space-font-size\` / \`--space-leading\` | 正文字号 / 行距（跟随排版设置） |
 | \`--space-chart-1\` … \`--space-chart-6\` | 图表系列色 |
 | \`--space-pop-duration\` / \`--space-pop-easing\` | 「轻弹」动效（悬停、按压），用于 \`transition\` |
@@ -222,6 +230,8 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 - 窗口变窄时不挤、不溢出（\`.space-bento\` 会自动变成 2 列、1 列；自己写的布局请用 \`minmax(0, 1fr)\`、\`min-width: 0\`）。
 - 数字照实显示，单位清楚；日期用中文习惯（10月22日）。
 - 动效跟随 \`--space-motion-amplitude\`，并在 \`@media (prefers-reduced-motion: reduce)\` 下停止。
+- 图表和日历的时间跨度跟着数据走：只有几天的记录时不要画 12 周或一整年的空格子，可以从第一条记录开始，或显示最近 7–30 天。
+- 录入表单在窄卡片里也整齐：输入框可以缩小（\`min-width: 0\`、\`flex: 1 1 8em\`），按钮和输入框留在同一行或整体换行，占位文字不要被截断。
 - 页面不报错（错误会显示在页面顶部）。
 
 ### 色相

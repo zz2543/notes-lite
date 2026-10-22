@@ -28,6 +28,8 @@
   --space-font: var(--body-font);
   --space-heading-font: var(--heading-font);
   --space-mono: var(--code-font);
+  /* The interface font, for dashboard-like pages that should read like the app rather than a note. */
+  --space-ui-font: var(--font-ui, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif);
   --space-font-size: var(--body-size);
   --space-leading: var(--body-leading);
   --space-disabled-opacity: var(--disabled-opacity);

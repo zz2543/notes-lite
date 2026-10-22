@@ -72,6 +72,8 @@ describe("空间库", () => {
         "# 训练记录\n\n## 卧推\n\n| 日期 | 动作 | 重量 | 组数 |\n|---|---|---|---|\n| 2026-10-18 | 卧推 | 60 | 5 |\n\n```\n| 不是 | 表 |\n|---|---|\n```\n",
       "健身/说明.md": "| 只是一行竖线 |\n\n正文",
       "日记/2026-10.md": "| 日期 | 时长 |\n| --- | --- |\n",
+      "健身/对比.md": "## 小批次 vs 大批次\n\n| 特性 | 小批次 | 大批次 |\n|---|---|---|\n| 噪声 | 大 | 小 |\n",
+      "健身/体重.md": "| 称重 | 公斤 |\n|---|---|\n| 2026-10-01 | 70 |\n",
       "别处/无关.md": "| 字段 |\n|---|\n",
       ".notes/空间/旧.html": "| 隐藏 |\n|---|\n",
     });
@@ -85,9 +87,14 @@ describe("空间库", () => {
     expect(prompt).toContain("健身/训练记录.md#卧推：日期 | 动作 | 重量 | 组数");
     expect(prompt).toContain("日记/2026-10.md：日期 | 时长");
     expect(prompt, "tables outside the scope are not offered").not.toContain("别处");
-    expect(prompt, "tables inside code fences are not record tables").not.toContain("不是");
+    expect(prompt, "tables inside code fences are not record tables").not.toContain("不是 | 表");
     expect(prompt, "a lone row of bars is not a table").not.toContain("只是一行竖线");
     expect(prompt).not.toContain("隐藏");
+    expect(prompt, "a dated cell makes a record table").toContain("健身/体重.md：称重 | 公斤");
+    expect(prompt, "content tables are not listed as records").not.toContain("小批次");
+    expect(prompt).toContain("另有 1 个内容表格");
+    expect(prompt, "the agent is told how to work").toContain("不要打开或解包笔记应用的程序文件");
+    expect(prompt).toContain("不要自建测试页面");
   });
 
   it("offers a whole-library space every table, and says so when there are none", async () => {

@@ -70,14 +70,22 @@ export function recordTables(text: string): RecordTable[] {
  * with no heading) with their header. A table is addressable when it is the note's first, or the
  * first under its heading.
  */
-export function addressableTables(path: string, text: string): { source: string; header: string[] }[] {
+export function addressableTables(path: string, text: string): { source: string; header: string[]; dated: boolean }[] {
   const tables = recordTables(text);
   return tables.flatMap((table, index) => {
     const addressable = index === 0 || (table.heading !== null && tables.find((t) => t.heading === table.heading) === table);
     if (!addressable) return [];
     const source = index === 0 && table.heading === null ? path : `${path}${table.heading !== null ? `#${table.heading}` : ""}`;
-    return [{ source, header: table.header }];
+    return [{ source, header: table.header, dated: isDated(table) }];
   });
+}
+
+/**
+ * Whether a table looks like a log of progress — a date/time column or a `YYYY-MM-DD` cell —
+ * rather than content (a comparison, a cheat sheet) that happens to be a table.
+ */
+function isDated(table: RecordTable): boolean {
+  return table.header.some((cell) => /日期|时间|date|day|time/i.test(cell)) || table.rows.some((row) => row.some((cell) => /^\d{4}-\d{2}-\d{2}/.test(cell.trim())));
 }
 
 // --- typed records -------------------------------------------------------------------------

@@ -399,7 +399,7 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
   const reorder = (names: string[]) => saveOrder(names);
 
   const tablesIn = async (scope: SpaceScope) => {
-    const tables: { source: string; header: string[] }[] = [];
+    const tables: { source: string; header: string[]; dated: boolean }[] = [];
     for (const path of await notesInScope(root, scope)) {
       const text = await readFile(join(root, ...path.split("/")), "utf8").catch(() => "");
       tables.push(...addressableTables(path, text));
@@ -409,7 +409,10 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
 
   const prompt = async (space: Space) => {
     await installGuide();
-    const tables = await tablesIn(space.scope);
+    const all = await tablesIn(space.scope);
+    const records = all.filter((table) => table.dated);
+    const shown = records.slice(0, 30);
+    const others = all.length - records.length;
     return [
       `请为笔记应用编写“${space.name}”空间的空间主页。`,
       "",
@@ -417,12 +420,20 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
       `- 空间文件：${fileOf(space.name)}（保留开头的 meta，在其后写主页；不要修改 space-scope）`,
       `- 空间名称：${space.name}`,
       `- 范围：${scopeLabel(space.scope)}`,
-      "- 范围内现有记录表：",
-      ...(tables.length === 0
-        ? ["  - 暂无。可以用 space-quick-add 或 space.append 指定目标笔记和表头，笔记应用会自动新建记录表。"]
-        : tables.map((table) => `  - ${table.source}：${table.header.join(" | ")}`)),
+      "- 范围内的进展记录表：",
+      ...(shown.length === 0
+        ? ["  - 暂无。请设计一张记录表（例如 学习日志.md#每日学习：日期 | 内容 | 时长），用 space-quick-add 或 space.append 写入，笔记应用会自动新建；表还不存在时组件会显示空状态。"]
+        : shown.map((table) => `  - ${table.source}：${table.header.join(" | ")}`)),
+      ...(records.length > shown.length ? [`  - 另有 ${records.length - shown.length} 张，未列出。`] : []),
+      ...(others > 0 ? [`- 另有 ${others} 个内容表格（对比、速查等），不是进展记录，不必读取，也不要做成主页内容。`] : []),
       "",
       "请围绕我每天的进展设计这个主页：用美观的图表展示进展，并提供快捷录入。数据只能存进范围内的记录表。",
+      "",
+      "工作方式：",
+      "- 只需阅读编写说明、空间文件和上面列出的记录表；想了解主题，最多浏览几篇笔记，不要逐篇读完范围内的笔记。",
+      "- 编写说明已写明组件和 space 接口的全部行为，不要打开或解包笔记应用的程序文件。",
+      "- 不要自建测试页面或用浏览器检查；写好空间文件后笔记应用会立即显示，出错会显示在主页顶部的提示条里。",
+      "- 写好空间文件就结束，简短说明主页包含什么。",
     ].join("\n");
   };
 
