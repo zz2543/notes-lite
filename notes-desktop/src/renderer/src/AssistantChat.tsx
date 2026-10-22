@@ -1,4 +1,4 @@
-import { ArrowUp, CaretRight, Stop, X } from "@phosphor-icons/react";
+import { ArrowUp, CaretRight, Check, FileText, MagnifyingGlass, PencilSimple, Plus, Sparkle, Stop, TerminalWindow, Warning, X, type Icon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
@@ -7,7 +7,7 @@ import { stoppedTurn, withEvent, type Conversation, type ConversationSummary, ty
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
-import { MarkdownView } from "./MarkdownView";
+import { Beam, Orb, orbFor } from "./effects";
 import { icon } from "./tokens";
 import { TurnReview, type ReviewAction } from "./TurnReview";
 
@@ -102,23 +102,56 @@ export type AssistantState = ReturnType<typeof useAssistant>;
 const verbs: Record<AgentActivity, string> = { reading: "读取", searching: "搜索", writing: "写入", running: "运行", thinking: "" };
 const stepText = (step: Step) => [verbs[step.activity] || step.name, step.detail].filter(Boolean).join(" ");
 
+const stepIcons: Record<AgentActivity, Icon> = { reading: FileText, searching: MagnifyingGlass, writing: PencilSimple, running: TerminalWindow, thinking: Sparkle };
+const stepKinds: AgentActivity[] = ["running", "reading", "searching", "writing", "thinking"];
+
+/** What a folded timeline did, by kind: 运行 3 · 读取 1. */
+const tally = (steps: Step[]) =>
+  stepKinds
+    .map((kind) => [verbs[kind] || "思考", steps.filter((step) => step.activity === kind).length] as const)
+    .filter(([, count]) => count > 0)
+    .map(([verb, count]) => `${verb} ${count}`)
+    .join(" · ");
+
+/** One step: what kind it is, and what it worked on — a command in code type, cut to one line until opened. */
+function StepRow({ step }: { step: Step }) {
+  const [open, setOpen] = useState(false);
+  const Glyph = step.failed ? Warning : stepIcons[step.activity];
+  const state = step.failed ? "failed" : step.done ? "done" : "running";
+  const verb = verbs[step.activity] || step.name;
+  const detail = step.detail.replace(/\s+/g, " ").trim();
+  return (
+    <li className={`timeline-step ${state}${open ? " open" : ""}`}>
+      <button className="step-row" aria-expanded={detail ? open : undefined} title={open ? undefined : stepText(step)} onClick={() => setOpen(!open)}>
+        <Glyph size={icon.caret} className="step-icon" aria-hidden />
+        <span className="step-verb">{verb}</span>{detail && " "}
+        {detail && <span className={step.activity === "running" ? "step-detail code" : "step-detail"}>{open ? step.detail : detail}</span>}
+        {step.done && !step.failed && <Check size={icon.caret} className="step-done" aria-hidden />}
+      </button>
+    </li>
+  );
+}
+
 /** Consecutive tool calls, folded to one line; open, each call on a line of its own. */
 function Timeline({ steps, live }: { steps: Step[]; live: boolean }) {
   const [open, setOpen] = useState(false);
   const last = steps.at(-1)!;
-  const summary = live && !last.done ? `正在${stepText(last)}` : `${steps.length} 个步骤`;
+  const working = live && !last.done;
+  const failed = steps.filter((step) => step.failed).length;
   return (
     <div className="assistant-timeline">
       <button className="timeline-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <CaretRight size={icon.caret} className="timeline-caret" />
-        <span>{live && !last.done ? `${steps.length} 个步骤 · ${summary}` : summary}</span>
+        {/* 界面特效 › 思考光球: the step under way, as an orb doing it. */}
+        {working && <Orb state={orbFor(last.activity)} className="timeline-orb" />}
+        <span>{working ? `${steps.length} 个步骤 · 正在${stepText(last)}` : `${steps.length} 个步骤`}</span>
+        {!working && <span className="timeline-tally">{tally(steps)}</span>}
+        {!working && failed > 0 && <span className="timeline-failed">{failed} 个失败</span>}
       </button>
       {open && (
         <ol className="timeline-steps" aria-label="时间线">
           {steps.map((step) => (
-            <li key={step.id} className={step.failed ? "failed" : step.done ? "" : "running"}>
-              {stepText(step)}
-            </li>
+            <StepRow key={step.id} step={step} />
           ))}
         </ol>
       )}
@@ -131,12 +164,17 @@ function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: Rev
     <div className="assistant-reply">
       {reply.parts.map((part, i) =>
         part.kind === "text" ? (
-          <MarkdownView key={i} className="reply-text" text={part.text} />
+          <p key={i} className="reply-text">
+            {part.text}
+          </p>
         ) : (
           <Timeline key={i} steps={part.steps} live={!reply.done && i === reply.parts.length - 1} />
         ),
       )}
-      {!reply.done && reply.parts.length === 0 && <p className="reply-waiting">正在思考…</p>}
+      {!reply.done && reply.parts.length === 0 && <p className="reply-waiting">
+          <Orb state="breathing" className="waiting-orb" />
+          正在思考…
+        </p>}
       {reply.failed && (
         <p className="reply-failed" role="alert">
           {reply.failed}
@@ -315,62 +353,151 @@ export function Composer({ note, running, disabled, onSend, onStop, hasConversat
   };
   const track = (target: HTMLTextAreaElement) => setCaret(target.selectionStart);
 
+  const add = (path: string) => {
+    setMentioned((now) => (now.includes(path) ? now : [...now, path]));
+    if (path === note) setDropped(null);
+  };
+
   return (
-    <div className="assistant-composer">
-      {choices.length > 0 && (
-        <ul className="mention-list" role="listbox" aria-label="提及笔记">
-          {choices.map((hit, i) => (
-            <li
-              key={hit.path}
-              role="option"
-              aria-selected={i === highlight}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                mention(hit);
-              }}
-            >
-              <span className="mention-title">{hit.title}</span>
-              {hit.folder && <span className="mention-folder">{hit.folder}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {attached.length > 0 && (
-        <ul className="attached-notes" aria-label="附带的笔记">
-          {attached.map((path) => (
-            <li key={path} className="note-chip">
-              <span>{titleOf(path)}</span>
-              <button onClick={() => remove(path)} aria-label={`不附上 ${titleOf(path)}`} title="不附上">
-                <X size={icon.caret} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <textarea
-        ref={field}
-        rows={3}
-        aria-label="给助手的消息"
-        placeholder={hasConversation ? "继续对话，@ 提及笔记" : "问问助手，@ 提及笔记"}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-          track(event.target);
-        }}
-        onSelect={(event) => track(event.currentTarget)}
-        onKeyDown={onKeyDown}
-      />
-      <div className="composer-actions">
-        {running ? (
-          <button className="icon-button small" onClick={onStop} aria-label="停止" title="停止">
-            <Stop size={icon.small} weight="fill" />
-          </button>
-        ) : (
-          <button className="composer-send" onClick={send} disabled={disabled || !text.trim()} aria-label="发送" title="发送">
-            <ArrowUp size={icon.small} weight="bold" />
-          </button>
+    <div className="composer-stack">
+      {/* The notes going with the message float above it as capsules: take one off, or add another. */}
+      <div className="composer-chips">
+        {attached.length > 0 && (
+          <ul className="attached-notes" aria-label="附带的笔记">
+            {attached.map((path) => (
+              <li key={path} className="note-chip" title={path}>
+                <FileText size={icon.caret} className="note-chip-icon" aria-hidden />
+                <span className="note-chip-title">{titleOf(path)}</span>
+                <button onClick={() => remove(path)} aria-label={`不附上 ${titleOf(path)}`} title="不附上">
+                  <X size={icon.caret} />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
+        <NotePicker attached={attached} onPick={add} />
       </div>
+      {/* 界面特效 › 流光边框: a beam runs around the composer while the assistant works. */}
+      <Beam active={running} size="md" className="composer-beam">
+        <div className="assistant-composer">
+          {choices.length > 0 && (
+            <ul className="mention-list" role="listbox" aria-label="提及笔记">
+              {choices.map((hit, i) => (
+                <li
+                  key={hit.path}
+                  role="option"
+                  aria-selected={i === highlight}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    mention(hit);
+                  }}
+                >
+                  <span className="mention-title">{hit.title}</span>
+                  {hit.folder && <span className="mention-folder">{hit.folder}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <textarea
+            ref={field}
+            rows={3}
+            aria-label="给助手的消息"
+            placeholder={hasConversation ? "继续对话，@ 提及笔记" : "问问助手，@ 提及笔记"}
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              track(event.target);
+            }}
+            onSelect={(event) => track(event.currentTarget)}
+            onKeyDown={onKeyDown}
+          />
+          <div className="composer-actions">
+            {running ? (
+              <button className="icon-button small" onClick={onStop} aria-label="停止" title="停止">
+                <Stop size={icon.small} weight="fill" />
+              </button>
+            ) : (
+              <button className="composer-send" onClick={send} disabled={disabled || !text.trim()} aria-label="发送" title="发送">
+                <ArrowUp size={icon.small} weight="bold" />
+              </button>
+            )}
+          </div>
+        </div>
+      </Beam>
+    </div>
+  );
+}
+
+/** 提及笔记: a capsule that opens a search for one more note to send with the message. */
+function NotePicker({ attached, onPick }: { attached: string[]; onPick(path: string): void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const hits = useMentions(open ? query : null).filter((hit) => !attached.includes(hit.path));
+  useEffect(() => {
+    setHighlight(0);
+  }, [query]);
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+  const pick = (hit: SearchHit) => {
+    onPick(hit.path);
+    close();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+    if (step && hits.length > 0) {
+      event.preventDefault();
+      setHighlight((highlight + step + hits.length) % hits.length);
+    } else if (event.key === "Enter" && hits[highlight]) {
+      event.preventDefault();
+      pick(hits[highlight]);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    }
+  };
+  return (
+    <div className="note-picker">
+      <button className="note-chip note-chip-add" aria-expanded={open} aria-label="提及笔记…" title="提及笔记" onClick={() => (open ? close() : setOpen(true))}>
+        <Plus size={icon.caret} aria-hidden />
+        {attached.length === 0 && <span>提及笔记</span>}
+      </button>
+      {open && (
+        <div className="mention-picker">
+          <input
+            autoFocus
+            aria-label="搜索要提及的笔记"
+            placeholder="搜索笔记"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={close}
+          />
+          {hits.length > 0 ? (
+            <ul className="mention-list inline" role="listbox" aria-label="选择笔记">
+              {hits.map((hit, i) => (
+                <li
+                  key={hit.path}
+                  role="option"
+                  aria-selected={i === highlight}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    pick(hit);
+                  }}
+                >
+                  <span className="mention-title">{hit.title}</span>
+                  {hit.folder && <span className="mention-folder">{hit.folder}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mention-empty">{query ? "没有找到笔记" : "没有更多笔记"}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

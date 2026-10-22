@@ -2,6 +2,7 @@ import { Check, Folder } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { ListedItem } from "./FolderContentsList";
+import { createPortal } from "react-dom";
 import { libraryChanged } from "./ipc";
 import { useMotion } from "./MotionProvider";
 import "./organize.css";
@@ -268,7 +269,9 @@ export function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }
     all[(at + (event.key === "ArrowDown" ? 1 : all.length - 1)) % all.length]?.focus();
   };
 
-  return (
+  // On the page itself, not inside the panel that opened it: a panel with a filter, a transform or a fade
+  // would stop the menu's frosted glass from seeing (and blurring) what lies behind it.
+  return createPortal(
     <div ref={ref} className="menu" role="menu" style={place} onKeyDown={onKeyDown} onContextMenu={(event) => event.preventDefault()}>
       {items.map((item, index) =>
         item === "separator" ? (
@@ -288,7 +291,8 @@ export function ContextMenu({ x, y, items, onClose }: Menu & { onClose(): void }
           </button>
         ),
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
