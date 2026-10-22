@@ -42,6 +42,12 @@ describe("一轮", () => {
     expect(run!.stdin).toContain("补充计划");
     expect(run!.stdin).toContain("周一.md");
     expect(run!.stdin).toContain("../随记.md");
+    // Around them, where the agent is and what the notes are, so “这篇” needs no search of the library.
+    expect(run!.stdin.startsWith("补充计划\n\n---\n")).toBe(true);
+    expect(run!.stdin).toContain("根目录在 ..；当前工作目录是其中的“日记”文件夹。");
+    expect(run!.stdin).toContain("用户说“这篇”“笔记”“上面的”时所指的：\n  - 周一.md\n  - ../随记.md\n");
+    expect(run!.stdin).toContain("不必再浏览或搜索其他文件");
+    expect(run!.stdin).toContain("../.notes 文件夹是笔记应用自己的数据");
 
     // The reply streamed in pieces; the tool call came and went.
     const text = lib.events.filter((e) => e.kind === "text").map((e) => (e.kind === "text" ? e.text : ""));

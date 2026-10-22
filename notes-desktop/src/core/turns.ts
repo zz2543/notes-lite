@@ -8,7 +8,7 @@ import { modelName, type AgentId } from "../shared/agentKinds";
 import { stoppedTurn } from "../shared/conversation";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
-import { spaceGuideName, spacesFolder, type SpaceLibrary } from "./spaces";
+import { notesFolder, spaceGuideName, spacesFolder, type SpaceLibrary } from "./spaces";
 
 export interface TurnRequest {
   agent: { id: AgentId; path: string };
@@ -73,22 +73,36 @@ export async function turnSpaces(library: SpaceLibrary, open?: string): Promise<
 const spacesGuidePath = `${spacesFolder}/${spaceGuideName}`;
 
 /**
- * What the agent is asked: the user's words, then the notes in context and the library's spaces with
- * their authoring guide, paths relative to the working directory.
+ * What the agent is asked: the user's words first, then what the app knows of where they are — the
+ * library and the working directory in it, the notes they attached (what “这篇” or “笔记” means), and the
+ * library's spaces with their authoring guide. Paths are relative to the working directory. Without it
+ * an agent asked “总结笔记” goes looking through the library for what was meant.
  */
 export function turnPrompt({ root, folder, text, notes, spaces }: Pick<TurnRequest, "root" | "folder" | "text" | "notes" | "spaces">): string {
   const cwd = at(root, folder);
-  const rel = (path: string) => relative(cwd, at(root, path)).split("\\").join("/");
-  const parts = [text];
-  if (notes.length > 0) parts.push(`附带的笔记（路径相对于当前工作目录）：\n${notes.map((note) => `- ${rel(note)}`).join("\n")}`);
+  const rel = (path: string) => relative(cwd, at(root, path)).split("\\").join("/") || ".";
+  const context = [
+    folder
+      ? `- 这是用户的 Markdown 笔记库，根目录在 ${rel("")}；当前工作目录是其中的“${folder}”文件夹。`
+      : "- 这是用户的 Markdown 笔记库，当前工作目录就是笔记库根目录。",
+    notes.length > 0
+      ? [
+          "- 用户附上的笔记，也就是用户说“这篇”“笔记”“上面的”时所指的：",
+          ...notes.map((note) => `  - ${rel(note)}`),
+          "  先读这些笔记；只凭它们就能完成时直接作答，不必再浏览或搜索其他文件。",
+        ].join("\n")
+      : "- 用户没有附上笔记；说到“这里”“这些笔记”时，指的是当前工作目录里的笔记。",
+    "- 回复会按 Markdown 显示。总结、解释、回答问题直接写在回复里；只有用户要求修改或新建笔记时才改动文件。",
+    `- ${rel(notesFolder)} 文件夹是笔记应用自己的数据（操作记录、空间主页等），不是笔记，与用户的请求无关时不用看。`,
+  ];
   if (spaces)
-    parts.push(
+    context.push(
       [
-        `笔记库的空间主页（路径相对于当前工作目录）。编写或修改空间主页前，请先完整阅读并遵守编写说明：${rel(spaces.guide)}`,
-        ...spaces.list.map(({ name, path }) => `- ${name}：${rel(path)}${name === spaces.open ? "（当前打开）" : ""}`),
+        `- 笔记库的空间主页如下；只有用户要编写或修改空间主页时才需要看。那时请先完整阅读并遵守编写说明：${rel(spaces.guide)}`,
+        ...spaces.list.map(({ name, path }) => `  - ${name}：${rel(path)}${name === spaces.open ? "（当前打开）" : ""}`),
       ].join("\n"),
     );
-  return parts.length === 1 ? text : `${parts.join("\n\n")}\n`;
+  return `${text}\n\n---\n以下是笔记应用附上的背景，路径相对于当前工作目录：\n${context.join("\n")}\n`;
 }
 
 /** Runs the command; a Windows .cmd or .bat shim goes through the shell, which Node requires. */
