@@ -153,6 +153,56 @@ test("a turn is undone from 操作记录 in a library with no spaces, reached fr
   await expect.poll(() => readFile(join(root, "随记.md"), "utf8")).toBe("随记\n");
 });
 
+test("a reply is shown as Markdown: headings, emphasis, lists and tasks, code, tables; a web link opens in the browser", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  const reply = [
+    "## 本周计划",
+    "",
+    "- **跑步** 三公里",
+    "- [x] 读完*第一章*",
+    "  1. 摘记",
+    "",
+    "> 引用一句",
+    "",
+    "用 `npm test` 跑测试，见 [官网](https://example.com/页)。",
+    "",
+    "```js",
+    "const a = **1**;",
+    "```",
+    "",
+    "| 项 | 数 |",
+    "| --- | ---: |",
+    "| 甲 | 1 |",
+  ].join("\n");
+  await installFakeAgent(join(scratch, "agents"), "claude", { steps: [{ say: reply }] });
+  const { app, page } = await launchWith(scratch, root);
+  await app.evaluate(({ shell }) => {
+    const opened: string[] = [];
+    (globalThis as { opened?: string[] }).opened = opened;
+    shell.openExternal = async (url) => void opened.push(url);
+  });
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await input(page).fill("列个计划");
+  await input(page).press("Enter");
+
+  const text = column(page).getByRole("log", { name: "对话" }).locator(".reply-text");
+  await expect(text.getByRole("heading", { level: 2, name: "本周计划" })).toBeVisible();
+  await expect(text.locator("strong")).toHaveText("跑步");
+  await expect(text.locator("em")).toHaveText("第一章");
+  await expect(text.locator("ul > li")).toHaveCount(2);
+  await expect(text.locator("ul > li ol > li")).toHaveText("摘记");
+  await expect(text.getByRole("checkbox", { name: "已完成" })).toBeChecked();
+  await expect(text.locator("blockquote")).toHaveText("引用一句");
+  await expect(text.locator("p code")).toHaveText("npm test");
+  // Code stays as written, its asterisks too; no Markdown syntax shows elsewhere.
+  await expect(text.locator("pre")).toHaveText("const a = **1**;");
+  await expect(text.getByRole("table").getByRole("cell", { name: "甲" })).toBeVisible();
+  await expect(text).not.toContainText("##");
+  await expect(text).not.toContainText("](");
+  await text.getByRole("link", { name: "官网" }).click();
+  await expect.poll(() => app.evaluate(() => (globalThis as { opened?: string[] }).opened ?? [])).toEqual(["https://example.com/页"]);
+});
+
 test("an agent that fails shows why and the figure turns to 出错", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
   await installFakeAgent(join(scratch, "agents"), "claude", { steps: [{ say: "开始" }, { fail: "额度已用完" }] });
@@ -207,4 +257,26 @@ test("模型选择: 默认 names the agent's own model; one chosen goes on the c
   await input(page).press("Enter");
   await expect.poll(async () => (await agent.runs()).length).toBe(2);
   expect((await agent.runs())[1]!.argv).not.toContain("--model");
+});
+
+test("模型选择 offers every model Codex lists, not only the one in its config.toml; one chosen goes on its command line", async ({ scratch }) => {
+  // 2026-10-22 用户反馈: Codex offered only gpt-6-luna.
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await library(scratch, "home", { ".codex/config.toml": 'model = "gpt-6-luna"\n' });
+  const agent = await installFakeAgent(join(scratch, "agents"), "codex", { session: "x-1", models: ["gpt-6-luna", "gpt-6-sol", "gpt-5.5"], steps: [{ say: "好的。" }] });
+  const { page } = await launchWith(scratch, root);
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+
+  const picker = column(page).getByRole("button", { name: /^模型：/ });
+  await expect(picker).toHaveText("模型：默认（gpt-6-luna）");
+  await picker.click();
+  await expect(page.getByRole("menuitemradio")).toHaveText(["默认（gpt-6-luna）", "gpt-6-luna", "gpt-6-sol", "gpt-5.5"]);
+  await page.getByRole("menuitemradio", { name: "gpt-6-sol" }).click();
+  await input(page).fill("你好");
+  await input(page).press("Enter");
+  await expect(column(page).getByRole("log", { name: "对话" })).toContainText("好的。");
+  // Asking for the list is not a turn: the one run is the turn, with the model chosen.
+  const runs = await agent.runs();
+  expect(runs).toHaveLength(1);
+  expect(runs[0]!.argv.slice(runs[0]!.argv.indexOf("-m"), runs[0]!.argv.indexOf("-m") + 2)).toEqual(["-m", "gpt-6-sol"]);
 });
