@@ -293,3 +293,23 @@ test("模型选择 offers every model Codex lists, not only the one in its confi
   expect(runs).toHaveLength(1);
   expect(runs[0]!.argv.slice(runs[0]!.argv.indexOf("-m"), runs[0]!.argv.indexOf("-m") + 2)).toEqual(["-m", "gpt-6-sol"]);
 });
+
+test("while the model works with nothing new to show (thinking, or writing a long file), the reply says so and for how long", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  const hold = join(scratch, "go-on");
+  await installFakeAgent(join(scratch, "agents"), "claude", {
+    steps: [{ tool: "Read", input: { file_path: join(root, "随记.md") } }, { waitFor: hold }, { say: "写好了。" }],
+  });
+  const { page } = await launchWith(scratch, root);
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await input(page).fill("做个主页");
+  await input(page).press("Enter");
+  const conversation = column(page).getByRole("log", { name: "对话" });
+  await expect(conversation.getByRole("button", { name: /1 个步骤/ })).toBeVisible();
+  // Every step done, the turn still going: after a few seconds, a line that counts the wait.
+  const waiting = conversation.getByRole("status").filter({ hasText: "正在思考" });
+  await expect(waiting).toContainText(/\d+ 秒/, { timeout: 10_000 });
+  await writeFile(hold, "");
+  await expect(conversation).toContainText("写好了。");
+  await expect(waiting).toHaveCount(0);
+});

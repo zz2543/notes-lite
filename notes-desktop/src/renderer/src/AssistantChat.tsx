@@ -100,7 +100,33 @@ export function useAssistant() {
 export type AssistantState = ReturnType<typeof useAssistant>;
 
 const verbs: Record<AgentActivity, string> = { reading: "读取", searching: "搜索", writing: "写入", running: "运行", thinking: "" };
-const stepText = (step: Step) => [verbs[step.activity] || step.name, step.detail].filter(Boolean).join(" ");
+/** How much of a call the model has written so far: 18 KB. */
+const sizeText = (size: number) => (size < 1024 ? `${size} 字符` : `${Math.round(size / 1024)} KB`);
+const stepText = (step: Step) =>
+  [verbs[step.activity] || step.name, step.detail].filter(Boolean).join(" ") + (!step.done && step.size ? ` · 已写 ${sizeText(step.size)}` : "");
+
+/** Seconds as the waiting line says them: 42 秒, 3 分 05 秒. */
+const elapsedText = (seconds: number) =>
+  seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${String(seconds % 60).padStart(2, "0")} 秒`;
+
+/**
+ * The turn is still going though nothing new has shown for a while (the model thinking, or writing
+ * something long it shows only when done): say so, and for how long, so it never looks stuck.
+ */
+function StillWorking({ immediate }: { immediate: boolean }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  if (!immediate && seconds < 5) return null;
+  return (
+    <p className="reply-waiting" role="status">
+      正在思考…{seconds >= 5 && <span className="reply-waiting-time"> {elapsedText(seconds)}</span>}
+    </p>
+  );
+}
 
 const stepIcons: Record<AgentActivity, Icon> = { reading: FileText, searching: MagnifyingGlass, writing: PencilSimple, running: TerminalWindow, thinking: Sparkle };
 const stepKinds: AgentActivity[] = ["running", "reading", "searching", "writing", "thinking"];
@@ -126,6 +152,7 @@ function StepRow({ step }: { step: Step }) {
         <Glyph size={icon.caret} className="step-icon" aria-hidden />
         <span className="step-verb">{verb}</span>{detail && " "}
         {detail && <span className={step.activity === "running" ? "step-detail code" : "step-detail"}>{open ? step.detail : detail}</span>}
+        {!step.done && step.size ? <span className="step-size"> · 已写 {sizeText(step.size)}</span> : null}
         {step.done && !step.failed && <Check size={icon.caret} className="step-done" aria-hidden />}
       </button>
     </li>
@@ -157,6 +184,16 @@ function Timeline({ steps, live }: { steps: Step[]; live: boolean }) {
   );
 }
 
+/** Changes whenever the reply shows something new: its parts, a step's progress or end, more text. */
+const progressKey = (reply: Reply) =>
+  reply.parts.map((part) => (part.kind === "text" ? part.text.length : part.steps.map((s) => `${s.id}${s.done ? "+" : ""}${s.size ?? ""}`).join())).join("|");
+
+/** A tool call is on (its line says what it does), so the reply is not waiting on the model. */
+const stepRunning = (reply: Reply) => {
+  const last = reply.parts.at(-1);
+  return last?.kind === "steps" && !last.steps.at(-1)!.done;
+};
+
 function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: ReviewAction; onShowLog(): void }) {
   return (
     <div className="assistant-reply">
@@ -167,7 +204,7 @@ function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: Rev
           <Timeline key={i} steps={part.steps} live={!reply.done && i === reply.parts.length - 1} />
         ),
       )}
-      {!reply.done && reply.parts.length === 0 && <p className="reply-waiting">正在思考…</p>}
+      {!reply.done && !stepRunning(reply) && <StillWorking key={progressKey(reply)} immediate={reply.parts.length === 0} />}
       {reply.failed && (
         <p className="reply-failed" role="alert">
           {reply.failed}

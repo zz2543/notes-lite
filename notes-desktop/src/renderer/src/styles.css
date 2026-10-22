@@ -1617,3 +1617,8 @@ nav.rail {
 .card-focus {
   color: var(--card-path);
 }
+.reply-waiting-time,
+.step-size {
+  font-variant-numeric: tabular-nums;
+  color: var(--side-muted);
+}

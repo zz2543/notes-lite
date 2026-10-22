@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { agentAdapter, type AgentEvent, type AgentId } from "../../src/core";
+import { addEvent, agentAdapter, emptyReply, type AgentEvent, type AgentId } from "../../src/core";
 
 // 适配层 (assistant-spec, ticket 30): each agent's full-permission command line and its output read into
 // the 助手栏's events. The fixtures in agentOutput/ are what the real CLIs printed (Codex 0.163.0, Pi 1.3.0,
@@ -21,6 +21,33 @@ describe("Claude Code", () => {
     expect(claude.args()).not.toContain("--model");
     expect(claude.args("c-1", "opus")).toEqual(expect.arrayContaining(["--model", "opus", "--resume", "c-1"]));
     expect(claude.args("c-1", "opus").indexOf("opus")).toBe(claude.args("c-1", "opus").indexOf("--model") + 1);
+  });
+
+  it("shows a tool call while the model is still writing it, how far along, then once whole as one step", () => {
+    const cwd = "/库";
+    const stream = (event: object) => JSON.stringify({ type: "stream_event", event });
+    const content = "<div>" + "x".repeat(3000) + "</div>";
+    const json = JSON.stringify({ file_path: "/库/.notes/空间/学习.html", content });
+    const pieces = [json.slice(0, 20), json.slice(20, 50), json.slice(50, 1500), json.slice(1500)];
+    const events = read("claude", cwd, [
+      stream({ type: "message_start", message: { id: "m1" } }),
+      stream({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "t1", name: "Write", input: {} } }),
+      ...pieces.map((partial_json) => stream({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json } })),
+      stream({ type: "content_block_stop", index: 0 }),
+      JSON.stringify({ type: "assistant", message: { id: "m1", content: [{ type: "tool_use", id: "t1", name: "Write", input: { file_path: "/库/.notes/空间/学习.html", content } }] } }),
+      JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1" }] } }),
+    ]);
+    expect(events[0]).toMatchObject({ kind: "tool", id: "t1", activity: "writing", detail: "" });
+    const progress = events.filter((e) => e.kind === "toolInput");
+    expect(progress[0]).toMatchObject({ id: "t1", detail: ".notes/空间/学习.html" });
+    expect(progress.at(-1)).toMatchObject({ size: json.length });
+    expect(events.find((e) => e.kind === "tool" && e.writes)).toMatchObject({ writes: "/库/.notes/空间/学习.html" });
+
+    // Folded into the reply: one step, which says what it writes and how much while it is being written.
+    const live = events.slice(0, events.indexOf(progress.at(-1)!) + 1).reduce(addEvent, emptyReply());
+    expect(live.parts).toEqual([{ kind: "steps", steps: [expect.objectContaining({ id: "t1", detail: ".notes/空间/学习.html", size: json.length, done: false })] }]);
+    const whole = events.reduce(addEvent, emptyReply());
+    expect(whole.parts).toEqual([{ kind: "steps", steps: [expect.objectContaining({ id: "t1", detail: ".notes/空间/学习.html", done: true, size: undefined })] }]);
   });
 });
 

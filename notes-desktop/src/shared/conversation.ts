@@ -29,6 +29,8 @@ export type AgentEvent =
   | { kind: "text"; text: string }
   /** A tool call began: what it is and what it works on. */
   | { kind: "tool"; id: string; name: string; activity: AgentActivity; detail: string; /** The file it writes, as the agent named it. */ writes?: string }
+  /** A tool call still being written by the model (a whole homepage, say): how much so far, and what it works on once that is known. */
+  | { kind: "toolInput"; id: string; size: number; detail?: string }
   | { kind: "toolDone"; id: string; failed: boolean }
   /** The agent finished, or failed with a message. */
   | { kind: "result"; failed?: string };
@@ -69,6 +71,8 @@ export interface Step {
   detail: string;
   done: boolean;
   failed: boolean;
+  /** While the model is still writing the call: its length so far, in characters. */
+  size?: number;
 }
 
 /** A reply is its text with the tool calls between, consecutive calls folded into one timeline. */
@@ -134,6 +138,9 @@ export const stoppedTurn = "已停止。";
 
 export const emptyReply = (): Reply => ({ role: "assistant", parts: [], done: false });
 
+const mapStep = (parts: ReplyPart[], id: string, change: (step: Step) => Step): ReplyPart[] =>
+  parts.map((part) => (part.kind === "steps" && part.steps.some((s) => s.id === id) ? { kind: "steps", steps: part.steps.map((s) => (s.id === id ? change(s) : s)) } : part));
+
 /** The reply with one more event of its turn. */
 export function addEvent(reply: Reply, event: TurnEvent): Reply {
   const parts = [...reply.parts];
@@ -144,11 +151,16 @@ export function addEvent(reply: Reply, event: TurnEvent): Reply {
       else parts.push({ kind: "text", text: event.text });
       return { ...reply, parts };
     case "tool": {
+      // The same call again, now whole (it showed while the model wrote it): the step takes what it says.
+      if (parts.some((part) => part.kind === "steps" && part.steps.some((s) => s.id === event.id)))
+        return { ...reply, parts: mapStep(parts, event.id, (s) => ({ ...s, name: event.name, activity: event.activity, detail: event.detail || s.detail, size: undefined })) };
       const step: Step = { id: event.id, name: event.name, activity: event.activity, detail: event.detail, done: false, failed: false };
       if (last?.kind === "steps") parts[parts.length - 1] = { kind: "steps", steps: [...last.steps, step] };
       else parts.push({ kind: "steps", steps: [step] });
       return { ...reply, parts };
     }
+    case "toolInput":
+      return { ...reply, parts: mapStep(parts, event.id, (s) => ({ ...s, size: event.size, ...(event.detail ? { detail: event.detail } : {}) })) };
     case "toolDone":
       return {
         ...reply,

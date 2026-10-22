@@ -84,6 +84,18 @@ function detailOf(input: Record<string, unknown>, cwd: string): string {
   return textOf(input, "command") ?? textOf(input, "pattern") ?? textOf(input, "query") ?? textOf(input, "url") ?? textOf(input, "description") ?? "";
 }
 
+/** What a tool call works on, read from the start of its input while the model is still writing it. */
+function partialDetail(json: string, cwd: string): string | undefined {
+  const field = /"(?:file_path|notebook_path|path|command|pattern)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(json);
+  if (!field) return undefined;
+  try {
+    const value = JSON.parse(`"${field[1]}"`) as string;
+    return /"(?:file_path|notebook_path|path)"/.test(field[0]) ? shortPath(value, cwd) : value;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A tool call began: what the figure shows of it, and what it works on. */
 const toolEvent = (id: string, name: string, input: Record<string, unknown>, cwd: string): AgentEvent => ({
   kind: "tool",
@@ -102,7 +114,13 @@ interface ClaudeLine {
   session_id?: string;
   is_error?: boolean;
   result?: string;
-  event?: { type?: string; message?: { id?: string }; delta?: { type?: string; text?: string } };
+  event?: {
+    type?: string;
+    index?: number;
+    message?: { id?: string };
+    content_block?: { type?: string; id?: string; name?: string };
+    delta?: { type?: string; text?: string; partial_json?: string };
+  };
   message?: { id?: string; content?: Array<{ type?: string; text?: string; id?: string; name?: string; input?: Record<string, unknown>; tool_use_id?: string; is_error?: boolean }> };
 }
 
@@ -126,6 +144,8 @@ export const claudeCode: AgentAdapter = {
     const streamed = new Set<string>();
     let current: string | undefined;
     let session: string | undefined;
+    // Tool calls the model is still writing, by block: shown at once, and how far along (a homepage can take minutes).
+    const writing = new Map<number, { id: string; name: string; json: string; shown: number; detail?: string }>();
     return (raw) => {
       const line = parse<ClaudeLine>(raw);
       if (!line) return [];
@@ -137,6 +157,22 @@ export const claudeCode: AgentAdapter = {
       if (line.type === "stream_event") {
         const event = line.event;
         if (event?.type === "message_start") current = event.message?.id;
+        const block = event?.content_block;
+        if (event?.type === "content_block_start" && block?.type === "tool_use" && block.id && block.name) {
+          writing.set(event.index ?? 0, { id: block.id, name: block.name, json: "", shown: 0 });
+          events.push(toolEvent(block.id, block.name, {}, cwd));
+        }
+        const call = writing.get(event?.index ?? 0);
+        if (event?.type === "content_block_delta" && event.delta?.type === "input_json_delta" && call) {
+          call.json += event.delta.partial_json ?? "";
+          const found = call.detail ? undefined : partialDetail(call.json, cwd);
+          if (found) call.detail = found;
+          if (found || call.json.length - call.shown >= 1024) {
+            call.shown = call.json.length;
+            events.push({ kind: "toolInput", id: call.id, size: call.json.length, ...(found ? { detail: found } : {}) });
+          }
+        }
+        if (event?.type === "content_block_stop") writing.delete(event.index ?? 0);
         if (event?.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
           if (current) streamed.add(current);
           events.push({ kind: "text", text: event.delta.text });
