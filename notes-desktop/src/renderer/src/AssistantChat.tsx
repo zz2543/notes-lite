@@ -7,7 +7,7 @@ import { stoppedTurn, withEvent, type Conversation, type ConversationSummary, ty
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
-import { MarkdownView } from "./MarkdownView";
+import { MarkdownView } from "./ReplyMarkdown";
 import { icon } from "./tokens";
 import { TurnReview, type ReviewAction } from "./TurnReview";
 
