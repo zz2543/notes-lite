@@ -49,7 +49,7 @@ test("a turn with the open note: its folder is the working directory, the reply 
   await timeline.click();
   await expect(conversation.getByRole("list", { name: "时间线" }).getByRole("listitem")).toHaveText(["读取 周一.md", "写入 周一.md"]);
 
-  // Opening another note meanwhile leaves the turn's notes as they were sent; the next turn takes the new one.
+  // Opening another note meanwhile leaves the conversation's notes as they were sent, during the turn and after.
   await openNote(page, "笔记库", "随记");
   await expect(column(page).getByRole("list", { name: "这一轮附带的笔记" }).getByRole("listitem")).toHaveText(["周一"]);
   await expect(column(page).getByRole("list", { name: "附带的笔记", exact: true })).toHaveCount(0);
@@ -59,7 +59,7 @@ test("a turn with the open note: its folder is the working directory, the reply 
   await expect(column(page).getByRole("img", { name: /助手形象：(完成|待命)/ })).toBeVisible();
   await expect(column(page).getByRole("img", { name: "助手形象：待命" })).toBeVisible({ timeout: 5000 });
   await expect(column(page).getByRole("list", { name: "这一轮附带的笔记" })).toHaveCount(0);
-  await expect(attached.getByRole("listitem")).toHaveText(["随记"]);
+  await expect(attached.getByRole("listitem")).toHaveText(["周一"]);
   await openNote(page, "日记", "周一");
   // The note shows what the agent wrote.
   await expect(page.getByLabel("笔记正文")).toContainText("跑步");
@@ -119,10 +119,14 @@ test("a chosen folder is the working directory; the open note can be taken off, 
   await input(page).press("Enter");
   await expect(conversation.getByText("好的。")).toHaveCount(2);
 
-  // A new conversation starts where the user is now.
+  // The conversation keeps the notes it was sent with; opening a note does not change them.
+  await expect(attached.getByRole("listitem")).toHaveText(["随记"]);
+
+  // A new conversation starts where the user is now, with the open note.
   await column(page).getByRole("button", { name: "新对话" }).click();
   await expect(conversation).toHaveCount(0);
   await expect(column(page).getByRole("button", { name: "工作目录：日记" })).toBeVisible();
+  await expect(attached.getByRole("listitem")).toHaveText(["周一"]);
 
   const [first, second] = await agent.runs();
   expect(await realpath(first!.cwd)).toBe(await realpath(join(root, "读书")));
@@ -130,6 +134,7 @@ test("a chosen folder is the working directory; the open note can be taken off, 
   expect(first!.stdin).not.toContain("周一");
   expect(await realpath(second!.cwd)).toBe(await realpath(join(root, "读书")));
   expect(second!.argv).toEqual(expect.arrayContaining(["--resume", "s-2"]));
+  expect(second!.stdin).toContain("../随记.md");
 });
 
 test("a turn is undone from 操作记录 in a library with no spaces, reached from the reply or the menu", async ({ scratch }) => {

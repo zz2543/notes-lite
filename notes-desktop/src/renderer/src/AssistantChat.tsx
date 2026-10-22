@@ -272,8 +272,11 @@ function useMentions(query: string | null) {
 export interface ComposerProps {
   /** The open note, attached each turn unless taken off. */
   note: string | null;
-  /** While a turn runs, the notes it was sent with: shown instead of the open note, which may change. */
-  turnNotes?: string[] | undefined;
+  /**
+   * In a conversation, the notes its last turn was sent with: they stay its context, whatever note is
+   * opened meanwhile, until the user changes them or starts a new conversation. Undefined before one.
+   */
+  conversationNotes?: string[] | undefined;
   running: boolean;
   /** Something stands in the way of sending, such as no agent installed. */
   disabled: boolean;
@@ -285,7 +288,7 @@ export interface ComposerProps {
 }
 
 /** The input: what to ask, with the open note attached (it can be taken off) and notes mentioned with @. */
-export function Composer({ note, turnNotes, running, disabled, onSend, onStop, hasConversation, focusRequest = 0 }: ComposerProps) {
+export function Composer({ note, conversationNotes, running, disabled, onSend, onStop, hasConversation, focusRequest = 0 }: ComposerProps) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [dropped, setDropped] = useState<string | null>(null);
@@ -302,21 +305,34 @@ export function Composer({ note, turnNotes, running, disabled, onSend, onStop, h
     setHighlight(0);
   }, [query]);
 
-  const attached = [...new Set([...(note && note !== dropped ? [note] : []), ...mentioned])];
+  // A new conversation takes the open note; once started, its context stays as the user left it.
+  const [edited, setEdited] = useState<string[] | null>(null);
+  const sentKey = conversationNotes === undefined ? null : JSON.stringify(conversationNotes);
+  useEffect(() => {
+    setEdited(null);
+    // A new conversation starts afresh: the open note back on, nothing mentioned.
+    if (sentKey === null) {
+      setDropped(null);
+      setMentioned([]);
+    }
+  }, [sentKey]);
+  const pinned = conversationNotes === undefined ? null : (edited ?? conversationNotes);
+  const attached = pinned ?? [...new Set([...(note && note !== dropped ? [note] : []), ...mentioned])];
+  const edit = (change: (notes: string[]) => string[]) => setEdited(change(pinned!));
 
   const mention = (hit: SearchHit) => {
     const before = text.slice(0, caret).replace(/@[^\s@]*$/, "");
     const after = text.slice(caret);
     setText(before + after);
     setCaret(before.length);
-    setMentioned((now) => (now.includes(hit.path) ? now : [...now, hit.path]));
-    if (hit.path === note) setDropped(null);
+    add(hit.path);
     requestAnimationFrame(() => {
       field.current?.focus();
       field.current?.setSelectionRange(before.length, before.length);
     });
   };
   const remove = (path: string) => {
+    if (pinned) return edit((notes) => notes.filter((p) => p !== path));
     if (path === note) setDropped(path);
     setMentioned((now) => now.filter((p) => p !== path));
   };
@@ -348,21 +364,22 @@ export function Composer({ note, turnNotes, running, disabled, onSend, onStop, h
   };
   const track = (target: HTMLTextAreaElement) => setCaret(target.selectionStart);
 
-  const add = (path: string) => {
+  function add(path: string) {
+    if (pinned) return edit((notes) => (notes.includes(path) ? notes : [...notes, path]));
     setMentioned((now) => (now.includes(path) ? now : [...now, path]));
     if (path === note) setDropped(null);
-  };
+  }
 
   return (
     <div className="composer-stack">
       {/* The notes going with the message float above it as capsules: take one off, or add another. */}
       <div className="composer-chips">
-        {turnNotes ? (
+        {running ? (
           // The turn under way keeps the notes it was sent with, whatever is opened meanwhile.
-          turnNotes.length > 0 && (
+          attached.length > 0 && (
             <ul className="attached-notes" aria-label="这一轮附带的笔记">
-              {turnNotes.map((path) => (
-                <li key={path} className="note-chip locked" title={`${path}（这一轮正在用；结束后换成当前打开的笔记）`}>
+              {attached.map((path) => (
+                <li key={path} className="note-chip locked" title={`${path}（这一轮正在用，结束后可以更改）`}>
                   <FileText size={icon.caret} className="note-chip-icon" aria-hidden />
                   <span className="note-chip-title">{titleOf(path)}</span>
                 </li>
