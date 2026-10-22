@@ -97,6 +97,20 @@
 | `--space-title-size` | 24px | 同左 | 标题区的空间名称（字重 `--heading-weight`，行高 1.25，字距 −0.01em） |
 | `--space-title-padding` | `--gap-6` `--space-page-inline` `--gap-1` | 同左 | 标题区（图标、名称、范围与三个操作）的内边距 |
 
+#### 设计地基（2026-10-22）
+
+主页可以用 `spaceKit/foundation.css` 自己拼出样式，不必用组件。色相 10 个（红、橙、黄、绿、青、蓝、靛、紫、粉、石墨），每个有纯色、深色卡片底（`-deep`）、深色底上的浅色字（`-tint`）和光晕（`-glow`），用 `data-hue` 选用，不写时是强调色。
+
+| 变量 / 类 | 取值 | 用途 |
+| --- | --- | --- |
+| `--space-text-xs` … `--space-text-display` | 11.5、12.5、14、17、22、30、48px | 主页字号 |
+| `--space-radius-s` / `-m` / `-l` | 10 / 14 / 24px | 小部件、按钮、大卡片圆角 |
+| `--space-motion-amplitude` | 轻 0.6、标准 1、强 2 | 主页动效的幅度，跟随动效强度 |
+| `.space-bento` | 4 列，间距 `--space-gap`；≤720px 2 列，≤440px 1 列 | 大小不一的卡片网格 |
+| `.space-glow` | 色相深色底 + 模糊 26px 的光晕缓慢飘动（14s） | 一页里的重点卡片 |
+| `.space-glass` | 卡片底 55% + 模糊 30px、饱和 1.8 | 配合 `body.space-mesh` 的彩色背景 |
+| `.space-tint` | 色相 10% 混入卡片底 | 次要分组 |
+
 ## 材质
 
 | 层 | macOS | Windows 11 | Windows 10 |
