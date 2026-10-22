@@ -365,6 +365,11 @@ section.list {
 .editor .cm-content {
   width: 100%;
   min-height: 0;
+  /* As tall as the text, never squeezed to the scroller's height: CodeMirror's line wrapping lets the
+     column shrink (along the row it expects), and in this column-wise scroller that shrinks its height. A
+     column shorter than the text scrolls out of sight while its text still shows, and the editor then stops
+     drawing the lines that come into view (blank until a click). */
+  flex-shrink: 0;
   max-width: var(--measure);
   margin: 0 auto;
   padding: 0;

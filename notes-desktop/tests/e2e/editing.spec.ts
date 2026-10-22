@@ -188,3 +188,24 @@ test("the card's top tools appear while the pointer is over its top and leave on
   await expect(tool).toHaveCSS("opacity", "1");
   await app.close();
 });
+
+test("a long note keeps its text drawn all the way down as it is scrolled", async ({ scratch }) => {
+  // 2026-10-21 用户反馈: past the first screen the text went blank until a click. The text column must be as
+  // tall as the text, or the editor takes it for scrolled out of sight and stops drawing what comes next.
+  const lines = Array.from({ length: 120 }, (_, i) => `${i + 1}. 读完任务和规格后，在描述的草稿里列出要做的行为和要测的接缝，第 ${i + 1} 段。`);
+  const root = await library(scratch, "笔记库", { "长/长笔记.md": `${lines.join("\n\n")}\n\n最后一段。\n` });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "长", "长笔记");
+  const scroller = page.locator(".editor .cm-scroller");
+  const box = (await scroller.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  // A wheel at a time, as a hand scrolls, until the end of the note.
+  const atEnd = () => scroller.evaluate((s) => s.scrollTop + s.clientHeight >= s.scrollHeight - 1);
+  for (let wheel = 0; wheel < 100 && !(await atEnd()); wheel++) {
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(50);
+  }
+  expect(await atEnd()).toBe(true);
+  await expect(page.getByText("最后一段。")).toBeInViewport();
+  await app.close();
+});
