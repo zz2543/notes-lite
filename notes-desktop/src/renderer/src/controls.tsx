@@ -1,6 +1,5 @@
 import { motion } from "motion/react";
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { LiquidPill, useVisualEffect } from "./effects";
+import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { useMotion } from "./MotionProvider";
 
 // The settings panel's control library. Every value is set by something you can see — segments,
@@ -32,20 +31,11 @@ export function Segmented<T extends string>({ label, choices, value, onChange }:
   const { slide } = useMotion();
   const pill = useId();
   const keys = useRadioKeys(choices.map((c) => c.value), value, onChange);
-  // 界面特效 › 液态滑块: the pill is one drop of liquid under the group instead, following the choice.
-  const liquid = useVisualEffect("effectGooey");
-  const [group, setGroup] = useState<HTMLDivElement | null>(null);
-  const [chosen, setChosen] = useState<HTMLButtonElement | null>(null);
-  const setRef = (el: HTMLDivElement | null) => {
-    keys.ref.current = el;
-    setGroup(el);
-  };
   return (
-    <div className={liquid ? "segmented liquid" : "segmented"} role="radiogroup" aria-label={label} {...keys} ref={setRef}>
-      {liquid && <LiquidPill container={group} target={chosen} fill="--list-pill" shadow="--pill-shadow" className="segment-liquid" />}
+    <div className="segmented" role="radiogroup" aria-label={label} {...keys}>
       {choices.map((choice) => (
-        <button key={choice.value} {...radio(choice.value === value)} ref={choice.value === value ? setChosen : undefined} onClick={() => onChange(choice.value)}>
-          {!liquid && choice.value === value && <motion.span layoutId={pill} transition={slide} className="segment-pill" aria-hidden />}
+        <button key={choice.value} {...radio(choice.value === value)} onClick={() => onChange(choice.value)}>
+          {choice.value === value && <motion.span layoutId={pill} transition={slide} className="segment-pill" aria-hidden />}
           <span className="label">{choice.label}</span>
         </button>
       ))}

@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { AssistantPage } from "./AssistantSettings";
-import { PreviewChoices, Segmented, Swatches, Switch, type Choice, type PreviewChoice, type Swatch } from "./controls";
+import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
 import { usePreferences } from "./preferences";
 import "./settings.css";
@@ -135,41 +135,10 @@ const intensities: Choice<MotionIntensity>[] = [
 function MotionPage() {
   const { preferences, change } = usePreferences();
   return (
-    <>
     <SettingsGroup title="动效强度" description="“强”最生动；“轻”让面板、菜单和展开更快落定。系统开启“减弱动态效果”时，动效一律降为淡入淡出。">
       <SettingRow label="强度">
         <Segmented label="动效强度" choices={intensities} value={preferences.motion} onChange={(motion) => change({ motion })} />
       </SettingRow>
-    </SettingsGroup>
-    <EffectsGroup />
-    </>
-  );
-}
-
-/** 界面特效 (effects.tsx), each on its own switch under the one for all of them. */
-const effectRows: { key: "effectBeam" | "effectOrbs" | "effectGooey"; label: string }[] = [
-  { key: "effectBeam", label: "流光边框" },
-  { key: "effectOrbs", label: "思考光球" },
-  { key: "effectGooey", label: "液态滑块" },
-];
-
-function EffectsGroup() {
-  const { preferences, change } = usePreferences();
-  const on = preferences.effects === "on";
-  return (
-    <SettingsGroup
-      title="界面特效"
-      description="助手工作时输入框的流光边框、思考时的光球、分段控件与“资料库 | 空间”的液态滑块。关闭后界面回到没有这些特效时的样子；系统开启“减弱动态效果”时，特效停在静止的一帧。"
-    >
-      <SettingRow label="界面特效">
-        <Switch label="界面特效" on={on} onChange={(value) => change({ effects: value ? "on" : "off" })} />
-      </SettingRow>
-      {on &&
-        effectRows.map(({ key, label }) => (
-          <SettingRow key={key} label={label}>
-            <Switch label={label} on={preferences[key] === "on"} onChange={(value) => change({ [key]: value ? "on" : "off" })} />
-          </SettingRow>
-        ))}
     </SettingsGroup>
   );
 }
