@@ -186,7 +186,8 @@
   transition:
     background-color var(--spring-pop),
     color var(--spring-pop),
-    scale var(--spring-pop);
+    scale var(--spring-pop),
+    opacity var(--focus-fade-duration) ease-out;
 }
 .card-back:hover {
   background: var(--hover);

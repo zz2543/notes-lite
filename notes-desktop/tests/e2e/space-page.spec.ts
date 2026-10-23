@@ -252,6 +252,10 @@ test("in 单栏导航 a clicked space takes the whole panel; ‹ 空间 and the 
   await contents.getByRole("button", { name: "计划" }).click();
   await expect(page.getByRole("textbox", { name: "笔记正文" })).toContainText("计划");
   await expect.poll(() => shownPages(app)).toBe(0);
+  // 专注 keeps only the title and the body: the way back steps aside, clear of macOS's window buttons.
+  await page.getByRole("button", { name: "进入专注模式" }).click();
+  await expect(page.getByRole("button", { name: "返回“健身”主页" })).toBeHidden();
+  await page.getByRole("button", { name: "退出专注" }).click();
   // The card's top left leads back to the homepage.
   await page.getByRole("button", { name: "返回“健身”主页" }).click();
   await expect.poll(() => shownPages(app)).toBe(1);
