@@ -154,6 +154,32 @@
   font-weight: inherit;
   opacity: 0.8;
 }
+/* The notes keep their folders: each level steps in by --row-indent, a folder's caret turns as it folds. */
+.item.space-note-item,
+.item.space-folder-item {
+  gap: 6px;
+  height: var(--row-height);
+  padding-block: 0;
+  padding-inline-start: calc(var(--row-padding) + var(--depth, 0) * var(--row-indent));
+}
+.item.space-folder-item {
+  font-size: var(--text-side-row);
+  font-weight: var(--weight-space-note);
+}
+.item.space-folder-item svg {
+  flex: none;
+  color: var(--side-muted);
+}
+.item.space-folder-item .label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.item.space-note-item .caret,
+.item.space-folder-item .caret {
+  flex: none;
+}
 .item.space-note-item {
   font-size: var(--text-side-row);
   font-weight: var(--weight-space-note);
@@ -470,8 +496,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 专注 hides the side panel: on macOS the name then steps right of the window's buttons. */
-:root.mac .app.focused .card[data-kind="space"] .card-head {
+/* 专注 hides the side panel: on macOS the name, or a note's way back to its space's homepage, then steps
+   right of the window's buttons. */
+:root.mac .app.focused .card[data-kind="space"] .card-head,
+:root.mac .app.focused .card[data-kind="note"] .card-head:has(.card-back) {
   padding-inline-start: var(--traffic-lights-inset);
 }
 .space-title-tools {
@@ -510,6 +538,7 @@
   visibility: visible;
 }
 .list .space-notes-label,
-.list .item.space-note-item svg {
+.list .item.space-note-item svg,
+.list .item.space-folder-item svg {
   color: var(--list-muted);
 }

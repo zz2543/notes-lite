@@ -1614,15 +1614,14 @@ nav.rail {
     opacity var(--focus-fade-duration) ease-out,
     visibility 0s linear var(--focus-fade-duration);
 }
-/* Only the title and the body: the path, the card's tools, the way back to a space's homepage (it would
-   sit under macOS's window buttons) and its foot step aside; the way out stays. */
+/* Only the title and the body: the path, the card's tools and its foot step aside; the way out stays, and
+   so does the way back to a space's homepage. */
 .card-path,
 .card-tool,
-.card-back,
 .card-foot {
   transition: opacity var(--focus-fade-duration) ease-out;
 }
-.app.focused :is(.card-path, .card-tool, .card-back, .card-foot) {
+.app.focused :is(.card-path, .card-tool, .card-foot) {
   opacity: 0;
   visibility: hidden;
   transition:

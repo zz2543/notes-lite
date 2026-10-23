@@ -252,10 +252,14 @@ test("in 单栏导航 a clicked space takes the whole panel; ‹ 空间 and the 
   await contents.getByRole("button", { name: "计划" }).click();
   await expect(page.getByRole("textbox", { name: "笔记正文" })).toContainText("计划");
   await expect.poll(() => shownPages(app)).toBe(0);
-  // 专注 keeps only the title and the body: the way back steps aside, clear of macOS's window buttons.
+  // 专注 keeps the way back, on macOS right of the window's buttons.
+  await page.evaluate(() => document.documentElement.classList.add("mac"));
   await page.getByRole("button", { name: "进入专注模式" }).click();
-  await expect(page.getByRole("button", { name: "返回“健身”主页" })).toBeHidden();
+  const back = page.getByRole("button", { name: "返回“健身”主页" });
+  await expect(back).toBeVisible();
+  await expect.poll(async () => (await back.boundingBox())!.x).toBeGreaterThanOrEqual(84);
   await page.getByRole("button", { name: "退出专注" }).click();
+  await page.evaluate(() => document.documentElement.classList.remove("mac"));
   // The card's top left leads back to the homepage.
   await page.getByRole("button", { name: "返回“健身”主页" }).click();
   await expect.poll(() => shownPages(app)).toBe(1);
@@ -271,5 +275,27 @@ test("in 单栏导航 a clicked space takes the whole panel; ‹ 空间 and the 
   await expect(side.getByRole("list", { name: "空间内容" })).toHaveCount(0);
   await spaceList(page).getByRole("button", { name: "健身" }).click();
   await expect(contents.getByRole("button")).toHaveText(["主页", "计划", "训练记录"]);
+  await app.close();
+});
+
+test("a space's notes keep their folders: subfolders first, each one folds", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", {
+    "健身/计划.md": "# 计划\n",
+    "健身/器械/卧推.md": "# 卧推\n",
+    "健身/器械/深蹲/记录.md": "# 记录\n",
+    "健身/跑步/五公里.md": "# 五公里\n",
+    ".notes/空间/健身.html": homepage,
+  });
+  const { app, page } = await launchWith(scratch, root);
+  await showSide(page, "空间");
+  await spaceList(page).getByRole("button", { name: "健身" }).click();
+  const contents = page.getByRole("list", { name: "空间内容" });
+  // The space of one folder starts inside it.
+  await expect(contents.getByRole("button")).toHaveText(["主页", "跑步", "五公里", "器械", "深蹲", "记录", "卧推", "计划"]);
+  await contents.getByRole("button", { name: "器械" }).click();
+  await expect(contents.getByRole("button", { name: "器械" })).toHaveAttribute("aria-expanded", "false");
+  await expect(contents.getByRole("button")).toHaveText(["主页", "跑步", "五公里", "器械", "计划"]);
+  await contents.getByRole("button", { name: "五公里" }).click();
+  await expect(page.getByRole("textbox", { name: "笔记正文" })).toContainText("五公里");
   await app.close();
 });

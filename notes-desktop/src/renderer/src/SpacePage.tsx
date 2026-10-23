@@ -1,4 +1,4 @@
-import { CaretLeft, Check, Copy, FileText, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, Check, Copy, FileText, Folder, FolderOpen, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SpaceNetwork, SpaceScope } from "../../core";
@@ -84,13 +84,94 @@ interface SpaceContentsProps {
   onBack?(): void;
 }
 
+interface SpaceFolder {
+  name: string;
+  path: string;
+  folders: SpaceFolder[];
+  notes: SpaceNote[];
+}
+
+/**
+ * The notes as the folders they sit in, so the space keeps the library's structure. A space of one
+ * folder starts inside it; one of several folders, or the whole library, starts at the library's top.
+ */
+function spaceTree(notes: SpaceNote[], scope: SpaceInfo["scope"]): SpaceFolder {
+  const base = !scope.library && scope.folders.length === 1 ? scope.folders[0]! : "";
+  const root: SpaceFolder = { name: "", path: base, folders: [], notes: [] };
+  for (const note of notes) {
+    const inside = base && note.path.startsWith(`${base}/`) ? note.path.slice(base.length + 1) : note.path;
+    const parts = inside.split("/").slice(0, -1);
+    let at = root;
+    for (const part of parts) {
+      const path = at.path ? `${at.path}/${part}` : part;
+      let next = at.folders.find((folder) => folder.name === part);
+      if (!next) at.folders.push((next = { name: part, path, folders: [], notes: [] }));
+      at = next;
+    }
+    at.notes.push(note);
+  }
+  return root;
+}
+
 /**
  * An open space's contents: 主页 first and set apart (a tinted tile, bolder), then under a small
- * “笔记” label every note in its scope, lighter, so the homepage reads as the space's front page and
- * the notes as what lies inside it (2026-10-23 用户确认).
+ * “笔记” label its notes in their folders (subfolders first, each folds), lighter, so the homepage reads
+ * as the space's front page and the notes as what lies inside it (2026-10-23 用户确认).
  */
 export function SpaceContents({ space, place, showingHome, openNote, onHome, onOpenNote, onBack }: SpaceContentsProps) {
   const notes = useSpaceNotes(space.name);
+  // Folders start open; the ones folded are kept while the space stays open.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const fold = (path: string) =>
+    setFolded((now) => {
+      const next = new Set(now);
+      if (!next.delete(path)) next.add(path);
+      return next;
+    });
+  const tree = notes && spaceTree(notes, space.scope);
+  const nested = Boolean(tree && tree.folders.length > 0);
+  const rows = (folder: SpaceFolder, depth: number): ReactNode[] => [
+    ...folder.folders.flatMap((child) => {
+      const open = !folded.has(child.path);
+      return [
+        <li key={`folder:${child.path}`}>
+          <button
+            className="item space-folder-item"
+            style={{ "--depth": depth } as CSSProperties}
+            aria-expanded={open}
+            title={child.path}
+            onClick={() => fold(child.path)}
+          >
+            <span className="caret" aria-hidden>
+              <CaretRight size={icon.caret} weight="bold" />
+            </span>
+            {open ? <FolderOpen size={icon.small} aria-hidden /> : <Folder size={icon.small} aria-hidden />}
+            <span className="label">{child.name}</span>
+          </button>
+        </li>,
+        ...(open ? rows(child, depth + 1) : []),
+      ];
+    }),
+    ...folder.notes.map((note) => {
+      const on = !showingHome && openNote === note.path;
+      return (
+        <li key={note.path}>
+          <button
+            className={`item space-note-item ${on ? "on" : ""}`}
+            style={{ "--depth": depth } as CSSProperties}
+            aria-current={on || undefined}
+            title={note.path}
+            onClick={() => onOpenNote(note.path)}
+          >
+            {on && <SelectionPill group="list" />}
+            {nested && <span className="caret" aria-hidden />}
+            <FileText size={icon.small} aria-hidden />
+            <span className="label">{note.title}</span>
+          </button>
+        </li>
+      );
+    }),
+  ];
   const name = (
     <>
       {space.icon && <span aria-hidden>{space.icon} </span>}
@@ -129,18 +210,7 @@ export function SpaceContents({ space, place, showingHome, openNote, onHome, onO
             笔记 <span className="count">{notes.length}</span>
           </li>
         )}
-        {notes?.map((note) => {
-          const on = !showingHome && openNote === note.path;
-          return (
-            <li key={note.path}>
-              <button className={`item space-note-item ${on ? "on" : ""}`} aria-current={on || undefined} title={note.path} onClick={() => onOpenNote(note.path)}>
-                {on && <SelectionPill group="list" />}
-                <FileText size={icon.small} aria-hidden />
-                <span className="label">{note.title}</span>
-              </button>
-            </li>
-          );
-        })}
+        {tree && rows(tree, 0)}
       </ul>
       {notes?.length === 0 && <p className="empty">范围内还没有笔记</p>}
     </>
