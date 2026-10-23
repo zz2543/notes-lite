@@ -215,3 +215,30 @@ test("Obsidian's ![[图.png]] shows the image wherever it is in the library, at 
   expect(await images.nth(1).evaluate((img: HTMLImageElement) => img.getBoundingClientRect().width)).toBe(40);
   await app.close();
 });
+
+test("after following links, the card's back button returns note by note, and is gone once back at the start", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "入口.md": "# 入口\n\n见 [[摘记]]\n\n末行", "阅读/摘记.md": "# 摘记\n\n再看 [[细节]]\n\n末行", "阅读/细节.md": "# 细节\n\n内容" });
+  const { app, page } = await launchWith(scratch, root);
+  await openNote(page, "入口");
+  const title = page.getByLabel("笔记标题");
+  await expect(page.getByRole("button", { name: /^返回“/ })).toHaveCount(0);
+
+  await editor(page).locator(".cm-md-link", { hasText: "摘记" }).click();
+  await expect(title).toHaveAttribute("title", "阅读 / 摘记.md");
+  await editor(page).locator(".cm-md-link", { hasText: "细节" }).click();
+  await expect(title).toHaveAttribute("title", "阅读 / 细节.md");
+
+  await page.getByRole("button", { name: "返回“摘记”" }).click();
+  await expect(title).toHaveAttribute("title", "阅读 / 摘记.md");
+  await page.getByRole("button", { name: "返回“入口”" }).click();
+  await expect(title).toHaveAttribute("title", "入口.md");
+  await expect(page.getByRole("button", { name: /^返回“/ })).toHaveCount(0);
+
+  // Opening a note any other way starts afresh.
+  await editor(page).locator(".cm-md-link", { hasText: "摘记" }).click();
+  await expect(page.getByRole("button", { name: "返回“入口”" })).toBeVisible();
+  await page.getByRole("list", { name: "当前目录内容" }).getByRole("button", { name: "细节" }).click();
+  await expect(page.getByRole("button", { name: /^返回“/ })).toHaveCount(0);
+  await app.close();
+});
+

@@ -207,9 +207,35 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     setExpanded((now) => new Set([...now].map(remap)));
     requested.current = requested.current && remap(requested.current);
     setNote((now) => now && remap(now));
+    setTrail((now) => now.map(remap));
   };
   const organize = useOrganize({ libraryName: library.name, folder, note, saveFirst, notify, showFolder: openFolder, showNote, relocated });
   const lastDeletedName = organize.lastDeleted?.split("/").pop()?.replace(/\.md$/i, "");
+
+  // 跟随链接 leaves a way back: the notes followed from, the last on top. Opening a note any other way
+  // starts the trail afresh.
+  const [trail, setTrail] = useState<string[]>([]);
+  const viaTrail = useRef<string | null>(null);
+  useEffect(() => {
+    if (note !== viaTrail.current) setTrail([]);
+    viaTrail.current = null;
+  }, [note]);
+  const openLinked = async (path: string) => {
+    const from = note;
+    if (path === from) return;
+    viaTrail.current = path;
+    if (!(await openNote(path))) return void (viaTrail.current = null);
+    if (from) setTrail((now) => [...now, from]);
+    openFolder(parentOf(path));
+  };
+  const goBack = async () => {
+    const previous = trail.at(-1);
+    if (!previous) return;
+    viaTrail.current = previous;
+    if (!(await openNote(previous))) return void (viaTrail.current = null);
+    setTrail((now) => now.slice(0, -1));
+    openFolder(parentOf(previous));
+  };
 
   // The input saved as a copy beside its note: shown where it lies, and opened.
   const openCopy = (path: string) => {
@@ -419,7 +445,13 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
 
   const sidePage = sideMode === "library" ? "library" : single && inSpace && !spaceListShown ? "space" : "spaces";
   // A note opened from a space keeps the way back to the space's homepage at the card's top left.
-  const cardHeadStart = inSpace && !showingHome && (
+  const backTitle = trail.at(-1)?.split("/").pop()?.replace(/\.md$/i, "");
+  const cardHeadStart = backTitle ? (
+    <button className="card-back" onClick={() => void goBack()} aria-label={`返回“${backTitle}”`} title={`返回“${backTitle}”`}>
+      <CaretLeft size={icon.small} weight="bold" />
+      <span className="label">{backTitle}</span>
+    </button>
+  ) : inSpace && !showingHome && (
     <button className="card-back" onClick={() => void goHome()} aria-label={`返回“${inSpace.name}”主页`} title={`返回“${inSpace.name}”主页`}>
       <CaretLeft size={icon.small} weight="bold" />
       <span className="card-back-icon" aria-hidden>
@@ -570,7 +602,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
             fresh={note !== null && note === fresh}
             onOpenCopy={openCopy}
             onLetGo={letGo}
-            onOpenLinked={openCopy}
+            onOpenLinked={(path) => void openLinked(path)}
             notify={notify}
             onRename={organize.renameNote}
             headStart={cardHeadStart}
