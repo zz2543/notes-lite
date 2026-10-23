@@ -33,7 +33,7 @@ async function compile(script: string): Promise<string> {
 
 describe("空间主页编写说明", () => {
   it("teaches the new names, under .notes/", () => {
-    expect(spaceGuideVersion).toBe(6);
+    expect(spaceGuideVersion).toBe(7);
     expect(spaceGuide).toContain(`版本 ${spaceGuideVersion}`);
     expect(spaceGuide).toContain(".notes/空间/<名称>.html");
     expect(spaceGuide).not.toContain(".留白");

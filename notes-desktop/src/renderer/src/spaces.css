@@ -250,7 +250,7 @@
   color: var(--card-muted);
 }
 /* 复制提示词 and 新建示例空间: a word in the sentence, in the accent. */
-:is(.space-no-page, .space-empty) .link-button {
+:is(.space-no-page, .space-empty, .empty) .link-button {
   padding: 0 2px;
   border: none;
   background: none;
@@ -258,7 +258,7 @@
   font: inherit;
   cursor: pointer;
 }
-:is(.space-no-page, .space-empty) .link-button:hover {
+:is(.space-no-page, .space-empty, .empty) .link-button:hover {
   text-decoration: underline;
 }
 

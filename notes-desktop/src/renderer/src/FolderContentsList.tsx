@@ -24,13 +24,16 @@ interface Props {
   onOpenNote(path: string): void;
   /** An item was right-clicked: its menu. */
   onMenu?(item: ListedItem, event: MouseEvent): void;
+  /** 新建笔记 / 新建文件夹 in this folder, from the “…” menu or an empty folder. */
+  onNewNote?(): void;
+  onNewFolder?(): void;
 }
 
 /**
  * 当前目录内容: the selected folder's direct subfolders, then its direct notes. Notes show as much as
  * 笔记列表详细程度 asks: 简洁 the title, 标准 a muted date too, 详细 a one-line summary as well.
  */
-export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOpenNote, onMenu }: Props) {
+export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOpenNote, onMenu, onNewNote, onNewFolder }: Props) {
   const { preferences, change } = usePreferences();
   const detail = preferences.listDetail;
   const { value: contents, error } = useFolder(folder);
@@ -44,8 +47,13 @@ export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOp
   // The “…” menu offers the same choice as the settings panel; either one changes both.
   const openListMenu = (event: MouseEvent<HTMLButtonElement>) => {
     const { left, bottom } = event.currentTarget.getBoundingClientRect();
-    const items = listDetails.map(({ value, label }) => ({ label, checked: value === detail, run: () => change({ listDetail: value }) }));
-    setListMenu({ x: left, y: bottom, items });
+    const details = listDetails.map(({ value, label }) => ({ label, checked: value === detail, run: () => change({ listDetail: value }) }));
+    // Making something here comes first: otherwise it is only on a right click or a hover in the tree.
+    const making: Menu["items"] = [
+      ...(onNewNote ? [{ label: "新建笔记", run: onNewNote }] : []),
+      ...(onNewFolder ? [{ label: "新建文件夹…", run: onNewFolder }] : []),
+    ];
+    setListMenu({ x: left, y: bottom, items: making.length ? [...making, "separator", ...details] : details });
   };
   const note = (n: NoteEntry) => (
     <>
@@ -66,7 +74,16 @@ export function FolderContentsList({ folder, title, openNote, onOpenFolder, onOp
       )}
       {listMenu && <ContextMenu {...listMenu} onClose={() => setListMenu(undefined)} />}
       {error && <p className="empty">{error}</p>}
-      {empty && <p className="empty">这个文件夹是空的</p>}
+      {empty && (
+        <div className="empty">
+          <p>这个文件夹是空的</p>
+          {onNewNote && (
+            <button className="link-button" onClick={onNewNote}>
+              新建笔记
+            </button>
+          )}
+        </div>
+      )}
       {contents && !empty && (
         <ul className={`items ${detail}`} aria-label="当前目录内容">
           {contents.folders.map((f) => (

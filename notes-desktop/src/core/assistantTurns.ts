@@ -20,6 +20,8 @@ export interface TurnStart {
   /** For a new conversation: the model chosen, if not the agent's own. */
   model?: string;
   text: string;
+  /** What the column shows of the message instead of `text`, which the agent gets. */
+  shown?: string;
   /** Notes put in the context, library-relative. */
   notes: string[];
   /** The space open in the app, by name, if any. */
@@ -120,7 +122,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
     conversation = {
       ...conversation,
-      messages: [...conversation.messages.map(keepWaiting), { role: "user", text: request.text, notes: request.notes }, emptyReply()],
+      messages: [...conversation.messages.map(keepWaiting), { role: "user", text: request.text, notes: request.notes, ...(request.shown ? { shown: request.shown } : {}) }, emptyReply()],
     };
     const id = conversation.id;
     live.set(id, conversation);

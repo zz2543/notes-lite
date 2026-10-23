@@ -53,7 +53,7 @@ export function useAssistant() {
   const running = conversation?.messages.at(-1)?.role === "assistant" && !(conversation.messages.at(-1) as Reply).done;
 
   /** Starts a turn: in the conversation shown, or, `fresh`, in a new one whatever is shown. */
-  const send = async ({ fresh, ...start }: { agent: AgentId; folder: string; model?: string; text: string; notes: string[]; space?: string; fresh?: boolean }) => {
+  const send = async ({ fresh, ...start }: { agent: AgentId; folder: string; model?: string; text: string; shown?: string; notes: string[]; space?: string; fresh?: boolean }) => {
     setProblem(undefined);
     const started = await window.notes.startTurn({ conversation: fresh ? null : (conversation?.id ?? null), ...start });
     if (!started.ok) {
@@ -263,7 +263,7 @@ export function ConversationView({ conversation, onReview, onShowLog }: Conversa
       {conversation.messages.map((message, i) =>
         message.role === "user" ? (
           <div key={i} className="assistant-user">
-            <p>{message.text}</p>
+            <p>{message.shown ?? message.text}</p>
             {message.notes.length > 0 && <p className="user-notes">{message.notes.map(titleOf).join("、")}</p>}
           </div>
         ) : (
@@ -595,4 +595,69 @@ function NotePicker({ attached, onPick }: { attached: string[]; onPick(path: str
       )}
     </div>
   );
+}
+
+/** What 生成主页 asks before the agent starts: what the user wants, and whether to see a plan first. */
+export interface HomepageWish {
+  wishes: string;
+  plan: boolean;
+}
+
+/**
+ * 生成主页, waiting for the user: which space and scope, a line for what they want on it, and
+ * 先给我看方案 (on by default), so the agent proposes before it writes. Nothing is sent until 开始.
+ */
+export function HomepageStart({ space, scope, again, onStart, onCancel }: { space: string; scope: string; again: boolean; onStart(wish: HomepageWish): void; onCancel(): void }) {
+  const [wishes, setWishes] = useState("");
+  const [plan, setPlan] = useState(true);
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => field.current?.focus(), []);
+  const start = () => onStart({ wishes: wishes.trim(), plan });
+  return (
+    <div className="assistant-messages">
+      <section className="turn-review homepage-start" aria-label="生成主页">
+        <p className="review-head">{again ? `重新生成“${space}”的主页` : `为“${space}”生成主页`}</p>
+        <p className="homepage-start-scope">范围：{scope}</p>
+        <label className="homepage-start-label" htmlFor="homepage-wishes">
+          你希望主页上有什么？（可选）
+        </label>
+        <textarea
+          id="homepage-wishes"
+          ref={field}
+          className="homepage-start-wishes"
+          rows={3}
+          placeholder="例如：本周训练次数、体重曲线、快速记一组……"
+          value={wishes}
+          onChange={(event) => setWishes(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) start();
+          }}
+        />
+        <label className="homepage-start-plan">
+          <input type="checkbox" checked={plan} onChange={(event) => setPlan(event.target.checked)} />
+          先给我看方案，确认后再写
+        </label>
+        <div className="review-buttons">
+          <button type="button" className="secondary" onClick={onCancel}>
+            取消
+          </button>
+          <button type="button" className="primary" onClick={start}>
+            开始
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** What the agent is told on 开始, after the space's prompt, and what the column shows of it. */
+export function homepageMessage(prompt: string, space: string, { wishes, plan }: HomepageWish, again: boolean) {
+  const text = [
+    prompt,
+    "",
+    ...(wishes ? [`我希望主页上有：${wishes}`, ""] : []),
+    plan ? "请先按“工作方式”给出方案并问我的偏好，等我确认后再写空间文件。" : "这次不用先给方案，直接写空间文件。",
+  ].join("\n");
+  const shown = [`${again ? "重新生成" : "生成"}“${space}”的主页`, ...(wishes ? [`我希望主页上有：${wishes}`] : []), ...(plan ? [] : ["直接生成，不用先看方案"])].join("\n");
+  return { text, shown };
 }

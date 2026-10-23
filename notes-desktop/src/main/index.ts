@@ -577,11 +577,15 @@ function registerIpc() {
     })),
   );
   space(channels.undoOperation, async (id: string) => (await log().undo(id), null));
-  space(channels.copySpaceError, async (name: string, problem: SpacePageProblem) => {
+  const errorReport = (name: string, problem: SpacePageProblem) => {
     const lib = spaces();
-    clipboard.writeText(spaceErrorReport({ space: name, file: join(lib.folder, `${name}.html`), guide: lib.guidePath, error: problem }));
+    return spaceErrorReport({ space: name, file: join(lib.folder, `${name}.html`), guide: lib.guidePath, error: problem });
+  };
+  space(channels.copySpaceError, async (name: string, problem: SpacePageProblem) => {
+    clipboard.writeText(errorReport(name, problem));
     return null;
   });
+  space(channels.spaceErrorReport, async (name: string, problem: SpacePageProblem) => errorReport(name, problem));
   ipcMain.on(channels.prepareSnapshots, () => {
     void (library && snapshots.library(library.root).baseline().catch(() => undefined));
     // The login shell is asked for its PATH ahead of the first turn too.

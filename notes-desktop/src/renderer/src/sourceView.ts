@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { dialogOpen } from "./dialogs";
 
 // Whether the editor shows the Markdown source instead of the typeset note. One choice for the whole
 // window, kept while notes change (as in the old app); not saved across launches.
@@ -24,7 +25,7 @@ const mac = /Mac/.test(navigator.platform);
 /** ⌘⇧M / Ctrl+Shift+M, and 笔记 › Markdown 源码 in the menu, switch the view. */
 export function listenForSourceView(): () => void {
   const onKey = (event: KeyboardEvent) => {
-    if (event.isComposing || event.code !== "KeyM" || !event.shiftKey || event.altKey) return;
+    if (event.isComposing || dialogOpen() || event.code !== "KeyM" || !event.shiftKey || event.altKey) return;
     if (mac ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey) return;
     event.preventDefault();
     setShowSource(!showSource);

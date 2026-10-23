@@ -85,6 +85,8 @@ export type ReplyPart = { kind: "text"; text: string } | { kind: "steps"; steps:
 export interface UserMessage {
   role: "user";
   text: string;
+  /** What the column shows of it, when the agent was sent more (a space's whole prompt, say). */
+  shown?: string;
   /** Notes put in the context, library-relative. */
   notes: string[];
 }

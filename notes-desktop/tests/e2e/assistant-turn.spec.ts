@@ -90,6 +90,7 @@ test("执行前询问: the reply asks before a command; 拒绝 keeps it from run
     ],
   });
   const { page } = await launchWith(scratch, root);
+  await expect(page.getByRole("treeitem", { name: "笔记库" })).toBeVisible();
   await page.keyboard.press("ControlOrMeta+KeyJ");
   await input(page).fill("整理一下");
   await input(page).press("Enter");

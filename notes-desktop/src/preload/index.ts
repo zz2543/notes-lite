@@ -118,6 +118,7 @@ const api: NotesApi = {
     return () => ipcRenderer.off(channels.spacePageEvent, handler);
   },
   copySpaceError: (name, problem) => ipcRenderer.invoke(channels.copySpaceError, name, problem),
+  spaceErrorReport: (name, problem) => ipcRenderer.invoke(channels.spaceErrorReport, name, problem),
   detectAgents: () => ipcRenderer.invoke(channels.detectAgents),
   agentModels: (agent) => ipcRenderer.invoke(channels.agentModels, agent),
   prepareSnapshots: () => ipcRenderer.send(channels.prepareSnapshots),

@@ -136,12 +136,14 @@ interface SpaceHomeProps {
   onGenerate(): void;
   /** 让助手修改: opens 助手栏 to say what to change; the open space goes with it. */
   onAsk(): void;
+  /** 让助手修复: the homepage's error, as the report for the agent and its one line. */
+  onFix?(report: string, message: string): void;
   /** At the head's right end, as on a note's card. */
   headEnd?: ReactNode;
 }
 
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
-export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, headEnd }: SpaceHomeProps) {
+export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, headEnd }: SpaceHomeProps) {
   const network = useSpaceNetwork(space.name);
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
@@ -167,7 +169,7 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, headEnd
       />
       {space.hasPage ? (
         <>
-          <PageBars name={space.name} onShowLog={onShowLog} network={network.state} onNetwork={(allowed) => void network.decide(allowed)} />
+          <PageBars name={space.name} onShowLog={onShowLog} onFix={onFix} network={network.state} onNetwork={(allowed) => void network.decide(allowed)} />
           <PageSlot name={space.name} />
         </>
       ) : (
@@ -232,7 +234,7 @@ function SpaceTitle({ space, network, onNetwork, onAsk, onCopyPrompt, notify }: 
         )}
         <button className="space-title-button" onClick={onAsk}>
           <Sparkle size={icon.small} aria-hidden />
-          让助手修改
+          {space.hasPage ? "让助手修改" : "让助手生成主页"}
         </button>
         <button className="space-title-button" onClick={onCopyPrompt}>
           <Copy size={icon.small} aria-hidden />
@@ -258,7 +260,7 @@ const sameProblem = (a: SpacePageProblem, b: SpacePageProblem) => a.message === 
  * Above the homepage: the 错误条 when it went wrong (with 复制错误给 agent), and 写入提示 after it wrote.
  * Both open on 展开, pushing the page down rather than covering it.
  */
-function PageBars({ name, onShowLog, network, onNetwork }: { name: string; onShowLog(): void; network?: SpaceNetwork; onNetwork(allowed: boolean): void }) {
+function PageBars({ name, onShowLog, onFix, network, onNetwork }: { name: string; onShowLog(): void; onFix?(report: string, message: string): void; network?: SpaceNetwork; onNetwork(allowed: boolean): void }) {
   const [problems, setProblems] = useState<SpacePageProblem[]>([]);
   const [wrote, setWrote] = useState<{ changes: number; onlyRecords: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -300,6 +302,11 @@ function PageBars({ name, onShowLog, network, onNetwork }: { name: string; onSho
     const done = await window.notes.copySpaceError(name, problem);
     if (done.ok) setCopied(true);
   };
+  const fix = async () => {
+    if (!problem || !onFix) return;
+    const report = await window.notes.spaceErrorReport(name, problem);
+    if (report.ok) onFix(report.value, problem.message);
+  };
   const bar = { initial: { height: 0, opacity: 0 }, animate: { height: "auto", opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: expand };
 
   return (
@@ -333,6 +340,12 @@ function PageBars({ name, onShowLog, network, onNetwork }: { name: string; onSho
                   {problem.location && ` · ${problem.location}`}
                 </span>
               </div>
+              {onFix && (
+                <button type="button" className="space-bar-button" onClick={() => void fix()}>
+                  <Sparkle size={icon.small} aria-hidden />
+                  让助手修复
+                </button>
+              )}
               <button type="button" className="space-bar-button" onClick={() => void copy()}>
                 {copied ? <Check size={icon.small} aria-hidden /> : <Copy size={icon.small} aria-hidden />}
                 {copied ? "已复制" : "复制错误给 agent"}

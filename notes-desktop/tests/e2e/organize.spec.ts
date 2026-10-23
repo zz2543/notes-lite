@@ -65,6 +65,14 @@ test("renaming and moving notes and folders keeps links working; a taken name is
   await contents(page).getByRole("button", { name: "雨后散步" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "移动到…" }).click();
   const move = page.getByRole("dialog", { name: "移动“雨后散步”" });
+  // Opened from a menu, nothing in it focused yet: Esc still closes it, and ⌘K waits.
+  await expect(move).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+KeyK");
+  await expect(page.getByRole("searchbox")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(move).toBeHidden();
+  await contents(page).getByRole("button", { name: "雨后散步" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "移动到…" }).click();
   await expect(move.getByRole("option", { name: "日记", exact: true })).toBeDisabled();
   await move.getByRole("option", { name: "归档", exact: true }).click();
   await move.getByRole("button", { name: "移动" }).click();

@@ -7,6 +7,7 @@ import { useAssistant } from "./AssistantChat";
 import { FocusToggle, useFocusMode } from "./FocusMode";
 import { FolderContentsList } from "./FolderContentsList";
 import { FolderTree } from "./FolderTree";
+import { dialogOpen } from "./dialogs";
 import { isSearchShortcut, SearchBar, SearchHead, SearchResultsList, searchShortcut, startSearch, useSearch, type SearchState } from "./InlineSearch";
 import { errorText, pageShown } from "./ipc";
 import { useFolderFallback } from "./libraryChanges";
@@ -21,6 +22,7 @@ import { useSettingsShortcut } from "./SettingsPanel";
 import { SpaceContents, SpaceHome, useSpace } from "./SpacePage";
 import { SidePages, SideSwitch, SpacePanel, type SideMode } from "./Spaces";
 import { icon } from "./tokens";
+import { scopeLabel } from "../../shared/spaceScope";
 
 type Phase = { kind: "starting" } | LaunchState;
 
@@ -219,13 +221,38 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   // assistant is doing, in the column or, closed, on the card's toggle.
   const [assistantOpen, setAssistantOpen] = useState(false);
   const assistant = useAssistant();
+  // 执行前询问: a call waiting on the user opens the column, so the turn does not sit unseen.
+  const waitingOn = (() => {
+    const last = assistant.conversation?.messages.at(-1);
+    return last?.role === "assistant" ? last.asking?.id : undefined;
+  })();
+  useEffect(() => {
+    if (waitingOn) setAssistantOpen(true);
+  }, [waitingOn]);
   // 新建空间 and 让助手生成主页: the space's prompt goes to 助手 as a new conversation (2026-10-21 用户反馈).
   const [assistantRequest, setAssistantRequest] = useState<AssistantRequest | null>(null);
+  // Nothing is sent yet: the column asks what the user wants on it and whether to see a plan first.
   const generateHomepage = async (name: string) => {
     const prompt = await window.notes.spacePrompt(name);
     if (!prompt.ok) return notify(prompt.message);
+    const space = (await window.notes.listSpaces().catch(() => [])).find((s) => s.name === name);
     setAssistantOpen(true);
-    setAssistantRequest({ id: Date.now(), text: prompt.value, space: name });
+    setAssistantRequest({
+      id: Date.now(),
+      text: prompt.value,
+      space: name,
+      homepage: { space: name, scope: space ? scopeLabel(space.scope) : "", again: Boolean(space?.hasPage) },
+    });
+  };
+  // 让助手修复: the homepage's error goes to 助手 at once, as a new conversation about the space.
+  const fixHomepage = (name: string, report: string, message: string) => {
+    setAssistantOpen(true);
+    setAssistantRequest({
+      id: Date.now(),
+      text: report,
+      shown: `修复“${name}”主页的错误：${message}`,
+      space: name,
+    });
   };
   // 让助手修改: the column opens on its message field; the open space goes with what is asked.
   const [messageFocus, setMessageFocus] = useState(0);
@@ -235,11 +262,16 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   };
   const requestTaken = async (request: AssistantRequest, sent: RequestOutcome) => {
     setAssistantRequest(null);
-    if (sent === "busy") return notify("助手还在进行上一轮，结束后再让它生成主页。");
+    const what = request.homepage ? "生成主页" : "修复主页";
+    if (sent === "busy") return notify(`助手还在进行上一轮，结束后再让它${what}。`);
     if ((sent === "no-agent" || sent === "failed") && request.space) {
       // Without an agent here, or one that could not begin, the prompt is copied for one used elsewhere.
+      const why = sent === "no-agent" ? "没有找到本机的命令行 Agent。" : `助手没能开始${what}。`;
+      if (!request.homepage) {
+        await navigator.clipboard.writeText(request.text).catch(() => undefined);
+        return notify(`${why}错误已复制到剪贴板，可以粘贴给外部 agent 修复。`);
+      }
       const copied = await window.notes.copySpacePrompt(request.space);
-      const why = sent === "no-agent" ? "没有找到本机的命令行 Agent。" : "助手没能开始生成主页。";
       notify(copied.ok ? `${why}提示词已复制到剪贴板，可以粘贴给外部 agent 生成空间主页。` : copied.message);
     }
   };
@@ -259,7 +291,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   const workingFolder = picked === "note" && note !== null ? parentOf(note) : folder;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isAssistantShortcut(event)) return;
+      if (!isAssistantShortcut(event) || dialogOpen()) return;
       event.preventDefault();
       setAssistantOpen((now) => !now);
     };
@@ -329,7 +361,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isSearchShortcut(event)) return;
+      if (!isSearchShortcut(event) || dialogOpen()) return;
       event.preventDefault();
       openSearch();
     };
@@ -489,6 +521,8 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
                   onOpenFolder={openFolder}
                   onOpenNote={(path) => void openNote(path)}
                   onMenu={organize.itemMenu}
+                  onNewNote={() => void organize.newNote(folder)}
+                  onNewFolder={() => organize.newFolder(folder)}
                 />
               )}
             </>
@@ -497,7 +531,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
       )}
       <main className="card-wrap" ref={cardWrap}>
         {inSpace && showingHome ? (
-          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} onGenerate={() => void generateHomepage(inSpace.name)} onAsk={askAssistant} headEnd={cardHeadEnd} />
+          <SpaceHome space={inSpace} notify={notify} onShowLog={operationLog.show} onGenerate={() => void generateHomepage(inSpace.name)} onAsk={askAssistant} onFix={(report, message) => fixHomepage(inSpace.name, report, message)} headEnd={cardHeadEnd} />
         ) : (
           <NoteEditor
             key={reloads}

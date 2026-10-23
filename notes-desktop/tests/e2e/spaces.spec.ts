@@ -179,9 +179,9 @@ test("a space file written by another program shows up in the list", async ({ sc
   await app.close();
 });
 
-test("creating a space opens 助手 and has it write the homepage in a new conversation, in the library itself", async ({ scratch }) => {
+test("creating a space opens 助手, which waits for 开始 with what the user wants; it then works in a new conversation in the library itself", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "健身/训练.md": training });
-  const agent = await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-1", steps: [{ say: "主页写好了。" }] });
+  const agent = await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-1", steps: [{ say: "方案如下……你更关心哪些数字？" }] });
   const { page } = await launchWith(scratch, root);
   await showSide(page, "空间");
 
@@ -193,19 +193,75 @@ test("creating a space opens 助手 and has it write the homepage in a new conve
 
   const column = page.getByRole("complementary", { name: "助手栏" });
   await expect(column).toHaveAttribute("aria-hidden", "false");
+  // Nothing is sent yet: the column asks first.
+  const start = column.getByRole("region", { name: "生成主页" });
+  await expect(start).toContainText("为“健身”生成主页");
+  await expect(start).toContainText("范围：健身");
+  await expect(start.getByRole("checkbox", { name: "先给我看方案，确认后再写" })).toBeChecked();
+  expect(await agent.runs()).toHaveLength(0);
+  await start.getByRole("textbox", { name: "你希望主页上有什么？（可选）" }).fill("体重曲线");
+  await start.getByRole("button", { name: "开始" }).click();
+
   const conversation = column.getByRole("log", { name: "对话" });
-  await expect(conversation).toContainText("请为笔记应用编写“健身”空间的空间主页。");
-  await expect(conversation).toContainText("主页写好了。");
+  // The column shows what was asked in a line; the agent gets the whole prompt.
+  await expect(conversation).toContainText("生成“健身”的主页");
+  await expect(conversation).toContainText("我希望主页上有：体重曲线");
+  await expect(conversation).not.toContainText("请为笔记应用编写");
+  await expect(conversation).toContainText("你更关心哪些数字？");
   const [run] = await agent.runs();
+  expect(run!.stdin).toContain("请为笔记应用编写“健身”空间的空间主页。");
   expect(run!.stdin).toContain(join(root, ".notes", "空间", "健身.html"));
   expect(run!.stdin).toContain("健身/训练.md#卧推：日期 | 重量");
+  expect(run!.stdin).toContain("我希望主页上有：体重曲线");
+  expect(run!.stdin).toContain("先给方案、再动手");
+  expect(run!.stdin).toContain("请先按“工作方式”给出方案并问我的偏好");
   // The space is told with its authoring guide, as the open one.
   expect(run!.stdin).toContain("- 健身：.notes/空间/健身.html（当前打开）");
   expect(await realpath(run!.cwd)).toBe(await realpath(root));
 
-  // Asked again from the space's menu: another new conversation.
+  // Asked again from the space's menu: 取消 sends nothing; 开始 without a plan, another new conversation.
   await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "让助手生成主页" }).click();
+  await start.getByRole("button", { name: "取消" }).click();
+  await expect(start).toHaveCount(0);
+  await expect(conversation).toContainText("你更关心哪些数字？");
+  await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "让助手生成主页" }).click();
+  await start.getByRole("checkbox", { name: "先给我看方案，确认后再写" }).uncheck();
+  await start.getByRole("button", { name: "开始" }).click();
   await expect.poll(async () => (await agent.runs()).length).toBe(2);
-  expect((await agent.runs())[1]!.argv).not.toContain("--resume");
+  const second = (await agent.runs())[1]!;
+  expect(second.argv).not.toContain("--resume");
+  expect(second.stdin).toContain("这次不用先给方案，直接写空间文件。");
+  await expect(conversation).toContainText("直接生成，不用先看方案");
+});
+
+test("the scope is a folded tree: a folder opens with its caret; ticking one ticks the folders inside, and names the space", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "学习/英语/单词.md": "# 单词", "学习/英语/语法/时态.md": "# 时态", "学习/数学/线代.md": "# 线代", "日记/今天.md": "# 今天" });
+  const { page } = await launchWith(scratch, root);
+  await showSide(page, "空间");
+  await page.getByRole("button", { name: "新建空间" }).first().click();
+  const form = page.getByRole("dialog", { name: "新建空间" });
+  const folders = form.getByRole("group", { name: "笔记库中的文件夹" });
+  // Only the top level at first.
+  await expect(folders.getByRole("checkbox")).toHaveCount(2);
+  await folders.getByRole("button", { name: "展开“学习”" }).click();
+  await expect(folders.getByRole("checkbox", { name: "学习 / 英语", exact: true })).toBeVisible();
+  await folders.getByRole("button", { name: "展开“英语”" }).click();
+  // One inside ticked: the folder around it shows a dash.
+  await folders.getByRole("checkbox", { name: "学习 / 英语 / 语法" }).check();
+  await expect(folders.getByRole("checkbox", { name: "学习", exact: true })).toHaveAttribute("aria-checked", "mixed");
+  await expect(form.getByLabel("空间名称")).toHaveValue("语法");
+  // The whole folder: everything inside is ticked with it, and waits for it.
+  await folders.getByRole("checkbox", { name: "学习", exact: true }).check();
+  for (const inside of ["学习 / 英语", "学习 / 数学", "学习 / 英语 / 语法"]) {
+    await expect(folders.getByRole("checkbox", { name: inside, exact: true })).toBeChecked();
+    await expect(folders.getByRole("checkbox", { name: inside, exact: true })).toBeDisabled();
+  }
+  await expect(form.getByLabel("空间名称")).toHaveValue("学习");
+  await folders.getByRole("button", { name: "收起“学习”" }).click();
+  await expect(folders.getByRole("checkbox")).toHaveCount(2);
+  await form.getByRole("button", { name: "新建" }).click();
+  await expect(form).toHaveCount(0);
+  expect(await readFile(join(root, ".notes/空间/学习.html"), "utf8")).toContain('content="学习"');
 });

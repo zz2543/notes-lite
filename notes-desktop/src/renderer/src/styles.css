@@ -56,6 +56,9 @@ button {
   font-size: var(--text-path);
   text-align: center;
 }
+.empty p {
+  margin: 0 0 4px;
+}
 
 /* Welcome */
 .welcome {
@@ -77,6 +80,7 @@ button {
 }
 .welcome p {
   max-width: var(--welcome-width);
+  text-wrap: balance;
   margin: 0 0 var(--titlebar-height);
   color: var(--side-muted);
   font-size: var(--text-side-row);
@@ -1630,4 +1634,38 @@ nav.rail {
 .step-size {
   font-variant-numeric: tabular-nums;
   color: var(--side-muted);
+}
+/* 生成主页, before it starts. */
+.homepage-start-scope {
+  margin: 0;
+  font-size: var(--text-meta);
+  color: var(--side-muted);
+}
+.homepage-start-label {
+  font-size: var(--text-path);
+}
+.homepage-start-wishes {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 6px var(--row-padding);
+  border: 0;
+  border-radius: var(--icon-button-radius);
+  outline: none;
+  background: var(--card-bg);
+  color: var(--card-fg);
+  box-shadow: var(--pill-shadow);
+  caret-color: var(--accent);
+  font: inherit;
+  font-size: var(--text-path);
+}
+.homepage-start-plan {
+  display: flex;
+  align-items: center;
+  gap: var(--inline-gap);
+  font-size: var(--text-path);
+}
+.homepage-start-plan input {
+  margin: 0;
+  accent-color: var(--accent);
 }

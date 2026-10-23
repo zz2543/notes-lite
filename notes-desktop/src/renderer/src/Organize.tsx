@@ -3,6 +3,8 @@ import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { ListedItem } from "./FolderContentsList";
 import { createPortal } from "react-dom";
+import { openDialogs } from "./dialogs";
+import { FolderChooser } from "./FolderPicker";
 import { libraryChanged } from "./ipc";
 import { useMotion } from "./MotionProvider";
 import "./organize.css";
@@ -198,7 +200,7 @@ export function useOrganize(view: OrganizeView) {
     </>
   );
 
-  return { newNote, renameNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
+  return { newNote, newFolder, renameNote, itemMenu, folderMenu, restore, lastDeleted, overlay };
 }
 
 // Menus and dialogs float over the whole window. A space homepage is laid over the card by main,
@@ -300,9 +302,32 @@ interface DialogProps {
   onClose(): void;
 }
 
+
 /** A floating panel over a dimmed window: Esc or a click outside closes it. */
 export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { title: string; onSubmit(event: FormEvent): void; children: ReactNode }) {
   useOverlay();
+  const form = useRef<HTMLFormElement>(null);
+  const closing = useRef(onClose);
+  closing.current = onClose;
+  useEffect(() => {
+    const entry = { close: () => closing.current() };
+    openDialogs.push(entry);
+    // Opened from a menu, nothing in it has the focus yet: it takes it, so Esc and Tab start here.
+    if (!form.current?.contains(document.activeElement)) form.current?.focus();
+    const keys = (event: globalThis.KeyboardEvent) => {
+      if (openDialogs.at(-1) !== entry) return;
+      if (event.key === "Escape" && !event.isComposing) {
+        event.preventDefault();
+        event.stopPropagation();
+        entry.close();
+      }
+    };
+    window.addEventListener("keydown", keys, true);
+    return () => {
+      window.removeEventListener("keydown", keys, true);
+      openDialogs.splice(openDialogs.indexOf(entry), 1);
+    };
+  }, []);
   // 浮现, as the settings panel does: the dialog grows into place out of a blur over a fading scrim, and
   // shrinks away when it closes, inert by then, so nothing waits on it and nothing in it answers twice.
   const { emerge, overlay } = useMotion();
@@ -322,6 +347,8 @@ export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { t
         animate={overlay.animate}
         exit={overlay.exit}
         transition={emerge}
+        ref={form}
+        tabIndex={-1}
         className="dialog"
         role="dialog"
         aria-modal="true"
@@ -330,7 +357,6 @@ export function Dialog({ title, onClose, onSubmit, children }: DialogProps & { t
           event.preventDefault();
           onSubmit(event);
         }}
-        onKeyDown={(event) => event.key === "Escape" && onClose()}
       >
         <h2>{title}</h2>
         {children}
@@ -417,29 +443,9 @@ function MoveDialog({ item, libraryName, onSubmit, onClose }: MoveDialogProps) {
   const submit = (folder = target) => folder !== undefined && void run(() => onSubmit(folder));
   return (
     <Dialog title={`移动“${item.name}”`} onClose={onClose} onSubmit={() => submit()}>
-      <div className="dialog-list" role="listbox" aria-label="目标文件夹">
-        {folders &&
-          ["", ...folders].map((folder) => {
-            const parts = folder ? folder.split("/") : [];
-            return (
-              <button
-                type="button"
-                key={folder}
-                role="option"
-                className="dialog-option"
-                aria-label={folder ? parts.join(" / ") : libraryName}
-                aria-selected={target === folder}
-                disabled={!allowed(folder)}
-                style={{ "--depth": parts.length } as CSSProperties}
-                onClick={() => setTarget(folder)}
-                onDoubleClick={() => submit(folder)}
-              >
-                <SelectedIcon off={Folder} selected={target === folder} />
-                <span className="label">{parts.at(-1) ?? libraryName}</span>
-              </button>
-            );
-          })}
-      </div>
+      {folders && (
+        <FolderChooser folders={folders} libraryName={libraryName} near={parentOf(item.path)} chosen={target} allowed={allowed} onChoose={setTarget} onConfirm={submit} />
+      )}
       {error && (
         <p className="dialog-error" role="alert">
           {error}

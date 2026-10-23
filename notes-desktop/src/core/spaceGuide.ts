@@ -4,7 +4,7 @@
 // interface's TypeScript declarations.
 
 /** Bumped whenever the text changes. */
-export const spaceGuideVersion = 6;
+export const spaceGuideVersion = 7;
 
 /** The page interface and components as TypeScript declarations, as the guide carries them. */
 export const spaceTypes = `/** 字段类型：整列都是数字为 number，整列都是 YYYY-MM-DD 为 date，其余为 text。 */
@@ -127,6 +127,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 - **只读需要的东西：** 这份说明、空间文件、提示词里列出的进展记录表。想了解主题，最多浏览几篇笔记；不要逐篇读完范围内的笔记。范围内的对比表、速查表等内容表格不是进展记录，不要做成主页内容。
 - **这份说明就是全部接口文档。** 不要打开或解包笔记应用的程序文件去找组件的行为。常被问到的：记录表还不存在时，组件显示空状态，\`space.query\` 返回空数组，第一次写入时自动新建；\`data-space-count\` 在元素出现或属性变化时滚动到新值；\`space.chart\` 跟随主题和窗口大小自动更新。
 - **不要自建测试页面，也不要用浏览器检查。** 写好空间文件后笔记应用会立即显示主页，出错会显示在主页顶部的提示条里，用户会告诉你。
+- **新建主页先给方案。** 第一次回复不写文件：说说你对这个空间的理解，列出打算放的卡片、图表、快捷录入和要用的记录表，问用户两三个偏好问题，等用户确认后再写。用户说“直接做”或要求已经很明确时可以跳过。修改已有主页时按用户说的改，不必先给方案。
 - **写好空间文件就结束**，简短说明主页包含什么。
 
 ## 空间文件

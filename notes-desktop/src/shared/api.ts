@@ -192,6 +192,8 @@ export interface NotesApi {
   onSpacePageEvent(listener: (event: SpacePageEvent) => void): () => void;
   /** 复制错误给 agent: the problem, with the space file and the guide, to the clipboard. */
   copySpaceError(name: string, problem: SpacePageProblem): Promise<SpaceDone<null>>;
+  /** The same report, for 让助手修复 to send to 助手. */
+  spaceErrorReport(name: string, problem: SpacePageProblem): Promise<SpaceDone<string>>;
 }
 
 /** What main tells the app about a space's homepage. */
@@ -330,4 +332,5 @@ export const channels = {
   undoOperation: "spaces:undo",
   spacePageEvent: "spaces:page-event",
   copySpaceError: "spaces:copy-error",
+  spaceErrorReport: "spaces:error-report",
 } as const;

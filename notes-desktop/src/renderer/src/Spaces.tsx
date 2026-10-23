@@ -1,12 +1,13 @@
 import { Books, DotsThree, Plus, SquaresFour } from "@phosphor-icons/react";
 import { AnimatePresence, motion, Reorder } from "motion/react";
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { SpaceDraft, SpaceScope } from "../../core";
 import type { SpaceInfo } from "../../shared/api";
 import { scopeLabel } from "../../shared/spaceScope";
 import { travel } from "./motion";
 import { useMotion } from "./MotionProvider";
+import { FolderChecklist } from "./FolderPicker";
 import { ContextMenu, Dialog, useStep, type Menu } from "./Organize";
 import { SelectionPill } from "./SelectionPill";
 import "./spaces.css";
@@ -307,13 +308,13 @@ function SpaceDialog({ title, confirm, libraryName, space, onClose, onSubmit }: 
     window.notes.listFolders().then(setFolders, () => setFolders([]));
   }, []);
 
-  const toggle = (folder: string) => {
+  // The name, until typed, follows the first folder ticked: ticking 健身 names the space 健身.
+  const [named, setNamed] = useState(Boolean(space));
+  const choose = (next: ReadonlySet<string>) => {
     setError(undefined);
-    setChosen((now) => {
-      const next = new Set(now);
-      if (!next.delete(folder)) next.add(folder);
-      return next;
-    });
+    setChosen(next);
+    const first = (folders ?? []).find((f) => next.has(f));
+    if (!named) setName(first?.split("/").at(-1) ?? "");
   };
   const submit = () => {
     // Folders keep the library's order, whatever order they were ticked in.
@@ -340,11 +341,12 @@ function SpaceDialog({ title, confirm, libraryName, space, onClose, onSubmit }: 
           spellCheck={false}
           onChange={(event) => {
             setName(event.target.value);
+            setNamed(event.target.value !== "");
             setError(undefined);
           }}
         />
       </div>
-      <p className="dialog-hint">范围：空间主页只能读取和写入范围内的笔记。</p>
+      <p className="dialog-hint">范围：空间主页只能读取和写入范围内的笔记。选中的文件夹包括它里面的所有子文件夹。</p>
       <label className="space-check">
         <input
           type="checkbox"
@@ -356,19 +358,14 @@ function SpaceDialog({ title, confirm, libraryName, space, onClose, onSubmit }: 
         />
         <span className="label">整个笔记库</span>
       </label>
-      {!whole && (
-        <div className="dialog-list space-folders" role="group" aria-label={`${libraryName}中的文件夹`}>
-          {folders?.map((folder) => {
-            const parts = folder.split("/");
-            return (
-              <label key={folder} className="space-check" style={{ "--depth": parts.length - 1 } as CSSProperties} title={folder}>
-                <input type="checkbox" aria-label={parts.join(" / ")} checked={chosen.has(folder)} onChange={() => toggle(folder)} />
-                <span className="label">{parts.at(-1)}</span>
-              </label>
-            );
-          })}
-          {folders?.length === 0 && <p className="dialog-hint">笔记库里还没有文件夹，可以选择整个笔记库。</p>}
-        </div>
+      {!whole && folders && (
+        <FolderChecklist
+          folders={folders}
+          chosen={chosen}
+          onChange={choose}
+          label={`${libraryName}中的文件夹`}
+          empty={<p className="dialog-hint">笔记库里还没有文件夹，可以选择整个笔记库。</p>}
+        />
       )}
       {error && (
         <p className="dialog-error" role="alert">

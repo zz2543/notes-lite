@@ -204,7 +204,7 @@ test("a note in the space opens in the editor, and 主页 brings the same page b
   // A space without a homepage yet has 助手 write one; with no agent installed the prompt is copied.
   await spaceList(page).getByRole("button", { name: "空白" }).click();
   await expect.poll(() => shownPages(app)).toBe(0);
-  await page.getByRole("button", { name: "让助手生成主页" }).click();
+  await page.getByRole("region", { name: "空间标题" }).getByRole("button", { name: "让助手生成主页" }).click();
   await expect(page.getByRole("alert")).toContainText("提示词");
   await page.keyboard.press("ControlOrMeta+KeyJ");
   await page.getByRole("paragraph").filter({ hasText: "交给外部 agent" }).getByRole("button", { name: "复制提示词" }).click();

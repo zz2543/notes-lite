@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AgentModels, InstalledAgent } from "../../core";
 import { agents, modelName, type AgentId } from "../../shared/agentKinds";
 import { AssistantFigure } from "./AssistantFigure";
-import { Composer, ConversationHistory, ConversationView, folderName, type AssistantState } from "./AssistantChat";
+import { Composer, ConversationHistory, ConversationView, folderName, homepageMessage, HomepageStart, type AssistantState, type HomepageWish } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
 import { ContextMenu, type Menu } from "./Organize";
 import { usePreferences } from "./preferences";
@@ -172,7 +172,7 @@ function useInstalledAgents(open: boolean) {
 }
 
 /** What became of a request from elsewhere: begun, no agent here, the last turn still going, or not begun. */
-export type RequestOutcome = "sent" | "no-agent" | "busy" | "failed";
+export type RequestOutcome = "sent" | "no-agent" | "busy" | "failed" | "cancelled";
 
 export interface AssistantColumnProps {
   open: boolean;
@@ -203,6 +203,10 @@ export interface AssistantRequest {
   text: string;
   /** The space it is about, told to the agent with the authoring guide. */
   space?: string;
+  /** What the column shows of the message, when `text` is longer (a space's prompt). */
+  shown?: string;
+  /** 生成主页: asked first in the column (what to have on it, a plan first or not); sent on 开始. */
+  homepage?: { space: string; scope: string; again: boolean };
 }
 
 export function AssistantColumn(props: AssistantColumnProps) {
@@ -235,21 +239,46 @@ export function AssistantColumn(props: AssistantColumnProps) {
   // the agent and model the switch shows.
   // Taken once: it is answered only after the turn has started (or not), and the effect may run again meanwhile.
   const taken = useRef<AssistantRequest | null>(null);
+  // 生成主页 waiting for 开始 in the column.
+  const [asking, setAsking] = useState<AssistantRequest | null>(null);
+  const begin = async (request: AssistantRequest) => {
+    if (!agent) return onRequestTaken(request, "no-agent");
+    if (assistant.running) return onRequestTaken(request, "busy");
+    // The agent reads the library from the disk: the open note is saved first.
+    const started =
+      (await saveFirst()) &&
+      (await assistant.send({
+        fresh: true,
+        agent: agent.id,
+        folder: "",
+        text: request.text,
+        notes: [],
+        ...(request.shown ? { shown: request.shown } : {}),
+        ...(model ? { model } : {}),
+        ...(request.space ? { space: request.space } : {}),
+      }));
+    onRequestTaken(request, started ? "sent" : "failed");
+  };
   useEffect(() => {
     if (!open || !request || !installed || taken.current === request) return;
     taken.current = request;
     if (!agent) return onRequestTaken(request, "no-agent");
     if (assistant.running) return onRequestTaken(request, "busy");
     setHistory(false);
-    void (async () => {
-      // The agent reads the library from the disk: the open note is saved first.
-      const started =
-        (await saveFirst()) &&
-        (await assistant.send({ fresh: true, agent: agent.id, folder: "", text: request.text, notes: [], ...(model ? { model } : {}), ...(request.space ? { space: request.space } : {}) }));
-      onRequestTaken(request, started ? "sent" : "failed");
-    })();
+    if (request.homepage) return setAsking(request);
+    void begin(request);
     // Run as the request comes, the column opens or the agents are known; what else it reads is that moment's.
   }, [open, request, installed]);
+  const startHomepage = (wish: HomepageWish) => {
+    if (!asking?.homepage) return;
+    const { space: name, again } = asking.homepage;
+    setAsking(null);
+    void begin({ ...asking, ...homepageMessage(asking.text, name, wish, again) });
+  };
+  const cancelHomepage = () => {
+    if (asking) onRequestTaken(asking, "cancelled");
+    setAsking(null);
+  };
   return (
     // Always there, so its width can move; closed, it is hidden from everything once it has shut.
     <aside className={`assistant ${open ? "open" : ""}`} aria-label="助手栏" aria-hidden={!open} inert={!open}>
@@ -260,9 +289,10 @@ export function AssistantColumn(props: AssistantColumnProps) {
             className="icon-button small"
             onClick={() => {
               setHistory(false);
+              cancelHomepage();
               assistant.reset();
             }}
-            disabled={assistant.running || conversation === null}
+            disabled={assistant.running || (conversation === null && !asking)}
             aria-label="新对话"
             title="新对话"
           >
@@ -312,7 +342,9 @@ export function AssistantColumn(props: AssistantColumnProps) {
           </div>
         </header>
         {installed?.length === 0 && <InstallGuide onDetect={detect} />}
-        {history ? (
+        {asking?.homepage && !history ? (
+          <HomepageStart space={asking.homepage.space} scope={asking.homepage.scope} again={asking.homepage.again} onStart={startHomepage} onCancel={cancelHomepage} />
+        ) : history ? (
           <ConversationHistory current={conversation?.id ?? null} libraryName={libraryName} onPick={pick} />
         ) : conversation ? (
           <ConversationView conversation={conversation} onReview={assistant.review} onShowLog={onShowLog} />
@@ -329,7 +361,7 @@ export function AssistantColumn(props: AssistantColumnProps) {
             {assistant.problem}
           </p>
         )}
-        {installed && installed.length > 0 && (
+        {installed && installed.length > 0 && !(asking && !history) && (
           <Composer
             note={note}
             conversationNotes={conversation ? (conversation.messages.findLast((message) => message.role === "user")?.notes ?? []) : undefined}

@@ -42,5 +42,5 @@ export function conversationStore(base: string, now: () => Date = () => new Date
 
 const titleOf = (conversation: Conversation) => {
   const first = conversation.messages.find((m) => m.role === "user");
-  return first?.role === "user" ? first.text.trim().split("\n")[0]! : "";
+  return first?.role === "user" ? (first.shown ?? first.text).trim().split("\n")[0]! : "";
 };

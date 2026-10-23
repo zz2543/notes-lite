@@ -1,5 +1,6 @@
 import { ArrowsIn, ArrowsOut } from "@phosphor-icons/react";
 import { useEffect, useState, type RefObject } from "react";
+import { dialogOpen } from "./dialogs";
 import { icon } from "./tokens";
 
 // 专注模式: a layout state of the window, not another editor. The card keeps its editor (text, caret,
@@ -19,7 +20,7 @@ export function useFocusMode(card: RefObject<HTMLElement | null>): [boolean, (on
   const [focused, setFocused] = useState(false);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing || dialogOpen()) return;
       if (isFocusShortcut(event)) {
         event.preventDefault();
         setFocused((now) => !now);
