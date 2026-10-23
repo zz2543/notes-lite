@@ -151,14 +151,6 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, 
   };
   return (
     <article className="card" data-kind="space" aria-label="卡片">
-      <header className="card-head">
-        <span className="card-path">{space.name} · 主页</span>
-        <button className="card-tool" onClick={onShowLog}>
-          <ListChecks size={icon.small} />
-          操作记录
-        </button>
-        {headEnd}
-      </header>
       <SpaceTitle
         space={space}
         network={space.hasPage ? network.state : undefined}
@@ -166,6 +158,15 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, 
         onAsk={space.hasPage ? onAsk : onGenerate}
         onCopyPrompt={() => void copyPrompt()}
         notify={notify}
+        headEnd={
+          <>
+            <button className="card-tool" onClick={onShowLog}>
+              <ListChecks size={icon.small} />
+              操作记录
+            </button>
+            {headEnd}
+          </>
+        }
       />
       {space.hasPage ? (
         <>
@@ -192,6 +193,16 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, 
 }
 
 /** 范围：健身/、日记/, or 范围：整个笔记库. */
+/** A tool over the page: its label beside the icon, only the icon (named all the same) in a narrow card. */
+function TitleButton({ label, onClick, children }: { label: string; onClick(): void; children: ReactNode }) {
+  return (
+    <button className="space-title-button" onClick={onClick} aria-label={label} title={label}>
+      {children}
+      <span className="space-title-label">{label}</span>
+    </button>
+  );
+}
+
 const scopeLine = (scope: SpaceScope) => `范围：${scopeLabel(scope, { asFolders: true })}`;
 
 interface SpaceTitleProps {
@@ -203,18 +214,44 @@ interface SpaceTitleProps {
   /** 联网, when the homepage names sites; pressing it asks again. */
   network?: SpaceNetwork;
   onNetwork(): void;
+  /** What follows the page's tools in the card's top row: 操作记录, then the window's own buttons. */
+  headEnd: ReactNode;
 }
 
-/** Over the homepage: the space's icon, name and scope, and what can be done to its page. */
-function SpaceTitle({ space, network, onNetwork, onAsk, onCopyPrompt, notify }: SpaceTitleProps) {
+/**
+ * Over the homepage: what can be done to its page in the card's top row, and right under it the space's
+ * icon, name and scope; the name is not said again as a path, so no tall empty brow is left over the page.
+ */
+function SpaceTitle({ space, network, onNetwork, onAsk, onCopyPrompt, notify, headEnd }: SpaceTitleProps) {
   // 查看源码: the space file, shown where it lies.
   const showSource = async () => {
     const shown = await window.notes.revealSpaceSource(space.name);
     if (!shown.ok) notify(shown.message);
   };
   return (
-    <section className="space-title" aria-label="空间标题">
-      <div className="space-title-text">
+    <section className="space-head" aria-label="空间标题">
+      <header className="card-head">
+        <span className="card-head-gap" />
+        <div className="space-title-tools">
+          {network && network.decision !== "ask" && (
+            <button className="space-title-button" onClick={onNetwork} title={`可访问：${network.hosts.join("、")}。点按重新选择。`} aria-label={network.decision === "allowed" ? "已允许联网" : "未允许联网"}>
+              <Globe size={icon.small} aria-hidden />
+              <span className="space-title-label">{network.decision === "allowed" ? "已允许联网" : "未允许联网"}</span>
+            </button>
+          )}
+          <TitleButton label={space.hasPage ? "让助手修改" : "让助手生成主页"} onClick={onAsk}>
+            <Sparkle size={icon.small} aria-hidden />
+          </TitleButton>
+          <TitleButton label="复制提示词" onClick={onCopyPrompt}>
+            <Copy size={icon.small} aria-hidden />
+          </TitleButton>
+          <TitleButton label="查看源码" onClick={() => void showSource()}>
+            <Code size={icon.small} aria-hidden />
+          </TitleButton>
+        </div>
+        {headEnd}
+      </header>
+      <div className="space-title">
         <h1>
           {space.icon && (
             <span className="space-title-icon" aria-hidden>
@@ -224,26 +261,6 @@ function SpaceTitle({ space, network, onNetwork, onAsk, onCopyPrompt, notify }: 
           {space.name}
         </h1>
         <p className="space-title-scope">{scopeLine(space.scope)}</p>
-      </div>
-      <div className="space-title-tools">
-        {network && network.decision !== "ask" && (
-          <button className="space-title-button" onClick={onNetwork} title={`可访问：${network.hosts.join("、")}。点按重新选择。`}>
-            <Globe size={icon.small} aria-hidden />
-            {network.decision === "allowed" ? "已允许联网" : "未允许联网"}
-          </button>
-        )}
-        <button className="space-title-button" onClick={onAsk}>
-          <Sparkle size={icon.small} aria-hidden />
-          {space.hasPage ? "让助手修改" : "让助手生成主页"}
-        </button>
-        <button className="space-title-button" onClick={onCopyPrompt}>
-          <Copy size={icon.small} aria-hidden />
-          复制提示词
-        </button>
-        <button className="space-title-button" onClick={() => void showSource()}>
-          <Code size={icon.small} aria-hidden />
-          查看源码
-        </button>
       </div>
     </section>
   );

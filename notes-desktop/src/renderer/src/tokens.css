@@ -204,7 +204,7 @@
   --space-page-inline: 40px;
   --space-grid-min: 176px;
   --space-title-size: 24px;
-  --space-title-padding: var(--gap-6) var(--space-page-inline) var(--gap-1);
+  --space-title-padding: var(--gap-1) var(--space-page-inline) var(--gap-2);
 }
 
 /* 颜色 · 深色: its own set, not the light one inverted. */

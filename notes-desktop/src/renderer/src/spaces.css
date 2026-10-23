@@ -307,16 +307,14 @@
 .card[data-kind="space"] {
   background: var(--space-surface);
 }
-.space-title {
-  flex: none;
-  display: flex;
-  align-items: flex-end;
-  gap: var(--gap-4);
-  padding: var(--space-title-padding);
+.card[data-kind="space"] {
+  container-type: inline-size;
 }
-.space-title-text {
-  flex: 1;
-  min-width: 0;
+.space-head {
+  flex: none;
+}
+.space-title {
+  padding: var(--space-title-padding);
 }
 .space-title h1 {
   margin: 0;
@@ -343,19 +341,26 @@
   flex: none;
   display: flex;
   gap: var(--gap-1);
+  -webkit-app-region: no-drag;
+}
+/* A narrow card keeps the tools' icons and drops their words (still their names, and their tips). */
+@container (max-width: 620px) {
+  .space-title-label {
+    display: none;
+  }
 }
 .space-title-button {
   display: inline-flex;
   align-items: center;
   gap: var(--icon-label-gap);
-  height: var(--icon-button);
+  height: var(--icon-button-small);
   padding: 0 var(--inline-gap);
   border: none;
   border-radius: var(--icon-button-radius);
   background: none;
-  color: var(--space-muted);
+  color: var(--card-path);
   font: inherit;
-  font-size: var(--text-path);
+  font-size: var(--text-meta);
   cursor: pointer;
 }
 .space-title-button:hover {
