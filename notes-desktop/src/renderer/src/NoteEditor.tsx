@@ -46,6 +46,7 @@ const stopTyping = (event: PointerEvent<HTMLElement>) => event.currentTarget.cla
 export function NoteEditor({
   path,
   fresh = false,
+  headStart,
   headEnd,
   ...choices
 }: {
@@ -53,6 +54,8 @@ export function NoteEditor({
   fresh?: boolean;
   /** At the head's right end, after the card's own tools: the 助手栏 toggle while the column is closed. */
   headEnd?: ReactNode;
+  /** At the head's left end, always shown: in a space, the way back to its homepage. */
+  headStart?: ReactNode;
 } & Choices) {
   const { value: source, error } = useNoteSource(path);
   const showSource = useShowSource();
@@ -68,6 +71,7 @@ export function NoteEditor({
     <article className="card" data-kind="note" aria-label="卡片" onKeyDownCapture={startTyping} onPointerMove={stopTyping}>
       <header className="card-head">
         {/* The note's name is its title, above its text; the head keeps only the tools. */}
+        {headStart}
         <span className="card-head-gap" />
         <button
           className="card-tool"

@@ -1,4 +1,4 @@
-import { ArrowCounterClockwise, CaretUpDown, HardDrives, MagnifyingGlass, SidebarSimple } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretLeft, CaretUpDown, HardDrives, House, MagnifyingGlass, SidebarSimple } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { LaunchState, LibraryInfo, Place } from "../../shared/api";
@@ -333,6 +333,13 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     setSpace(name);
     if (name !== null) void goHome();
   };
+  // 单栏导航: clicking a space enters it, its page taking the whole panel; ‹ 空间 goes back to the list
+  // (2026-10-23 用户确认). The space opened by turning to 空间 waits behind the list until clicked.
+  const [spaceListShown, setSpaceListShown] = useState(true);
+  const enterSpace = (name: string | null) => {
+    selectSpace(name);
+    setSpaceListShown(name === null);
+  };
   // Turning to 空间 with none open yet (or the open one gone) opens the first, so the card shows a space
   // page rather than the note left from 资料库.
   const changeSide = (mode: SideMode) => {
@@ -410,6 +417,17 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     <SearchResultsList answer={answer} libraryName={library.name} openNote={note} onOpen={(hit) => void openResult(hit)} />
   ) : null;
 
+  const sidePage = sideMode === "library" ? "library" : single && inSpace && !spaceListShown ? "space" : "spaces";
+  // A note opened from a space keeps the way back to the space's homepage at the card's top left.
+  const cardHeadStart = inSpace && !showingHome && (
+    <button className="card-back" onClick={() => void goHome()} aria-label={`返回“${inSpace.name}”主页`} title={`返回“${inSpace.name}”主页`}>
+      <CaretLeft size={icon.small} weight="bold" />
+      <span className="card-back-icon" aria-hidden>
+        {inSpace.icon || <House size={icon.small} />}
+      </span>
+      <span className="label">{inSpace.name} 主页</span>
+    </button>
+  );
   const cardHeadEnd = (
     <>
       <FocusToggle focused={focused} onChange={setFocused} />
@@ -456,8 +474,8 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
               <span className="side-top-slot" ref={setSideTools} />
             </div>
           </div>
-          <SidePages mode={sideMode}>
-            {sideMode === "library" ? (
+          <SidePages page={sidePage} rank={sidePage === "library" ? 0 : sidePage === "spaces" ? 1 : 2}>
+            {sidePage === "library" ? (
               <>
                 {single && searchHead}
                 {(single && searchResults) || (
@@ -487,22 +505,22 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
                   </button>
                 )}
               </>
+            ) : sidePage === "spaces" ? (
+                <SpacePanel tools={sideTools} libraryName={library.name} selected={space} onSelect={enterSpace} notify={notify} onGenerate={(name) => void generateHomepage(name)} />
             ) : (
-              <>
-                <SpacePanel tools={sideTools} libraryName={library.name} selected={space} onSelect={selectSpace} notify={notify} onGenerate={(name) => void generateHomepage(name)} />
-                {single && inSpace && (
-                  <div className="space-files">
-                    <SpaceContents
-                      space={inSpace}
-                      place="side"
-                      showingHome={showingHome}
-                      openNote={note}
-                      onHome={() => void goHome()}
-                      onOpenNote={(path) => void openSpaceNote(path)}
-                    />
-                  </div>
-                )}
-              </>
+              inSpace && (
+                <div className="space-files">
+                  <SpaceContents
+                    space={inSpace}
+                    place="side"
+                    showingHome={showingHome}
+                    openNote={note}
+                    onHome={() => void goHome()}
+                    onOpenNote={(path) => void openSpaceNote(path)}
+                    onBack={() => setSpaceListShown(true)}
+                  />
+                </div>
+              )
             )}
           </SidePages>
           <button className="side-foot" onClick={onSwitch} title="切换笔记库" aria-label="切换笔记库">
@@ -555,6 +573,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
             onOpenLinked={openCopy}
             notify={notify}
             onRename={organize.renameNote}
+            headStart={cardHeadStart}
             headEnd={cardHeadEnd}
           />
         )}

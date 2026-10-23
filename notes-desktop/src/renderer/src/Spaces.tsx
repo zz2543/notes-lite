@@ -48,26 +48,29 @@ export function SideSwitch({ mode, onChange }: { mode: SideMode; onChange(mode: 
 }
 
 /**
- * The side panel's two pages share one place: entering 空间 slides the content left, going back to
- * 资料库 slides it right, fading as it goes. A switch midway turns the slide around.
+ * The side panel's pages share one place, lying left to right: 资料库, the space list, then (单栏导航)
+ * an open space. Going to a page further right slides the content left, going back slides it right,
+ * fading as it goes. A switch midway turns the slide around.
  */
-export function SidePages({ mode, children }: { mode: SideMode; children: ReactNode }) {
+export function SidePages({ page, rank, children }: { page: string; rank: number; children: ReactNode }) {
   const { slide, amplitude } = useMotion();
   const distance = travel.sideSwitch * amplitude;
-  // Spaces lie to the right of the library.
-  const offset = (page: SideMode) => (page === "spaces" ? distance : -distance);
+  // Which way the page now arriving came from: +1 from the right, -1 from the left.
+  const last = useRef({ page, rank, way: 1 });
+  if (last.current.page !== page) last.current = { page, rank, way: rank > last.current.rank ? 1 : -1 };
+  const way = last.current.way;
   return (
     <div className="side-pages">
-      <AnimatePresence initial={false} mode="popLayout" custom={mode}>
+      <AnimatePresence initial={false} mode="popLayout" custom={way}>
         <motion.div
-          key={mode}
+          key={page}
           className="side-page"
-          custom={mode}
+          custom={way}
           variants={{
-            enter: (page: SideMode) => ({ x: offset(page), opacity: 0 }),
+            enter: (from: number) => ({ x: from * distance, opacity: 0 }),
             shown: { x: 0, opacity: 1 },
             // The page leaving goes the other way from the one arriving.
-            leave: (arriving: SideMode) => ({ x: -offset(arriving), opacity: 0 }),
+            leave: (from: number) => ({ x: -from * distance, opacity: 0 }),
           }}
           initial="enter"
           animate="shown"

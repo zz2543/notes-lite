@@ -1,4 +1,4 @@
-import { Check, Copy, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
+import { CaretLeft, Check, Copy, FileText, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SpaceNetwork, SpaceScope } from "../../core";
@@ -74,16 +74,22 @@ function useSpaceNotes(name: string): SpaceNote[] | undefined {
 
 interface SpaceContentsProps {
   space: SpaceInfo;
-  /** The list column (双栏导航), or under the spaces in the side panel (单栏导航). */
+  /** The list column (双栏导航), or the whole side panel once the space is entered (单栏导航). */
   place: "list" | "side";
   showingHome: boolean;
   openNote: string | null;
   onHome(): void;
   onOpenNote(path: string): void;
+  /** 单栏导航: ‹ 空间, back to the space list. */
+  onBack?(): void;
 }
 
-/** An open space's contents: 主页, then every note in its scope. */
-export function SpaceContents({ space, place, showingHome, openNote, onHome, onOpenNote }: SpaceContentsProps) {
+/**
+ * An open space's contents: 主页 first and set apart (a tinted tile, bolder), then under a small
+ * “笔记” label every note in its scope, lighter, so the homepage reads as the space's front page and
+ * the notes as what lies inside it (2026-10-23 用户确认).
+ */
+export function SpaceContents({ space, place, showingHome, openNote, onHome, onOpenNote, onBack }: SpaceContentsProps) {
   const notes = useSpaceNotes(space.name);
   const name = (
     <>
@@ -98,24 +104,38 @@ export function SpaceContents({ space, place, showingHome, openNote, onHome, onO
           <h1>{name}</h1>
         </header>
       ) : (
-        <div className="side-label">
-          <span className="label">{name}</span>
+        <div className="space-page-head">
+          {onBack && (
+            <button className="space-back" onClick={onBack} aria-label="返回空间列表" title="返回空间列表">
+              <CaretLeft size={icon.small} weight="bold" />
+              <span>空间</span>
+            </button>
+          )}
+          <h2 className="space-page-title">{name}</h2>
         </div>
       )}
-      <ul className="items" aria-label="空间内容">
+      <ul className="items space-contents" aria-label="空间内容">
         <li>
-          <button className={`item ${showingHome ? "on" : ""}`} aria-current={showingHome || undefined} onClick={onHome}>
+          <button className={`item space-home-item ${showingHome ? "on" : ""}`} aria-current={showingHome || undefined} onClick={onHome}>
             {showingHome && <SelectionPill group="list" />}
-            <House size={icon.regular} />
+            <span className="space-home-tile" aria-hidden>
+              <House size={icon.small} weight={showingHome ? "fill" : "regular"} />
+            </span>
             <span className="label">主页</span>
           </button>
         </li>
+        {notes && notes.length > 0 && (
+          <li className="space-notes-label" aria-hidden>
+            笔记 <span className="count">{notes.length}</span>
+          </li>
+        )}
         {notes?.map((note) => {
           const on = !showingHome && openNote === note.path;
           return (
             <li key={note.path}>
-              <button className={`item ${on ? "on" : ""}`} aria-current={on || undefined} title={note.path} onClick={() => onOpenNote(note.path)}>
+              <button className={`item space-note-item ${on ? "on" : ""}`} aria-current={on || undefined} title={note.path} onClick={() => onOpenNote(note.path)}>
                 {on && <SelectionPill group="list" />}
+                <FileText size={icon.small} aria-hidden />
                 <span className="label">{note.title}</span>
               </button>
             </li>

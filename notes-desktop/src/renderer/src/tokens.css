@@ -158,6 +158,10 @@
   --list-summary: color-mix(in srgb, var(--list-fg) 62%, transparent);
   --text-list-title: 15px;
   --weight-list-title: 650;
+  /* An open space: 主页 above its notes, which are lighter and smaller (2026-10-23 用户确认). */
+  --text-space-title: 17px;
+  --weight-space-note: 460;
+  --space-home-tile: 22px;
   --text-path: 13px;
   --text-meta: 11.5px;
 

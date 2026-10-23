@@ -76,12 +76,135 @@
   flex: 1;
   overflow-y: auto;
 }
-/* 单栏导航: an open space's 主页 and notes sit under the spaces, sharing the panel's height. */
+/* 单栏导航: an entered space takes the whole panel — ‹ 空间 and its name on top, then 主页 and its notes. */
 .space-files {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding-top: var(--card-gap);
+  display: flex;
+  flex-direction: column;
+}
+.space-page-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px 0 var(--card-gap);
+}
+.space-back {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--icon-button-small);
+  padding: 0 var(--inline-gap) 0 2px;
+  border-radius: var(--icon-button-radius);
+  color: var(--side-muted);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-group);
+  transition:
+    background-color var(--spring-pop),
+    color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.space-back:hover {
+  background: var(--hover);
+  color: var(--side-fg);
+}
+.space-back:active {
+  scale: var(--press-scale);
+}
+.space-page-title {
+  margin: 0;
+  padding-inline: var(--row-padding);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--side-fg);
+  font-size: var(--text-space-title);
+  font-weight: var(--weight-list-title);
+  letter-spacing: -0.01em;
+}
+
+/* 主页 is the space's front page: a tinted tile and the bolder weight. Its notes sit under a small
+   “笔记” label, lighter and smaller, each with a muted page glyph. */
+.item.space-home-item {
+  font-weight: var(--weight-list-title);
+}
+.space-home-tile {
+  flex: none;
+  width: var(--space-home-tile);
+  height: var(--space-home-tile);
+  display: grid;
+  place-items: center;
+  border-radius: calc(var(--item-radius) - 2px);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.space-notes-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--inline-gap);
+  padding: var(--card-gap) var(--row-padding) 4px;
+  color: var(--side-muted);
+  font-size: var(--text-group);
+  font-weight: var(--weight-group);
+}
+.space-notes-label .count {
+  font-weight: inherit;
+  opacity: 0.8;
+}
+.item.space-note-item {
+  font-size: var(--text-side-row);
+  font-weight: var(--weight-space-note);
+}
+.item.space-note-item svg {
+  flex: none;
+  color: var(--side-muted);
+}
+.item.space-note-item .label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A note opened from a space: the way back to its homepage, at the card's top left, always shown. */
+.card-back {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 50%;
+  height: var(--icon-button-small);
+  margin-inline-start: calc(-1 * var(--inline-gap));
+  padding: 0 var(--inline-gap) 0 4px;
+  border-radius: var(--icon-button-radius);
+  color: var(--card-path);
+  font-size: var(--text-meta);
+  -webkit-app-region: no-drag;
+  transition:
+    background-color var(--spring-pop),
+    color var(--spring-pop),
+    scale var(--spring-pop);
+}
+.card-back:hover {
+  background: var(--hover);
+  color: var(--card-fg);
+}
+.card-back:active {
+  scale: var(--press-scale);
+}
+.card-back-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.card-back .label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .space-list {
   margin: 0;
@@ -384,4 +507,8 @@
 .app.focused .card[data-kind="space"] .card-tool {
   opacity: 1;
   visibility: visible;
+}
+.list .space-notes-label,
+.list .item.space-note-item svg {
+  color: var(--list-muted);
 }
