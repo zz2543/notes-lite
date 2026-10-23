@@ -213,7 +213,10 @@ export interface AssistantRequest {
 export function AssistantColumn(props: AssistantColumnProps) {
   const { open, onClose, assistant, folder, note, space, libraryName, onOpenFolder, onShowLog, saveFirst, request, onRequestTaken, focusMessage } = props;
   const { installed, detect } = useInstalledAgents(open);
-  const [chosen, setChosen] = useState<AgentId>();
+  // 模型选择 and the agent: remembered in 设置, so the switch keeps what was last chosen.
+  const { preferences, change } = usePreferences();
+  const chosen = preferences.assistantAgent;
+  const setChosen = (id: AgentId) => change({ assistantAgent: id });
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
   const { conversation } = assistant;
   // Fixed when the conversation begins; until then it follows the selection.
@@ -233,7 +236,6 @@ export function AssistantColumn(props: AssistantColumnProps) {
   // A conversation from 对话历史 whose agent is no longer installed cannot go on.
   const agentGone = conversationAgent && installed && !installed.some((a) => a.id === conversationAgent.id);
   // 模型选择: remembered per agent, for its next new conversation; none is the agent's own default.
-  const { preferences, change } = usePreferences();
   const model = agent && preferences.agentModels[agent.id];
   const chooseModel = (id: AgentId, chosen: string) => change({ agentModels: { ...preferences.agentModels, [id]: chosen } });
   const send = async (text: string, notes: string[]) => {

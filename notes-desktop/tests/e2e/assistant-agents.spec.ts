@@ -79,6 +79,28 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
   }
 });
 
+test("the agent chosen stays chosen: for the next new conversation, and after a restart", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await installFakeAgent(join(scratch, "agents"), "codex", { session: "x-1", steps: [{ say: "Codex 收到。" }] });
+  await installFakeAgent(join(scratch, "agents"), "dsh", { session: "d-1", steps: [{ say: "DSH 收到。" }] });
+  const first = await launchWith(scratch, root);
+  let page = first.page;
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await expect(column(page).getByRole("button", { name: "Agent：Codex" })).toBeVisible();
+  await chooseAgent(page, "DeepSeek Harness");
+  await say(page, "你好");
+  await expect(conversation(page)).toContainText("DSH 收到。");
+  await column(page).getByRole("button", { name: "新对话" }).click();
+  await expect(column(page).getByRole("button", { name: "Agent：DeepSeek Harness" })).toBeVisible();
+
+  await first.app.close();
+  const again = await launch(scratch);
+  page = again.page;
+  await page.getByRole("button", { name: "打开助手栏" }).click();
+  await expect(column(page).getByRole("button", { name: "Agent：DeepSeek Harness" })).toBeVisible();
+  await again.app.close();
+});
+
 test("对话历史 lists the library's conversations; one opened again is continued with its agent and working directory, after a restart too, and only read once its agent is gone", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "日记/周一.md": "# 周一\n", "读书/书单.md": "# 书单\n" });
   const codex = await installFakeAgent(join(scratch, "agents"), "codex", { session: "x-1", steps: [{ say: "整理好了。" }] });

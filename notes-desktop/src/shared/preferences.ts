@@ -36,6 +36,11 @@ export interface Preferences {
    * not here runs its own default. A change carries only the agents it changes, "" for back to 默认.
    */
   agentModels: Partial<Record<AgentId, string>>;
+  /**
+   * 助手栏's agent: the one last chosen in its switch, for every new conversation after, across restarts
+   * (2026-10-23 用户反馈); null, or one no longer installed, is the first installed.
+   */
+  assistantAgent: AgentId | null;
   /** 附件位置: a library-relative folder, the same in every library (attachments.ts). */
   attachmentFolder: string;
   /** 附件命名. */
@@ -53,6 +58,7 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   navigation: ["double", "single"],
   assistantReview: ["review", "keep"],
   assistantPermissions: ["ask", "full"],
+  assistantAgent: [null, ...agents.map((agent) => agent.id)],
   attachmentNaming: attachmentNamings,
 };
 
@@ -66,6 +72,7 @@ export const defaultPreferences: Preferences = {
   assistantPermissions: "ask",
   typography: defaultTypography,
   agentModels: {},
+  assistantAgent: null,
   attachmentFolder: defaultAttachmentSettings.folder,
   attachmentNaming: defaultAttachmentSettings.naming,
 };

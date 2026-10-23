@@ -30,6 +30,15 @@ describe("preferences", () => {
     expect(readPreferences({ agentModels: "opus" }, chosen).agentModels).toEqual({ claude: "opus", codex: "gpt-5.2" });
   });
 
+  it("keep the agent last chosen in 助手栏, for new conversations after a restart too", () => {
+    expect(defaultPreferences.assistantAgent).toBeNull();
+    const chosen = readPreferences({ assistantAgent: "dsh" });
+    expect(chosen.assistantAgent).toBe("dsh");
+    expect(readPreferences({ assistantAgent: "codex" }, chosen).assistantAgent).toBe("codex");
+    expect(readPreferences({ assistantAgent: "nobody" }, chosen).assistantAgent).toBe("dsh");
+    expect(readPreferences({ colorScheme: "dark" }, chosen).assistantAgent).toBe("dsh");
+  });
+
   it("read missing or unknown values as the defaults: 跟随系统, 简洁, 强, 双栏", () => {
     expect(readPreferences(undefined)).toMatchObject({ colorScheme: "system", accent: "system", listDetail: "compact", motion: "strong", navigation: "double" });
     expect(readPreferences({ colorScheme: "sepia", accent: "purple", motion: 3, navigation: "triple", extra: true })).toEqual({
