@@ -19,6 +19,7 @@ export const kitStyle = `${tokens}\n${kit}\n${foundation}`;
 /** The libraries the app carries for homepages (space.load), served at their own address on demand. */
 export const kitLibraries: Record<string, () => Promise<string>> = {
   "/kit/echarts.js": async () => (await import("echarts/dist/echarts.min.js?raw")).default,
+  "/kit/react.js": async () => (await import("virtual:space-react")).default,
 };
 export const kitScripts = [spaceShim, components];
 

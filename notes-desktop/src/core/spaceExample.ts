@@ -2,7 +2,8 @@
 // notes hold record tables running up to the day it is made; the homepage puts every component to
 // work on them, and under each card shows the markup that draws it, for copying into a page of one's own.
 // Above them, 自定义写法 (设计地基): a section drawn without components, from the style foundation, the
-// built-in charts and space.open, as an agent's own page would be.
+// built-in charts and space.open, as an agent's own page would be; then React 写法, the same notes drawn
+// with React and Recharts (space.load("react")).
 
 /** The sample space's name; a second one is “组件示例 2”, and so on. */
 export const exampleSpaceName = "组件示例";
@@ -188,6 +189,97 @@ export function examplePage(folder: string): string {
     }
     draw();
     space.on("change", draw);
+  })();
+</script>
+
+<section class="space-section">
+  <h2 class="space-section-title">React 写法 <span class="space-section-hint">space.load("react")：React、htm 和 Recharts，配色跟随应用，笔记一改就重画</span></h2>
+  <div class="space-bento" id="example-react"></div>
+</section>
+
+<script>
+  // React 写法: two cards drawn with Recharts from the notes, through space.load("react").
+  (async () => {
+    const folder = ${JSON.stringify(folder)};
+    const { html, mount, useTheme, useQuery, chartProps, Recharts } = await space.load("react");
+    const { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } = Recharts;
+    const day = (date) => Number(String(date).slice(5, 7)) + "/" + Number(String(date).slice(8, 10));
+    const monday = (date) => {
+      const d = new Date(date + "T00:00:00");
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    };
+
+    function Weight() {
+      const t = useTheme(), p = chartProps(t);
+      const rows = useQuery(folder + "/健身记录.md#体重", { sort: "日期" });
+      if (!rows || !rows.length) return null;
+      const last = rows[rows.length - 1], before = rows[Math.max(0, rows.length - 5)];
+      const change = last.体重 - before.体重;
+      return html\`<div class="space-card space-m">
+        <div class="space-label">体重 · Recharts</div>
+        <div style="display: flex; align-items: baseline; gap: var(--gap-3)">
+          <div class="space-big">\${last.体重.toFixed(1)}<small>kg</small></div>
+          <span class="space-label" style=\${{ color: change <= 0 ? t.good : t.bad }}>\${change <= 0 ? "↓" : "↑"} \${Math.abs(change).toFixed(1)} 比 4 周前</span>
+        </div>
+        <div style="height: 170px">
+          <\${ResponsiveContainer}>
+            <\${AreaChart} data=\${rows} margin=\${{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="example-weight-fill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stopColor=\${t.accent} stopOpacity="0.28" />
+                  <stop offset="1" stopColor=\${t.accent} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <\${CartesianGrid} ...\${p.grid} />
+              <\${XAxis} dataKey="日期" tickFormatter=\${day} ...\${p.xAxis} />
+              <\${YAxis} domain=\${[(min) => Math.floor(min) - 0.5, (max) => Math.ceil(max)]} tickCount=\${5} tickFormatter=\${(v) => v.toFixed(1)} ...\${p.yAxis} />
+              <\${Tooltip} ...\${p.tooltip} separator="  " labelFormatter=\${day} formatter=\${(v) => [v.toFixed(1) + " kg", "体重"]} />
+              <\${ReferenceLine} y=\${70} stroke=\${t.good} strokeDasharray="4 4" label=\${{ value: "目标 70", position: "insideTopRight", fill: t.good, fontSize: 11 }} />
+              <\${Area} type="monotone" dataKey="体重" stroke=\${t.accent} strokeWidth=\${2.4} fill="url(#example-weight-fill)" dot=\${false}
+                activeDot=\${{ r: 4.5, strokeWidth: 2, stroke: t.card }} isAnimationActive=\${p.animate} />
+            </\${AreaChart}>
+          </\${ResponsiveContainer}>
+        </div>
+      </div>\`;
+    }
+
+    function Weekly() {
+      const t = useTheme(), p = chartProps(t);
+      const rows = useQuery(folder + "/健身记录.md#训练", { sort: "日期" });
+      if (!rows) return null;
+      const weeks = new Map();
+      for (const r of rows) {
+        const week = monday(r.日期);
+        const entry = weeks.get(week) || { 周: week, 卧推: 0, 深蹲: 0 };
+        entry[r.动作] = (entry[r.动作] || 0) + 1;
+        weeks.set(week, entry);
+      }
+      const data = [...weeks.values()].slice(-8);
+      const total = data.reduce((sum, w) => sum + w.卧推 + w.深蹲, 0);
+      return html\`<div class="space-card space-m">
+        <div class="space-label">每周训练 · Recharts</div>
+        <div style="display: flex; align-items: baseline; gap: var(--gap-3)">
+          <div class="space-big">\${(total / Math.max(1, data.length)).toFixed(1)}<small>次 / 周</small></div>
+          <span class="space-label">最近 \${data.length} 周共 \${total} 次</span>
+        </div>
+        <div style="height: 170px">
+          <\${ResponsiveContainer}>
+            <\${BarChart} data=\${data} margin=\${{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
+              <\${CartesianGrid} ...\${p.grid} />
+              <\${XAxis} dataKey="周" tickFormatter=\${day} ...\${p.xAxis} />
+              <\${YAxis} allowDecimals=\${false} ...\${p.yAxis} />
+              <\${Tooltip} ...\${p.tooltip} separator="  " cursor=\${{ fill: t.hover }} labelFormatter=\${(week) => day(week) + " 这周"} />
+              <\${Legend} ...\${p.legend} />
+              <\${Bar} dataKey="卧推" stackId="动作" fill=\${p.colors[0]} isAnimationActive=\${p.animate} />
+              <\${Bar} dataKey="深蹲" stackId="动作" fill=\${p.colors[1]} radius=\${[6, 6, 0, 0]} isAnimationActive=\${p.animate} />
+            </\${BarChart}>
+          </\${ResponsiveContainer}>
+        </div>
+      </div>\`;
+    }
+
+    mount("#example-react", () => html\`<\${Weight} /><\${Weekly} />\`);
   })();
 </script>
 

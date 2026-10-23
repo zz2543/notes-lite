@@ -4,7 +4,7 @@
 // interface's TypeScript declarations.
 
 /** Bumped whenever the text changes. */
-export const spaceGuideVersion = 7;
+export const spaceGuideVersion = 8;
 
 /** The page interface and components as TypeScript declarations, as the guide carries them. */
 export const spaceTypes = `/** 字段类型：整列都是数字为 number，整列都是 YYYY-MM-DD 为 date，其余为 text。 */
@@ -80,8 +80,10 @@ interface SpaceApi {
   open(path: string): Promise<{ path: string }>;
   /** 当前外观下解析好的设计变量（同步）。 */
   theme(): SpaceTheme;
-  /** 加载笔记应用内置的库（离线可用）；目前有 "echarts"。 */
+  /** 加载笔记应用内置的库（离线可用）："echarts"，或 "react"（React、htm、Recharts）。 */
   load(name: "echarts"): Promise<any>;
+  /** React 19、htm 和 Recharts 3，以及 useTheme、useQuery、chartProps、mount；见「React 与 Recharts」。 */
+  load(name: "react"): Promise<{ React: any; ReactDOM: any; html: any; Recharts: any; useTheme(): SpaceTheme; useQuery(source: string, options?: object): any[] | undefined; chartProps(theme: SpaceTheme): any; mount(target: Element | string, component: any, props?: object): any }>;
   /** 在元素里画一张 ECharts 图表，配色字体跟随笔记应用；option 可以是函数，外观变化时用新的 theme 重新调用。 */
   chart(target: Element | string, option: object | ((theme: SpaceTheme) => object)): Promise<SpaceEChartsInstance>;
   /** 页面底部的提示，可以带一个按钮。 */
@@ -352,6 +354,51 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 
 量级差别大的两组数用两个 y 轴（\`yAxisIndex\`）；日期请用 \`type: "time"\`，不要当作类别。
 
+### React 与 Recharts：\`space.load("react")\`
+
+想用 React 组件写页面、用 [Recharts](https://recharts.org) 画图时，笔记应用也内置了它们（离线可用，用到时才加载）。不需要构建：用 \`html\` 标签模板（[htm](https://github.com/developit/htm)）代替 JSX。
+
+- \`html\`：写法和 JSX 一样，只是组件写成 \`<\${Area} …/>\`，属性值写成 \`\${…}\`，展开属性写成 \`...\${props}\`，结束标签可以写 \`</\${Area}>\` 或 \`<//>\`。\`class\`、\`for\` 和字符串 \`style="height: 170px"\` 照 HTML 写即可。
+- \`useQuery(来源, 选项)\`：同 \`space.query\`，笔记变化时自动重新读取并重画；第一次读到之前是 \`undefined\`。
+- \`useTheme()\`：当前的 \`space.theme()\`，外观、强调色变化时重画。
+- \`chartProps(theme)\`：让 Recharts 跟随笔记应用的现成属性：\`xAxis\`、\`yAxis\`、\`grid\`、\`tooltip\`、\`legend\` 展开到对应部件上；\`colors\` 是图表系列色；\`animate\` 交给 \`isAnimationActive\`（减弱动态效果时为 false）。
+- \`mount(元素或选择器, 组件)\`：把组件画进元素；同一个元素再次 mount 会替换。
+- 图表放在 \`ResponsiveContainer\` 里，外面的元素要有高度。
+- 同一页里 ECharts 和 Recharts 都可以用；简单的趋势、对比用哪个都行，热力日历、雷达这类复杂的图用 ECharts。
+
+\`\`\`html
+<div class="space-bento" id="weight"></div>
+<script>
+  (async () => {
+    const { html, mount, useTheme, useQuery, chartProps, Recharts } = await space.load("react");
+    const { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } = Recharts;
+    function Weight() {
+      const t = useTheme(), p = chartProps(t);
+      const rows = useQuery("健身/体重.md", { sort: "日期" });
+      if (!rows) return null;
+      const last = rows[rows.length - 1];
+      return html\`<div class="space-card space-m">
+        <div class="space-label">体重</div>
+        <div class="space-big">\${last ? last.体重 : "—"}<small>kg</small></div>
+        <div style="height: 170px">
+          <\${ResponsiveContainer}>
+            <\${AreaChart} data=\${rows}>
+              <\${CartesianGrid} ...\${p.grid} />
+              <\${XAxis} dataKey="日期" ...\${p.xAxis} />
+              <\${YAxis} domain=\${["auto", "auto"]} ...\${p.yAxis} />
+              <\${Tooltip} ...\${p.tooltip} />
+              <\${ReferenceLine} y=\${70} stroke=\${t.good} strokeDasharray="4 4" />
+              <\${Area} type="monotone" dataKey="体重" stroke=\${t.accent} fill=\${t.accent} fillOpacity=\${0.12} isAnimationActive=\${p.animate} />
+            <//>
+          <//>
+        </div>
+      </div>\`;
+    }
+    mount("#weight", Weight);
+  })();
+</script>
+\`\`\`
+
 ### 其他接口
 
 - \`space.theme()\`：当前外观下解析好的颜色和字体（\`rgb()\` 字符串，可以直接用在画布、SVG 和 ECharts 里），以及 \`dark\`、\`reducedMotion\`、\`amplitude\`。\`space.on("theme", (theme) => …)\` 在外观、强调色、排版、动效强度变化时触发。
@@ -520,7 +567,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 ### 其他
 
 - \`space.today()\` → 今天的日期 \`YYYY-MM-DD\`（本地时间，同步返回）。
-- \`space.open(path)\`、\`space.theme()\`、\`space.load(name)\`、\`space.chart(target, option)\`、\`space.toast(message, options?)\`：见「设计与自定义」。
+- \`space.open(path)\`、\`space.theme()\`、\`space.load(name)\`（\`"echarts"\` 或 \`"react"\`）、\`space.chart(target, option)\`、\`space.toast(message, options?)\`：见「设计与自定义」。
 
 ### 事件
 

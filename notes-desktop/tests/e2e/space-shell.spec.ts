@@ -31,6 +31,10 @@ test("新建示例空间, from the empty list or the menu beside 新建空间, m
   const home = await spacePage(app, "组件示例");
   await expect(home.locator("space-stat").first()).toContainText(/\d/);
   await expect(home.locator("space-chart svg").first()).toBeVisible();
+  // React 写法: React and Recharts, loaded offline through space.load("react"), drawn from the notes.
+  await expect(home.locator("#example-react .space-card")).toHaveCount(2);
+  await expect(home.locator("#example-react .recharts-wrapper")).toHaveCount(2);
+  await expect(home.locator("#example-react")).toContainText("kg");
   // Written by the app: 助手 is not asked for it.
   await expect(page.getByRole("complementary", { name: "助手栏", includeHidden: true })).toHaveAttribute("aria-hidden", "true");
 

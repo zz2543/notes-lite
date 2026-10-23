@@ -138,6 +138,7 @@
 - **样式地基**（`spaceKit/foundation.css`，随样式包注入）：10 个色相（`--space-<色相>` 及 `-deep` / `-tint` / `-glow`），`data-hue` 给一张卡片和里面的元素定色相；字号、圆角、间距、阴影变量；`.space-bento` 4 列网格（`.space-m` / `-l` / `-full` / `-tall`，窄窗口变 2 列、1 列）、`.space-header`、`.space-section`；卡片风格 `.space-glow`（光晕）、`.space-glass`（毛玻璃）、`.space-tint`（柔彩）；文字与小部件（大数字、分段切换、标签、玻璃按钮、进度条、进度环）；动效（`data-space-count` 滚动数字、`.space-lift` / `-spotlight` / `-float` / `-shimmer` / `-live` / `-breathe`），幅度跟随动效强度（`--space-motion-amplitude`：轻 0.6、标准 1、强 2），减弱动态效果时全部停止。
 - **新接口**（`spaceKit/runtime.js`，拼进 `space`）：`space.chart(元素, option)` 用内置 ECharts 6 画图，配色字体跟随设计变量、尺寸变化重绘、外观变化换色；`space.load("echarts")` 拿原始库（应用自带，从 `notes-space:` 协议的 `/kit/echarts.js` 离线提供，用到时才加载）；`space.theme()` 返回解析好的 `rgb()` 颜色、字体和动效设置，`space.on("theme")` 在变化时通知；`space.open(path)` 在应用里打开范围内的笔记（范围外 `outside-scope`，不存在 `not-found`）；`space.toast(文字, { action, onAction, duration })`。
 - **编写说明第 4 版**：新增「设计与自定义」：先声明页面完全由助手决定，再给推荐做法、检查清单和全部变量、类名、接口，以及光晕数字卡和自己写组件的例子。
+- **React 与 Recharts（2026-10-23 小样）**：`space.load("react")` 返回应用自带的 React 19、htm（不用构建的 JSX 写法）和 Recharts 3，打包成一个脚本从 `/kit/react.js` 离线提供，用到时才加载；另有 `useTheme`、`useQuery`（笔记变化时重读）、`chartProps(theme)`（坐标轴、网格、提示框、图例跟随应用）和 `mount`。`html` 里的 `class`、`for` 和字符串 `style` 照 HTML 写即可。示例空间在「自定义写法」后加「React 写法」一节（体重面积图带目标线、每周训练堆叠柱状图）。
 - **示例空间**：在内置组件前加「自定义写法」一节，不用组件，只用地基、`space.chart` 和 `space.open` 画出来。
 - **下一轮**：按地基重做 5 个内置组件、加新组件，以及旧页面的提示。
 

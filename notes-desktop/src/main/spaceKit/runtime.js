@@ -98,7 +98,7 @@ function spaceRuntime(call) {
 
   // MARK: libraries
 
-  const libraries = { echarts: { url: "kit/echarts.js", global: "echarts" } };
+  const libraries = { echarts: { url: "kit/echarts.js", global: "echarts" }, react: { url: "kit/react.js", global: "SpaceReact" } };
   const loading = new Map();
   const load = (name) => {
     const library = libraries[name];
