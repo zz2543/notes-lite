@@ -76,6 +76,27 @@ test("the title area over a homepage shows its icon, name and scope, with 让助
   await title.getByRole("button", { name: "让助手修改" }).click();
   await expect(page.getByRole("complementary", { name: "助手栏" })).toHaveAttribute("aria-hidden", "false");
   await expect(page.getByRole("textbox", { name: "给助手的消息" })).toBeFocused();
+  const conversation = page.getByRole("complementary", { name: "助手栏" }).getByRole("log", { name: "对话" });
+  await page.getByRole("textbox", { name: "给助手的消息" }).fill("加一张卡片");
+  await page.keyboard.press("Enter");
+  await expect(conversation).toContainText("好的。");
+  // Asked again over the same space, the conversation about it goes on.
+  await title.getByRole("button", { name: "让助手修改" }).click();
+  await expect(conversation).toContainText("加一张卡片");
+
+  // A conversation about something else is left in 对话历史: 让助手修改 starts a new one.
+  await showSide(page, "资料库");
+  await page.getByRole("button", { name: "新对话" }).click();
+  await page.getByRole("textbox", { name: "给助手的消息" }).fill("随便聊聊");
+  await page.keyboard.press("Enter");
+  await expect(conversation).toContainText("随便聊聊");
+  await expect(conversation).toContainText("好的。");
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await showSide(page, "空间");
+  await spaceList(page).getByRole("button", { name: "健身" }).click();
+  await title.getByRole("button", { name: "让助手修改" }).click();
+  await expect(page.getByRole("textbox", { name: "给助手的消息" })).toBeFocused();
+  await expect(conversation).toHaveCount(0);
   await app.close();
 });
 

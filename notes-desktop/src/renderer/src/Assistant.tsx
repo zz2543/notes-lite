@@ -2,6 +2,7 @@ import { CaretDown, ClockCounterClockwise, FolderSimple, NotePencil, X } from "@
 import { useEffect, useRef, useState } from "react";
 import type { AgentModels, InstalledAgent } from "../../core";
 import { agents, modelName, type AgentId } from "../../shared/agentKinds";
+import type { UserMessage } from "../../shared/conversation";
 import { AssistantFigure } from "./AssistantFigure";
 import { Composer, ConversationHistory, ConversationView, folderName, homepageMessage, HomepageStart, type AssistantState, type HomepageWish } from "./AssistantChat";
 import type { FigureState } from "./figureModel";
@@ -216,7 +217,11 @@ export function AssistantColumn(props: AssistantColumnProps) {
   const agent = installed?.find((a) => a.id === chosen) ?? installed?.[0];
   const { conversation } = assistant;
   // Fixed when the conversation begins; until then it follows the selection.
-  const workingFolder = conversation?.folder ?? folder;
+  // 让助手修改 in a space starts a new conversation about it, in the library itself, unless the one shown
+  // is already about that space: what is asked never lands in an unrelated conversation.
+  const [spaceStart, setSpaceStart] = useState<string | null>(null);
+  const fromSpace = conversation === null && space !== null && spaceStart === space;
+  const workingFolder = conversation?.folder ?? (fromSpace ? "" : folder);
   const workingName = folderName(workingFolder, libraryName);
   // 对话历史 shows in place of the conversation until one is picked.
   const [history, setHistory] = useState(false);
@@ -233,7 +238,7 @@ export function AssistantColumn(props: AssistantColumnProps) {
   const chooseModel = (id: AgentId, chosen: string) => change({ agentModels: { ...preferences.agentModels, [id]: chosen } });
   const send = async (text: string, notes: string[]) => {
     if (!agent || !(await saveFirst())) return;
-    await assistant.send({ agent: agent.id, folder, text, notes, ...(model ? { model } : {}), ...(space ? { space } : {}) });
+    await assistant.send({ agent: agent.id, folder: workingFolder, text, notes, ...(model ? { model } : {}), ...(space ? { space } : {}) });
   };
   // A request from elsewhere: once the agents are known, a new conversation in the library itself, with
   // the agent and model the switch shows.
@@ -275,6 +280,16 @@ export function AssistantColumn(props: AssistantColumnProps) {
     setAsking(null);
     void begin({ ...asking, ...homepageMessage(asking.text, name, wish, again) });
   };
+  useEffect(() => {
+    if (!focusMessage || !space || assistant.running || asking) return;
+    setSpaceStart(space);
+    const about = conversation?.messages.find((m): m is UserMessage => m.role === "user" && Boolean(m.space))?.space;
+    if (conversation && about !== space) {
+      setHistory(false);
+      assistant.reset();
+    }
+    // Only as 让助手修改 is pressed; the conversation and space are that moment's.
+  }, [focusMessage]);
   const cancelHomepage = () => {
     if (asking) onRequestTaken(asking, "cancelled");
     setAsking(null);

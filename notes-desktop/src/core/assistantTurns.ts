@@ -122,7 +122,7 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     if (!agent) return { ok: false, message: "没有找到这个对话所用的 Agent，请确认它仍然安装着。" };
     conversation = {
       ...conversation,
-      messages: [...conversation.messages.map(keepWaiting), { role: "user", text: request.text, notes: request.notes, ...(request.shown ? { shown: request.shown } : {}) }, emptyReply()],
+      messages: [...conversation.messages.map(keepWaiting), { role: "user", text: request.text, notes: request.notes, ...(request.shown ? { shown: request.shown } : {}), ...(request.space ? { space: request.space } : {}) }, emptyReply()],
     };
     const id = conversation.id;
     live.set(id, conversation);

@@ -87,6 +87,8 @@ export interface UserMessage {
   text: string;
   /** What the column shows of it, when the agent was sent more (a space's whole prompt, say). */
   shown?: string;
+  /** The space open when it was sent, by name: a conversation about it is continued by 让助手修改. */
+  space?: string;
   /** Notes put in the context, library-relative. */
   notes: string[];
 }
