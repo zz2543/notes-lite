@@ -333,6 +333,19 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
     setSpace(name);
     if (name !== null) void goHome();
   };
+  // Turning to 空间 with none open yet (or the open one gone) opens the first, so the card shows a space
+  // page rather than the note left from 资料库.
+  const changeSide = (mode: SideMode) => {
+    setSideMode(mode);
+    if (mode !== "spaces" || (space !== null && openSpace)) return;
+    void window.notes.listSpaces().then(
+      (listed) => {
+        const first = listed[0];
+        if (first && (space === null || !listed.some((s) => s.name === space))) selectSpace(first.name);
+      },
+      () => undefined,
+    );
+  };
   const openSpaceNote = async (path: string) => {
     if (await openNote(path)) setShowingHome(false);
   };
@@ -432,7 +445,7 @@ function LibraryView({ library, place, onSwitch, saveFirst, notify }: LibraryVie
         <aside className={`side ${single ? "single" : ""}`} onKeyDown={single ? closeOnEscape : undefined}>
           {/* The title bar's row: “资料库 | 空间” level with the window's buttons, the side's tools at its end. */}
           <div className="drag side-top">
-            <SideSwitch mode={sideMode} onChange={setSideMode} />
+            <SideSwitch mode={sideMode} onChange={changeSide} />
             <div className="side-top-tools">
               {/* In 双栏导航 the search is the bar atop the list instead. */}
               {single && sideMode === "library" && (

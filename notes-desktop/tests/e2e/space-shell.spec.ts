@@ -171,3 +171,16 @@ test("the style kit: cards without an outline, a shadow in light and a fine edge
   }
   await app.close();
 });
+
+test("turning to 空间 with none open opens the first space, so the card shows its page", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "健身/训练.md": training, ".notes/空间/健身.html": homepage });
+  const { page } = await launchWith(scratch, root);
+  await expect(page.getByRole("treeitem", { name: "笔记库" })).toBeVisible();
+  await showSide(page, "空间");
+  await expect(page.getByRole("region", { name: "空间标题" })).toContainText("健身");
+  // Back in 资料库 and over again, the space chosen is kept.
+  await showSide(page, "资料库");
+  await expect(page.getByRole("region", { name: "空间标题" })).toHaveCount(0);
+  await showSide(page, "空间");
+  await expect(page.getByRole("region", { name: "空间标题" })).toContainText("健身");
+});
