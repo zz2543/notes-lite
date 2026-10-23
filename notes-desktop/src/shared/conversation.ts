@@ -32,6 +32,10 @@ export type AgentEvent =
   /** A tool call still being written by the model (a whole homepage, say): how much so far, and what it works on once that is known. */
   | { kind: "toolInput"; id: string; size: number; detail?: string }
   | { kind: "toolDone"; id: string; failed: boolean }
+  /** 执行前询问: the agent waits for the user to allow (or not) a tool call it is about to make. */
+  | { kind: "approval"; id: string; name: string; activity: AgentActivity; detail: string; /** The call as the agent sent it: main keeps it to answer with, the page never sees it. */ input?: Record<string, unknown> }
+  /** The user answered it (or the turn went on without an answer). */
+  | { kind: "approvalDone"; id: string; allowed: boolean }
   /** The agent finished, or failed with a message. */
   | { kind: "result"; failed?: string };
 
@@ -99,7 +103,20 @@ export interface Reply {
   /** Files it wrote outside the library, which can't be undone. */
   outside?: string[];
   review?: ReviewState;
+  /** A tool call waiting for the user to allow it (执行前询问). */
+  asking?: Approval;
 }
+
+/** A tool call the agent asks to make, as the 助手栏 shows it. */
+export interface Approval {
+  id: string;
+  name: string;
+  activity: AgentActivity;
+  detail: string;
+}
+
+/** 助手权限: ask before a command or a file outside the folder, or run with full permissions. */
+export type PermissionMode = "ask" | "full";
 
 export type Message = UserMessage | Reply;
 
@@ -168,9 +185,19 @@ export function addEvent(reply: Reply, event: TurnEvent): Reply {
           part.kind === "steps" ? { kind: "steps", steps: part.steps.map((s) => (s.id === event.id ? { ...s, done: true, failed: event.failed } : s)) } : part,
         ),
       };
+    case "approval": {
+      const { kind: _, input: __, ...asking } = event;
+      return { ...reply, asking };
+    }
+    case "approvalDone": {
+      if (reply.asking?.id !== event.id) return reply;
+      const { asking: _, ...rest } = reply;
+      return rest;
+    }
     case "end": {
       const { kind: _, ...end } = event;
-      return { ...reply, ...end, done: true };
+      const { asking: __, ...rest } = reply;
+      return { ...rest, ...end, done: true };
     }
     default:
       return reply;

@@ -7,7 +7,7 @@ import { join, sep } from "node:path";
 import { collator, LibraryError, openLibrary, type Library } from "./library";
 import { operationLog, OperationLogError, writeWhole, type LogEntry, type LogKind, type NewLogEntry } from "./operationLog";
 import type { VetRelocation } from "./organize";
-import { appendRecords, cellNumber, fieldTypes, findTable, normalizedCell, RecordError, rewriteRows, unknownField, type FieldType } from "./recordTables";
+import { addressableTables, appendRecords, cellNumber, fieldTypes, findTable, normalizedCell, RecordError, rewriteRows, unknownField, type FieldType } from "./recordTables";
 import { serialized } from "./serialized";
 import { notesInScope, scopeContains, scopeMeta, spaceLibrary, spaceScopeOf, type SpaceScope } from "./spaces";
 import { isHidden, noteTitle } from "../shared/paths";
@@ -218,10 +218,17 @@ export function spaceRequests(root: string, space: string, options: SpaceRequest
     return { path };
   };
 
+  // One note's tables are read from that note alone; the whole scope only when no note is named.
   const tables = async (raw: unknown) => {
-    const only = typeof raw === "string" && raw !== "" ? (await resolve(raw)).path : null;
-    const all = await spaces.recordTables(await scope());
-    return all.filter((table) => only === null || table.source === only || table.source.startsWith(`${only}#`));
+    const found =
+      typeof raw === "string" && raw !== ""
+        ? await (async () => {
+            const { path, real } = await resolve(raw);
+            const text = await textAt(real);
+            return text === null ? [] : addressableTables(path, text);
+          })()
+        : await spaces.recordTables(await scope());
+    return found.map(({ source, header }) => ({ source, header }));
   };
 
   const query = async (raw: string, options: Record<string, unknown>) => {

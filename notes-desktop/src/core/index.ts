@@ -20,3 +20,4 @@ export * from "./assistantTurns";
 export * from "../shared/conversation";
 export * from "./conversations";
 export * from "./spaceStorage";
+export * from "./spaceNetwork";

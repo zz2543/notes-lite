@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { realpath, rm } from "node:fs/promises";
+import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { installFakeAgent } from "../support/fakeAgent";
 import { expect, launch, launchWith, library, showSide, test } from "./fixtures";
@@ -31,6 +31,9 @@ test("Codex, DeepSeek Harness and Pi can each be chosen, answer a turn with full
     "DeepSeek Harness": await installFakeAgent(join(scratch, "agents"), "dsh", { session: "d-1", steps: [{ say: "DSH 收到。" }] }),
     Pi: await installFakeAgent(join(scratch, "agents"), "pi", { session: "p-1", steps: [{ say: "Pi 收到。" }] }),
   };
+  // 完全权限 chosen in 设置 › 助手.
+  await mkdir(join(scratch, "profile"), { recursive: true });
+  await writeFile(join(scratch, "profile", "settings.json"), JSON.stringify({ preferences: { assistantPermissions: "full" } }));
   const { page } = await launchWith(scratch, root);
   await page.getByRole("button", { name: "打开助手栏" }).click();
   const choice = column(page).getByRole("button", { name: /^Agent：/ });

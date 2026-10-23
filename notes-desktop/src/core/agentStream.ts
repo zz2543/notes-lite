@@ -1,14 +1,27 @@
 // What a command-line agent says during 一轮, read from its output into the events the 助手栏 shows
 // (their types live in shared/conversation, where the page folds them too).
 import type { AgentId } from "../shared/agentKinds";
-import type { AgentActivity, AgentEvent } from "../shared/conversation";
+import type { AgentActivity, AgentEvent, PermissionMode } from "../shared/conversation";
 
 export type { AgentActivity, AgentEvent, TurnEvent } from "../shared/conversation";
 
 /** How one agent is run and read. */
 export interface AgentAdapter {
-  /** The command line after the command; the prompt goes in on stdin. `model`, when chosen, overrides the agent's own. */
-  args(session?: string, model?: string): string[];
+  /**
+   * The command line after the command; the prompt goes in on stdin. `model`, when chosen, overrides
+   * the agent's own. `mode` 执行前询问 ("ask") runs it as `limits` says; full permissions otherwise.
+   */
+  args(session?: string, model?: string, mode?: PermissionMode): string[];
+  /**
+   * What 执行前询问 means for it: "ask", it stops before a command (or a file outside the folder) until
+   * the user answers; "sandbox", it can't ask, so it runs shut in the folder without network; none, it
+   * has no such mode and runs with full permissions either way.
+   */
+  limits?: "ask" | "sandbox";
+  /** When it asks: what goes on stdin first (stdin then stays open for the answers, until its result). */
+  input?(prompt: string): string;
+  /** When it asks: the line that answers its `approval`. */
+  answer?(approval: Extract<AgentEvent, { kind: "approval" }>, allowed: boolean): string;
   /** What it needs in its environment besides what the app passes on. */
   env?: Record<string, string>;
   /** Reads its output a line at a time. */
@@ -110,6 +123,9 @@ const unfinishedTurn = "Agent 没有完成这一轮。";
 
 interface ClaudeLine {
   type?: string;
+  /** A control request (执行前询问): the stdio permission prompt asking about a tool call. */
+  request_id?: string;
+  request?: { subtype?: string; tool_name?: string; input?: Record<string, unknown> };
   subtype?: string;
   session_id?: string;
   is_error?: boolean;
@@ -129,16 +145,37 @@ interface ClaudeLine {
  * a reply that streams, and --dangerously-skip-permissions so it never stops to ask (assistant-spec).
  */
 export const claudeCode: AgentAdapter = {
-  args: (session, model) => [
+  args: (session, model, mode) => [
     "-p",
     "--output-format",
     "stream-json",
     "--verbose",
     "--include-partial-messages",
-    "--dangerously-skip-permissions",
+    // 执行前询问: edits in the folder go ahead (each turn can be undone); commands, the web and files
+    // elsewhere ask, through the stdio permission prompt, which needs the prompt as stream-json too.
+    ...(mode === "ask"
+      ? ["--input-format", "stream-json", "--permission-prompt-tool", "stdio", "--permission-mode", "acceptEdits"]
+      : ["--dangerously-skip-permissions"]),
     ...(model ? ["--model", model] : []),
     ...(session ? ["--resume", session] : []),
   ],
+  limits: "ask",
+  input: (prompt) =>
+    [
+      { type: "control_request", request_id: "notes-init", request: { subtype: "initialize", hooks: null } },
+      { type: "user", session_id: "", parent_tool_use_id: null, message: { role: "user", content: [{ type: "text", text: prompt }] } },
+    ]
+      .map((line) => JSON.stringify(line) + "\n")
+      .join(""),
+  answer: (approval, allowed) =>
+    JSON.stringify({
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: approval.id,
+        response: allowed ? { behavior: "allow", updatedInput: approval.input ?? {} } : { behavior: "deny", message: "用户没有允许这个操作。请换一种不需要它的做法，或者说明为什么需要。" },
+      },
+    }) + "\n",
   reader: (cwd) => {
     // A message whose text came in pieces arrives whole afterwards too; that copy is not shown again.
     const streamed = new Set<string>();
@@ -154,7 +191,11 @@ export const claudeCode: AgentAdapter = {
         session = line.session_id;
         events.push({ kind: "session", id: session });
       }
-      if (line.type === "stream_event") {
+      if (line.type === "control_request" && line.request?.subtype === "can_use_tool" && line.request_id && line.request.tool_name) {
+        const input = line.request.input ?? {};
+        const { id: _, kind: __, ...call } = toolEvent(line.request_id, line.request.tool_name, input, cwd) as Extract<AgentEvent, { kind: "tool" }>;
+        events.push({ kind: "approval", id: line.request_id, ...call, input });
+      } else if (line.type === "stream_event") {
         const event = line.event;
         if (event?.type === "message_start") current = event.message?.id;
         const block = event?.content_block;
@@ -231,9 +272,13 @@ interface CodexLine {
  * `exec resume <id>`. Replies come whole, not streamed.
  */
 export const codex: AgentAdapter = {
-  args: (session, model) => {
-    const options = ["--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", ...(model ? ["-m", model] : [])];
-    return session ? ["exec", "resume", ...options, session, "-"] : ["exec", ...options, "-"];
+  limits: "sandbox",
+  args: (session, model, mode) => {
+    // 执行前询问: codex exec can't ask, so it is shut in the folder without network instead.
+    // The override goes before the subcommand, where `exec resume` takes it too.
+    const sandbox = mode === "ask" ? ["-c", "sandbox_mode=workspace-write"] : [];
+    const options = ["--json", "--skip-git-repo-check", ...(mode === "ask" ? [] : ["--dangerously-bypass-approvals-and-sandbox"]), ...(model ? ["-m", model] : [])];
+    return session ? [...sandbox, "exec", "resume", ...options, session, "-"] : [...sandbox, "exec", ...options, "-"];
   },
   reader: (cwd) => {
     const started = new Set<string>();

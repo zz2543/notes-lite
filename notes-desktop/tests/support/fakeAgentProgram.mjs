@@ -13,7 +13,8 @@
 //                                                      type: "command_execution", "file_change", "web_search"; any
 //                                                      other is an MCP tool); `write` changes a file (relative to the
 //                                                      working directory); `waitFor` holds the call open until that
-//                                                      file exists
+//                                                      file exists; `"ask": true` (Claude Code asking first) asks the
+//                                                      app before the call, and refused, fails it without writing
 //   { "waitFor": "/abs/file" }                         holds until that file exists (so a test can look mid-turn)
 //   { "fail": "message" }                              fails as that agent does
 // For "dsh", `"tooOld": true` in the script answers as a DeepSeek Harness too old for JSON events does.
@@ -22,14 +23,40 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
+const argv = process.argv.slice(2);
+// Claude Code asking first (--input-format stream-json): stdin is JSON lines, the prompt in the first
+// user message, the answers to its permission prompts after; it stays open until the result.
+const streaming = argv.includes("--input-format") && argv[argv.indexOf("--input-format") + 1] === "stream-json";
+const incoming = [];
+const waiters = [];
+const nextLine = (match) =>
+  new Promise((done) => {
+    const found = incoming.findIndex(match);
+    if (found >= 0) return done(incoming.splice(found, 1)[0]);
+    waiters.push({ match, done });
+  });
 const stdin = await new Promise((done) => {
   let text = "";
+  let pending = "";
   process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (chunk) => (text += chunk));
+  process.stdin.on("data", (chunk) => {
+    text += chunk;
+    if (!streaming) return;
+    pending += chunk;
+    const lines = pending.split("\n");
+    pending = lines.pop();
+    for (const raw of lines.filter(Boolean)) {
+      const value = JSON.parse(raw);
+      const waiter = waiters.findIndex((w) => w.match(value));
+      if (waiter >= 0) waiters.splice(waiter, 1)[0].done(value);
+      else incoming.push(value);
+    }
+  });
   process.stdin.on("end", () => done(text));
+  if (streaming)
+    void nextLine((value) => value.type === "user").then((value) => done(value.message.content.map((part) => part.text ?? "").join("")));
 });
 
-const argv = process.argv.slice(2);
 const dialect = process.env.FAKE_AGENT_DIALECT ?? "claude";
 const logFile = process.env.FAKE_AGENT_LOG;
 const runs = logFile && existsSync(logFile) ? readFileSync(logFile, "utf8").split("\n").filter(Boolean).length : 0;
@@ -102,6 +129,16 @@ const dialects = {
         const use = `toolu_${++tool}`;
         emit({ type: "stream_event", event: { type: "message_start", message: { id, role: "assistant", content: [] } } });
         emit({ type: "assistant", message: { id, role: "assistant", content: [{ type: "tool_use", id: use, name: step.tool, input: step.input ?? {} }] } });
+        // `ask`: asking first, the call waits for the app's answer; refused, it fails and does nothing.
+        if (step.ask && streaming) {
+          const request = `perm_${tool}`;
+          line({ type: "control_request", request_id: request, request: { subtype: "can_use_tool", tool_name: step.tool, input: step.input ?? {} } });
+          const answer = await nextLine((value) => value.type === "control_response" && value.response?.request_id === request);
+          if (answer.response.response?.behavior !== "allow") {
+            emit({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: use, content: answer.response.response?.message ?? "", is_error: true }] } });
+            return;
+          }
+        }
         await run();
         emit({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: use, content: "ok", is_error: Boolean(step.toolFails) }] } });
       },
@@ -240,3 +277,4 @@ for (const step of script.steps ?? []) {
   else if (step.fail !== undefined) agent.fail(step.fail);
 }
 agent.end();
+// Asking first, it waits for more messages, and goes when the app ends stdin after the result.

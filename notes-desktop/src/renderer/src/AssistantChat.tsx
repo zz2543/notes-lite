@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
 import { agents, type AgentId } from "../../shared/agentKinds";
-import { stoppedTurn, withEvent, type Conversation, type ConversationSummary, type Reply, type ReviewChoice, type Step } from "../../shared/conversation";
+import { stoppedTurn, withEvent, type Approval, type Conversation, type ConversationSummary, type Reply, type ReviewChoice, type Step } from "../../shared/conversation";
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
 import type { FigureState } from "./figureModel";
@@ -194,7 +194,33 @@ const stepRunning = (reply: Reply) => {
   return last?.kind === "steps" && !last.steps.at(-1)!.done;
 };
 
-function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: ReviewAction; onShowLog(): void }) {
+const askVerbs: Record<AgentActivity, string> = { running: "运行命令", reading: "读取", searching: "搜索", writing: "写入", thinking: "使用" };
+
+/** 执行前询问: the tool call the agent waits on, to allow or not. */
+function ApprovalCard({ approval, onAnswer }: { approval: Approval; onAnswer(allowed: boolean): void }) {
+  const [busy, setBusy] = useState(false);
+  const answer = (allowed: boolean) => {
+    setBusy(true);
+    onAnswer(allowed);
+  };
+  const what = approval.activity === "thinking" ? `${askVerbs.thinking} ${approval.name}` : askVerbs[approval.activity];
+  return (
+    <section className="turn-review approval" aria-label="需要你允许">
+      <p className="review-head">Agent 想{what}，要允许吗？</p>
+      {approval.detail && <code className="approval-detail">{approval.detail}</code>}
+      <div className="review-buttons">
+        <button type="button" className="secondary" disabled={busy} onClick={() => answer(false)}>
+          拒绝
+        </button>
+        <button type="button" className="primary" disabled={busy} onClick={() => answer(true)}>
+          允许
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ReplyView({ reply, onReview, onShowLog, onAnswer }: { reply: Reply; onReview: ReviewAction; onShowLog(): void; onAnswer(approval: string, allowed: boolean): void }) {
   return (
     <div className="assistant-reply">
       {reply.parts.map((part, i) =>
@@ -204,7 +230,8 @@ function ReplyView({ reply, onReview, onShowLog }: { reply: Reply; onReview: Rev
           <Timeline key={i} steps={part.steps} live={!reply.done && i === reply.parts.length - 1} />
         ),
       )}
-      {!reply.done && !stepRunning(reply) && <StillWorking key={progressKey(reply)} immediate={reply.parts.length === 0} />}
+      {reply.asking && <ApprovalCard key={reply.asking.id} approval={reply.asking} onAnswer={(allowed) => onAnswer(reply.asking!.id, allowed)} />}
+      {!reply.done && !reply.asking && !stepRunning(reply) && <StillWorking key={progressKey(reply)} immediate={reply.parts.length === 0} />}
       {reply.failed && (
         <p className="reply-failed" role="alert">
           {reply.failed}
@@ -240,7 +267,13 @@ export function ConversationView({ conversation, onReview, onShowLog }: Conversa
             {message.notes.length > 0 && <p className="user-notes">{message.notes.map(titleOf).join("、")}</p>}
           </div>
         ) : (
-          <ReplyView key={i} reply={message} onReview={(action, path) => onReview(message.turn!, action, path)} onShowLog={onShowLog} />
+          <ReplyView
+            key={i}
+            reply={message}
+            onReview={(action, path) => onReview(message.turn!, action, path)}
+            onShowLog={onShowLog}
+            onAnswer={(approval, allowed) => window.notes.answerApproval(conversation.id, approval, allowed)}
+          />
         ),
       )}
       <div ref={end} />

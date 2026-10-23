@@ -4,7 +4,7 @@
 // interface's TypeScript declarations.
 
 /** Bumped whenever the text changes. */
-export const spaceGuideVersion = 5;
+export const spaceGuideVersion = 6;
 
 /** The page interface and components as TypeScript declarations, as the guide carries them. */
 export const spaceTypes = `/** 字段类型：整列都是数字为 number，整列都是 YYYY-MM-DD 为 date，其余为 text。 */
@@ -145,8 +145,8 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 
 - 只写 \`<body>\` 里的内容即可（可以包含 \`<style>\`、\`<script>\`），笔记应用会注入样式包、组件和 \`space\` 接口。
 - meta 之后为空表示「还没有主页」。保存文件后，笔记应用会自动刷新显示。
-- 页面可以联网，可以用 \`<script src="https://cdn.jsdelivr.net/...">\` 引用网上的库，也可以 \`fetch\` 外部数据。图表请优先用内置的 ECharts（\`space.chart\`，离线可用，见「设计与自定义」）。
-- 网上的 \`<script src>\` 加载完之前，它后面的脚本不会运行。先用组件和 \`space\` 把数据显示出来，再在需要外部库的地方检查它是否已加载（例如 \`if (window.Chart)\`），网络慢时页面也不会空着。
+- **页面默认不能联网。** 图表用内置的 ECharts（\`space.chart\`），字体用系统字体，不要从 CDN 加载脚本、样式、字体或图片。
+- **确实需要联网时**（例如获取天气、汇率）：先在对话里告诉用户要访问哪些网站、做什么用，问他是否同意；不同意就换成不联网的做法。同意后在空间文件开头写明网站和用途：\`<meta name="space-network" content="api.open-meteo.com">\`、\`<meta name="space-network-reason" content="获取每天的天气">\`（多个网站用逗号分隔，\`*.example.com\` 表示它的所有子域名）。主页显示时，笔记应用会在顶部请用户允许；允许前和不允许时，到这些网站的请求都会失败，页面要照常显示笔记里的数据，并说明「未允许联网」。没有写明的网站始终不能访问。
 - 页面里的 JS 报错会显示在页面顶部的错误条上，用户可以把错误复制给你修复。错误里的行号就是空间文件里的行号。
 - 页面不能跳转到别的网址（点击链接会在用户的浏览器里打开）。嵌入的 \`<iframe>\` 里没有 \`space\`。
 - 页面里的顶层卡片（\`<body>\` 的直接子元素和 \`.space-grid\` 里的卡片）打开时会依次浮现，动效强度跟随用户的设置；不需要自己写入场动画。
@@ -192,7 +192,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 | \`--space-radius\` | 卡片圆角 |
 | \`--space-shadow\` | 卡片阴影 |
 | \`--space-font\` / \`--space-heading-font\` / \`--space-mono\` | 正文字体 / 标题字体 / 等宽字体（跟随排版设置） |
-| \`--space-ui-font\` | 界面字体（无衬线，和笔记应用的界面一致）；正文字体可能是衬线体，仪表盘式的主页可以在 \`body\` 上改用它 |
+| \`--space-ui-font\` | 界面字体（无衬线，和笔记应用的界面一致） |
 | \`--space-font-size\` / \`--space-leading\` | 正文字号 / 行距（跟随排版设置） |
 | \`--space-chart-1\` … \`--space-chart-6\` | 图表系列色 |
 | \`--space-pop-duration\` / \`--space-pop-easing\` | 「轻弹」动效（悬停、按压），用于 \`transition\` |
@@ -200,6 +200,8 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 | \`--space-expand-duration\` / \`--space-expand-easing\` | 「展开」动效（图表、展开） |
 | \`--space-emerge-duration\` / \`--space-emerge-easing\` | 「浮现」动效（卡片进入） |
 | \`--space-ease\` | 不带回弹的缓动 |
+
+**字体由你按页面风格决定。** 页面默认用 \`--space-font\`（用户的正文字体，可能是衬线体）。仪表盘、数据卡片这类界面感强的主页可以在 \`body\` 上改用 \`--space-ui-font\`；读书、写作这类阅读感强的主页可以保留正文字体；大数字、标题也可以单独换字体。只用系统里有的字体，不要从网上加载。
 
 动效变量按用户选的动效强度给出；用户开启「减弱动态效果」时，请只做淡入淡出（\`@media (prefers-reduced-motion: reduce)\`）。示例：\`transition: transform var(--space-pop-duration) var(--space-pop-easing);\`
 

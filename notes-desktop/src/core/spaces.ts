@@ -2,6 +2,7 @@ import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs
 import { join } from "node:path";
 import { collator } from "./library";
 import { addressableTables } from "./recordTables";
+import { networkHosts, referencedHosts } from "./spaceNetwork";
 import { exampleNotes, examplePage, exampleSpaceIcon, exampleSpaceName } from "./spaceExample";
 import { spaceGuide } from "./spaceGuide";
 import { isHidden, noteTitle } from "../shared/paths";
@@ -31,6 +32,9 @@ export interface Space {
   path: string;
   /** False while the file holds nothing but its meta, comments and whitespace. */
   hasPage: boolean;
+  /** 联网: the sites the homepage asks to reach (`space-network`), and why; none by default. */
+  network: string[];
+  networkReason: string;
 }
 
 export interface SpaceDraft {
@@ -114,6 +118,8 @@ function metaAttributes(tag: string): Record<string, string> {
 export const spaceMeta = {
   scope: ["space-scope", "lb-scope"],
   icon: ["space-icon", "lb-icon"],
+  network: ["space-network"],
+  networkReason: ["space-network-reason"],
 } as const;
 
 type MetaNames = (typeof spaceMeta)[keyof typeof spaceMeta];
@@ -153,6 +159,8 @@ function parseSpace(name: string, html: string): Space {
     html,
     path: `${spacesFolder}/${name}.html`,
     hasPage: pageBody(html) !== "",
+    network: [...new Set([...networkHosts(readMeta(html, spaceMeta.network)), ...referencedHosts(html)])].sort(),
+    networkReason: (readMeta(html, spaceMeta.networkReason) ?? "").trim().slice(0, 200),
   };
 }
 
@@ -399,12 +407,18 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
   const reorder = (names: string[]) => saveOrder(names);
 
   const tablesIn = async (scope: SpaceScope) => {
-    const tables: { source: string; header: string[]; dated: boolean }[] = [];
-    for (const path of await notesInScope(root, scope)) {
-      const text = await readFile(join(root, ...path.split("/")), "utf8").catch(() => "");
-      tables.push(...addressableTables(path, text));
+    // Read a few notes at a time rather than one after another: a large scope takes a fraction as long.
+    const paths = await notesInScope(root, scope);
+    const tables: { source: string; header: string[]; dated: boolean }[][] = new Array(paths.length);
+    for (let start = 0; start < paths.length; start += 16) {
+      await Promise.all(
+        paths.slice(start, start + 16).map(async (path, i) => {
+          const text = await readFile(join(root, ...path.split("/")), "utf8").catch(() => "");
+          tables[start + i] = addressableTables(path, text);
+        }),
+      );
     }
-    return tables;
+    return tables.flat();
   };
 
   const prompt = async (space: Space) => {

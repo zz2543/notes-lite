@@ -1,4 +1,4 @@
-import type { AgentId, AgentModels, Conversation, ConversationSummary, FollowedLink, Link, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpacePageProblem, SpaceScope } from "../core";
+import type { AgentId, AgentModels, Conversation, ConversationSummary, FollowedLink, Link, TurnDiff, TurnReviewed, TurnReviewRequest, TurnStart, TurnStarted, FolderContents, InstalledAgent, TurnEvent, LibraryErrorCode, Relocation, SearchOptions, SearchResults, SnapshotUsage, SpaceDraft, SpaceErrorCode, SpaceNetwork, SpacePageProblem, SpaceScope } from "../core";
 
 export type { SpacePageProblem };
 import type { Appearance } from "./appearance";
@@ -135,6 +135,10 @@ export interface NotesApi {
   reorderSpaces(names: string[]): Promise<SpaceDone<null>>;
   /** Copies the prompt for an external agent to the clipboard. */
   copySpacePrompt(name: string): Promise<SpaceDone<null>>;
+  /** 联网: the sites the homepage names, why, and whether the user allowed them. */
+  spaceNetwork(name: string): Promise<SpaceDone<SpaceNetwork>>;
+  /** Allows (or not) the sites the homepage names now; null asks again. The page loads afresh. */
+  setSpaceNetwork(name: string, allowed: boolean | null): Promise<SpaceDone<SpaceNetwork>>;
   /** The same prompt, for 助手 to write the space's homepage in a turn of its own. */
   spacePrompt(name: string): Promise<SpaceDone<string>>;
   /** 显示源文件: shows the space's HTML file in the system's file manager. */
@@ -158,6 +162,8 @@ export interface NotesApi {
   startTurn(request: TurnStart): Promise<TurnStarted>;
   /** Stops the conversation's running turn. */
   stopTurn(conversation: string): void;
+  /** 执行前询问: allows (or not) the tool call the conversation's turn waits on. */
+  answerApproval(conversation: string, approval: string, allowed: boolean): void;
   /** 对话历史 (ticket 30): the open library's kept conversations, the latest first. */
   conversations(): Promise<ConversationSummary[]>;
   /** A kept conversation of the open library as it stands, to show and continue; null when it is gone. */
@@ -300,6 +306,8 @@ export const channels = {
   deleteSpace: "spaces:delete",
   reorderSpaces: "spaces:reorder",
   copySpacePrompt: "spaces:copy-prompt",
+  spaceNetwork: "spaces:network",
+  setSpaceNetwork: "spaces:set-network",
   spacePrompt: "spaces:prompt",
   revealSpaceSource: "spaces:reveal-source",
   detectAgents: "assistant:detect-agents",
@@ -309,6 +317,7 @@ export const channels = {
   clearSnapshots: "assistant:clear-snapshots",
   startTurn: "assistant:start-turn",
   stopTurn: "assistant:stop-turn",
+  answerApproval: "assistant:answer-approval",
   conversations: "assistant:conversations",
   openConversation: "assistant:open-conversation",
   turnEvent: "assistant:turn-event",

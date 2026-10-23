@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SnapshotUsage } from "../../core";
+import type { PermissionMode } from "../../shared/conversation";
 import type { ReviewMode } from "../../shared/preferences";
 import { Segmented, type Choice } from "./controls";
 import { usePreferences } from "./preferences";
@@ -11,6 +12,11 @@ import { SettingRow, SettingsGroup } from "./SettingsPanel";
 const reviewModes: Choice<ReviewMode>[] = [
   { value: "review", label: "每轮结束后审查" },
   { value: "keep", label: "直接保留" },
+];
+
+const permissionModes: Choice<PermissionMode>[] = [
+  { value: "ask", label: "执行前询问" },
+  { value: "full", label: "完全权限" },
 ];
 
 /** Bytes as the settings panel shows them: KB below a megabyte, then MB, then GB. */
@@ -47,6 +53,14 @@ export function AssistantPage() {
 
   return (
     <>
+      <SettingsGroup
+        title="权限"
+        description="执行前询问：Claude Code 修改当前文件夹里的笔记会直接进行（每一轮都能撤销），运行命令、联网、读写文件夹以外的文件前会先问你。Codex 不能中途询问，改为只能修改当前文件夹、不能联网。DeepSeek Harness 和 Pi 不支持询问，总是以完全权限运行。完全权限：Agent 不再询问，可以运行任何命令。"
+      >
+        <SettingRow label="助手权限">
+          <Segmented label="助手权限" choices={permissionModes} value={preferences.assistantPermissions} onChange={(assistantPermissions) => change({ assistantPermissions })} />
+        </SettingRow>
+      </SettingsGroup>
       <SettingsGroup
         title="写入审查"
         description="助手直接改写笔记库，审查发生在每一轮结束之后：一张卡片列出这一轮改过的笔记，默认全部保留，也可以逐篇撤回。选择“直接保留”就不再出现卡片，改动仍可在操作记录中撤销。"

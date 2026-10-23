@@ -185,3 +185,43 @@ test("the homepage follows 排版, 强调色 and 外观 as they change", async (
   expect(await home.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(30, 30, 33)");
   await app.close();
 });
+
+test("a homepage that wants the network asks atop the page; until allowed its requests are blocked, then they go through; the choice can be taken back", async ({ scratch }) => {
+  const { createServer } = await import("node:http");
+  const server = createServer((_, res) => {
+    res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" });
+    res.end(JSON.stringify({ rate: 7.1 }));
+  });
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  const port = (server.address() as { port: number }).port;
+  const html = `<meta name="space-scope" content="健身">
+<meta name="space-network" content="127.0.0.1:${port}">
+<meta name="space-network-reason" content="查汇率">
+<button id="go">查</button><p id="out">…</p>
+<script>
+document.getElementById("go").onclick = () => fetch("http://127.0.0.1:${port}/rate").then((r) => r.json()).then((d) => (out.textContent = "汇率 " + d.rate), () => (out.textContent = "未允许联网"));
+</script>`;
+  try {
+    const { app, page, home } = await openSpace(scratch, { "健身/训练记录.md": training, ".notes/空间/健身.html": html }, "健身");
+    const bar = page.getByRole("alert", { name: "主页想联网" });
+    await expect(bar).toContainText(`127.0.0.1:${port}`);
+    await expect(bar).toContainText("查汇率");
+    await home.locator("#go").click();
+    await expect(home.locator("#out")).toHaveText("未允许联网");
+
+    await bar.getByRole("button", { name: "允许联网" }).click();
+    await expect(bar).toHaveCount(0);
+    const again = await spacePage(app, "健身");
+    await again.locator("#go").click();
+    await expect(again.locator("#out")).toHaveText("汇率 7.1");
+
+    // Taken back from the title: it asks again.
+    await page.getByRole("button", { name: "已允许联网" }).click();
+    await expect(page.getByRole("alert", { name: "主页想联网" })).toBeVisible();
+    await page.getByRole("alert", { name: "主页想联网" }).getByRole("button", { name: "不允许" }).click();
+    await expect(page.getByRole("button", { name: "未允许联网" })).toBeVisible();
+    await app.close();
+  } finally {
+    server.close();
+  }
+});

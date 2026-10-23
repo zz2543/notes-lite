@@ -2,7 +2,7 @@
 // at a time; its events are folded into it (shared/conversation's one rule) and passed on as they
 // come, and it is kept with the app (对话记录) once the turn is over.
 import { modelChoosable, modelName, type AgentId } from "../shared/agentKinds";
-import { canRevert, emptyReply, stoppedTurn, withEvent, type Conversation, type ConversationSummary, type Message, type Reply, type ReviewChoice, type TurnChange, type TurnEvent } from "../shared/conversation";
+import { canRevert, emptyReply, stoppedTurn, withEvent, type Conversation, type ConversationSummary, type Message, type PermissionMode, type Reply, type ReviewChoice, type TurnChange, type TurnEvent } from "../shared/conversation";
 import type { ReviewMode } from "../shared/preferences";
 import type { InstalledAgent } from "./agents";
 import type { ConversationStore } from "./conversations";
@@ -53,6 +53,8 @@ export interface AssistantTurnsOptions {
   env(): Promise<NodeJS.ProcessEnv>;
   /** The 写入审查 setting now: a card after each turn, or keep it all. */
   reviewMode(): ReviewMode;
+  /** The 助手权限 setting now, read as each turn begins: 执行前询问 or full permissions. */
+  permissionMode?(): PermissionMode;
   /** The spaces of the library at `root`, told to the agent with their authoring guide each turn. */
   spaces?(root: string): SpaceLibrary;
 }
@@ -69,6 +71,8 @@ export interface AssistantTurns {
   open(root: string | null, conversation: string): Promise<Conversation | null>;
   /** Stops the conversation's running turn. */
   stop(conversation: string): void;
+  /** 执行前询问: the user's answer to the tool call the conversation's turn waits on. */
+  answer(conversation: string, approval: string, allowed: boolean): void;
   /** Stops every running turn, as when the app quits. */
   stopAll(): void;
   /** Does what the review card asks and answers with the conversation as it now stands. */
@@ -95,6 +99,8 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
   // The conversations of this run stay in memory too.
   const live = new Map<string, Conversation>();
   const running = new Map<string, AbortController>();
+  // Tool calls waiting for the user (执行前询问), by conversation and then by the agent's id for the call.
+  const waiting = new Map<string, Map<string, (allowed: boolean) => void>>();
   // Kept one save at a time, each the conversation as it stands then.
   let saving = Promise.resolve();
   const keep = (id: string) => {
@@ -145,6 +151,13 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
       log: options.log(root),
       env: await options.env(),
       signal: stop.signal,
+      mode: options.permissionMode?.() ?? "full",
+      ask: (approval) =>
+        new Promise<boolean>((answer) => {
+          if (stop.signal.aborted) return answer(false);
+          const calls = waiting.get(id) ?? new Map<string, (allowed: boolean) => void>();
+          waiting.set(id, calls.set(approval.id, answer));
+        }),
       onEvent: pass,
     })
       .catch((error: Error) => {
@@ -154,6 +167,8 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
       })
       .finally(() => {
         running.delete(id);
+        waiting.get(id)?.forEach((answer) => answer(false));
+        waiting.delete(id);
         keep(id);
       });
     return { ok: true, conversation };
@@ -217,8 +232,17 @@ export function assistantTurns(options: AssistantTurnsOptions): AssistantTurns {
     start,
     history: async (root) => (root ? conversations.list(root) : []),
     open,
-    stop: (id) => running.get(id)?.abort(),
+    stop: (id) => {
+      running.get(id)?.abort();
+      waiting.get(id)?.forEach((answer) => answer(false));
+      waiting.delete(id);
+    },
     stopAll: () => running.forEach((turn) => turn.abort()),
+    answer: (id, approval, allowed) => {
+      const answer = waiting.get(id)?.get(approval);
+      waiting.get(id)?.delete(approval);
+      answer?.(allowed === true);
+    },
     review,
     diff,
   };

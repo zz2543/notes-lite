@@ -29,6 +29,9 @@ import {
   spaceLibrary,
   spaceNotes,
   spaceStorage,
+  networkDecisions,
+  networkState,
+  type SpaceNetwork,
   watchLibrary,
   type Library,
   type Link,
@@ -83,6 +86,13 @@ let settingsWindow: BrowserWindow | null = null;
 const appWindows = () => [window, settingsWindow].filter((w): w is BrowserWindow => w !== null && !w.isDestroyed());
 // Each homepage's own storage, kept with the app (spaces-spec #51).
 const homepageStorage = spaceStorage(join(app.getPath("userData"), "space-storage.json"));
+// 联网: what the user allowed each homepage to reach, kept by its storage key.
+const networkKept = networkDecisions(join(app.getPath("userData"), "space-network.json"));
+/** Where 联网 stands for the space `name` of the library at `root`. */
+async function spaceNetworkOf(root: string, name: string): Promise<SpaceNetwork> {
+  const space = await spaceLibrary(root, libraryOptions).space(name);
+  return networkState(space.network, space.networkReason, await networkKept.get(await homepageStorage.key(root, name)));
+}
 // Space homepages, each in its own sandbox laid over the card.
 // A homepage takes the app's 排版, 强调色 and 动效 (spaceKit), and follows them when they change.
 const pages = spacePages(
@@ -92,6 +102,10 @@ const pages = spacePages(
   (event) => window && !window.isDestroyed() && window.webContents.send(channels.spacePageEvent, event),
   (paths) => changedHere(paths),
   homepageStorage,
+  async (root, name) => {
+    const state = await spaceNetworkOf(root, name);
+    return state.decision === "allowed" ? state.hosts : [];
+  },
 );
 // Set once the page has saved (or the user chose to drop unsaved input), so the next close goes through.
 let closeAllowed = false;
@@ -189,6 +203,7 @@ const turns = assistantTurns({
   env: agentEnvironment,
   // Read at the end of each turn (the setting is declared further down).
   reviewMode: () => preferences.assistantReview,
+  permissionMode: () => preferences.assistantPermissions,
   spaces: (root) => spaceLibrary(root, libraryOptions),
 });
 
@@ -527,6 +542,15 @@ function registerIpc() {
     return null;
   });
   space(channels.reorderSpaces, async (names: string[]) => (await spaces().reorder(names), null));
+  space(channels.spaceNetwork, (name: string) => spaceNetworkOf(requireLibrary().root, String(name)));
+  // The answer holds for the sites named now; null forgets it, and the homepage asks again.
+  space(channels.setSpaceNetwork, async (name: string, allowed: boolean | null) => {
+    const root = requireLibrary().root;
+    const { hosts } = await spaceNetworkOf(root, String(name));
+    await networkKept.set(await homepageStorage.key(root, String(name)), typeof allowed === "boolean" ? { hosts, allowed } : null);
+    pages.reload(String(name));
+    return spaceNetworkOf(root, String(name));
+  });
   space(channels.copySpacePrompt, async (name: string) => (await copyPrompt(await spaces().space(name)), null));
   space(channels.spacePrompt, async (name: string) => spaces().prompt(await spaces().space(name)));
   space(channels.revealSpaceSource, async (name: string) => {
@@ -597,6 +621,7 @@ function registerIpc() {
     turns.start(library?.root ?? null, request, (id, event) => !sender.isDestroyed() && sender.send(channels.turnEvent, id, event)),
   );
   ipcMain.on(channels.stopTurn, (_, id: string) => turns.stop(id));
+  ipcMain.on(channels.answerApproval, (_, id: string, approval: string, allowed: boolean) => turns.answer(String(id), String(approval), allowed === true));
   ipcMain.handle(channels.reviewTurn, (_, request: TurnReviewRequest) => turns.review(library?.root ?? null, request));
   ipcMain.handle(channels.turnDiff, (_, turn: string, path: string) => turns.diff(library?.root ?? null, turn, path));
   ipcMain.handle(channels.conversations, () => turns.history(library?.root ?? null));

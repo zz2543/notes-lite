@@ -1,11 +1,11 @@
-// 一轮 (assistant-spec, ADR 0005): snapshot the library, run the agent in the working directory with
-// full permissions and pass on what it says, snapshot again, and log what it changed as one entry
+// 一轮 (assistant-spec, ADR 0005): snapshot the library, run the agent in the working directory (with
+// full permissions, or asking first: 助手权限) and pass on what it says, snapshot again, and log what it changed as one entry
 // that undoes the whole turn.
 import { spawn } from "node:child_process";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { agentAdapter, type AgentEvent, type TurnEvent } from "./agentStream";
 import { modelName, type AgentId } from "../shared/agentKinds";
-import { stoppedTurn } from "../shared/conversation";
+import { stoppedTurn, type PermissionMode } from "../shared/conversation";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
 import { notesFolder, spaceGuideName, spacesFolder, type SpaceLibrary } from "./spaces";
@@ -28,6 +28,10 @@ export interface TurnRequest {
   spaces?: TurnSpaces;
   snapshots: TurnSnapshots;
   log: OperationLog;
+  /** 助手权限: 执行前询问 or full permissions (the default); an agent that can't ask runs as its adapter says. */
+  mode?: PermissionMode;
+  /** 执行前询问: asks the user about a tool call; true to allow it. None: every call that asks is refused. */
+  ask?(approval: Extract<AgentEvent, { kind: "approval" }>): Promise<boolean>;
   /** The agent's environment; this process's by default. */
   env?: NodeJS.ProcessEnv;
   /** Stops the agent. */
@@ -132,7 +136,10 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
   let failed: string | undefined;
   try {
     failed = await new Promise<string | undefined>((done) => {
-      const child = start(agent.path, adapter.args(request.session, modelName(request.model)), cwd, env);
+      const mode: PermissionMode = request.mode === "ask" && adapter.limits ? "ask" : "full";
+      // It asks through the app: the prompt goes in as its first message, and stdin stays open for the answers.
+      const asks = mode === "ask" && adapter.limits === "ask" && adapter.input && adapter.answer ? adapter : undefined;
+      const child = start(agent.path, adapter.args(request.session, modelName(request.model), mode), cwd, env);
       const read = adapter.reader(cwd);
       let result: AgentEvent | undefined;
       let stderr = "";
@@ -141,8 +148,20 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
         for (const event of read(line)) {
           if (event.kind === "session") outcome.session = event.id;
           if (event.kind === "tool" && event.writes) noteWrite(event.writes);
-          if (event.kind === "result") result = event;
-          else onEvent(event);
+          if (event.kind === "result") {
+            result = event;
+            if (asks) child.stdin.end();
+          } else if (event.kind === "approval") {
+            const { input: _, ...shown } = event;
+            onEvent(shown);
+            void (request.ask?.(event) ?? Promise.resolve(false))
+              .catch(() => false)
+              .then((allowed) => {
+                if (!child.stdin.writable) return;
+                child.stdin.write(asks?.answer?.(event, allowed) ?? "");
+                onEvent({ kind: "approvalDone", id: event.id, allowed });
+              });
+          } else onEvent(event);
         }
       };
       child.stdout.setEncoding("utf8");
@@ -172,7 +191,8 @@ export async function runTurn(request: TurnRequest): Promise<TurnOutcome> {
         done(undefined);
       });
       child.stdin.on("error", () => {});
-      child.stdin.end(turnPrompt(request));
+      if (asks) child.stdin.write(asks.input!(turnPrompt(request)));
+      else child.stdin.end(turnPrompt(request));
     });
   } finally {
     // Whatever happened, what the agent changed is listed and can be undone.

@@ -180,3 +180,18 @@ describe("every agent", () => {
     for (const id of ["claude", "codex", "dsh", "pi"] as const) expect(read(id, "/w", ["WARNING: something", ""])).toEqual([]);
   });
 });
+
+describe("Claude Code, asking first (执行前询问)", () => {
+  const claudeCode = agentAdapter("claude");
+  it("takes the prompt as stream-json, reads its permission prompt and answers it as the SDK does", () => {
+    const opening = claudeCode.input!("你好").trim().split("\n").map((line) => JSON.parse(line));
+    expect(opening.at(-1)).toMatchObject({ type: "user", message: { role: "user", content: [{ type: "text", text: "你好" }] } });
+    const read = claudeCode.reader("/lib");
+    const [approval] = read(JSON.stringify({ type: "control_request", request_id: "r1", request: { subtype: "can_use_tool", tool_name: "Bash", input: { command: "ls -la" } } }));
+    expect(approval).toEqual({ kind: "approval", id: "r1", name: "Bash", activity: "running", detail: "ls -la", input: { command: "ls -la" } });
+    const allow = JSON.parse(claudeCode.answer!(approval as Extract<AgentEvent, { kind: "approval" }>, true));
+    expect(allow).toEqual({ type: "control_response", response: { subtype: "success", request_id: "r1", response: { behavior: "allow", updatedInput: { command: "ls -la" } } } });
+    const deny = JSON.parse(claudeCode.answer!(approval as Extract<AgentEvent, { kind: "approval" }>, false));
+    expect(deny.response.response.behavior).toBe("deny");
+  });
+});

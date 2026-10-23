@@ -4,7 +4,7 @@
 // to the core library. Nothing here decides what a request may do.
 import { join } from "node:path";
 import { ipcMain, protocol, session, shell, WebContentsView, type BrowserWindow, type Rectangle, type Session } from "electron";
-import { spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope, type SpaceStorage } from "../core";
+import { hostAllowed, spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope, type SpaceStorage } from "../core";
 import type { SpacePageEvent, SpacePageProblem } from "../shared/api";
 import { spacePageChannels } from "../shared/spacePage";
 import { kitLibraries, kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
@@ -96,6 +96,8 @@ export interface SpacePages {
    * loads again, and each homepage hears, through `space.on("change")`, of the changes in its scope.
    */
   libraryChanged(paths: string[]): Promise<void>;
+  /** Loads the homepage of `name` afresh, if it is open, as after its 联网 was allowed or taken back. */
+  reload(name: string): void;
 }
 
 /**
@@ -110,6 +112,8 @@ export function spacePages(
   /** Told of every path a homepage wrote (see SpaceRequestOptions.wrote). */
   wrote: (paths: string[]) => Promise<void>,
   storage: SpaceStorage,
+  /** 联网: the sites the homepage of `name` may reach now, read each time it loads; none by default. */
+  network: (library: string, name: string) => Promise<string[]> = async () => [],
 ): SpacePages {
   let hosted: Hosted[] = [];
   // How many lines come before each space file in the page last served for it.
@@ -118,6 +122,8 @@ export function spacePages(
   let hostedRoot: string | null = null;
   // Which space each session serves now: a renamed space keeps its session under its new name.
   const served = new WeakMap<Session, { library: string; name: string }>();
+  // The sites each session's page may reach, as allowed when it last loaded.
+  const reachable = new WeakMap<Session, string[]>();
 
   const trash = (path: string) => shell.trashItem(path);
 
@@ -131,11 +137,16 @@ export function spacePages(
       const carried = kitLibraries[new URL(request.url).pathname];
       if (carried) return new Response(await carried(), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "max-age=31536000, immutable" } });
       const { library, name } = served.get(ses)!;
+      reachable.set(ses, await network(library, name).catch(() => []));
       const space = await spaceLibrary(library).space(name).catch(() => null);
       const { page, offset } = documentFor(name, space?.html ?? "", settings());
       offsets.set(name, offset);
       return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
     });
+    // 联网: nothing leaves for the web but to the sites the user allowed this homepage.
+    ses.webRequest.onBeforeRequest({ urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"] }, (details, answer) =>
+      answer({ cancel: !hostAllowed(details.url, reachable.get(ses) ?? []) }),
+    );
     // No camera, microphone, location or notifications: the page is someone else's script.
     ses.setPermissionRequestHandler((_contents, _permission, answer) => answer(false));
     ses.setPermissionCheckHandler(() => false);
@@ -295,5 +306,10 @@ export function spacePages(
     for (const { view } of hosted) if (!view.webContents.isDestroyed()) view.webContents.send(spacePageChannels.settings, css);
   };
 
-  return { show, hide, closeAll, close, settingsChanged, libraryChanged };
+  const reloadNamed = (name: string) => {
+    const page = hosted.find((p) => p.name === name);
+    if (page) reload(page);
+  };
+
+  return { show, hide, closeAll, close, settingsChanged, libraryChanged, reload: reloadNamed };
 }

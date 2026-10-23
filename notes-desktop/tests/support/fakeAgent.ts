@@ -8,7 +8,7 @@ import type { AgentId } from "../../src/shared/agentKinds";
 
 export type FakeStep =
   | { say: string }
-  | { tool: string; input?: Record<string, unknown>; write?: { path: string; text: string }; toolFails?: boolean; waitFor?: string }
+  | { tool: string; input?: Record<string, unknown>; write?: { path: string; text: string }; toolFails?: boolean; waitFor?: string; ask?: boolean }
   | { waitFor: string }
   | { fail: string };
 

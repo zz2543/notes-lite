@@ -1,7 +1,7 @@
 import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, spaceLibrary, turnSpaces, type AgentId, type TurnEvent, type TurnSpaces } from "../../src/core";
+import { addEvent, conversationStore, emptyReply, operationLog, runTurn, snapshotStore, spaceLibrary, turnSpaces, type AgentId, type TurnEvent, type TurnRequest, type TurnSpaces } from "../../src/core";
 import { installFakeAgent, type FakeScript } from "../support/fakeAgent";
 import { contents, fakeTrash, library, scratchFolder } from "../support/library";
 
@@ -16,7 +16,7 @@ async function setup(files: Record<string, string>, script: FakeScript | FakeScr
   const log = operationLog(root, { trash: trash.trash, turns: snapshots });
   const agent = await installFakeAgent(join(data, "agents"), id, script);
   const events: TurnEvent[] = [];
-  const turn = (request: { folder: string; text: string; notes?: string[]; session?: string; signal?: AbortSignal; spaces?: TurnSpaces }) =>
+  const turn = (request: { folder: string; text: string; notes?: string[]; session?: string; signal?: AbortSignal; spaces?: TurnSpaces } & Pick<TurnRequest, "mode" | "ask">) =>
     runTurn({ agent: { id, path: agent.path }, root, snapshots, log, notes: [], ...request, onEvent: (event) => events.push(event) });
   return { root, agent, events, turn, log };
 }
@@ -294,3 +294,65 @@ function runTurnStopping(lib: Awaited<ReturnType<typeof setup>>, stop: AbortCont
   return lib.turn({ folder: "", text: "等着", signal: stop.signal });
 }
 
+
+// 助手权限 › 执行前询问: Claude Code asks the app before a command, and waits for the user's answer;
+// Codex, which can't ask, runs shut in the folder; DeepSeek Harness and Pi have no such mode.
+describe("执行前询问", () => {
+  const asking = (answer: boolean) =>
+    setup({ "日记/周一.md": "# 周一\n" }, {
+      steps: [
+        { say: "先运行一条命令。" },
+        { tool: "Bash", input: { command: "touch 新.md" }, write: { path: "新.md", text: "新\n" }, ask: true },
+        { say: "好了。" },
+      ],
+    }).then(async (lib) => {
+      const asked: string[] = [];
+      const outcome = await lib.turn({
+        folder: "日记",
+        text: "建一篇",
+        mode: "ask",
+        ask: async (approval) => {
+          asked.push(`${approval.name} ${approval.detail}`);
+          return answer;
+        },
+      });
+      return { ...lib, asked, outcome };
+    });
+
+  it("asks before a command, and runs it once allowed", async () => {
+    const lib = await asking(true);
+    const [run] = await lib.agent.runs();
+    expect(run!.argv).toEqual(expect.arrayContaining(["--permission-prompt-tool", "stdio", "--permission-mode", "acceptEdits", "--input-format", "stream-json"]));
+    expect(run!.argv).not.toContain("--dangerously-skip-permissions");
+    expect(run!.stdin).toContain("建一篇");
+    expect(lib.asked).toEqual(["Bash touch 新.md"]);
+    const approval = lib.events.find((e) => e.kind === "approval");
+    expect(approval).toMatchObject({ kind: "approval", name: "Bash", activity: "running", detail: "touch 新.md" });
+    expect(approval).not.toHaveProperty("input");
+    expect(lib.events).toContainEqual({ kind: "approvalDone", id: (approval as { id: string }).id, allowed: true });
+    expect(await readFile(join(lib.root, "日记/新.md"), "utf8")).toBe("新\n");
+    expect(lib.outcome.failed).toBeUndefined();
+  });
+
+  it("refused, the call fails and the turn goes on", async () => {
+    const lib = await asking(false);
+    await expect(readFile(join(lib.root, "日记/新.md"), "utf8")).rejects.toThrow();
+    expect(lib.events).toContainEqual(expect.objectContaining({ kind: "approvalDone", allowed: false }));
+    expect(lib.events).toContainEqual(expect.objectContaining({ kind: "toolDone", failed: true }));
+    expect(lib.outcome.failed).toBeUndefined();
+  });
+
+  it("runs Codex shut in the folder, and DeepSeek Harness and Pi as they always run", async () => {
+    for (const id of ["codex", "dsh", "pi"] as const) {
+      const lib = await setup({ "a.md": "a\n" }, { steps: [{ say: "好。" }] }, id);
+      await lib.turn({ folder: "", text: "看看", mode: "ask" });
+      const [run] = await lib.agent.runs();
+      if (id === "codex") {
+        expect(run!.argv.slice(0, 3)).toEqual(["-c", "sandbox_mode=workspace-write", "exec"]);
+        expect(run!.argv).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+      }
+      if (id === "dsh") expect(run!.permissionMode).toBe("danger-full-access");
+      expect(run!.stdin).toContain("看看");
+    }
+  });
+});

@@ -1,7 +1,7 @@
-import { Check, Code, Copy, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
+import { Check, Code, Copy, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { SpaceScope } from "../../core";
+import type { SpaceNetwork, SpaceScope } from "../../core";
 import type { SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
 import { scopeLabel } from "../../shared/spaceScope";
 import { useMotion } from "./MotionProvider";
@@ -32,6 +32,29 @@ export function useSpace(name: string | null): SpaceInfo | null | undefined {
   useEffect(() => window.notes.onLibraryChanged((paths) => paths.some(touchesSpaces) && setRevision((n) => n + 1)), []);
   if (name === null) return null;
   return spaces && (spaces.find((space) => space.name === name) ?? null);
+}
+
+/**
+ * 联网: the sites the homepage names and whether the user allowed them, read again when a space file
+ * changes; `decide` answers (null: ask again).
+ */
+function useSpaceNetwork(name: string) {
+  const [network, setNetwork] = useState<{ name: string; state: SpaceNetwork }>();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void window.notes.spaceNetwork(name).then((read) => live && read.ok && setNetwork({ name, state: read.value }));
+    return () => {
+      live = false;
+    };
+  }, [name, revision]);
+  useEffect(() => window.notes.onLibraryChanged((paths) => paths.some(touchesSpaces) && setRevision((n) => n + 1)), []);
+  const decide = async (allowed: boolean | null) => {
+    const done = await window.notes.setSpaceNetwork(name, allowed);
+    if (done.ok) setNetwork({ name, state: done.value });
+  };
+  const state = network?.name === name && network.state.hosts.length > 0 ? network.state : undefined;
+  return { state, decide };
 }
 
 /** The notes in the space's scope, read again when the library changes. */
@@ -119,6 +142,7 @@ interface SpaceHomeProps {
 
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
 export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, headEnd }: SpaceHomeProps) {
+  const network = useSpaceNetwork(space.name);
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。" : copied.message);
@@ -133,10 +157,17 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, headEnd
         </button>
         {headEnd}
       </header>
-      <SpaceTitle space={space} onAsk={space.hasPage ? onAsk : onGenerate} onCopyPrompt={() => void copyPrompt()} notify={notify} />
+      <SpaceTitle
+        space={space}
+        network={space.hasPage ? network.state : undefined}
+        onNetwork={() => void network.decide(null)}
+        onAsk={space.hasPage ? onAsk : onGenerate}
+        onCopyPrompt={() => void copyPrompt()}
+        notify={notify}
+      />
       {space.hasPage ? (
         <>
-          <PageBars name={space.name} onShowLog={onShowLog} />
+          <PageBars name={space.name} onShowLog={onShowLog} network={network.state} onNetwork={(allowed) => void network.decide(allowed)} />
           <PageSlot name={space.name} />
         </>
       ) : (
@@ -167,10 +198,13 @@ interface SpaceTitleProps {
   onAsk(): void;
   onCopyPrompt(): void;
   notify(message: string): void;
+  /** 联网, when the homepage names sites; pressing it asks again. */
+  network?: SpaceNetwork;
+  onNetwork(): void;
 }
 
 /** Over the homepage: the space's icon, name and scope, and what can be done to its page. */
-function SpaceTitle({ space, onAsk, onCopyPrompt, notify }: SpaceTitleProps) {
+function SpaceTitle({ space, network, onNetwork, onAsk, onCopyPrompt, notify }: SpaceTitleProps) {
   // 查看源码: the space file, shown where it lies.
   const showSource = async () => {
     const shown = await window.notes.revealSpaceSource(space.name);
@@ -190,6 +224,12 @@ function SpaceTitle({ space, onAsk, onCopyPrompt, notify }: SpaceTitleProps) {
         <p className="space-title-scope">{scopeLine(space.scope)}</p>
       </div>
       <div className="space-title-tools">
+        {network && network.decision !== "ask" && (
+          <button className="space-title-button" onClick={onNetwork} title={`可访问：${network.hosts.join("、")}。点按重新选择。`}>
+            <Globe size={icon.small} aria-hidden />
+            {network.decision === "allowed" ? "已允许联网" : "未允许联网"}
+          </button>
+        )}
         <button className="space-title-button" onClick={onAsk}>
           <Sparkle size={icon.small} aria-hidden />
           让助手修改
@@ -218,7 +258,7 @@ const sameProblem = (a: SpacePageProblem, b: SpacePageProblem) => a.message === 
  * Above the homepage: the 错误条 when it went wrong (with 复制错误给 agent), and 写入提示 after it wrote.
  * Both open on 展开, pushing the page down rather than covering it.
  */
-function PageBars({ name, onShowLog }: { name: string; onShowLog(): void }) {
+function PageBars({ name, onShowLog, network, onNetwork }: { name: string; onShowLog(): void; network?: SpaceNetwork; onNetwork(allowed: boolean): void }) {
   const [problems, setProblems] = useState<SpacePageProblem[]>([]);
   const [wrote, setWrote] = useState<{ changes: number; onlyRecords: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -265,6 +305,23 @@ function PageBars({ name, onShowLog }: { name: string; onShowLog(): void }) {
   return (
     <div className="space-bars">
       <AnimatePresence initial={false}>
+        {network?.decision === "ask" && (
+          <motion.div key="network" className="space-bar-frame" {...bar}>
+            <div className="space-bar notice" role="alert" aria-label="主页想联网">
+              <Globe size={icon.small} className="space-bar-icon" aria-hidden />
+              <div className="space-bar-text">
+                <strong>这个主页想联网，访问 {network.hosts.join("、")}</strong>
+                <span className="space-bar-detail">{network.reason ? `用途：${network.reason}。` : ""}不允许时，它只能使用笔记里的数据。</span>
+              </div>
+              <button type="button" className="space-bar-button" onClick={() => onNetwork(false)}>
+                不允许
+              </button>
+              <button type="button" className="space-bar-button" onClick={() => onNetwork(true)}>
+                允许联网
+              </button>
+            </div>
+          </motion.div>
+        )}
         {problem && (
           <motion.div key="problem" className="space-bar-frame" {...bar}>
             <div className="space-bar problem" role="alert" aria-label="主页出错了">

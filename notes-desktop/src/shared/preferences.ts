@@ -1,5 +1,6 @@
 import { agents, modelName, type AgentId } from "./agentKinds";
 import { attachmentFolderOf, attachmentNamings, defaultAttachmentSettings, type AttachmentNaming } from "./attachments";
+import type { PermissionMode } from "./conversation";
 import { defaultTypography, readTypography, type Typography } from "./typography";
 
 // 设置: what the user chose in the settings panel. Kept with the app (settings.json in its profile),
@@ -26,6 +27,8 @@ export interface Preferences {
   motion: MotionIntensity;
   navigation: Navigation;
   assistantReview: ReviewMode;
+  /** 助手权限: 执行前询问 (commands, the web and files outside the folder wait for the user) or 完全权限. */
+  assistantPermissions: PermissionMode;
   /** 排版: a change may carry only the fields it changes; the rest stay. */
   typography: Typography;
   /**
@@ -49,6 +52,7 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   motion: ["light", "standard", "strong"],
   navigation: ["double", "single"],
   assistantReview: ["review", "keep"],
+  assistantPermissions: ["ask", "full"],
   attachmentNaming: attachmentNamings,
 };
 
@@ -59,6 +63,7 @@ export const defaultPreferences: Preferences = {
   motion: "strong",
   navigation: "double",
   assistantReview: "review",
+  assistantPermissions: "ask",
   typography: defaultTypography,
   agentModels: {},
   attachmentFolder: defaultAttachmentSettings.folder,

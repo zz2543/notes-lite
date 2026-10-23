@@ -1235,6 +1235,15 @@ button.assistant-model:hover,
 .review-diff .added {
   color: var(--side-fg);
 }
+/* 执行前询问: the call the agent waits on, as the review card looks. */
+.approval-detail {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-path);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8em;
+  overflow: auto;
+}
 .review-buttons {
   display: flex;
   justify-content: flex-end;

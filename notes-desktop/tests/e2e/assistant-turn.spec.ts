@@ -65,7 +65,9 @@ test("a turn with the open note: its folder is the working directory, the reply 
   await expect(page.getByLabel("笔记正文")).toContainText("跑步");
 
   const [run] = await agent.runs();
-  expect(run!.argv).toContain("--dangerously-skip-permissions");
+  // 执行前询问 is the default: Claude asks the app before a risky tool.
+  expect(run!.argv).toContain("--permission-prompt-tool");
+  expect(run!.argv).not.toContain("--dangerously-skip-permissions");
   expect(await realpath(run!.cwd)).toBe(await realpath(join(root, "日记")));
   expect(run!.stdin).toContain("帮我补充计划");
   expect(run!.stdin).toContain("- 周一.md");
@@ -75,6 +77,32 @@ test("a turn with the open note: its folder is the working directory, the reply 
   const [file] = await readdir(kept);
   expect(JSON.parse(await readFile(join(kept, file!), "utf8"))).toMatchObject({ agent: "claude", folder: "日记", session: "s-1" });
   expect(await readdir(join(root, "日记"))).toEqual(["周一.md"]);
+});
+
+test("执行前询问: the reply asks before a command; 拒绝 keeps it from running, 允许 lets it", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "随记.md": "随记\n" });
+  await installFakeAgent(join(scratch, "agents"), "claude", {
+    session: "s-ask",
+    steps: [
+      { tool: "Bash", input: { command: "rm -rf 旧笔记" }, ask: true },
+      { tool: "Write", input: { file_path: join(root, "新.md") }, write: { path: "新.md", text: "# 新\n" }, ask: true },
+      { say: "好了。" },
+    ],
+  });
+  const { page } = await launchWith(scratch, root);
+  await page.keyboard.press("ControlOrMeta+KeyJ");
+  await input(page).fill("整理一下");
+  await input(page).press("Enter");
+
+  const conversation = column(page).getByRole("log", { name: "对话" });
+  const asking = conversation.getByRole("region", { name: "需要你允许" });
+  await expect(asking).toContainText("rm -rf 旧笔记");
+  await asking.getByRole("button", { name: "拒绝" }).click();
+  await expect(asking).toContainText("新.md");
+  await asking.getByRole("button", { name: "允许" }).click();
+  await expect(conversation).toContainText("好了。");
+  await expect(asking).toHaveCount(0);
+  expect(await readFile(join(root, "新.md"), "utf8")).toBe("# 新\n");
 });
 
 test("a chosen folder is the working directory; the open note can be taken off, others @-mentioned; the directory stays until a new conversation", async ({ scratch }) => {
