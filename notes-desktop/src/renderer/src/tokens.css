@@ -203,8 +203,8 @@
   --gap-8: 32px;
   --space-page-inline: 40px;
   --space-grid-min: 176px;
-  --space-title-size: 24px;
-  --space-title-padding: var(--gap-1) var(--space-page-inline) var(--gap-2);
+  --space-title-size: 15px;
+  --space-title-padding: 0;
 }
 
 /* 颜色 · 深色: its own set, not the light one inverted. */

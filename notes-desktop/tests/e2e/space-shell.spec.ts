@@ -54,15 +54,10 @@ test("新建示例空间, from the empty list or the menu beside 新建空间, m
 const training = "## 卧推\n\n| 日期 | 重量 |\n|---|---|\n| 2026-10-18 | 60 |\n";
 const homepage = '<meta name="space-scope" content="健身, 日记">\n<meta name="space-icon" content="🏋️">\n<div class="space-card"><p class="space-muted">本周</p><space-stat source="健身/训练.md#卧推" op="count" label="训练"></space-stat></div>\n';
 
-test("the title area over a homepage shows its icon, name and scope, with 让助手修改, 复制提示词 and 查看源码", async ({ scratch }) => {
+test("the title area over a homepage shows its icon, name and scope in one row, with 让助手修改", async ({ scratch }) => {
   const root = await library(scratch, "笔记库", { "健身/训练.md": training, "日记/今天.md": "今天", ".notes/空间/健身.html": homepage });
   await installFakeAgent(join(scratch, "agents"), "claude", { session: "s-1", steps: [{ say: "好的。" }] });
   const { app, page } = await launchWith(scratch, root);
-  await app.evaluate(({ shell }) => {
-    const shown: string[] = [];
-    (globalThis as { shown?: string[] }).shown = shown;
-    shell.showItemInFolder = (path) => void shown.push(path);
-  });
   await showSide(page, "空间");
   await spaceList(page).getByRole("button", { name: "健身" }).click();
 
@@ -70,11 +65,12 @@ test("the title area over a homepage shows its icon, name and scope, with 让助
   await expect(title.getByRole("heading", { level: 1 })).toHaveText("🏋️健身");
   await expect(title).toContainText("范围：健身/、日记/");
 
-  await title.getByRole("button", { name: "复制提示词" }).click();
+  // 复制提示词 and 查看源码 are left to the space's right-click menu.
+  await expect(title.getByRole("button", { name: "复制提示词" })).toHaveCount(0);
+  await expect(title.getByRole("button", { name: "查看源码" })).toHaveCount(0);
+  await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "复制给 agent 的提示词" }).click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toContain("请为笔记应用编写“健身”空间的空间主页。");
-
-  await title.getByRole("button", { name: "查看源码" }).click();
-  await expect.poll(() => app.evaluate(() => (globalThis as { shown?: string[] }).shown)).toEqual([join(root, ".notes", "空间", "健身.html")]);
 
   // 让助手修改: the column opens on its message field; the open space goes with what is asked.
   await title.getByRole("button", { name: "让助手修改" }).click();

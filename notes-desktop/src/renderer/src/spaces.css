@@ -314,28 +314,41 @@
   flex: none;
 }
 .space-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-3);
   padding: var(--space-title-padding);
 }
 .space-title h1 {
+  flex: none;
+  max-width: 60%;
   margin: 0;
+  color: var(--card-fg);
   font-size: var(--space-title-size);
   font-weight: var(--heading-weight);
-  letter-spacing: -0.01em;
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .space-title-icon {
-  margin-right: var(--gap-2);
+  margin-right: var(--gap-1);
 }
 .space-title-scope {
-  margin: var(--gap-1) 0 0;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   color: var(--space-muted);
-  font-size: var(--text-path);
+  font-size: var(--text-meta);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 专注 hides the side panel: on macOS the name then steps right of the window's buttons. */
+:root.mac .app.focused .card[data-kind="space"] .card-head {
+  padding-inline-start: var(--traffic-lights-inset);
 }
 .space-title-tools {
   flex: none;

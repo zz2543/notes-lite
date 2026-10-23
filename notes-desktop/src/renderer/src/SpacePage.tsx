@@ -1,4 +1,4 @@
-import { Check, Code, Copy, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
+import { Check, Copy, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { SpaceNetwork, SpaceScope } from "../../core";
@@ -156,8 +156,6 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, 
         network={space.hasPage ? network.state : undefined}
         onNetwork={() => void network.decide(null)}
         onAsk={space.hasPage ? onAsk : onGenerate}
-        onCopyPrompt={() => void copyPrompt()}
-        notify={notify}
         headEnd={
           <>
             <button className="card-tool" onClick={onShowLog}>
@@ -194,9 +192,9 @@ export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, 
 
 /** 范围：健身/、日记/, or 范围：整个笔记库. */
 /** A tool over the page: its label beside the icon, only the icon (named all the same) in a narrow card. */
-function TitleButton({ label, onClick, children }: { label: string; onClick(): void; children: ReactNode }) {
+function TitleButton({ label, tip = label, onClick, children }: { label: string; tip?: string; onClick(): void; children: ReactNode }) {
   return (
-    <button className="space-title-button" onClick={onClick} aria-label={label} title={label}>
+    <button className="space-title-button" onClick={onClick} aria-label={label} title={tip}>
       {children}
       <span className="space-title-label">{label}</span>
     </button>
@@ -209,8 +207,6 @@ interface SpaceTitleProps {
   space: SpaceInfo;
   /** 让助手修改: the assistant on this page, or, while there is no page yet, 让助手生成主页. */
   onAsk(): void;
-  onCopyPrompt(): void;
-  notify(message: string): void;
   /** 联网, when the homepage names sites; pressing it asks again. */
   network?: SpaceNetwork;
   onNetwork(): void;
@@ -219,49 +215,37 @@ interface SpaceTitleProps {
 }
 
 /**
- * Over the homepage: what can be done to its page in the card's top row, and right under it the space's
- * icon, name and scope; the name is not said again as a path, so no tall empty brow is left over the page.
+ * Over the homepage, one row only: the space's icon, name and scope, then 让助手修改 (and 联网 when asked),
+ * 操作记录 and the window's buttons, so the page keeps the card's height. 复制提示词 and 显示源文件 are in
+ * the space's right-click menu.
  */
-function SpaceTitle({ space, network, onNetwork, onAsk, onCopyPrompt, notify, headEnd }: SpaceTitleProps) {
-  // 查看源码: the space file, shown where it lies.
-  const showSource = async () => {
-    const shown = await window.notes.revealSpaceSource(space.name);
-    if (!shown.ok) notify(shown.message);
-  };
+function SpaceTitle({ space, network, onNetwork, onAsk, headEnd }: SpaceTitleProps) {
   return (
     <section className="space-head" aria-label="空间标题">
       <header className="card-head">
-        <span className="card-head-gap" />
+        <div className="space-title">
+          <h1>
+            {space.icon && (
+              <span className="space-title-icon" aria-hidden>
+                {space.icon}
+              </span>
+            )}
+            {space.name}
+          </h1>
+          <p className="space-title-scope">{scopeLine(space.scope)}</p>
+        </div>
         <div className="space-title-tools">
           {network && network.decision !== "ask" && (
-            <button className="space-title-button" onClick={onNetwork} title={`可访问：${network.hosts.join("、")}。点按重新选择。`} aria-label={network.decision === "allowed" ? "已允许联网" : "未允许联网"}>
+            <TitleButton label={network.decision === "allowed" ? "已允许联网" : "未允许联网"} tip={`可访问：${network.hosts.join("、")}。点按重新选择。`} onClick={onNetwork}>
               <Globe size={icon.small} aria-hidden />
-              <span className="space-title-label">{network.decision === "allowed" ? "已允许联网" : "未允许联网"}</span>
-            </button>
+            </TitleButton>
           )}
           <TitleButton label={space.hasPage ? "让助手修改" : "让助手生成主页"} onClick={onAsk}>
             <Sparkle size={icon.small} aria-hidden />
           </TitleButton>
-          <TitleButton label="复制提示词" onClick={onCopyPrompt}>
-            <Copy size={icon.small} aria-hidden />
-          </TitleButton>
-          <TitleButton label="查看源码" onClick={() => void showSource()}>
-            <Code size={icon.small} aria-hidden />
-          </TitleButton>
         </div>
         {headEnd}
       </header>
-      <div className="space-title">
-        <h1>
-          {space.icon && (
-            <span className="space-title-icon" aria-hidden>
-              {space.icon}
-            </span>
-          )}
-          {space.name}
-        </h1>
-        <p className="space-title-scope">{scopeLine(space.scope)}</p>
-      </div>
     </section>
   );
 }
