@@ -1,10 +1,10 @@
-// 笔记链接、图片与附件 in the editor (ticket 13): ⌘ / Ctrl-click follows a link, pasted and dropped files
+// 笔记链接、图片与附件 in the editor (ticket 13): a click on a typeset link (or ⌘ / Ctrl-click on any) follows it, pasted and dropped files
 // are imported into the library and linked on lines of their own. What following and importing do is
 // the host's: the editor only knows the text.
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { literalBlocks, linkOf, parseLine, pastedName, snippetInsertion, type Link } from "../../shared/markdown";
-import { followsLink, imagePressedBefore, linkHost } from "./linkHost";
+import { followsLink, imagePressedBefore, linkHost, plainClick } from "./linkHost";
 import { literal } from "./markdownView";
 
 /** The link at `pos`, its syntax included, outside code. */
@@ -24,6 +24,15 @@ export function linkAt(view: EditorView, pos: number): Link | null {
     if (link && offset >= from && offset <= to && (offset > from || pos === line.from + from)) return link;
   }
   return null;
+}
+
+/** Whether a press is on a link drawn typeset: on its text, in a line not being edited (whose syntax is hidden). */
+function onTypesetLink(view: EditorView, event: MouseEvent, pos: number): boolean {
+  const el = (event.target as HTMLElement | null)?.closest?.(".cm-md-link");
+  if (!el || !view.contentDOM.contains(el)) return false;
+  if (!view.hasFocus) return true;
+  const line = view.state.doc.lineAt(pos);
+  return !view.state.selection.ranges.some((r) => r.to >= line.from && r.from <= line.to);
 }
 
 /** Puts the imported files' Markdown in place of the selection, each on a line of its own, the caret after the last. */
@@ -71,8 +80,8 @@ export const linkHandling: Extension = Prec.high(
         view.state.facet(linkHost)?.open(image);
         return true;
       }
-      if (!followsLink(event)) return false;
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+      if (!followsLink(event) && !(plainClick(event) && onTypesetLink(view, event, pos))) return false;
       const link = linkAt(view, pos);
       const host = view.state.facet(linkHost);
       if (!link || !host) return false;

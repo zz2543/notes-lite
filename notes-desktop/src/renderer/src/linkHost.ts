@@ -5,7 +5,7 @@ import type { Link } from "../../shared/markdown";
 
 /** What the editor asks of the app about links and attachments, for the note it shows. */
 export interface LinkHost {
-  /** ⌘ / Ctrl-click on a link: open the note, the file or the web page it leads to. */
+  /** A click on a typeset link, or ⌘ / Ctrl-click on any: open the note, the file or the web page it leads to. */
   follow(link: Link): void;
   /** A double click on an image: open it with the system's app for it. */
   open(link: Link): void;
@@ -20,6 +20,8 @@ export const linkHost = Facet.define<LinkHost, LinkHost | null>({ combine: (host
 const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 /** ⌘ on macOS, Ctrl elsewhere: the key that makes a click follow a link rather than place the caret. */
 export const followsLink = (event: MouseEvent) => (mac ? event.metaKey : event.ctrlKey) && !event.altKey && !event.shiftKey;
+/** A single click with no key held: it follows a link shown typeset (not one whose line is being edited). */
+export const plainClick = (event: MouseEvent) => event.detail <= 1 && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 
 // An image's double click may land on its Markdown, come back above it at the first click: the first
 // press is remembered for a moment, so the second still opens the image.

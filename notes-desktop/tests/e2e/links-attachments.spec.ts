@@ -1,9 +1,9 @@
 import type { ElectronApplication, Page } from "@playwright/test";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { closeSettings, expect, launchWith, library, openSettings, test } from "./fixtures";
 
-// Ticket 13: ⌘ / Ctrl-click follows links; images and attachments imported (pasted, dropped, chosen from the
+// Ticket 13: a click on a typeset link (⌘ / Ctrl-click on any) follows it; images and attachments imported (pasted, dropped, chosen from the
 // menu) into 附件 and linked relative to the note; images shown in place and opened with a double click;
 // links that lead nowhere say so. The note's file holds exactly the Markdown.
 
@@ -30,7 +30,7 @@ async function catchOpened(app: ElectronApplication) {
   return () => app.evaluate(() => (globalThis as { opened?: string[] }).opened ?? []);
 }
 
-test("⌘ / Ctrl-click follows a link to a note or a web page; a plain click edits; a missing note says so", async ({ scratch }) => {
+test("a click follows a typeset link to a note or a web page; on the line being edited it places the caret; a missing note says so", async ({ scratch }) => {
   const source = "# 入口\n\n见 [[阅读/摘记|读书摘记]] 和 [[不存在]]。\n\n[网页](https://example.com/页)";
   const root = await library(scratch, "笔记库", { "入口.md": source, "阅读/摘记.md": "# 摘记\n\n内容" });
   const { app, page } = await launchWith(scratch, root);
@@ -43,24 +43,30 @@ test("⌘ / Ctrl-click follows a link to a note or a web page; a plain click edi
   await expect(link).toHaveText("读书摘记");
   await expect(editor(page)).not.toContainText("阅读/摘记|");
 
-  // A plain click only places the caret: the link's Markdown shows on that line, nothing opens.
-  await link.click();
+  // On the line being edited the Markdown shows and a plain click only places the caret there.
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
   await expect(editor(page)).toContainText("[[阅读/摘记|读书摘记]]");
+  await editor(page).getByText("阅读/摘记|读书摘记").click();
   await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "入口.md");
+  await expect(editor(page)).toContainText("[[阅读/摘记|读书摘记]]");
 
+  // Elsewhere, a plain click follows it, as in Obsidian.
   await page.keyboard.press("ControlOrMeta+End");
-  await link.click({ modifiers: ["ControlOrMeta"] });
+  await link.click();
   await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "阅读 / 摘记.md");
   await expect(editor(page)).toContainText("内容");
 
   await page.getByRole("tree").getByRole("treeitem", { name: "笔记库" }).click();
   await openNote(page, "入口");
   await page.keyboard.press("ControlOrMeta+End");
-  await editor(page).locator(".cm-md-link", { hasText: "不存在" }).click({ modifiers: ["ControlOrMeta"] });
+  await editor(page).locator(".cm-md-link", { hasText: "不存在" }).click();
   await expect(page.getByRole("alert")).toHaveText("找不到笔记“不存在”。");
   await expect(page.getByLabel("笔记标题")).toHaveAttribute("title", "入口.md");
 
-  await editor(page).locator(".cm-md-link", { hasText: "网页" }).click({ modifiers: ["ControlOrMeta"] });
+  // ⌘ / Ctrl-click follows a link even on the line being edited.
+  await page.keyboard.press("ControlOrMeta+End");
+  await editor(page).getByText("[网页](https://example.com/页)").click({ modifiers: ["ControlOrMeta"] });
   await expect.poll(opened).toEqual(["https://example.com/页"]);
   expect(await readFile(join(root, "入口.md"), "utf8")).toBe(source);
   await app.close();
@@ -192,5 +198,20 @@ test("设置 › 附件: imports go to the chosen folder, named after the note; 
   await expect.poll(() => readFile(join(root, "周一.md"), "utf8")).toBe("第一行\n![周一-1.png](资料/周一-1.png)\n[周一-2.txt](资料/周一-2.txt)");
   expect(await readFile(join(root, "资料/周一-1.png"))).toEqual(png);
   await expect(editor(page).locator(".cm-md-image img")).toBeVisible();
+  await app.close();
+});
+
+test("Obsidian's ![[图.png]] shows the image wherever it is in the library, at the width written", async ({ scratch }) => {
+  const root = await library(scratch, "笔记库", { "英语/雅思.md": "# 雅思\n\n![[雅思小作文练习.png]]\n\n![[雅思小作文练习.png|40]]\n\n末行" });
+  await mkdir(join(root, "Attachments"));
+  await writeFile(join(root, "Attachments", "雅思小作文练习.png"), png);
+  const { app, page } = await launchWith(scratch, root);
+  await page.getByRole("button", { name: "英语", exact: true }).click();
+  await openNote(page, "雅思");
+  await page.keyboard.press("ControlOrMeta+End");
+  const images = editor(page).locator(".cm-md-image img");
+  await expect(images).toHaveCount(2);
+  expect(await images.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(2);
+  expect(await images.nth(1).evaluate((img: HTMLImageElement) => img.getBoundingClientRect().width)).toBe(40);
   await app.close();
 });

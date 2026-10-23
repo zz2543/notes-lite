@@ -47,6 +47,24 @@ describe("跟随链接", () => {
     expect(await lib.followLink("阅读/笔记.md", { target: "说明 书.pdf|页 2", wiki: true })).toEqual({ kind: "file", path: "附件/说明 书.pdf" });
     await expect(lib.followLink("阅读/笔记.md", { target: "丢了.png", wiki: true })).rejects.toThrow("找不到附件“丢了.png”");
   });
+
+  it("finds an Obsidian embed by its name anywhere in the library, the nearest of several, and a note by the end of its path", async () => {
+    const root = await library({
+      "英语/雅思/练习.md": "",
+      "Attachments/雅思小作文练习.png": "a",
+      "英语/assets/雅思小作文练习.png": "b",
+      "其他/图 2.PNG": "c",
+      "资料/阅读/摘记.md": "",
+    });
+    const lib = await openLibrary(root);
+
+    // Of two, the one sharing the note's folders.
+    expect(await lib.followLink("英语/雅思/练习.md", { target: "雅思小作文练习.png", wiki: true })).toEqual({ kind: "file", path: "英语/assets/雅思小作文练习.png" });
+    expect(await lib.followLink("资料/阅读/摘记.md", { target: "雅思小作文练习.png|300", wiki: true })).toEqual({ kind: "file", path: "Attachments/雅思小作文练习.png" });
+    expect(await lib.followLink("资料/阅读/摘记.md", { target: "图 2.png", wiki: true })).toEqual({ kind: "file", path: "其他/图 2.PNG" });
+    expect(await lib.followLink("英语/雅思/练习.md", { target: "阅读/摘记", wiki: true })).toEqual({ kind: "note", path: "资料/阅读/摘记.md" });
+    expect(await lib.readImage("英语/雅思/练习.md", { target: "雅思小作文练习.png", wiki: true })).toBe(`data:image/png;base64,${Buffer.from("b").toString("base64")}`);
+  });
 });
 
 describe("显示图片", () => {

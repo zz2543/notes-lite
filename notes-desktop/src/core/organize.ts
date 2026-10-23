@@ -141,6 +141,14 @@ async function notesUnder(folder: string): Promise<string[]> {
   return [...visible.filter((e) => e.isFile() && isNoteFile(e.name)).map((e) => join(folder, e.name)), ...nested.flat()];
 }
 
+/** Every file under `folder` but hidden ones (and what hidden folders hold), as real paths. */
+async function filesUnder(folder: string): Promise<string[]> {
+  const entries = await readdir(folder, { withFileTypes: true }).catch(() => []);
+  const visible = entries.filter((entry) => !entry.name.startsWith("."));
+  const nested = await Promise.all(visible.filter((e) => e.isDirectory()).map((e) => filesUnder(join(folder, e.name))));
+  return [...visible.filter((e) => e.isFile()).map((e) => join(folder, e.name)), ...nested.flat()];
+}
+
 const decode = (target: string) => {
   try {
     return decodeURIComponent(target);
@@ -210,9 +218,28 @@ export function organizer({ root, resolve, trash: sendToTrash, attachments = () 
       }
       return null;
     };
+    // Obsidian's way: `![[图.png]]` names the file wherever it is in the library, `[[文件夹/笔记]]` by the
+    // end of its path. Of several, the nearest the note: sharing most of its folders, then the shortest path.
+    const anywhere = async () => {
+      if (!fileLike && !named.includes("/")) return null;
+      const wanted = (wiki && !fileLike && !isNoteFile(named) ? `${named}.md` : named).toLowerCase();
+      const from = relativeOf(dirname(real)).split("/");
+      const shared = (path: string) => {
+        const parts = path.split("/");
+        let n = 0;
+        while (n < from.length && n < parts.length - 1 && parts[n] === from[n]) n++;
+        return n;
+      };
+      const candidates = (await filesUnder(root))
+        .map((file) => relativeOf(file))
+        .filter((path) => path.toLowerCase() === wanted || path.toLowerCase().endsWith(`/${wanted}`))
+        .sort((a, b) => shared(b) - shared(a) || a.split("/").length - b.split("/").length || collator.compare(a, b));
+      return candidates[0] ? { real: join(root, ...candidates[0].split("/")) } : null;
+    };
     const found =
       (await follow(link(target, wiki && !fileLike), real, titles)) ??
       (fileLike ? await inAttachments() : null) ??
+      (wiki ? await anywhere() : null) ??
       // `[摘记](阅读/摘记)`: a Markdown link may leave out .md, as the old app let it.
       (!wiki && !hasExtension ? await follow(link(`${target}.md`, false), real, titles) : null);
     if (found && (await stat(found.real)).isFile()) return { kind: isNoteFile(found.real) ? "note" : "file", path: relativeOf(found.real) };

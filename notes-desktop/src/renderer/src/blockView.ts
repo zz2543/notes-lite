@@ -5,7 +5,7 @@
 import { Prec, StateEffect, StateField, type EditorState, type Extension, type Range as Decorated } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from "@codemirror/view";
 import { linkOf, linkPath, parseLine, parseTable, renderedBlocks, shownSpan, type Link, type LiteralBlock, type RenderedBlock, type SpanKind } from "../../shared/markdown";
-import { followsLink, linkHost, pressImage } from "./linkHost";
+import { followsLink, linkHost, plainClick, pressImage } from "./linkHost";
 import { renderTex } from "./tex";
 
 /** The class of each kind of inline markup typeset, in the lines and in table cells alike. */
@@ -91,11 +91,11 @@ function inlineMarkdown(text: string, into: HTMLElement, view: EditorView) {
   flush();
 }
 
-/** The link a table cell's text carries under a ⌘ / Ctrl-click, followed; false when there is none. */
+/** The link a table cell's text carries under a click (or ⌘ / Ctrl-click), followed; false when there is none. */
 function followFromCell(view: EditorView, event: MouseEvent): boolean {
   const el = (event.target as HTMLElement).closest<HTMLElement>("[data-target]");
   const host = view.state.facet(linkHost);
-  if (!el || !host || !followsLink(event)) return false;
+  if (!el || !host || !(followsLink(event) || plainClick(event))) return false;
   host.follow({ target: el.dataset.target!, wiki: el.dataset.wiki === "true" });
   return true;
 }
@@ -213,6 +213,9 @@ class ImageWidget extends WidgetType {
       const img = new Image();
       img.alt = name;
       img.draggable = false;
+      // Obsidian's `![[图.png|300]]` / `|300x200`: the width asked for, never wider than the column.
+      const size = this.link.wiki ? /\|\s*(\d+)(?:\s*x\s*(\d+))?\s*$/.exec(this.link.target) : null;
+      if (size) img.style.width = `${size[1]}px`;
       img.onload = () => {
         el.replaceChildren(img);
         view.requestMeasure();
