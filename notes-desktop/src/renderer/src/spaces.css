@@ -380,3 +380,8 @@
   background: var(--hover);
   color: var(--card-fg);
 }
+/* 专注 keeps a space's 操作记录: unlike a note's tools, it is how the page's changes are seen and undone. */
+.app.focused .card[data-kind="space"] .card-tool {
+  opacity: 1;
+  visibility: visible;
+}

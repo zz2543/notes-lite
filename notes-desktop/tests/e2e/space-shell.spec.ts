@@ -72,6 +72,14 @@ test("the title area over a homepage shows its icon, name and scope in one row, 
   await page.getByRole("menuitem", { name: "复制给 agent 的提示词" }).click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toContain("请为笔记应用编写“健身”空间的空间主页。");
 
+  // 专注 hides a note's tools, but a space keeps 操作记录 beside 让助手修改.
+  await page.keyboard.press("ControlOrMeta+Shift+KeyF");
+  await expect(page.locator(".app.focused")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "操作记录" })).toBeVisible();
+  await expect(title.getByRole("button", { name: "让助手修改" })).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+Shift+KeyF");
+  await expect(page.locator(".app.focused")).toHaveCount(0);
+
   // 让助手修改: the column opens on its message field; the open space goes with what is asked.
   await title.getByRole("button", { name: "让助手修改" }).click();
   await expect(page.getByRole("complementary", { name: "助手栏" })).toHaveAttribute("aria-hidden", "false");
