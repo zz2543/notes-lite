@@ -7,7 +7,7 @@ import { ipcMain, protocol, session, shell, WebContentsView, type BrowserWindow,
 import { hostAllowed, spaceChanges, spaceLibrary, spaceRequests, spacesFolder, type SpaceReply, type SpaceScope, type SpaceStorage } from "../core";
 import type { SpacePageEvent, SpacePageProblem } from "../shared/api";
 import { spacePageChannels } from "../shared/spacePage";
-import { kitLibraries, kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
+import { kitFonts, kitLibraries, kitScripts, kitStyle, settingsStyleId } from "./spaceKit";
 
 export const spaceScheme = "notes-space";
 const pageUrl = `${spaceScheme}://page/`;
@@ -134,7 +134,10 @@ export function spacePages(
     if (handled) return;
     ses.protocol.handle(spaceScheme, async (request) => {
       // The libraries the app carries (space.load): the same on every page, offline too.
-      const carried = kitLibraries[new URL(request.url).pathname];
+      const path = new URL(request.url).pathname;
+      const font = kitFonts[path];
+      if (font) return new Response(new Uint8Array(font()), { headers: { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" } });
+      const carried = kitLibraries[path];
       if (carried) return new Response(await carried(), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "max-age=31536000, immutable" } });
       const { library, name } = served.get(ses)!;
       reachable.set(ses, await network(library, name).catch(() => []));

@@ -204,6 +204,22 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 | \`--space-emerge-duration\` / \`--space-emerge-easing\` | 「浮现」动效（卡片进入） |
 | \`--space-ease\` | 不带回弹的缓动 |
 
+### 空间风格
+
+用户可以在 设置 · 空间 里给所有空间主页选一个**空间风格**：默认（跟随笔记应用）、晴空、暗夜、玻璃、便当、大地、活力，或自定义。风格改的是上面这些变量的值（背景、卡片、文字、强调色、图表色、圆角、阴影、字体），外加下面几个变量；页面不需要知道当前是哪个风格，**只要颜色、圆角、阴影都用变量，不写死**，换风格时页面自然跟着换。
+
+| 变量 | 含义 |
+|---|---|
+| \`--space-feature\` / \`--space-feature-text\` | 强调卡片的底色 / 文字（风格里没有色相的 \`.space-glow\` 用它） |
+| \`--space-page-image\` | 页面背景上的渐变（没有时是 \`none\`），已经画在 \`html\` 上 |
+| \`--space-control-radius\` / \`--space-button-radius\` | 输入框、代码块等小元素的圆角 / 按钮和分段控件的圆角（圆润的风格里是胶囊形） |
+| \`--space-cell-radius\` / \`--space-bar-radius\` | 日历格、圆点 / 柱子的圆角 |
+| \`--space-progress-height\` / \`--space-ring-stroke\` | 进度条高度 / 进度环粗细 |
+| \`--space-number-weight\` | 大数字的字重 |
+| \`--space-decor\` | 细节画法：\`plain\` \`capsule\` \`led\` \`glow\` \`bento\` \`pebble\` \`dots\`（\`space.theme().decor\`）。内置的进度条、进度环、柱状图会按它画成胶囊、分段、发光、细柱等；自己画图时也可以读它 |
+
+风格可能是深色的（暗夜、玻璃），即使用户的外观是浅色；\`space.theme().dark\` 说的是页面实际的深浅，不要用 \`prefers-color-scheme\` 判断。
+
 **字体由你按页面风格决定。** 页面默认用 \`--space-font\`（用户的正文字体，可能是衬线体）。仪表盘、数据卡片这类界面感强的主页可以在 \`body\` 上改用 \`--space-ui-font\`；读书、写作这类阅读感强的主页可以保留正文字体；大数字、标题也可以单独换字体。只用系统里有的字体，不要从网上加载。
 
 动效变量按用户选的动效强度给出；用户开启「减弱动态效果」时，请只做淡入淡出（\`@media (prefers-reduced-motion: reduce)\`）。示例：\`transition: transform var(--space-pop-duration) var(--space-pop-easing);\`
@@ -302,6 +318,11 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 | \`.space-glass-button\` | 玻璃按钮（光晕卡片上用）；\`.space-glass-button.space-solid\` 是白色实心按钮 |
 | \`.space-progress\` | 进度条：\`<div class="space-progress" style="--space-value: 62"></div>\`（0–100，出现时从 0 长到该值） |
 | \`.space-ring\` | 进度环：\`<div class="space-ring-wrap"><div class="space-ring" style="--space-value: 75"></div><span>75%</span></div>\`；大小用 \`--space-ring-size\`、粗细用 \`--space-ring-width\` |
+| \`.space-steps\` | 步骤列表：\`<ol class="space-steps"><li data-state="done">…</li><li data-state="now">…</li><li>…</li></ol>\` |
+| \`.space-dots\` | 圆点格（连续打卡、计数）：\`<div class="space-dots"><i class="on"></i><i></i></div>\` |
+| \`.space-arrow\` | 圆形箭头按钮（"查看更多"），空的时候显示 ↗；\`.space-arrow.space-solid\` 为强调色 |
+| \`.space-kv\` | 键值列表：\`<dl class="space-kv"><dt>名称</dt><dd>值</dd>…</dl>\` |
+| \`.space-delta\` | 涨跌小标签：\`<span class="space-delta space-up">12%</span>\`（自带箭头） |
 
 ### 动效
 
@@ -401,7 +422,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 
 ### 其他接口
 
-- \`space.theme()\`：当前外观下解析好的颜色和字体（\`rgb()\` 字符串，可以直接用在画布、SVG 和 ECharts 里），以及 \`dark\`、\`reducedMotion\`、\`amplitude\`。\`space.on("theme", (theme) => …)\` 在外观、强调色、排版、动效强度变化时触发。
+- \`space.theme()\`：当前外观下解析好的颜色和字体（\`rgb()\` 字符串，可以直接用在画布、SVG 和 ECharts 里），以及 \`dark\`（页面实际是否深色）、\`reducedMotion\`、\`amplitude\`、\`look\`（空间风格，默认为 \`app\`）、\`decor\`（细节画法）。\`space.on("theme", (theme) => …)\` 在外观、强调色、排版、动效强度或空间风格变化时触发。
 - \`space.open(path)\`：在笔记应用里打开范围内的一篇笔记（例如点击笔记卡片）。
 - \`space.toast(message, { action, onAction, duration })\`：页面底部的提示，例如删除后 \`space.toast("已删除 1 条", { action: "撤销", onAction: undo })\`。
 
@@ -571,7 +592,7 @@ export const spaceGuide = `<!-- 空间主页编写说明 · 版本 ${spaceGuideV
 
 ### 事件
 
-- \`space.on("theme", (theme) => { … })\`：外观、强调色、排版或动效强度变化时触发。
+- \`space.on("theme", (theme) => { … })\`：外观、强调色、排版、动效强度或空间风格变化时触发。
 - \`space.on("change", (paths) => { … })\`：范围内的文件变化时触发（用户在编辑器里保存、外部工具修改、\`space\` 写入都算），\`paths\` 是变化的路径。返回取消订阅的函数。组件已经自动刷新，你自己写的部分需要订阅它。
 
 ### 错误码

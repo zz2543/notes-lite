@@ -97,6 +97,10 @@
 | `--space-title-size` | 24px | 同左 | 标题区的空间名称（字重 `--heading-weight`，行高 1.25，字距 −0.01em） |
 | `--space-title-padding` | `--gap-6` `--space-page-inline` `--gap-1` | 同左 | 标题区（图标、名称、范围与三个操作）的内边距 |
 
+#### 空间风格（2026-10-23）
+
+设置 · 空间里选的风格覆盖上表和下文的 `--space-*` 取值（`shared/spaceThemes.ts`），「默认」不覆盖任何值。每个风格给出：页面底色与可选渐变（`--space-page-image`）、卡片、文字、次要文字、分隔线、强调色、强调卡片（`--space-feature` / `-text`）、6 个图表色、状态色；字体、圆角（`--space-radius` 及 `-s` / `-m` / `-l`）、卡片阴影；细节（`--space-decor`）及由它推出的 `--space-button-radius`、`--space-cell-radius`、`--space-bar-radius`、`--space-progress-height`、`--space-ring-stroke`、`--space-number-weight`；示例风格还重定 10 个色相。暗夜、玻璃始终深色；其余有浅色、深色两套。
+
 #### 设计地基（2026-10-22）
 
 主页可以用 `spaceKit/foundation.css` 自己拼出样式，不必用组件。色相 10 个（红、橙、黄、绿、青、蓝、靛、紫、粉、石墨），每个有纯色、深色卡片底（`-deep`）、深色底上的浅色字（`-tint`）和光晕（`-glow`），用 `data-hue` 选用，不写时是强调色。

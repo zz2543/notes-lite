@@ -46,8 +46,11 @@ function spaceRuntime(call) {
     for (const name of hueNames) {
       hues[name] = { color: color(`--space-${name}`), deep: color(`--space-${name}-deep`), tint: color(`--space-${name}-tint`), glow: color(`--space-${name}-glow`) };
     }
+    // Dark is the page's own: a 空间风格 may be dark under a light 外观 (暗夜, 玻璃).
+    const [r, g, b] = (color("--space-bg").match(/[\d.]+/g) || []).map(Number);
+    const pageDark = r == null ? null : (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.45;
     cached = Object.freeze({
-      dark: !!(darkQuery && darkQuery.matches),
+      dark: pageDark == null ? !!(darkQuery && darkQuery.matches) : pageDark,
       reducedMotion: reduced(),
       amplitude: parseFloat(variable("--space-motion-amplitude")) || 1,
       accent: color("--space-accent"),
@@ -67,6 +70,9 @@ function spaceRuntime(call) {
       headingFont: variable("--space-heading-font"),
       mono: variable("--space-mono"),
       radius: parseFloat(variable("--space-radius")) || 18,
+      // 空间风格: which look ("app" for 默认) and its 细节, for pages that draw their own parts.
+      look: variable("--space-theme") || "app",
+      decor: variable("--space-decor") || "plain",
     });
     return cached;
   };
@@ -144,7 +150,10 @@ function spaceRuntime(call) {
       timeAxis: axis(false),
       logAxis: axis(true),
       line: { symbol: "circle", symbolSize: 6, showSymbol: false, smooth: 0.3, lineStyle: { width: 2.4 } },
-      bar: { itemStyle: { borderRadius: [6, 6, 0, 0] }, barMaxWidth: 28 },
+      bar: {
+        itemStyle: { borderRadius: ["capsule", "glow", "pebble", "dots"].includes(t.decor) ? 999 : t.decor === "led" || t.decor === "bento" ? 2 : [6, 6, 0, 0] },
+        barMaxWidth: t.decor === "bento" ? 14 : 28,
+      },
       pie: { itemStyle: { borderColor: t.card, borderWidth: 2, borderRadius: 6 } },
       scatter: { symbolSize: 8 },
       gauge: { axisLine: { lineStyle: { color: [[1, t.hover]] } } },

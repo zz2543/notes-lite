@@ -3,3 +3,4 @@ declare module "virtual:space-react" {
   const script: string;
   export default script;
 }
+

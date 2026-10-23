@@ -1,6 +1,7 @@
 import { agents, modelName, type AgentId } from "./agentKinds";
 import { attachmentFolderOf, attachmentNamings, defaultAttachmentSettings, type AttachmentNaming } from "./attachments";
 import type { PermissionMode } from "./conversation";
+import { defaultCustomSpaceTheme, readCustomSpaceTheme, spaceThemeChoices, type CustomSpaceTheme, type SpaceThemeChoice } from "./spaceThemes";
 import { defaultTypography, readTypography, type Typography } from "./typography";
 
 // 设置: what the user chose in the settings panel. Kept with the app (settings.json in its profile),
@@ -40,10 +41,14 @@ export interface Preferences {
   attachmentFolder: string;
   /** 附件命名. */
   attachmentNaming: AttachmentNaming;
+  /** 空间风格: 默认, one of the examples, or 自定义 (spaceThemes.ts). */
+  spaceTheme: SpaceThemeChoice;
+  /** 自定义 as the user last set it; kept when another look is chosen, so going back finds it. */
+  customSpaceTheme: CustomSpaceTheme;
 }
 
 /** The settings that are one of a few choices. */
-type ChoiceKey = Exclude<keyof Preferences, "typography" | "agentModels" | "attachmentFolder">;
+type ChoiceKey = Exclude<keyof Preferences, "typography" | "agentModels" | "attachmentFolder" | "customSpaceTheme">;
 
 export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } = {
   colorScheme: ["system", "light", "dark"],
@@ -54,6 +59,7 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   assistantReview: ["review", "keep"],
   assistantPermissions: ["ask", "full"],
   attachmentNaming: attachmentNamings,
+  spaceTheme: spaceThemeChoices,
 };
 
 export const defaultPreferences: Preferences = {
@@ -68,6 +74,8 @@ export const defaultPreferences: Preferences = {
   agentModels: {},
   attachmentFolder: defaultAttachmentSettings.folder,
   attachmentNaming: defaultAttachmentSettings.naming,
+  spaceTheme: "app",
+  customSpaceTheme: defaultCustomSpaceTheme,
 };
 
 /** Whatever was stored (or sent), as preferences: known keys with known values, the rest from `base`. */
@@ -75,12 +83,13 @@ export function readPreferences(stored: unknown, base: Preferences = defaultPref
   const raw = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
   const pick = <K extends ChoiceKey>(key: K): Preferences[K] =>
     (choices[key] as readonly unknown[]).includes(raw[key]) ? (raw[key] as Preferences[K]) : base[key];
-  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography" | "agentModels" | "attachmentFolder">;
+  const picked = Object.fromEntries((Object.keys(choices) as ChoiceKey[]).map((key) => [key, pick(key)])) as Omit<Preferences, "typography" | "agentModels" | "attachmentFolder" | "customSpaceTheme">;
   return {
     ...picked,
     typography: readTypography(raw.typography, base.typography),
     agentModels: readAgentModels(raw.agentModels, base.agentModels),
     attachmentFolder: attachmentFolderOf(raw.attachmentFolder) ?? base.attachmentFolder,
+    customSpaceTheme: readCustomSpaceTheme(raw.customSpaceTheme, base.customSpaceTheme),
   };
 }
 

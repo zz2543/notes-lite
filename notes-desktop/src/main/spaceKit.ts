@@ -5,11 +5,15 @@ import { spring } from "motion";
 import tokens from "../renderer/src/tokens.css?raw";
 import { motionPresets, spaceCardEnter } from "../shared/motion";
 import type { Preferences } from "../shared/preferences";
+import { resolveSpaceTheme, spaceFontFamily, spaceThemeCss, type SpaceFont } from "../shared/spaceThemes";
 import { typographyVariables } from "../shared/typography";
 import { spaceShim } from "./spaceShim";
 import components from "./spaceKit/components.js?raw";
 import foundation from "./spaceKit/foundation.css?raw";
 import kit from "./spaceKit/style.css?raw";
+import inter from "./spaceKit/fonts/Inter.woff2.b64?raw";
+import jakarta from "./spaceKit/fonts/PlusJakartaSans.woff2.b64?raw";
+import urbanist from "./spaceKit/fonts/Urbanist.woff2.b64?raw";
 
 /** The id of the style element holding the page settings; the homepage's preload replaces its text. */
 export const settingsStyleId = "space-settings";
@@ -22,6 +26,17 @@ export const kitLibraries: Record<string, () => Promise<string>> = {
   "/kit/react.js": async () => (await import("virtual:space-react")).default,
 };
 export const kitScripts = [spaceShim, components];
+
+/** The fonts the 空间风格 carry, at their own address: variable faces, Latin only (Chinese falls to the system's).
+ * Kept in the repo as base64 text (spaceKit/fonts/*.woff2.b64) and decoded on request. */
+const fontFiles: Partial<Record<SpaceFont, string>> = { inter, jakarta, urbanist };
+export const kitFonts: Record<string, () => Buffer> = Object.fromEntries(
+  Object.entries(fontFiles).map(([font, text]) => [`/kit/fonts/${font}.woff2`, () => Buffer.from(text!, "base64")]),
+);
+const fontFace = (font: SpaceFont) => {
+  const family = spaceFontFamily[font];
+  return family ? `@font-face { font-family: "${family}"; font-weight: 100 900; font-display: block; src: url(/kit/fonts/${font}.woff2) format("woff2"); }` : "";
+};
 
 /** The design system's blur ease (动效 · 模糊), which no spring carries. */
 const ease = "cubic-bezier(0.2, 0.8, 0.2, 1)";
@@ -52,7 +67,10 @@ export function spacePageSettings(preferences: Preferences, systemAccent: string
   variables["--space-enter-blur"] = `${round(spaceCardEnter.blur * presets.amplitude)}px`;
   variables["--space-stagger"] = `${spaceCardEnter.stagger}s`;
   variables["--space-motion-amplitude"] = `${presets.amplitude}`;
-  return `:root {\n${Object.entries(variables)
+  const settings = `:root {\n${Object.entries(variables)
     .map(([name, value]) => `  ${name}: ${value};`)
     .join("\n")}\n}`;
+  // 空间风格 after the rest: its colours, type and details override the app's own.
+  const theme = spaceThemeCss(resolveSpaceTheme(preferences.spaceTheme, preferences.customSpaceTheme), fontFace);
+  return theme ? `${settings}\n${theme}` : settings;
 }

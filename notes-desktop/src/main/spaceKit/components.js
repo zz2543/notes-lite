@@ -109,9 +109,14 @@
     }
     connectedCallback() {
       if (!this.unsubscribe) this.unsubscribe = api.on("change", () => this.refresh());
+      // 空间风格 and 外观: what is drawn from the look (a chart's bars) is drawn again.
+      if (this.retheme && !this.unsubscribeTheme) this.unsubscribeTheme = api.on("theme", () => this.retheme());
       this.refresh();
     }
-    disconnectedCallback() { if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; } }
+    disconnectedCallback() {
+      if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; }
+      if (this.unsubscribeTheme) { this.unsubscribeTheme(); this.unsubscribeTheme = null; }
+    }
     attributeChangedCallback() { if (this.isConnected) this.refresh(); }
     attr(name, fallback) { const v = this.getAttribute(name); return v == null || v === "" ? fallback : v; }
     refresh() {
@@ -146,7 +151,7 @@
     static style = `
       .label { font-size: 0.88em; color: var(--space-muted); display: flex; gap: 6px; align-items: baseline; }
       .period { font-size: 0.81em; padding: 1px 6px; border-radius: 99px; background: var(--space-accent-soft); color: var(--space-text); opacity: 0.8; }
-      .value { font-size: 2.31em; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
+      .value { font-size: 2.31em; font-weight: calc(var(--space-number-weight, 750) - 100); letter-spacing: -0.02em; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
       .unit { font-size: 1em; font-weight: 500; color: var(--space-muted); margin-left: 4px; }
     `;
     async load() {
@@ -230,6 +235,7 @@
       .line { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
       .dot { stroke: var(--space-card, var(--space-bg)); stroke-width: 2; transition: r var(--space-pop-duration) var(--space-pop-easing); }
       .bar { transition: opacity 0.16s ease; }
+      .glow .bar { filter: drop-shadow(0 0 6px currentColor); }
       .guide { stroke: var(--space-muted); stroke-dasharray: 2 3; opacity: 0; transition: opacity 0.15s ease; }
       .legend { display: flex; gap: 12px; font-size: 0.85em; color: var(--space-muted); margin: -4px 0 8px; }
       .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 5px; vertical-align: 0; }
@@ -278,6 +284,9 @@
       this.data = data;
       this.render(data, animate, animate ? null : previous);
     }
+    retheme() { if (this.data) this.render(this.data, false); }
+    /** 细节 of the 空间风格: how the bars are shaped. */
+    decor() { return getComputedStyle(this).getPropertyValue("--space-decor").trim() || "plain"; }
     colors(n) {
       const custom = list(this.attr("color", ""));
       return Array.from({ length: n }, (_, i) => custom[i] || `var(--space-chart-${(i % 6) + 1})`);
@@ -309,15 +318,23 @@
       svg += keys.map((k, i) => (i % labelEvery === 0 || i === keys.length - 1 ? `<text x="${X(i)}" y="${height - 6}" text-anchor="middle">${escape(shortKey(k))}</text>` : "")).join("") + `</g>`;
       svg += `<defs>${colors.map((c, s) => `<linearGradient id="g${s}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity="0.22"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`).join("")}</defs>`;
       if (type === "bar") {
-        const slot = W / keys.length, groupW = Math.min(slot * 0.68, 46), barW = groupW / ys.length;
+        const decor = this.decor();
+        const share = decor === "bento" ? 0.42 : decor === "pebble" || decor === "dots" || decor === "capsule" ? 0.74 : 0.68;
+        const slot = W / keys.length, groupW = Math.min(slot * share, decor === "bento" ? 18 : 46), barW = groupW / ys.length;
+        const round = ["capsule", "glow", "pebble", "dots"].includes(decor);
+        const rx = round ? Math.max(1, (barW - 2) / 2) : decor === "led" || decor === "bento" ? Math.min(2, barW / 3) : Math.min(5, barW / 3);
+        // 分段: the bars lit in segments, like a meter (a striped mask over all of them).
+        if (decor === "led") svg += `<defs><pattern id="segments" width="${width}" height="7" patternUnits="userSpaceOnUse" y="${pad.t + H}"><rect width="${width}" height="5" fill="#fff"/></pattern><mask id="segmented"><rect width="${width}" height="${height}" fill="url(#segments)"/></mask></defs><g mask="url(#segmented)">`;
+        if (decor === "glow") svg += `<g class="glow">`;
         series.forEach((values, s) => {
           values.forEach((v, i) => {
             if (v == null) return;
             const x = X(i) - groupW / 2 + s * barW, y0 = Y(Math.max(0, t0)), y = Y(v);
             const h = Math.abs(y0 - y);
-            svg += `<rect class="bar" data-i="${i}" x="${x + 1}" y="${Math.min(y, y0)}" width="${Math.max(2, barW - 2)}" height="${Math.max(1, h)}" rx="${Math.min(5, barW / 3)}" fill="${colors[s]}" style="transform-origin: ${x}px ${y0}px"/>`;
+            svg += `<rect class="bar" data-i="${i}" x="${x + 1}" y="${Math.min(y, y0)}" width="${Math.max(2, barW - 2)}" height="${Math.max(1, h)}" rx="${rx}" fill="${colors[s]}" style="transform-origin: ${x}px ${y0}px; color: ${colors[s]}"/>`;
           });
         });
+        if (decor === "led" || decor === "glow") svg += `</g>`;
       } else {
         series.forEach((values, s) => {
           const points = values.map((v, i) => (v == null ? null : [X(i), Y(v)])).filter(Boolean);
@@ -432,7 +449,7 @@
       .summary { font-size: 0.85em; color: var(--space-muted); font-variant-numeric: tabular-nums; }
       .grid { display: grid; grid-auto-flow: column; grid-auto-columns: 12px; grid-template-rows: 14px repeat(7, 12px); gap: 3px; overflow-x: auto; padding-bottom: 2px; }
       .month { font-size: 0.73em; color: var(--space-muted); grid-row: 1; white-space: nowrap; width: 12px; overflow: visible; line-height: 12px; }
-      .cell { width: 12px; height: 12px; border-radius: 3.5px; background: var(--space-line); transition: transform var(--space-pop-duration) var(--space-pop-easing); }
+      .cell { width: 12px; height: 12px; border-radius: var(--space-cell-radius, 3.5px); background: var(--space-line); transition: transform var(--space-pop-duration) var(--space-pop-easing); }
       .cell:hover { transform: scale(1.25); }
       .cell.today { box-shadow: 0 0 0 1.5px var(--space-text) inset; }
       .cell.future { visibility: hidden; }
@@ -559,13 +576,13 @@
       label { display: flex; flex-direction: column; gap: 5px; font-size: 0.81em; color: var(--space-muted); min-width: 0; }
       .actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
       input { font: inherit; font-size: 1em; color: var(--space-text); background: var(--space-bg); border: 1px solid var(--space-line);
-              border-radius: 8px; padding: 0 9px; height: 32px; line-height: 30px; outline: none; min-width: 0; width: 100%;
+              border-radius: var(--space-input-radius, 8px); padding: 0 9px; height: 32px; line-height: 30px; outline: none; min-width: 0; width: 100%;
               transition: border-color var(--space-pop-duration) var(--space-ease), box-shadow var(--space-pop-duration) var(--space-ease); }
       input:focus { border-color: color-mix(in srgb, var(--space-accent) 60%, transparent); box-shadow: 0 0 0 3px var(--space-accent-soft); }
       input[type=number] { font-variant-numeric: tabular-nums; }
       input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       input::-webkit-datetime-edit { padding: 0; }
-      button { font: inherit; font-weight: 550; font-size: 0.96em; color: var(--space-bg); background: var(--space-text); border: 0; border-radius: 8px;
+      button { font: inherit; font-weight: 550; font-size: 0.96em; color: var(--space-bg); background: var(--space-text); border: 0; border-radius: var(--space-input-radius, 8px);
                padding: 7px 16px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-width: 84px; justify-content: center;
                transition: transform var(--space-pop-duration) var(--space-pop-easing), opacity 0.16s ease, background-color 0.25s ease; }
       button:hover { opacity: 0.9; }
