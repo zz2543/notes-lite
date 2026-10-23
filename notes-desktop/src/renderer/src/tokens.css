@@ -141,6 +141,8 @@
   --inline-gap: 8px;
   /* A folder row's disclosure arrow, and the gap between a small icon and its label in a text button. */
   --caret-width: 14px;
+  /* 插入光标 drawn by 光标动画. */
+  --insertion-caret-width: 2px;
   --icon-label-gap: 4px;
 
   /* 动效 · 幅度: pressing shrinks a row or button to 0.97 (icon buttons 0.89) and it springs back. */

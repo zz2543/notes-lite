@@ -4,7 +4,7 @@ import { attachmentName, defaultAttachmentFolder, type AttachmentNaming } from "
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
 import { useSystemAccent } from "./appearance";
 import { AssistantPage } from "./AssistantSettings";
-import { PreviewChoices, Segmented, Swatches, type Choice, type PreviewChoice, type Swatch } from "./controls";
+import { PreviewChoices, Segmented, Swatches, Switch, type Choice, type PreviewChoice, type Swatch } from "./controls";
 import { listDetails } from "./listDetail";
 import { usePreferences } from "./preferences";
 import "./settings.css";
@@ -187,15 +187,22 @@ const intensities: Choice<MotionIntensity>[] = [
   { value: "strong", label: "强" },
 ];
 
-/** 动画. The 光标动画 and 输入动画 switches (tickets 10 and 11) join this page as their own group. */
+/** 动画: 动效强度, then 光标动画 (ticket 11). */
 function MotionPage() {
   const { preferences, change } = usePreferences();
   return (
-    <SettingsGroup title="动效强度" description="“强”最生动；“轻”让面板、菜单和展开更快落定。系统开启“减弱动态效果”时，动效一律降为淡入淡出。">
-      <SettingRow label="强度">
-        <Segmented label="动效强度" choices={intensities} value={preferences.motion} onChange={(motion) => change({ motion })} />
-      </SettingRow>
-    </SettingsGroup>
+    <>
+      <SettingsGroup title="动效强度" description="“强”最生动；“轻”让面板、菜单和展开更快落定。系统开启“减弱动态效果”时，动效一律降为淡入淡出。">
+        <SettingRow label="强度">
+          <Segmented label="动效强度" choices={intensities} value={preferences.motion} onChange={(motion) => change({ motion })} />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="光标" description="打字、删除、移动光标和拼音输入时，插入光标平滑滑到新位置，停下后柔和闪烁。系统开启“减弱动态效果”时关闭。">
+        <SettingRow label="光标动画">
+          <Switch label="光标动画" on={preferences.caretMotion} onChange={(caretMotion) => change({ caretMotion })} />
+        </SettingRow>
+      </SettingsGroup>
+    </>
   );
 }
 

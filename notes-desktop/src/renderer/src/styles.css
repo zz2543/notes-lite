@@ -386,6 +386,22 @@ section.list {
 .editor .cm-cursor {
   border-left-color: var(--accent);
 }
+/* 光标动画 (smoothCaret.ts): the browser's caret is there but unseen; the drawn one slides in its place. */
+.editor .cm-content.cm-smooth-caret-on,
+.editor .cm-content.cm-smooth-caret-on * {
+  caret-color: transparent;
+}
+.editor .cm-smooth-caret {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 150;
+  width: var(--insertion-caret-width);
+  border-radius: calc(var(--insertion-caret-width) / 2);
+  background: var(--accent);
+  pointer-events: none;
+  will-change: transform;
+}
 .editor .cm-selectionBackground,
 .editor .cm-focused .cm-selectionBackground,
 .editor ::selection {

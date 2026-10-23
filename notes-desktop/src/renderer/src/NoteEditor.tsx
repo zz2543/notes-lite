@@ -1,5 +1,5 @@
 import { defaultKeymap, history, historyKeymap, redo } from "@codemirror/commands";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { animate } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
@@ -14,6 +14,8 @@ import { markdownDisplay, switchMarkdownView } from "./markdownView";
 import { noteSwitch } from "./motion";
 import { useMotion, usePrefersReducedMotion } from "./MotionProvider";
 import { NoteDraft, setOpenDraft, type SaveStatus } from "./noteDraft";
+import { usePreferences } from "./preferences";
+import { smoothCaret } from "./smoothCaret";
 import { setShowSource, useShowSource } from "./sourceView";
 
 interface Choices {
@@ -122,6 +124,13 @@ function Editor({
   linkChoices.current = { onOpenLinked, notify };
   const renameTo = useRef(onRename);
   renameTo.current = onRename;
+  // 光标动画: on unless 设置 turns it off or the system asks for less motion.
+  const { preferences } = usePreferences();
+  const reducedMotion = usePrefersReducedMotion();
+  const caretSlides = preferences.caretMotion && !reducedMotion;
+  const caretOn = useRef(caretSlides);
+  caretOn.current = caretSlides;
+  const caretPlace = useRef(new Compartment());
 
   useEffect(() => {
     let countTimer: ReturnType<typeof setTimeout> | undefined;
@@ -138,6 +147,7 @@ function Editor({
           // Redo answers to ⌘⇧Z / Ctrl+Shift+Z everywhere, and to Ctrl+Y on Windows as usual.
           keymap.of([{ key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,
+          caretPlace.current.of(caretOn.current ? smoothCaret : []),
           inlineTitle(path, (name) => renameTo.current(path, name)),
           markdownDisplay(shown.current),
           listEditing,
@@ -199,6 +209,10 @@ function Editor({
     const running = animate(text, { opacity: [0, 1], y: [rise, 0] }, { duration: noteSwitch.textIn, ease: "easeOut" });
     return () => running.stop();
   }, []);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: caretPlace.current.reconfigure(caretSlides ? smoothCaret : []) });
+  }, [caretSlides]);
 
   // The same document shown another way: the state (text, selection, undo, composition) stays.
   useEffect(() => {

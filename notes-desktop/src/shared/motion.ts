@@ -131,3 +131,11 @@ export function motionPresets(intensity: MotionIntensity = defaultIntensity, { r
     overlay: overlayMotion(factor.amplitude, reduced),
   };
 }
+
+/**
+ * 光标动画 (ticket 11, 2026-10-23 用户确认: Word's smooth caret): the insertion caret slides to each new place
+ * over `slide` s ease-out, interruptible, never bouncing, so fast typing never leaves it behind (an exception
+ * to 滑移). A move farther than the visible height, or one the view's own layout makes, is a jump. While it
+ * moves it stays lit; `rest` s after the last move it blinks, fading, once every `blink` s.
+ */
+export const caretMotion = { slide: 0.12, rest: 0.65, blink: 1.06 } as const;

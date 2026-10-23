@@ -41,6 +41,8 @@ export interface Preferences {
    * (2026-10-23 用户反馈); null, or one no longer installed, is the first installed.
    */
   assistantAgent: AgentId | null;
+  /** 光标动画 (设置 › 动画): the insertion caret slides from place to place; the system's 减弱动态效果 turns it off too. */
+  caretMotion: boolean;
   /** 附件位置: a library-relative folder, the same in every library (attachments.ts). */
   attachmentFolder: string;
   /** 附件命名. */
@@ -59,6 +61,7 @@ export const choices: { readonly [K in ChoiceKey]: readonly Preferences[K][] } =
   assistantReview: ["review", "keep"],
   assistantPermissions: ["ask", "full"],
   assistantAgent: [null, ...agents.map((agent) => agent.id)],
+  caretMotion: [true, false],
   attachmentNaming: attachmentNamings,
 };
 
@@ -73,6 +76,7 @@ export const defaultPreferences: Preferences = {
   typography: defaultTypography,
   agentModels: {},
   assistantAgent: null,
+  caretMotion: true,
   attachmentFolder: defaultAttachmentSettings.folder,
   attachmentNaming: defaultAttachmentSettings.naming,
 };
