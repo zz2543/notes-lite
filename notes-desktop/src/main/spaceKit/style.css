@@ -12,7 +12,6 @@
   --space-shadow: var(--space-widget-shadow);
   --space-radius: var(--space-widget-radius);
   --space-control-radius: var(--icon-button-radius);
-  --space-button-radius: var(--space-control-radius);
   --space-accent: var(--accent);
   --space-on-accent: var(--on-accent);
   --space-accent-soft: color-mix(in srgb, var(--space-accent) 14%, transparent);
@@ -35,17 +34,6 @@
   --space-leading: var(--body-leading);
   --space-disabled-opacity: var(--disabled-opacity);
   --space-press-scale: var(--press-scale);
-  /* 空间风格 (spaceThemeCss) sets these; 默认 keeps the app's look. */
-  --space-themed: no;
-  --space-decor: plain;
-  --space-page-image: none;
-  --space-feature: var(--space-card);
-  --space-feature-text: var(--space-text);
-  --space-cell-radius: 3.5px;
-  --space-bar-radius: 5px;
-  --space-progress-height: 8px;
-  --space-ring-stroke: 9px;
-  --space-number-weight: 750;
 
   /* The old app's names. */
   --lb-bg: var(--space-bg);
@@ -73,8 +61,7 @@
 }
 
 * { box-sizing: border-box; }
-/* The page's gradient (空间风格), fixed to the window on both, so the body's edge never shows. */
-html, body { margin: 0; color: var(--space-text); background: var(--space-page-image) fixed, var(--space-bg); }
+html, body { margin: 0; background: var(--space-bg); color: var(--space-text); }
 /* 滚动条: the app's own, thin and quiet, not the system's default. */
 html { scrollbar-width: thin; scrollbar-color: var(--space-scrollbar) transparent; }
 body.space-page {
@@ -113,7 +100,7 @@ code { font-family: var(--space-mono); font-size: var(--code-size); }
 .space-button, .lb-button {
   font: inherit; font-weight: 500;
   color: var(--space-on-accent); background: var(--space-accent);
-  border: 0; border-radius: var(--space-button-radius); padding: var(--gap-1) var(--gap-4); cursor: pointer;
+  border: 0; border-radius: var(--space-control-radius); padding: var(--gap-1) var(--gap-4); cursor: pointer;
   transition: transform var(--space-pop-duration) var(--space-pop-easing), opacity var(--space-pop-duration) var(--space-ease);
 }
 .space-button:hover, .lb-button:hover { opacity: 0.88; }

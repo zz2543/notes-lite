@@ -1,0 +1,117 @@
+<!doctype html><meta charset=utf-8>
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1400px;height:1050px;background:radial-gradient(120% 90% at 50% 100%,#e4ded4,#b4ab9e);font-family:"Plus Jakarta Sans","Noto Sans SC",sans-serif;color:#1b1b1b;position:relative;overflow:hidden}
+.pn{position:absolute;left:80px;top:78px;width:1240px;height:876px;background:#f1efea;border-radius:16px;box-shadow:0 40px 80px rgba(60,40,20,.2)}
+.c{position:absolute;background:#fff;border-radius:28px}
+.cap{font-size:12.5px;font-weight:700;letter-spacing:.06em;color:#2b2b2b}
+.mut{color:#8a857d;font-size:13px}
+.side{position:absolute;left:34px;width:50px;height:50px;border-radius:14px;background:#fff;display:grid;place-items:center}
+.notch{position:absolute;background:#f1efea}
+.notch:before,.notch:after{content:"";position:absolute;width:24px;height:24px}
+.btn{position:absolute;width:62px;height:62px;border-radius:16px;background:#f5584a;display:grid;place-items:center;box-shadow:0 8px 18px rgba(245,88,74,.28)}
+.day{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#555;width:42px}
+.dc{width:42px;height:42px;border-radius:50%;display:grid;place-items:center}
+.wk{height:78px;border-radius:16px;background:#f3f1ed;display:flex;align-items:center;padding:6px;gap:16px;position:relative}
+.th{width:66px;height:66px;border-radius:10px;display:grid;place-items:center}
+.wk b{font-size:16.5px;font-weight:600;display:block}
+.wk span{font-size:14px;color:#555;display:block;margin-top:5px}
+.wk em{position:absolute;right:18px;bottom:12px;font-style:normal;font-size:13px;color:#555}
+.wk i{position:absolute;right:18px;top:10px;font-style:normal;letter-spacing:2px;font-weight:700;color:#555}
+</style>
+<div class=pn>
+ <div style="position:absolute;left:34px;top:40px;font-size:30px;font-weight:600;letter-spacing:-.02em">动力 <span style="font-weight:400;color:#8a857d;font-size:22px">dynamy</span></div>
+ <div style="position:absolute;left:718px;top:35px;width:362px;height:50px;background:#fff;border-radius:12px;display:flex;align-items:center;gap:12px;padding:0 18px;color:#8a857d;font-size:16px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.7><circle cx=8.5 cy=8.5 r=6.5 /><path d="M13.5 13.5l5 5"/></svg>搜索训练、课程…</div>
+ <div style="position:absolute;left:1102px;top:35px;width:50px;height:50px;background:#fff;border-radius:12px;display:grid;place-items:center"><svg width=22 height=22 viewBox="0 0 22 22" fill=none stroke=#222 stroke-width=1.6><path d="M11 3a5 5 0 0 0-5 5v4l-2 3h14l-2-3V8a5 5 0 0 0-5-5zM9 18a2 2 0 0 0 4 0"/><circle cx=16 cy=5 r=2.6 fill=#f5584a stroke=none /></svg></div>
+ <div style="position:absolute;left:1158px;top:35px;width:50px;height:50px;background:linear-gradient(150deg,#ffd84a,#f2b416);border-radius:12px;display:grid;place-items:center;font-weight:700;font-size:18px">哲</div>
+ <!-- side -->
+ <div class=side style="top:120px;background:#f5584a"><svg width=20 height=20 viewBox="0 0 20 20" fill=#fff><path d="M10 2l8 6v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z"/></svg></div>
+ <div class=side style="top:176px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.5><rect x=2 y=2 width=16 height=16 rx=4 /><path d="M6 14v-3M10 14V6M14 14v-5"/></svg></div>
+ <div class=side style="top:232px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.5><path d="M10 2a8 8 0 1 1-4 15l-4 1 1-4a8 8 0 0 1 7-12z"/><path d="M6.5 10h.1M10 10h.1M13.5 10h.1" stroke-width=2 stroke-linecap=round /></svg></div>
+ <div class=side style="top:288px"><svg width=22 height=20 viewBox="0 0 22 20" fill=none stroke=#222 stroke-width=1.5><circle cx=8 cy=6 r=3.5 /><path d="M1 18c0-4 3-6 7-6s7 2 7 6M15 3a3 3 0 0 1 0 6M17 12c2 1 4 2 4 6"/></svg></div>
+ <div class=side style="top:344px"><svg width=20 height=18 viewBox="0 0 20 18" fill=none stroke=#222 stroke-width=1.5><path d="M10 16S2 11 2 6a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 5-8 10-8 10z"/></svg></div>
+ <div class=side style="top:400px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.5><rect x=2 y=3 width=16 height=15 rx=3 /><path d="M2 8h16M6 1v4M14 1v4"/><path d="M6 12h.1M10 12h.1M14 12h.1M6 15h.1M10 15h.1" stroke-width=2 stroke-linecap=round /></svg></div>
+ <div class=side style="top:456px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.5><path d="M10 2a8 8 0 1 0 8 8h-8z"/><path d="M12 1a7 7 0 0 1 7 7h-7z"/></svg></div>
+ <div class=side style="top:736px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.5><path d="M10 1l8 4.5v9L10 19l-8-4.5v-9z"/><circle cx=10 cy=10 r=3 /></svg></div>
+ <div class=side style="top:792px"><svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=#222 stroke-width=1.5 stroke-linecap=round><path d="M12 4V3a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1M8 10h11M15 6l4 4-4 4"/></svg></div>
+
+ <!-- 今日活动 -->
+ <div class=c style="left:118px;top:120px;width:392px;height:536px">
+  <div class="cap" style="position:absolute;left:21px;top:22px">今日活动</div>
+  <div class=notch style="right:0;top:0;width:82px;height:82px;border-radius:0 0 0 26px"></div>
+  <div style="position:absolute;right:82px;top:0;width:26px;height:26px;background:radial-gradient(circle at 0 100%,transparent 25.5px,#f1efea 26px)"></div>
+  <div style="position:absolute;right:0;top:82px;width:26px;height:26px;background:radial-gradient(circle at 0 100%,transparent 25.5px,#f1efea 26px)"></div>
+  <div class=btn style="right:0;top:0"><svg width=24 height=24 viewBox="0 0 24 24" stroke=#fff stroke-width=2.2 stroke-linecap=round><path d="M12 3v18M3 12h18"/></svg></div>
+  <svg viewBox="0 0 392 70" style="position:absolute;left:0;top:56px;width:392px"><path d="M0 34C20 30 34 24 42 28S70 42 90 40 120 34 140 38 170 44 196 40 230 30 260 36 300 46 330 40 370 28 392 34" fill=none stroke=#f6cf4a stroke-width=2 /><circle cx=42 cy=28 r=3.2 fill=#222 /><circle cx=90 cy=40 r=3.2 fill=#222 /><circle cx=140 cy=40 r=3.2 fill=#222 /><circle cx=196 cy=39 r=7 fill=#fff stroke=#222 stroke-width=1.6 /><circle cx=196 cy=39 r=3.6 fill=#222 /></svg>
+  <div style="position:absolute;left:163px;top:54px;height:32px;border-radius:16px;background:#222;color:#fff;font-size:17px;font-weight:600;padding:0 12px;display:flex;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.25)">8.0<span style="font-size:13px;font-weight:400;opacity:.8">/公里</span></div>
+  <div id=days style="position:absolute;left:20px;right:20px;top:136px;display:flex;justify-content:space-between"></div>
+  <div class=cap style="position:absolute;left:21px;top:226px">即将进行</div><div style="position:absolute;right:22px;top:226px;font-size:13px;color:#444">查看全部</div>
+  <div style="position:absolute;left:20px;right:20px;top:258px;display:flex;flex-direction:column;gap:12px">
+   <div class=wk><div class=th style="background:linear-gradient(150deg,#e9e4dc,#c9c0b2)"><svg width=40 height=44 viewBox="0 0 40 44" fill=#2a2a2a><circle cx=22 cy=6 r=4 /><path d="M20 11l4 0 2 12 10 14-3 2-11-12-8 12-12 2 0-3 10-3 6-12z"/></svg></div><div><b>拉伸放松</b><span>30 分钟</span></div><i>···</i><em>今天</em></div>
+   <div class=wk><div class=th style="background:linear-gradient(150deg,#7ea0a8,#476870)"><svg width=46 height=30 viewBox="0 0 46 30" fill=#1d1d1d><circle cx=8 cy=12 r=4 /><path d="M12 13l30 4 1 4-30-3zM14 18l-2 10h3l3-9zM40 20l-1 9h-3l1-9z"/></svg></div><div><b>俯卧撑</b><span>25 分钟</span></div><i>···</i><em>8 月 11 日</em></div>
+   <div class=wk><div class=th style="background:linear-gradient(150deg,#ece9e4,#cfc9c0)"><svg width=46 height=40 viewBox="0 0 46 40" fill=#1d1d1d><circle cx=10 cy=26 r=4 /><path d="M13 24l12-16 4 2-8 14 18 10-2 3-20-8z"/><path d="M0 37h46v3H0z"/></svg></div><div><b>力量训练</b><span>45 分钟</span></div><i>···</i><em>8 月 12 日</em></div>
+  </div>
+ </div>
+ <!-- 步数 -->
+ <div class=c style="left:118px;top:672px;width:392px;height:168px;padding:22px 20px">
+  <div class=cap>今日步数</div><div class=mut style="position:absolute;right:20px;top:20px;text-align:right">每日目标<br><b style="color:#1b1b1b;font-size:14px">15,000</b> 步</div>
+  <div style="margin-top:12px;font-size:46px;font-weight:500;letter-spacing:-.03em;line-height:1">11,000<span class=mut style="font-size:14px;letter-spacing:0"> 步</span></div>
+  <div style="position:absolute;left:20px;right:20px;bottom:22px;height:40px;border-radius:8px;background:#f1efea;overflow:hidden;display:flex">
+   <div style="width:73%;background:linear-gradient(90deg,#f5584a,#f5584a 20%,#f9893f 45%,#ffc93d 75%,#ffd84a);display:flex"><i style="flex:1;border-right:1px solid rgba(255,255,255,.35)"></i><i style="flex:1;border-right:1px solid rgba(255,255,255,.35)"></i><i style="flex:1"></i></div><i style="width:3px;background:#fff"></i></div>
+ </div>
+ <!-- 进度 -->
+ <div class=c style="left:528px;top:120px;width:358px;height:354px;background:#1f1f1f;color:#fff">
+  <div class=cap style="position:absolute;left:21px;top:22px;color:#fff">训练进度</div>
+  <div style="position:absolute;left:18px;top:64px;font-size:84px;font-weight:400;letter-spacing:-.02em;line-height:1">84%</div>
+  <div style="position:absolute;left:242px;top:108px;font-size:14.5px;line-height:1.3;color:#e8e8e8">本周计划<br>已完成</div>
+  <div id=dots style="position:absolute;left:20px;top:174px;width:320px;height:160px"></div>
+ </div>
+ <!-- 卡路里 -->
+ <div class=c style="left:904px;top:120px;width:302px;height:354px;padding:22px 20px">
+  <div class=cap>卡路里</div><div class=mut style="position:absolute;right:18px;top:20px;text-align:right">每日目标<br><b style="color:#1b1b1b;font-size:14px">2000</b> 千卡</div>
+  <svg viewBox="0 0 240 240" style="position:absolute;left:31px;top:58px;width:240px" id=don></svg>
+  <div style="position:absolute;left:20px;right:20px;bottom:20px;display:flex;justify-content:space-between;font-size:13px">
+   <div><div class=mut>118<small>/克</small></div><div style="display:flex;align-items:center;gap:7px;font-weight:600;margin-top:3px"><i style="width:11px;height:11px;border-radius:3px;background:#ffd23f"></i>蛋白质</div></div>
+   <div><div class=mut>220<small>/克</small></div><div style="display:flex;align-items:center;gap:7px;font-weight:600;margin-top:3px"><i style="width:11px;height:11px;border-radius:3px;background:#f5584a"></i>碳水</div></div>
+   <div><div class=mut>90<small>/克</small></div><div style="display:flex;align-items:center;gap:7px;font-weight:600;margin-top:3px"><i style="width:11px;height:11px;border-radius:3px;background:#222"></i>脂肪</div></div></div>
+ </div>
+ <!-- 挑战 -->
+ <div class=c style="left:528px;top:492px;width:678px;height:348px;overflow:hidden;background:#b8ad9f">
+  <svg viewBox="0 0 678 348" style="position:absolute;inset:0" preserveAspectRatio=none>
+   <defs><linearGradient id=sk x1=0 x2=0 y1=0 y2=1><stop offset=0 stop-color=#cfc5b8 /><stop offset=1 stop-color=#9d9282 /></linearGradient><pattern id=tl width=46 height=24 patternUnits=userSpaceOnUse patternTransform="rotate(-8)"><rect width=46 height=24 fill=none /><path d="M0 23.5H46M23 0V24" stroke=#7d7365 stroke-opacity=.35 stroke-width=1.2 /></pattern><linearGradient id=sh x1=0 x2=0 y1=0 y2=1><stop offset=.45 stop-color=#000 stop-opacity=0 /><stop offset=1 stop-color=#000 stop-opacity=.45 /></linearGradient></defs>
+   <rect width=678 height=348 fill=url(#sk) /><rect width=678 height=348 fill=url(#tl) />
+   <g fill=#1c1c1e><ellipse cx=360 cy=255 rx=230 ry=14 fill=#000 opacity=.18 /><path d="M120 210l170-34 140 2 60-40 14 10-48 52 20 70-18 4-30-60-150 18-150 12z"/><circle cx=520 cy=128 r=22 fill=#3a2a22 /><path d="M470 150c20-6 40-6 50 6l-6 16c-14-6-30-6-44-4z" fill=#c79a7c /><path d="M455 178l10 62h-14l-12-50z" fill=#c79a7c /><path d="M112 206l-8 30 16 2 10-28z" fill=#2a2a2a /><path d="M100 236l26 2" stroke=#5ad0c0 stroke-width=6 /></g>
+   <rect width=678 height=348 fill=url(#sh) />
+  </svg>
+  <div class=notch style="right:0;top:0;width:82px;height:82px;border-radius:0 0 0 26px"></div>
+  <div style="position:absolute;right:82px;top:0;width:26px;height:26px;background:radial-gradient(circle at 0 100%,transparent 25.5px,#f1efea 26px)"></div>
+  <div style="position:absolute;right:0;top:82px;width:26px;height:26px;background:radial-gradient(circle at 0 100%,transparent 25.5px,#f1efea 26px)"></div>
+  <div class=btn style="right:0;top:0"><svg width=22 height=22 viewBox="0 0 22 22" fill=none stroke=#fff stroke-width=2 stroke-linecap=round><path d="M5 17L17 5M8 5h9v9"/></svg></div>
+  <div style="position:absolute;left:20px;top:20px;display:flex;align-items:center;gap:10px;color:#fff">
+   <div style="display:flex"><i style="width:36px;height:36px;border-radius:50%;border:2px solid #fff;background:#8b5e43"></i><i style="width:36px;height:36px;border-radius:50%;border:2px solid #fff;background:#d7a77b;margin-left:-12px"></i><i style="width:36px;height:36px;border-radius:50%;border:2px solid #fff;background:#5b3a2a;margin-left:-12px"></i></div>
+   <div><div style="font-size:26px;font-weight:600;line-height:1">1.2<small style="font-size:18px">k+</small></div><div style="font-size:14px;opacity:.9">位成员参与</div></div></div>
+  <div style="position:absolute;left:300px;top:136px;width:78px;height:78px;border-radius:50%;background:rgba(60,60,60,.55);backdrop-filter:blur(6px);display:grid;place-items:center;border:1px solid rgba(255,255,255,.2)"><svg width=24 height=26 viewBox="0 0 24 26"><path d="M4 2.5l18 10.5-18 10.5z" fill=#fff stroke=#fff stroke-width=2 stroke-linejoin=round /></svg></div>
+  <div style="position:absolute;left:22px;bottom:22px;color:#fff;font-size:28px;font-weight:400;line-height:1.25;letter-spacing:-.01em">每日挑战 ——<br>今天再突破一点</div>
+  <div style="position:absolute;right:22px;bottom:22px;color:#fff;font-size:42px;font-weight:500;line-height:1">2<span style="font-size:16px;opacity:.9">/7 天</span></div>
+ </div>
+</div>
+<script>
+const days=[['日',1],['一',1],['二',1],['三',2],['四',0],['五',3],['六',0]];
+const run='<svg width=20 height=20 viewBox="0 0 20 20" fill=none stroke=CL stroke-width=1.5 stroke-linecap=round stroke-linejoin=round><circle cx=12 cy=3 r=1.6 /><path d="M6 8l4-2 3 3 3 1M10 6l-2 6 4 2-1 5M8 12l-3 5"/></svg>';
+const bike='<svg width=24 height=18 viewBox="0 0 24 18" fill=none stroke=#444 stroke-width=1.5><circle cx=5 cy=12 r=4.5 /><circle cx=19 cy=12 r=4.5 /><path d="M5 12l5-7h6l3 7M10 5l3 7h6M9 2h3"/></svg>';
+const ck='<svg width=18 height=14 viewBox="0 0 18 14" fill=none stroke=#222 stroke-width=1.7 stroke-linecap=round><path d="M2 7l5 5 9-10"/></svg>';
+document.getElementById('days').innerHTML=days.map(([d,t])=>t==2?`<div class=day style="background:linear-gradient(#fff,#fff3c4);border-radius:22px 22px 26px 26px;padding-bottom:4px;margin:-8px 0 -4px;padding-top:8px"><span>${d}</span><div class=dc style="background:#ffc93d;box-shadow:0 6px 14px rgba(255,190,40,.45)">${run.replace('CL','#222')}</div></div>`:`<div class=day><span>${d}</span><div class=dc style="background:${t==1?'#fff0b8':'#f1efea'}">${t==1?ck:t==3?bike:run.replace('CL','#444')}</div></div>`).join('');
+// dot matrix: columns bottom-aligned
+const cols=[[1,1,1,0],[1,1,0,1],[0,1,1,1],[0,1,1,1],[0,0,1,1],[0,0,0,0],[0,0,0,1],[0,0,0,0]];
+const lay=[[3,2,1,0],[3,2,1,0],[3,2,1],[3,2,1],[3,2,1],[2,1],[2,1],[2,1]];
+const fill=[[1,1,1,1],[1,0,1,1],[0,1,1],[1,1,1],[1,1,0],[0,1],[1,0],[0,0]];
+let h='';const r=19,gap=40;lay.forEach((rows,ci)=>rows.forEach((row,ri)=>{const f=fill[ci][ri];h+=`<i style="position:absolute;left:${ci*gap}px;top:${row*gap}px;width:${r*2}px;height:${r*2}px;border-radius:50%;${f?'background:#ffd23f':'border:1.3px solid #e8c53a'}"></i>`}));
+document.getElementById('dots').innerHTML=h;
+// donut
+const don=document.getElementById('don');const C=120,R=86,W=34;let s='';const segs=[[0,.20,'#222'],[.21,.55,'#f5584a'],[.56,.99,'#ffd23f']];
+const pt=(a,rr)=>[C+rr*Math.sin(a*2*Math.PI-1.1),C-rr*Math.cos(a*2*Math.PI-1.1)];
+segs.forEach(([a,b,c])=>{const [x1,y1]=pt(a,R),[x2,y2]=pt(b,R);s+=`<path d="M${x1} ${y1}A${R} ${R} 0 ${b-a>.5?1:0} 1 ${x2} ${y2}" fill=none stroke=${c} stroke-width=${W} />`});
+[[.0,'20%'],[.38,'35%'],[.73,'45%']].forEach(([a,t])=>{const [x,y]=pt(a,R+20);s+=`<circle cx=${x} cy=${y} r=22 fill=#efede9 stroke=#fff stroke-width=3 /><text x=${x} y=${y+5} text-anchor=middle font-size=14 font-weight=600 font-family="Plus Jakarta Sans">${t}</text>`});
+s+=`<text x=120 y=124 text-anchor=middle font-size=34 font-weight=500 font-family="Plus Jakarta Sans" letter-spacing="-1">1,560</text><text x=120 y=148 text-anchor=middle font-size=14 fill=#8a857d font-family="Noto Sans SC">千卡</text>`;
+don.innerHTML=s;
+</script>

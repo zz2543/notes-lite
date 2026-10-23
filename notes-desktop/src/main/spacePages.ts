@@ -12,6 +12,26 @@ import { kitFonts, kitLibraries, kitScripts, kitStyle, settingsStyleId } from ".
 export const spaceScheme = "notes-space";
 const pageUrl = `${spaceScheme}://page/`;
 
+/** Run in the page (readBackdrop): its own background and text colour, or null while it keeps the app's. */
+const backdropScript = `(() => {
+  const body = document.body, root = document.documentElement;
+  if (!body) return null;
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;width:0;height:0;background:var(--space-bg)";
+  root.appendChild(probe);
+  const kit = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  const first = (image) => {
+    const at = image.indexOf("linear-gradient(");
+    const match = at < 0 ? null : image.slice(at).match(/rgba?\\([^)]*\\)/);
+    return match ? match[0] : null;
+  };
+  const shown = (color) => { const n = color.match(/[\\d.]+/g); return n && (n.length < 4 || Number(n[3]) > 0.5) ? color : null; };
+  const b = getComputedStyle(body), r = getComputedStyle(root);
+  const background = first(b.backgroundImage) || first(r.backgroundImage) || [b.backgroundColor, r.backgroundColor].map(shown).find((c) => c && c !== kit) || null;
+  return background ? { background, text: b.color } : null;
+})()`;
+
 /** Before the app is ready: the homepage's address is a secure origin with storage of its own. */
 export function registerSpaceScheme() {
   protocol.registerSchemesAsPrivileged([{ scheme: spaceScheme, privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
@@ -155,6 +175,27 @@ export function spacePages(
     ses.setPermissionCheckHandler(() => false);
   };
 
+  /**
+   * The page's own backdrop, read from the page: where it paints its own background (a 风格参考), the
+   * colour its top starts with — a vertical gradient's first stop, else its colour — and its text
+   * colour; null while it keeps the app's (the kit's --space-bg). Read once loaded, again a moment
+   * later for pages that style themselves from script, and after the settings change.
+   */
+  const readBackdrop = async (page: Hosted) => {
+    const contents = page.view.webContents;
+    if (contents.isDestroyed()) return;
+    const found: unknown = await contents.executeJavaScript(backdropScript, false).catch(() => null);
+    const color = (value: unknown) => (typeof value === "string" && /^rgba?\([\d.,\s/%]+\)$/.test(value) ? value : null);
+    const read = typeof found === "object" && found !== null ? (found as Record<string, unknown>) : {};
+    const background = color(read.background);
+    const text = color(read.text);
+    emit({ space: page.name, kind: "backdrop", backdrop: background && text ? { background, text } : null });
+  };
+  const backdropSoon = (page: Hosted) => {
+    void readBackdrop(page);
+    setTimeout(() => void readBackdrop(page), 800);
+  };
+
   /** Loads the page afresh; whatever went wrong on the old one goes with it. */
   const reload = (page: Hosted) => {
     emit({ space: page.name, kind: "loaded" });
@@ -191,6 +232,7 @@ export function spacePages(
       if (isMainFrame && code !== -3) problem(`页面加载失败：${description}（${url}）`);
     });
     const hostedPage: Hosted = { name, view, html, scope };
+    contents.on("did-finish-load", () => backdropSoon(hostedPage));
     contents.on("render-process-gone", (_event, details) => {
       if (details.reason === "clean-exit") return;
       problem("页面进程意外退出，已重新载入。");
@@ -307,6 +349,7 @@ export function spacePages(
   const settingsChanged = () => {
     const css = settings();
     for (const { view } of hosted) if (!view.webContents.isDestroyed()) view.webContents.send(spacePageChannels.settings, css);
+    setTimeout(() => hosted.forEach((page) => void readBackdrop(page)), 150);
   };
 
   const reloadNamed = (name: string) => {

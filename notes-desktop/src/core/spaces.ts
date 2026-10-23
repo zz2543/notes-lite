@@ -5,6 +5,8 @@ import { addressableTables } from "./recordTables";
 import { networkHosts, referencedHosts } from "./spaceNetwork";
 import { exampleNotes, examplePage, exampleSpaceIcon, exampleSpaceName } from "./spaceExample";
 import { spaceGuide } from "./spaceGuide";
+import { spaceStyleFiles } from "./spaceStyles";
+import { spaceStyles, spaceStylesFolder } from "../shared/spaceStyles";
 import { isHidden, noteTitle } from "../shared/paths";
 import { scopeLabel } from "../shared/spaceScope";
 
@@ -293,6 +295,7 @@ export interface SpaceLibraryOptions {
 export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): SpaceLibrary {
   const folder = join(root, ...spacesFolder.split("/"));
   const guidePath = join(folder, spaceGuideName);
+  const stylesPath = join(folder, spaceStylesFolder);
   const fileOf = (name: string) => join(folder, `${name}.html`);
 
   // Replaced whole: a crash mid-write leaves the old file, never half of one.
@@ -337,8 +340,17 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
 
   const installGuide = async () => {
     await mkdir(folder, { recursive: true });
-    if ((await readFile(guidePath, "utf8").catch(() => null)) === spaceGuide) return;
-    await writeAtomic(guidePath, spaceGuide);
+    if ((await readFile(guidePath, "utf8").catch(() => null)) !== spaceGuide) await writeAtomic(guidePath, spaceGuide);
+    // 风格参考, beside it: each look's notes, code and preview, for when the user picks one.
+    await mkdir(stylesPath, { recursive: true });
+    for (const { name, content } of spaceStyleFiles()) {
+      const path = join(stylesPath, name);
+      const old = await readFile(path).catch(() => null);
+      if (old && old.equals(typeof content === "string" ? Buffer.from(content, "utf8") : content)) continue;
+      const temp = `${path}.${process.pid}.saving`;
+      await writeFile(temp, content);
+      await rename(temp, path);
+    }
   };
 
   const create = async (draft: SpaceDraft): Promise<Space> => {
@@ -431,6 +443,7 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
       `请为笔记应用编写“${space.name}”空间的空间主页。`,
       "",
       `- 编写说明：${guidePath}（请先完整阅读并遵守）`,
+      `- 风格参考：${stylesPath}（${spaceStyles.map((style) => style.name).join("、")}；用户选了哪个风格，就先完整阅读对应的 .md）`,
       `- 空间文件：${fileOf(space.name)}（保留开头的 meta，在其后写主页；不要修改 space-scope）`,
       `- 空间名称：${space.name}`,
       `- 范围：${scopeLabel(space.scope)}`,
@@ -444,9 +457,9 @@ export function spaceLibrary(root: string, options: SpaceLibraryOptions = {}): S
       "请围绕我每天的进展设计这个主页：用美观的图表展示进展，并提供快捷录入。数据只能存进范围内的记录表。",
       "",
       "工作方式：",
-      "- 先给方案、再动手：第一次回复不要写任何文件。用一两句话说你对这个空间的理解，再列出主页方案——放哪些卡片、图表和快捷录入（每项一行），用到或新建哪些记录表（表名和列）；最后问我两三个偏好问题（比如最关心哪些数字、想要什么风格、要不要目标或提醒）。等我回复后再按确认的方案写空间文件。",
+      "- 先给方案、再动手：第一次回复不要写任何文件。用一两句话说你对这个空间的理解，再列出主页方案——放哪些卡片、图表和快捷录入（每项一行），用到或新建哪些记录表（表名和列）；最后问我两三个偏好问题（比如最关心哪些数字、要不要目标或提醒；我还没选风格时，问我想要哪个风格参考或自己描述一种）。等我回复后再按确认的方案写空间文件。",
       "- 我说“直接做”，或已经说清楚要什么时，可以跳过方案直接写。",
-      "- 只需阅读编写说明、空间文件和上面列出的记录表；想了解主题，最多浏览几篇笔记，不要逐篇读完范围内的笔记。",
+      "- 只需阅读编写说明、空间文件、上面列出的记录表和我选的风格参考；想了解主题，最多浏览几篇笔记，不要逐篇读完范围内的笔记。",
       "- 编写说明已写明组件和 space 接口的全部行为，不要打开或解包笔记应用的程序文件。",
       "- 不要自建测试页面或用浏览器检查；写好空间文件后笔记应用会立即显示，出错会显示在主页顶部的提示条里。",
       "- 写好空间文件就结束，简短说明主页包含什么。",

@@ -8,6 +8,7 @@ import { modelName, type AgentId } from "../shared/agentKinds";
 import { stoppedTurn, type PermissionMode } from "../shared/conversation";
 import { turnEntry, type LogEntry, type OperationLog } from "./operationLog";
 import type { TurnSnapshots } from "./snapshots";
+import { spaceStyles, spaceStylesFolder } from "../shared/spaceStyles";
 import { notesFolder, spaceGuideName, spacesFolder, type SpaceLibrary } from "./spaces";
 
 export interface TurnRequest {
@@ -53,6 +54,8 @@ const at = (root: string, path: string) => join(root, ...path.split("/").filter(
 export interface TurnSpaces {
   /** The authoring guide (编写说明). */
   guide: string;
+  /** The folder of 风格参考 beside it. */
+  styles: string;
   /** Each space by name, with its file. */
   list: Array<{ name: string; path: string }>;
   /** The space open in the app, if any. */
@@ -69,6 +72,7 @@ export async function turnSpaces(library: SpaceLibrary, open?: string): Promise<
   await library.installGuide();
   return {
     guide: spacesGuidePath,
+    styles: `${spacesFolder}/${spaceStylesFolder}`,
     list: spaces.map(({ name, path }) => ({ name, path })),
     ...(open && spaces.some((space) => space.name === open) ? { open } : {}),
   };
@@ -104,6 +108,7 @@ export function turnPrompt({ root, folder, text, notes, spaces }: Pick<TurnReque
       [
         `- 笔记库的空间主页如下；只有用户要编写或修改空间主页时才需要看。那时请先完整阅读并遵守编写说明：${rel(spaces.guide)}`,
         ...spaces.list.map(({ name, path }) => `  - ${name}：${rel(path)}${name === spaces.open ? "（当前打开）" : ""}`),
+        `  用户要换成某个风格（${spaceStyles.map((style) => style.name).join("、")}）时，先完整阅读 ${rel(spaces.styles)} 里对应的 .md。`,
       ].join("\n"),
     );
   return `${text}\n\n---\n以下是笔记应用附上的背景，路径相对于当前工作目录：\n${context.join("\n")}\n`;

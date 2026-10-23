@@ -1,0 +1,78 @@
+<!doctype html><meta charset=utf-8>
+<style>
+*{box-sizing:border-box}body{margin:0;width:1200px;height:900px;font-family:Inter,"Noto Sans SC",sans-serif;color:#1f2329;-webkit-font-smoothing:antialiased;
+background:radial-gradient(260px 120px at 18% 18%,rgba(255,255,255,.8),transparent 70%),radial-gradient(340px 140px at 70% 8%,rgba(255,255,255,.7),transparent 70%),radial-gradient(300px 120px at 88% 46%,rgba(255,255,255,.55),transparent 70%),radial-gradient(1400px 340px at 50% 118%,#6f9f4a 0 38%,transparent 60%),linear-gradient(#8fbfe6,#b9d8ef 55%,#cfe3dc);}
+.wrap{position:absolute;top:48px;left:56px;right:56px;display:grid;grid-template-columns:57fr 43fr;grid-template-rows:auto auto;gap:24px}
+.card{background:#fff;border-radius:28px;box-shadow:0 20px 50px rgba(40,80,120,.14)}
+.pad{padding:26px 28px}
+.h{display:flex;align-items:center;justify-content:space-between}
+.t{font-size:21px;font-weight:500;letter-spacing:-.01em}
+.ico{width:44px;height:44px;border-radius:50%;background:#fff3e9;display:grid;place-items:center;margin-right:14px}
+.ico svg{width:22px;height:22px;stroke:#f27a1a;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.muted{color:#9aa1ab}
+.big{font-size:56px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.unit{font-size:15px;color:#9aa1ab;font-weight:400;margin-left:4px}
+.meter{display:flex;gap:7px;height:46px;margin:26px 0}
+.meter i{flex:1;border-radius:99px;background:linear-gradient(90deg,#f37217,#ffb26e 55%,#f68a33);box-shadow:inset 0 -3px 4px rgba(200,80,0,.18)}
+.meter i.off{background:#f1f4f8;box-shadow:none}
+.meter i.off:nth-last-child(odd){transform:scaleY(.82);transform-origin:bottom}
+.split{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #eef0f3}
+.split>div{padding:22px 28px}.split>div+div{border-left:1px solid #eef0f3}
+.sub{display:flex;justify-content:space-between;font-size:15px}
+.caps{display:flex;justify-content:space-between;align-items:flex-end;height:92px;margin-top:18px}
+.caps div{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;color:#9aa1ab}
+.caps b{width:24px;border-radius:99px;background:linear-gradient(90deg,#f37217,#ffb877 55%,#f68a33);display:block}
+.macros{display:flex;gap:44px;border-top:1px solid #eef0f3;padding-top:20px;margin-top:4px}
+.macros p{margin:0}.m{font-size:34px;font-weight:400;letter-spacing:-.02em}.m small{font-size:13px;color:#9aa1ab;margin-left:2px}
+.macros span{font-size:14px}
+.chip{display:flex;align-items:center;gap:10px;background:#f1f4f8;border-radius:99px;padding:6px 8px 6px 16px;font-size:15px;font-weight:500}
+.pill{background:linear-gradient(90deg,#f37217,#ff9e4f);color:#fff;border-radius:99px;padding:8px 16px;font-size:16px;font-weight:500;display:flex;align-items:center;gap:8px}
+.pill:before{content:"";width:7px;height:7px;border-radius:50%;background:#fff}
+.inner{background:#f1f4f8;border-radius:22px;padding:20px 26px;display:flex;justify-content:space-between;align-items:flex-end;margin-top:22px}
+.bar2{width:120px;height:8px;border-radius:9px;background:#e3e7ed;margin-top:9px}.bar2 b{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#f37217,#ffa75c)}
+.legend{display:grid;grid-template-columns:repeat(3,1fr);margin-top:22px}
+.legend span{display:flex;align-items:center;gap:8px;font-size:16px;color:#9aa1ab}.legend span:before{content:"";width:9px;height:9px;border-radius:50%;background:#f37217}
+.legend p{margin:8px 0 0;font-size:40px;letter-spacing:-.02em}.legend small{font-size:14px;color:#9aa1ab;margin-left:4px}
+</style>
+<div class=wrap>
+ <section class=card>
+  <div class=pad style="padding-bottom:10px"><div class=h><span class=t>训练负荷 / 恢复平衡</span><span class=muted style="font-size:22px">+0.23</span></div>
+   <svg id=line viewBox="0 0 700 120" style="width:100%;height:120px;margin-top:10px;overflow:visible"></svg>
+   <div class="h muted" style="font-size:14px;margin-top:4px" id=months></div></div>
+  <div class=split>
+   <div><div class=sub><span>静息心率</span><span>+8%</span></div><div class=caps id=caps></div></div>
+   <div><div class=sub><span>心率变异性</span><span>+12%</span></div><svg id=gauge viewBox="0 0 260 140" style="width:100%;height:132px;margin-top:6px"></svg></div>
+  </div>
+ </section>
+ <section class="card pad">
+  <div class=h><div style="display:flex;align-items:center"><span class=ico><svg viewBox="0 0 24 24"><path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/></svg></span><span class=t>今日热量</span></div><span style="font-size:17px">2,350<small class=muted style="font-size:12px"> 千卡</small></span></div>
+  <div class=h style="align-items:flex-end;margin-top:30px"><span class=big>2,040</span><span class=muted style="font-size:17px">/ 千卡</span></div>
+  <div class=meter id=m1></div>
+  <div class=macros><div><p class=m>269<small>克</small></p><span>碳水</span></div><div><p class=m>164<small>克</small></p><span>蛋白质</span></div><div><p class=m>110<small>克</small></p><span>脂肪</span></div></div>
+ </section>
+ <section class="card pad">
+  <div class=h><div style="display:flex;align-items:center"><span class=ico><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span class=t>睡眠</span></div>
+   <span class=chip>⚡ 身体电量 <svg viewBox="0 0 36 36" width=32 height=32><circle cx=18 cy=18 r=14 fill=#fff stroke=#fde2cc stroke-width=4 /><circle cx=18 cy=18 r=14 fill=none stroke=#f37217 stroke-width=4 stroke-dasharray="63 88" stroke-linecap=round transform="rotate(-90 18 18)"/><text x=18 y=21.5 font-size=9 text-anchor=middle font-family=Inter>72</text></svg></span></div>
+  <p style="font-size:21px;margin:34px 0 8px">昨晚 7 小时 20 分</p>
+  <p class=muted style="font-size:16px;line-height:1.6;margin:0">比平时早睡 40 分钟，深睡占 23%。保持这个作息，明天适合大重量训练。</p>
+  <div class=inner><div><p style="margin:0 0 10px;font-weight:600;font-size:15px">睡眠质量</p><span style="font-size:44px;letter-spacing:-.02em">89%</span></div>
+   <div style="text-align:right"><span style="font-size:15px;font-weight:500">深睡 1.7 h</span><div class=bar2><b style="width:85%"></b></div><div class=bar2><b style="width:55%"></b></div></div></div>
+ </section>
+ <section class="card pad">
+  <div class=h><div style="display:flex;align-items:center"><span class=ico><svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg></span><span class=t>本周训练量</span></div><span class=pill>87%</span></div>
+  <div class=meter id=m2 style="margin:28px 0 24px"></div>
+  <div style="display:flex;align-items:baseline"><span class=big style="font-size:62px">8,420</span><span class=unit style="font-size:22px">千克</span></div>
+  <div class=legend><div><span>卧推</span><p>3,150<small>kg</small></p></div><div><span>深蹲</span><p>2,880<small>kg</small></p></div><div><span>硬拉</span><p>2,390<small>kg</small></p></div></div>
+ </section>
+</div>
+<script>
+const m=(id,on,n)=>document.getElementById(id).innerHTML=Array.from({length:n},(_,i)=>`<i class="${i<on?'':'off'}"></i>`).join("");
+m("m1",19,24);m("m2",19,24);
+const v=[30,62,35,48,70,52,58],w=700;const p=v.map((y,i)=>[10+i*(w-20)/6,110-y*1.3]);
+let d="M"+p.map(q=>q.join(",")).join(" L");
+document.getElementById("line").innerHTML=`<defs><filter id=s><feDropShadow dx=0 dy=8 stdDeviation=5 flood-color="#f37217" flood-opacity=.18 /></filter><linearGradient id=lg><stop offset=0 stop-color=#f37217 /><stop offset=1 stop-color=#ffb26e /></linearGradient></defs><path d="${d}" fill=none stroke="url(#lg)" stroke-width=3 filter="url(#s)"/>`+p.map(q=>`<circle cx=${q[0]} cy=${q[1]} r=7 fill=#f37217 stroke=#fff stroke-width=2.5 />`).join("");
+document.getElementById("months").innerHTML=["4月","5月","6月","7月","8月","9月","10月"].map(x=>`<span>${x}</span>`).join("");
+document.getElementById("caps").innerHTML=[["六",64],["日",30],["一",78],["二",52],["三",72],["四",62]].map(([d,h])=>`<div><b style="height:${h}px"></b>${d}</div>`).join("");
+let g="";const N=22;for(let i=0;i<N;i++){const a=Math.PI*(1+i/(N-1));const on=i/(N-1)<=.67;const x1=130+Math.cos(a)*100,y1=128+Math.sin(a)*100,x2=130+Math.cos(a)*120,y2=128+Math.sin(a)*120;g+=`<line x1=${x1} y1=${y1} x2=${x2} y2=${y2} stroke="${on?'url(#gg)':'#fde3cd'}" stroke-width=5.5 stroke-linecap=round />`}
+document.getElementById("gauge").innerHTML=`<defs><linearGradient id=gg x1=0 x2=1><stop offset=0 stop-color=#f37217 /><stop offset=1 stop-color=#ffa75c /></linearGradient></defs>${g}<text x=130 y=82 text-anchor=middle font-size=19 font-family=Inter>79</text><text x=130 y=104 text-anchor=middle font-size=14 font-family=Inter fill=#555>ms</text><text x=130 y=128 text-anchor=middle font-size=15 fill=#9aa1ab font-family="Inter,Noto Sans SC">高于平时 67%</text>`;
+</script>

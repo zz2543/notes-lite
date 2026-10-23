@@ -1,0 +1,56 @@
+<!doctype html><meta charset=utf-8>
+<style>
+*{box-sizing:border-box}body{margin:0;width:1200px;height:900px;font-family:Inter,"Noto Sans SC",sans-serif;color:#f2f2f2;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden;
+background:radial-gradient(900px 700px at 90% 0%,#2a2a2a,transparent 60%),radial-gradient(700px 600px at 0% 100%,#202020,transparent 60%),#111}
+.ring{position:absolute;left:60px;top:-140px;width:1080px;height:1080px;border-radius:50%;border:1.5px solid rgba(255,255,255,.12)}
+.g{position:absolute;inset:60px 64px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:360px 360px;gap:34px}
+.c{border-radius:30px;padding:30px;position:relative;background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03) 45%,rgba(255,255,255,.05));box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.07),0 20px 40px rgba(0,0,0,.35);backdrop-filter:blur(20px)}
+.hd{display:flex;gap:16px;align-items:flex-start}.hd svg{width:40px;height:40px;flex:none}
+.hd b{display:block;font-weight:400;font-size:21px}.hd span{color:#9a9a9a;font-size:19px}
+.val{position:absolute;left:30px;bottom:30px}.v{font-size:38px;letter-spacing:-.02em;display:flex;align-items:center;gap:14px}.v small{font-size:22px;color:#bbb;margin-left:-8px}
+.chip{font-size:20px;padding:6px 12px;border-radius:9px;display:flex;align-items:center;gap:6px}
+.cap{font-size:19px;margin-top:12px}
+.plus{position:absolute;right:30px;bottom:30px;width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.07);display:grid;place-items:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.plus:before,.plus:after{content:"";position:absolute;width:24px;height:2px;background:#bbb;border-radius:2px}.plus:after{transform:rotate(90deg)}
+.w{grid-column:span 2}
+</style>
+<div class=ring></div>
+<div class=g>
+ <div class=c><div class=hd><svg viewBox="0 0 40 40" fill=none stroke=#eee stroke-width=1.8><circle cx=16 cy=12 r=6 /><path d="M5 30c0-6 5-9 11-9s11 3 11 9c0 1-1 2-2 2H7c-1 0-2-1-2-2z"/><path d="M30 14c1-2 5-2 5 1 0 3-5 5-5 5s-5-2-5-5c0-3 4-3 5-1z"/></svg><div><b>训练状态</b><span>今天已更新</span></div></div>
+  <svg viewBox="0 0 330 130" style="width:100%;margin-top:30px"><text x=4 y=22 fill=#999 font-size=19>40</text><text x=4 y=106 fill=#999 font-size=19>20</text><path d="M48 10V112H330" stroke=#777 stroke-width=1.5 fill=none /><path d="M48 56H330" stroke=#666 stroke-dasharray="5 5"/>
+   <defs><linearGradient id=gr x1=0 x2=0 y1=0 y2=1><stop offset=0 stop-color=#3fd28a /><stop offset=1 stop-color=#17894f /></linearGradient></defs>
+   <g stroke=#2fc27a stroke-width=8 stroke-linecap=round><path d="M74 34V62"/><path d="M114 28V86"/><path d="M154 40V72"/><path d="M194 46V88"/><path d="M234 30V60"/></g></svg>
+  <div class=val><div class=v>32<small>/100</small><span class=chip style="background:rgba(255,80,80,.16);color:#ff7a7a">↘ 5</span></div><div class=cap style="color:#3fd28a">疲劳度下降</div></div><div class=plus></div></div>
+ <div class=c><div class=hd><svg viewBox="0 0 40 40" fill=none stroke=#eee stroke-width=1.8><path d="M20 10l3 6 6 1-4.5 4 1 6.5-5.5-3-5.5 3 1-6.5L11 17l6-1z"/><path d="M20 3v3M20 34v3M3 20h3M34 20h3M8 8l2 2M30 30l2 2M8 32l2-2M30 10l2-2"/></svg><div><b>心情</b><span>今天已更新</span></div></div>
+  <svg viewBox="0 0 330 140" style="width:calc(100% + 60px);margin:22px -30px 0"><defs><linearGradient id=pk x1=0 x2=1><stop offset=0 stop-color=#ff8fa8 stop-opacity=0 /><stop offset=.3 stop-color=#ff9db2 /><stop offset=.8 stop-color=#e98aa0 /><stop offset=1 stop-color=#e98aa0 stop-opacity=0 /></linearGradient></defs>
+   <path d="M0 90C40 95 60 30 100 30S150 120 190 110 240 30 280 40 320 80 330 75" stroke=#8a5a65 stroke-width=1.5 fill=none opacity=.6 /><path d="M0 100C30 120 70 20 120 20S170 120 220 100 280 20 330 50" stroke=#7a4a55 stroke-width=1.5 fill=none opacity=.5 />
+   <path d="M0 80C40 70 70 50 100 50S150 110 180 110 230 60 260 52 300 60 330 70" stroke=url(#pk) stroke-width=5 fill=none stroke-linecap=round /></svg>
+  <div class=val><div class=v>8.2<small>/10</small><span class=chip style="background:rgba(255,130,150,.16);color:#ff9db2">↗ 5%</span></div><div class=cap style="color:#ff9db2">状态不错</div></div><div class=plus></div></div>
+ <div class=c><div class=hd><svg viewBox="0 0 40 40" fill=none stroke=#eee stroke-width=1.8><circle cx=20 cy=8 r=4 /><path d="M20 14v8M12 22c3 2 13 2 16 0M8 32c4-6 20-6 24 0M14 28l6-6 6 6"/></svg><div><b>体重</b><span>上次更新：10月21日</span></div></div>
+  <svg viewBox="0 0 330 110" style="width:100%;margin-top:40px"><path d="M10 10H330" stroke=#555 stroke-dasharray="5 5"/><path d="M10 64H330" stroke=#555 /><path d="M10 48L70 56 190 56 240 70" stroke=#6aa8ff stroke-width=3 fill=none stroke-linecap=round /><circle cx=240 cy=70 r=7 fill=#4d86f0 stroke=#fff stroke-width=2 /><text x=14 y=104 fill=#999 font-size=19>70</text><text x=290 y=104 fill=#999 font-size=19>75</text></svg>
+  <div class=val><div class=v>72.5<small style="margin-left:-4px">kg</small></div><div class=cap style="color:#6aa8ff">BMI 正常</div></div><div class=plus></div></div>
+ <div class="c w" style="overflow:hidden"><div style="display:flex;align-items:center;gap:16px;font-size:24px;letter-spacing:.28em;color:#ccc">睡眠洞察 <svg width=18 height=26 viewBox="0 0 10 16" fill=none stroke=#aaa stroke-width=1.6><path d="M2 2l6 6-6 6"/></svg></div>
+  <div style="position:absolute;right:30px;top:30px;width:92px;height:92px;border-radius:24px;background:#1d3b20;box-shadow:inset 0 0 0 1px rgba(80,255,120,.15);display:grid;place-items:center"><svg width=44 height=30 viewBox="0 0 44 30" fill=none stroke=#37e05a stroke-width=2.2><path d="M3 2v26M3 20h38v8M41 20v-5c0-3-2-5-5-5H18v10"/><circle cx=11 cy=14 r=3.5 /></svg></div>
+  <svg id=dial viewBox="0 0 520 330" style="position:absolute;left:4px;bottom:0;width:500px"></svg>
+  <div style="position:absolute;left:122px;bottom:18px;width:260px;text-align:center"><div style="color:#9a9a9a;font-size:21px"><svg width=20 height=20 viewBox="0 0 24 24" style="vertical-align:-3px;margin-right:6px"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill=#999 /></svg>睡眠时长</div><div style="font-size:46px;letter-spacing:-.02em;margin:2px 0">7h 14m</div><div style="color:#888;font-size:20px"><b style="color:#bbb">3h</b> 深睡</div></div>
+  <div style="position:absolute;right:30px;bottom:30px;width:180px;height:200px;border-radius:24px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09);display:flex;flex-direction:column;justify-content:space-evenly;text-align:center"><div><div style="color:#999;font-size:20px"><svg width=20 height=20 viewBox="0 0 24 24" style="vertical-align:-3px;margin-right:6px"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill=#999 /></svg>入睡</div><div style="font-size:30px;margin-top:8px">23:00</div></div><div><div style="color:#999;font-size:20px"><svg width=20 height=20 viewBox="0 0 24 24" style="vertical-align:-3px;margin-right:6px" fill=none stroke=#999 stroke-width=2><circle cx=12 cy=12 r=4 fill=#999 /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>起床</div><div style="font-size:30px;margin-top:8px">06:30</div></div></div></div>
+ <div class=c><div class=hd><svg viewBox="0 0 40 40" fill=none stroke=#eee stroke-width=1.8><path d="M20 34S5 25 5 14a7.5 7.5 0 0 1 15-3 7.5 7.5 0 0 1 15 3c0 11-15 20-15 20z"/><path d="M9 20h6l3-5 4 9 3-4h6"/></svg><div><b>本周打卡</b><span>今天已更新</span></div></div>
+  <div id=dots style="display:flex;justify-content:space-between;margin-top:66px"></div>
+  <div class=val><div class=v>4/7<span class=chip style="background:rgba(40,200,80,.15);color:#2bd45a">↗ 1 次</span></div><div class=cap style="color:#2bc34f">比上周多练一次</div></div><div class=plus></div></div>
+</div>
+<script>
+document.getElementById("dots").innerHTML=Array.from({length:7},(_,i)=>i<4?`<svg width=40 height=40 viewBox="0 0 40 40"><defs><radialGradient id=d${i} cx=.4 cy=.35><stop offset=0 stop-color=#1fbf3c /><stop offset=1 stop-color=#0c6b1e /></radialGradient></defs><circle cx=20 cy=20 r=19 fill=url(#d${i}) /><path d="M13 20l5 5 9-10" stroke=#062b0c stroke-width=2.6 fill=none stroke-linecap=round /></svg>`:`<span style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.06)"></span>`).join("");
+// dial: center (260,330) r=240 ring, arc from angle for 23:00 to 06:30 on a 24h-ish top arc spanning 20..08 (12h over 180deg)
+const cx=260,cy=345,R=225;let s=`<defs><linearGradient id=ga x1=0 x2=1><stop offset=0 stop-color=#1a9a2a /><stop offset=.5 stop-color=#2fdc3f /><stop offset=1 stop-color=#1ea52e /></linearGradient><filter id=gl x=-50% y=-50% width=200% height=200%><feGaussianBlur stdDeviation=10 /></filter><pattern id=hatch width=8 height=8 patternUnits=userSpaceOnUse patternTransform="rotate(35)"><rect width=8 height=8 fill=transparent /><rect width=3 height=8 fill=rgba(0,0,0,.18) /></pattern></defs>`;
+s+=`<circle cx=${cx} cy=${cy} r=${R+18} fill=none stroke=rgba(255,255,255,.06) stroke-width=40 />`;
+const ang=h=>Math.PI+(((h-20+24)%24)/12)*Math.PI; // 20h at left, 08h at right
+const pt=(a,r)=>[cx+Math.cos(a)*r,cy+Math.sin(a)*r];
+for(let i=0;i<=48;i++){const a=Math.PI+i/48*Math.PI;const big=i%8==0;const [x1,y1]=pt(a,R-36),[x2,y2]=pt(a,R-36-(big?12:5));s+=`<line x1=${x1} y1=${y1} x2=${x2} y2=${y2} stroke=#777 stroke-width=${big?2:1.4} />`}
+[20,22,0,2,4,6,8].forEach(h=>{const [x,y]=pt(ang(h),R-62);s+=`<text x=${x} y=${y+7} text-anchor=middle fill=#bbb font-size=19>${String(h).padStart(2,"0")}</text>`});
+const a1=ang(23),a2=ang(6.5),[sx,sy]=pt(a1,R),[ex,ey]=pt(a2,R);
+const arc=`M${sx},${sy} A${R},${R} 0 0 1 ${ex},${ey}`;
+s+=`<path d="${arc}" stroke=#22d035 stroke-width=58 fill=none stroke-linecap=round filter=url(#gl) opacity=.55 /><path d="${arc}" stroke=url(#ga) stroke-width=54 fill=none stroke-linecap=round /><path d="${arc}" stroke=url(#hatch) stroke-width=54 fill=none stroke-linecap=round />`;
+const b1=ang(0.6),b2=ang(4.6),[px,py]=pt(b1,R),[qx,qy]=pt(b2,R);s+=`<path d="M${px},${py} A${R},${R} 0 0 1 ${qx},${qy}" stroke=#33c440 stroke-width=30 fill=none stroke-linecap=round /><path d="M${px},${py} A${R},${R} 0 0 1 ${qx},${qy}" stroke=rgba(0,40,0,.25) stroke-width=32 fill=none stroke-linecap=round /><path d="M${px},${py} A${R},${R} 0 0 1 ${qx},${qy}" stroke=#2fb83c stroke-width=28 fill=none stroke-linecap=round />`;
+[[sx,sy,"☾"],[ex,ey,"☀"]].forEach(([x,y,t])=>{s+=`<circle cx=${x} cy=${y} r=26 fill=#1c8a2a stroke=#46e45a stroke-width=2 />`+(t=="☾"?`<path transform="translate(${x-12},${y-12})" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill=#fff />`:`<g transform="translate(${x},${y})" stroke=#fff stroke-width=2.4 stroke-linecap=round><circle r=5 fill=#fff /><path d="M0 -12v3M0 9v3M-12 0h3M9 0h3M-8.5 -8.5l2 2M6.5 6.5l2 2M-8.5 8.5l2 -2M6.5 -6.5l2 -2"/></g>`)});
+document.getElementById("dial").innerHTML=s;
+</script>

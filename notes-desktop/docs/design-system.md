@@ -97,9 +97,9 @@
 | `--space-title-size` | 24px | 同左 | 标题区的空间名称（字重 `--heading-weight`，行高 1.25，字距 −0.01em） |
 | `--space-title-padding` | `--gap-6` `--space-page-inline` `--gap-1` | 同左 | 标题区（图标、名称、范围与三个操作）的内边距 |
 
-#### 空间风格（2026-10-23）
+#### 风格参考（2026-10-23）
 
-设置 · 空间里选的风格覆盖上表和下文的 `--space-*` 取值（`shared/spaceThemes.ts`），「默认」不覆盖任何值。每个风格给出：页面底色与可选渐变（`--space-page-image`）、卡片、文字、次要文字、分隔线、强调色、强调卡片（`--space-feature` / `-text`）、6 个图表色、状态色；字体、圆角（`--space-radius` 及 `-s` / `-m` / `-l`）、卡片阴影；细节（`--space-decor`）及由它推出的 `--space-button-radius`、`--space-cell-radius`、`--space-bar-radius`、`--space-progress-height`、`--space-ring-stroke`、`--space-number-weight`；示例风格还重定 10 个色相。暗夜、玻璃始终深色；其余有浅色、深色两套。
+上面的变量是主页的**默认样式**。用户生成主页时可以选一个风格参考（晴空、暗夜、玻璃、便当、大地、活力）或自己描述风格；这样的主页按风格参考（`.notes/空间/风格/*.md`）写死自己的颜色、字体和部件画法，外观固定，不跟随浅色深色和强调色。风格只属于那一个主页，不同空间可以不同。主页自己画了背景时，空间卡片（含标题行）的 `--space-surface`、`--card-fg`、`--card-path`、`--space-muted`、`--hover` 改取主页顶部的颜色和文字颜色。
 
 #### 设计地基（2026-10-22）
 

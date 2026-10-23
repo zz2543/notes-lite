@@ -16,7 +16,7 @@ copyright line.
    Design: Adobe, with Reserved Font Name "Source".
    Licence: SourceSerif4-OFL.txt
 
-3–5. The 空间风格 fonts, for space homepages only (variable weight 100–900, Latin subset, WOFF2):
+3–5. The 风格参考 fonts, for space homepages only (variable weight 100–900, Latin subset, WOFF2):
    Inter — Copyright 2016 The Inter Project Authors. Licence: Inter-OFL.txt
    Plus Jakarta Sans — Copyright 2020 The Plus Jakarta Sans Project Authors. Licence: PlusJakartaSans-OFL.txt
    Urbanist — Copyright 2021 The Urbanist Project Authors. Licence: Urbanist-OFL.txt

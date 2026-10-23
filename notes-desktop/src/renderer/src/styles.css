@@ -1669,3 +1669,80 @@ nav.rail {
   margin: 0;
   accent-color: var(--accent);
 }
+/* 风格: 不指定, the six 风格参考 as previews, 自己描述; the picked one shown larger below. */
+.homepage-style {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.homepage-style .homepage-start-label {
+  margin: 0;
+}
+.homepage-style-choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.homepage-style-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--icon-button-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.homepage-style-choice:hover {
+  background: var(--hover);
+}
+.homepage-style-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: calc(var(--icon-button-radius) - 2px);
+  background: var(--card-bg);
+  box-shadow: var(--pill-shadow);
+  color: var(--side-muted);
+}
+.homepage-style-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.homepage-style-choice[aria-checked="true"] .homepage-style-thumb {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.homepage-style-name {
+  font-size: var(--text-meta);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.homepage-style-choice[aria-checked="true"] .homepage-style-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+.homepage-style-preview {
+  margin: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.homepage-style-preview img {
+  width: 100%;
+  display: block;
+  border-radius: var(--icon-button-radius);
+  box-shadow: var(--pill-shadow);
+}
+.homepage-style-preview figcaption {
+  font-size: var(--text-meta);
+  color: var(--side-muted);
+}

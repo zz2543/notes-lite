@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import type { Appearance } from "../../shared/appearance";
 import type { AccentChoice } from "../../shared/preferences";
 import { typographyVariables, type Typography } from "../../shared/typography";
-import { resolveSpaceTheme, spaceThemeChromeCss, type CustomSpaceTheme, type SpaceThemeChoice } from "../../shared/spaceThemes";
 
 /** Hands the window material to the design system's variables (tokens.css), before the first frame. */
 export function applyAppearance({ material }: Appearance, root: HTMLElement = document.documentElement) {
@@ -33,17 +32,4 @@ export function useAccent(choice: AccentChoice) {
     if (value) root.setProperty("--accent", value);
     else root.removeProperty("--accent");
   }, [choice, system]);
-}
-
-/** 空间风格 on the app's own space card around a homepage (its title row): the look's page and text. */
-export function useSpaceThemeChrome(choice: SpaceThemeChoice, custom: CustomSpaceTheme) {
-  useLayoutEffect(() => {
-    let style = document.getElementById("space-theme-chrome");
-    if (!style) {
-      style = document.createElement("style");
-      style.id = "space-theme-chrome";
-      document.head.appendChild(style);
-    }
-    style.textContent = spaceThemeChromeCss(resolveSpaceTheme(choice, custom));
-  }, [choice, custom]);
 }

@@ -167,7 +167,7 @@ body.space-mesh, .space-mesh { background-image: var(--space-mesh); background-a
 .space-title { font-size: var(--space-text-xl); font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 .space-subtitle { font-size: var(--space-text-m); font-weight: 600; color: var(--space-muted); margin: 2px 0 0; }
 .space-label { font-size: var(--space-text-s); font-weight: 500; color: var(--space-muted); display: flex; align-items: center; gap: 6px; }
-.space-big { font-size: var(--space-text-display); font-weight: var(--space-number-weight); letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.space-big { font-size: var(--space-text-display); font-weight: 750; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .space-big small { font-size: 0.36em; font-weight: 600; letter-spacing: 0; color: var(--space-muted); margin-left: 4px; }
 .space-glow .space-big { text-shadow: 0 0 28px rgba(255, 255, 255, 0.35); }
 .space-num { font-variant-numeric: tabular-nums; }
@@ -175,10 +175,10 @@ body.space-mesh, .space-mesh { background-image: var(--space-mesh); background-a
 .space-glow :is(.space-up, .space-down) { color: #fff; }
 
 /* MARK: 小部件 */
-.space-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--space-button-radius); background: var(--space-hover); }
+.space-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--space-radius-s); background: var(--space-hover); }
 .space-segmented > button {
   font: inherit; font-size: var(--space-text-s); color: var(--space-text);
-  border: 0; background: none; border-radius: calc(var(--space-button-radius) - 2px); padding: 4px 12px; cursor: pointer;
+  border: 0; background: none; border-radius: 8px; padding: 4px 12px; cursor: pointer;
   transition: background var(--space-pop-duration) var(--space-ease);
 }
 .space-segmented > :is([aria-pressed="true"], .on) { background: var(--space-widget); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
@@ -198,7 +198,7 @@ body.space-mesh, .space-mesh { background-image: var(--space-mesh); background-a
 .space-glass-button.space-solid { background: #fff; color: var(--space-hue-deep); }
 :not(.space-glow) > .space-glass-button:not(.space-solid) { background: var(--space-hover); box-shadow: none; }
 /* 进度: style="--space-value: 62" (0–100). The fill grows in on 展开. */
-.space-progress { position: relative; height: var(--space-progress-height); border-radius: 999px; background: color-mix(in srgb, var(--space-text) 10%, transparent); overflow: hidden; }
+.space-progress { position: relative; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--space-text) 10%, transparent); overflow: hidden; }
 .space-progress::after {
   content: ""; position: absolute; inset: 0 auto 0 0; border-radius: inherit;
   width: calc(clamp(0, var(--space-value), 100) * 1%);
@@ -208,7 +208,7 @@ body.space-mesh, .space-mesh { background-image: var(--space-mesh); background-a
 .space-glow .space-progress { background: rgba(255, 255, 255, 0.18); }
 .space-glow .space-progress::after { background: linear-gradient(90deg, var(--space-hue-tint), #fff); box-shadow: 0 0 16px rgba(255, 255, 255, 0.6); }
 .space-ring {
-  --space-ring-size: 76px; --space-ring-width: var(--space-ring-stroke);
+  --space-ring-size: 76px; --space-ring-width: 9px;
   position: relative; display: inline-grid; place-items: center; flex: none;
   width: var(--space-ring-size); height: var(--space-ring-size); border-radius: 50%;
   font-weight: 650; font-size: var(--space-text-m); font-variant-numeric: tabular-nums;
@@ -221,126 +221,6 @@ body.space-mesh, .space-mesh { background-image: var(--space-mesh); background-a
 /* A ring's label sits beside it, since the mask hides what is inside: wrap both in .space-ring-wrap. */
 .space-ring-wrap { position: relative; display: inline-grid; place-items: center; }
 .space-ring-wrap > :not(.space-ring) { position: absolute; font-weight: 650; font-variant-numeric: tabular-nums; }
-
-/* MARK: 空间风格 (spaceThemeCss sets --space-themed and --space-decor on the root; 默认 sets neither) */
-/* 强调卡片: under a 空间风格, a .space-glow without its own hue is the look's feature card (晴空 white,
-   便当 and 活力 black, 大地 brown); the drifting glow stays for 光晕 only. With data-hue it keeps its hue. */
-@container style(--space-themed: yes) {
-  .space-glow:not([data-hue]) {
-    --space-text: var(--space-feature-text);
-    --space-muted: color-mix(in srgb, var(--space-feature-text) 62%, var(--space-feature));
-    --space-line: color-mix(in srgb, var(--space-feature-text) 14%, transparent);
-    --space-hover: color-mix(in srgb, var(--space-feature-text) 10%, transparent);
-    --space-card: color-mix(in srgb, var(--space-feature-text) 8%, transparent);
-    --space-bg: color-mix(in srgb, var(--space-feature-text) 8%, transparent);
-    --space-accent: var(--space-feature-text);
-    --space-on-accent: var(--space-feature);
-    --space-hue-tint: var(--space-muted);
-    --space-hue-deep: var(--space-feature);
-    background: var(--space-feature);
-    box-shadow: var(--space-shadow);
-  }
-  .space-glow:not([data-hue]) .space-title, .space-glow:not([data-hue]) .space-big { text-shadow: none; }
-  .space-glow:not([data-hue]) .space-progress::after { background: var(--space-accent); box-shadow: none; }
-  .space-glow:not([data-hue]) .space-ring { background: conic-gradient(var(--space-hue) calc(clamp(0, var(--space-value), 100) * 1%), color-mix(in srgb, var(--space-text) 14%, transparent) 0); }
-  .space-glow:not([data-hue])::before { display: none; }
-  .space-glass {
-    --space-card: color-mix(in srgb, var(--space-widget) 72%, transparent);
-    box-shadow: var(--space-shadow);
-  }
-  .space-tint { background: color-mix(in srgb, var(--space-hue) 12%, var(--space-card)); }
-}
-/* Elsewhere a .space-glow with a hue is a flat tile in the look's colour of that hue. */
-@container style(--space-glow-cards: flat) {
-  .space-glow[data-hue] { background: var(--space-hue-deep); box-shadow: var(--space-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
-  .space-glow[data-hue]::before { display: none; }
-  .space-glow[data-hue] :is(.space-title, .space-big) { text-shadow: none; }
-  .space-glow[data-hue] .space-progress::after { background: #fff; box-shadow: none; }
-}
-@container style(--space-decor: glow) {
-  .space-glow:not([data-hue])::before { display: block; opacity: 0.55; }
-  .space-card, .space-glass { -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); }
-  .space-progress::after { background: linear-gradient(90deg, color-mix(in srgb, var(--space-hue) 55%, transparent), var(--space-hue)); box-shadow: 0 0 14px color-mix(in srgb, var(--space-hue) 70%, transparent); }
-  .space-ring { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--space-hue) 60%, transparent)); }
-}
-/* 胶囊: short capsules with a gloss along the top; the ring in ticks. */
-@container style(--space-decor: capsule) {
-  .space-progress {
-    background: color-mix(in srgb, var(--space-text) 8%, transparent);
-    -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(var(--space-progress-height) * 1.5), transparent 0 calc(var(--space-progress-height) * 1.5 + 4px));
-    mask: repeating-linear-gradient(90deg, #000 0 calc(var(--space-progress-height) * 1.5), transparent 0 calc(var(--space-progress-height) * 1.5 + 4px));
-    border-radius: 4px;
-  }
-  .space-progress::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 55%), var(--space-hue); border-radius: 0; }
-  .space-ring {
-    -webkit-mask: repeating-conic-gradient(#000 0 7deg, transparent 0 10deg), radial-gradient(farthest-side, transparent calc(100% - var(--space-ring-width) - 0.5px), #000 calc(100% - var(--space-ring-width)));
-    -webkit-mask-composite: source-in;
-    mask: repeating-conic-gradient(#000 0 7deg, transparent 0 10deg) intersect, radial-gradient(farthest-side, transparent calc(100% - var(--space-ring-width) - 0.5px), #000 calc(100% - var(--space-ring-width)));
-  }
-}
-/* 分段: square segments, lit with a faint glow, like a meter. */
-@container style(--space-decor: led) {
-  .space-progress {
-    border-radius: 2px;
-    -webkit-mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 0 9px);
-    mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 0 9px);
-  }
-  .space-progress::after { border-radius: 0; box-shadow: 0 0 10px color-mix(in srgb, var(--space-hue) 70%, transparent); }
-  .space-ring {
-    -webkit-mask: repeating-conic-gradient(#000 0 4deg, transparent 0 6deg), radial-gradient(farthest-side, transparent calc(100% - var(--space-ring-width) - 0.5px), #000 calc(100% - var(--space-ring-width)));
-    -webkit-mask-composite: source-in;
-    mask: repeating-conic-gradient(#000 0 4deg, transparent 0 6deg) intersect, radial-gradient(farthest-side, transparent calc(100% - var(--space-ring-width) - 0.5px), #000 calc(100% - var(--space-ring-width)));
-  }
-}
-/* 细柱: thin and square-ended. */
-@container style(--space-decor: bento) {
-  .space-progress { border-radius: 2px; }
-}
-/* 圆点: the fill in diagonal stripes. */
-@container style(--space-decor: dots) {
-  .space-progress::after { background: repeating-linear-gradient(-45deg, var(--space-hue) 0 7px, color-mix(in srgb, var(--space-hue) 78%, #fff) 0 12px); }
-}
-
-/* MARK: 更多小部件 */
-/* 步骤: <ol class="space-steps"><li data-state="done|now|todo">…</li></ol>. */
-.space-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--gap-2); }
-.space-steps > li { display: flex; align-items: center; gap: var(--gap-2); font-size: var(--space-text-m); }
-.space-steps > li::before {
-  content: ""; flex: none; width: 20px; height: 20px; border-radius: 50%; box-sizing: border-box;
-  border: 2px solid color-mix(in srgb, var(--space-text) 22%, transparent);
-}
-.space-steps > li[data-state="now"]::before { border-color: var(--space-hue); box-shadow: inset 0 0 0 4px var(--space-card), inset 0 0 0 10px var(--space-hue); }
-.space-steps > li[data-state="done"]::before {
-  border: 0; background: var(--space-hue) no-repeat center / 12px
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-.space-steps > li[data-state="done"] { color: var(--space-muted); }
-/* 圆点格: <div class="space-dots"><i class="on"></i><i></i>…</div>, a streak or a count. */
-.space-dots { display: flex; flex-wrap: wrap; gap: 5px; }
-.space-dots > i { width: 12px; height: 12px; border-radius: var(--space-cell-radius); background: color-mix(in srgb, var(--space-text) 10%, transparent); }
-.space-dots > i.on { background: var(--space-hue); }
-/* 圆形按钮: an arrow (or any glyph) in a circle, for "more". */
-.space-arrow {
-  display: inline-grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
-  font: inherit; font-size: 15px; color: var(--space-text); background: var(--space-hover);
-  transition: transform var(--space-pop-duration) var(--space-pop-easing), background var(--space-pop-duration) var(--space-ease);
-}
-.space-arrow:empty::before { content: "↗"; }
-.space-arrow:hover { background: color-mix(in srgb, var(--space-text) 14%, transparent); }
-.space-arrow:active { transform: scale(var(--space-press-scale)); }
-.space-arrow.space-solid { color: var(--space-on-accent); background: var(--space-accent); }
-/* 键值: <dl class="space-kv"><dt>…</dt><dd>…</dd>…</dl>, label left and value right. */
-.space-kv { display: grid; grid-template-columns: 1fr auto; margin: 0; font-size: var(--space-text-m); }
-.space-kv > :is(dt, dd) { margin: 0; padding: 7px 0; border-top: 1px solid var(--space-line); }
-.space-kv > :is(dt, dd):nth-child(-n + 2) { border-top: 0; }
-.space-kv > dt { color: var(--space-muted); }
-.space-kv > dd { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
-/* 涨跌: <span class="space-delta space-up">12%</span>, a small chip with its arrow. */
-.space-delta { display: inline-flex; align-items: center; gap: 2px; font-size: var(--space-text-xs); font-weight: 650; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; color: var(--space-muted); background: var(--space-hover); }
-.space-delta.space-up { color: var(--space-good); background: color-mix(in srgb, var(--space-good) 14%, transparent); }
-.space-delta.space-down { color: var(--space-bad); background: color-mix(in srgb, var(--space-bad) 14%, transparent); }
-.space-delta.space-up::before { content: "↑"; }
-.space-delta.space-down::before { content: "↓"; }
 
 /* 提示 (space.toast) */
 .space-toasts { position: fixed; left: 50%; bottom: var(--gap-6); transform: translateX(-50%); display: grid; gap: var(--gap-2); z-index: 2147483000; pointer-events: none; }

@@ -222,6 +222,7 @@ describe("空间主页的编写说明", () => {
     const spaces = await turnSpaces(spaceLibrary(root), "健身");
     expect(spaces).toEqual({
       guide: ".notes/空间/编写说明.md",
+      styles: ".notes/空间/风格",
       list: [
         { name: "读书", path: ".notes/空间/读书.html" },
         { name: "健身", path: ".notes/空间/健身.html" },
@@ -229,6 +230,9 @@ describe("空间主页的编写说明", () => {
       open: "健身",
     });
     expect(await readFile(join(root, ".notes", "空间", "编写说明.md"), "utf8")).toContain("空间主页编写说明");
+    // 风格参考 beside it: each look's notes with its code, and its preview.
+    expect(await readFile(join(root, ".notes", "空间", "风格", "晴空.md"), "utf8")).toContain("## 参考代码");
+    expect((await readFile(join(root, ".notes", "空间", "风格", "晴空.jpg"))).subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
     // A space that is not there is not open.
     expect((await turnSpaces(spaceLibrary(root), "没有"))?.open).toBeUndefined();
   });
@@ -245,6 +249,7 @@ describe("空间主页的编写说明", () => {
     expect(run!.stdin).toContain("请先完整阅读并遵守编写说明：../.notes/空间/编写说明.md");
     expect(run!.stdin).toContain("- 健身：../.notes/空间/健身.html（当前打开）");
     expect(run!.stdin).toContain("- 读书：../.notes/空间/读书.html\n");
+    expect(run!.stdin).toContain("先完整阅读 ../.notes/空间/风格 里对应的 .md");
   });
 });
 

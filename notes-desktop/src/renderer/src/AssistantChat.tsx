@@ -1,4 +1,4 @@
-import { ArrowUp, CaretRight, Check, FileText, MagnifyingGlass, PencilSimple, Plus, Sparkle, Stop, TerminalWindow, Warning, X, type Icon } from "@phosphor-icons/react";
+import { ArrowUp, CaretRight, Prohibit, Check, FileText, MagnifyingGlass, PencilSimple, Plus, Sparkle, Stop, TerminalWindow, Warning, X, type Icon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit } from "../../core";
 import type { AgentActivity } from "../../shared/conversation";
@@ -6,6 +6,7 @@ import { agents, type AgentId } from "../../shared/agentKinds";
 import { stoppedTurn, withEvent, type Approval, type Conversation, type ConversationSummary, type Reply, type ReviewChoice, type Step } from "../../shared/conversation";
 import type { TurnEvent } from "../../shared/conversation";
 import { noteTitle } from "../../shared/paths";
+import { spaceStyles, type SpaceStyleId } from "../../shared/spaceStyles";
 import type { FigureState } from "./figureModel";
 import { MarkdownView } from "./ReplyMarkdown";
 import { icon } from "./tokens";
@@ -597,22 +598,104 @@ function NotePicker({ attached, onPick }: { attached: string[]; onPick(path: str
   );
 }
 
-/** What 生成主页 asks before the agent starts: what the user wants, and whether to see a plan first. */
+/** What 生成主页 asks before the agent starts: what the user wants, its look, and whether to see a plan first. */
 export interface HomepageWish {
   wishes: string;
   plan: boolean;
+  /** 风格: a reference's id, the user's own words, or none (the agent may suggest one). */
+  style: { kind: "none" } | { kind: "reference"; id: SpaceStyleId } | { kind: "own"; text: string };
+}
+
+type StyleChoice = "none" | "own" | SpaceStyleId;
+
+/**
+ * 风格 (2026-10-23 用户确认): this homepage's look, picked each time it is generated — 不指定, one of the
+ * 风格参考 (a preview, with a larger one and its summary once picked), or 自己描述 in their own words.
+ */
+function HomepageStyle({ choice, own, onChoice, onOwn }: { choice: StyleChoice; own: string; onChoice(choice: StyleChoice): void; onOwn(text: string): void }) {
+  const picked = spaceStyles.find((style) => style.id === choice);
+  const options: { id: StyleChoice; name: string; preview?: string }[] = [
+    { id: "none", name: "不指定" },
+    ...spaceStyles.map((style) => ({ id: style.id, name: style.name, preview: style.preview })),
+    { id: "own", name: "自己描述" },
+  ];
+  const move = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const next = (index + step + options.length) % options.length;
+    onChoice(options[next]!.id);
+    (event.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+  };
+  return (
+    <div className="homepage-style">
+      <p className="homepage-start-label" id="homepage-style-label">
+        风格（可选）
+      </p>
+      <div className="homepage-style-choices" role="radiogroup" aria-labelledby="homepage-style-label">
+        {options.map((option, index) => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={choice === option.id}
+            tabIndex={choice === option.id ? 0 : -1}
+            className="homepage-style-choice"
+            onClick={() => onChoice(option.id)}
+            onKeyDown={(event) => move(event, index)}
+          >
+            <span className="homepage-style-thumb" aria-hidden>
+              {option.preview ? (
+                <img src={`data:image/jpeg;base64,${option.preview}`} alt="" draggable={false} />
+              ) : option.id === "own" ? (
+                <PencilSimple size={18} />
+              ) : (
+                <Prohibit size={18} />
+              )}
+            </span>
+            <span className="homepage-style-name">{option.name}</span>
+          </button>
+        ))}
+      </div>
+      {picked && (
+        <figure className="homepage-style-preview">
+          <img src={`data:image/jpeg;base64,${picked.preview}`} alt={`${picked.name}风格预览`} draggable={false} />
+          <figcaption>{picked.summary}</figcaption>
+        </figure>
+      )}
+      {choice === "own" && (
+        <textarea
+          aria-label="描述你想要的风格"
+          className="homepage-start-wishes"
+          rows={2}
+          autoFocus
+          placeholder="例如：深蓝底、霓虹绿的大数字，卡片像仪表盘"
+          value={own}
+          onChange={(event) => onOwn(event.target.value)}
+        />
+      )}
+      {choice === "none" && <p className="homepage-start-scope">助手会在方案里推荐适合的风格，也可以用默认样式。</p>}
+    </div>
+  );
 }
 
 /**
- * 生成主页, waiting for the user: which space and scope, a line for what they want on it, and
+ * 生成主页, waiting for the user: which space and scope, a line for what they want on it, its 风格, and
  * 先给我看方案 (on by default), so the agent proposes before it writes. Nothing is sent until 开始.
  */
 export function HomepageStart({ space, scope, again, onStart, onCancel }: { space: string; scope: string; again: boolean; onStart(wish: HomepageWish): void; onCancel(): void }) {
   const [wishes, setWishes] = useState("");
   const [plan, setPlan] = useState(true);
+  const [styleChoice, setStyleChoice] = useState<StyleChoice>("none");
+  const [ownStyle, setOwnStyle] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
   useEffect(() => field.current?.focus(), []);
-  const start = () => onStart({ wishes: wishes.trim(), plan });
+  const start = () => {
+    const own = ownStyle.trim();
+    const style: HomepageWish["style"] =
+      styleChoice === "none" || (styleChoice === "own" && !own) ? { kind: "none" } : styleChoice === "own" ? { kind: "own", text: own } : { kind: "reference", id: styleChoice };
+    onStart({ wishes: wishes.trim(), plan, style });
+  };
   return (
     <div className="assistant-messages">
       <section className="turn-review homepage-start" aria-label="生成主页">
@@ -633,6 +716,7 @@ export function HomepageStart({ space, scope, again, onStart, onCancel }: { spac
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) start();
           }}
         />
+        <HomepageStyle choice={styleChoice} own={ownStyle} onChoice={setStyleChoice} onOwn={setOwnStyle} />
         <label className="homepage-start-plan">
           <input type="checkbox" checked={plan} onChange={(event) => setPlan(event.target.checked)} />
           先给我看方案，确认后再写
@@ -651,13 +735,21 @@ export function HomepageStart({ space, scope, again, onStart, onCancel }: { spac
 }
 
 /** What the agent is told on 开始, after the space's prompt, and what the column shows of it. */
-export function homepageMessage(prompt: string, space: string, { wishes, plan }: HomepageWish, again: boolean) {
+export function homepageMessage(prompt: string, space: string, { wishes, plan, style }: HomepageWish, again: boolean) {
+  const reference = style.kind === "reference" ? spaceStyles.find((s) => s.id === style.id) : undefined;
+  const styleLine = reference
+    ? `风格：用风格参考里的「${reference.name}」。先完整阅读风格参考文件夹里的 ${reference.name}.md，按它的配色、字体、卡片和部件画法写，内容换成这个空间的数据。`
+    : style.kind === "own"
+      ? `风格：我自己描述——${style.text}。按这个描述设计，可以借风格参考里的部件画法。`
+      : "";
+  const shownStyle = reference ? `风格：${reference.name}` : style.kind === "own" ? `风格：${style.text}` : "";
   const text = [
     prompt,
     "",
     ...(wishes ? [`我希望主页上有：${wishes}`, ""] : []),
+    ...(styleLine ? [styleLine, ""] : []),
     plan ? "请先按“工作方式”给出方案并问我的偏好，等我确认后再写空间文件。" : "这次不用先给方案，直接写空间文件。",
   ].join("\n");
-  const shown = [`${again ? "重新生成" : "生成"}“${space}”的主页`, ...(wishes ? [`我希望主页上有：${wishes}`] : []), ...(plan ? [] : ["直接生成，不用先看方案"])].join("\n");
+  const shown = [`${again ? "重新生成" : "生成"}“${space}”的主页`, ...(wishes ? [`我希望主页上有：${wishes}`] : []), ...(shownStyle ? [shownStyle] : []), ...(plan ? [] : ["直接生成，不用先看方案"])].join("\n");
   return { text, shown };
 }

@@ -1,8 +1,8 @@
 import { Check, Copy, Globe, House, ListChecks, PencilSimpleLine, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SpaceNetwork, SpaceScope } from "../../core";
-import type { SpaceInfo, SpaceNote, SpacePageProblem } from "../../shared/api";
+import type { SpaceInfo, SpaceNote, SpacePageProblem, SpaceBackdrop } from "../../shared/api";
 import { scopeLabel } from "../../shared/spaceScope";
 import { useMotion } from "./MotionProvider";
 import { useOverlayOpen } from "./Organize";
@@ -142,15 +142,40 @@ interface SpaceHomeProps {
   headEnd?: ReactNode;
 }
 
+/**
+ * The homepage's own backdrop (风格参考): the card around it, title row included, takes the page's top
+ * colour and text colour, so the title sits on the page rather than in a band of the app's colour.
+ */
+function useSpaceBackdrop(name: string): CSSProperties | undefined {
+  const [backdrop, setBackdrop] = useState<SpaceBackdrop | null>(null);
+  useEffect(() => {
+    setBackdrop(null);
+    return window.notes.onSpacePageEvent((event) => {
+      if (event.space !== name) return;
+      if (event.kind === "backdrop") setBackdrop(event.backdrop);
+    });
+  }, [name]);
+  if (!backdrop) return undefined;
+  const { background, text } = backdrop;
+  return {
+    "--space-surface": background,
+    "--card-fg": text,
+    "--card-path": `color-mix(in srgb, ${text} 38%, transparent)`,
+    "--space-muted": `color-mix(in srgb, ${text} 60%, transparent)`,
+    "--hover": `color-mix(in srgb, ${text} 8%, transparent)`,
+  } as CSSProperties;
+}
+
 /** The card while a space's homepage shows: its head, and the place main lays the homepage over. */
 export function SpaceHome({ space, notify, onShowLog, onGenerate, onAsk, onFix, headEnd }: SpaceHomeProps) {
   const network = useSpaceNetwork(space.name);
+  const backdrop = useSpaceBackdrop(space.name);
   const copyPrompt = async () => {
     const copied = await window.notes.copySpacePrompt(space.name);
     notify(copied.ok ? "提示词已复制到剪贴板，粘贴给 Claude Code、Codex 等外部 agent，就能生成空间主页。" : copied.message);
   };
   return (
-    <article className="card" data-kind="space" aria-label="卡片">
+    <article className="card" data-kind="space" aria-label="卡片" style={space.hasPage ? backdrop : undefined}>
       <SpaceTitle
         space={space}
         network={space.hasPage ? network.state : undefined}

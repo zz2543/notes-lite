@@ -1,4 +1,4 @@
-import { ChatsCircle, FadersHorizontal, ListBullets, Sparkle, SquaresFour, TextAa, type Icon } from "@phosphor-icons/react";
+import { ChatsCircle, FadersHorizontal, ListBullets, Sparkle, TextAa, type Icon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { attachmentName, defaultAttachmentFolder, type AttachmentNaming } from "../../shared/attachments";
 import type { AccentChoice, ColorScheme, ListDetail, MotionIntensity, Navigation } from "../../shared/preferences";
@@ -11,7 +11,6 @@ import "./settings.css";
 import { icon } from "./tokens";
 import { TypographyPage } from "./TypographySettings";
 import { SelectedIcon } from "./SelectedIcon";
-import { SpaceThemePage } from "./SpaceThemeSettings";
 
 // 设置: a window of its own. Categories on the left, each a page of groups on the right; every group
 // has a title and a short description, and its rows line up label | control.
@@ -29,7 +28,6 @@ const pages: SettingsPage[] = [
   { id: "typography", label: "排版", icon: TextAa, content: () => <TypographyPage /> },
   { id: "list", label: "笔记列表", icon: ListBullets, content: () => <ListPage /> },
   { id: "motion", label: "动画", icon: Sparkle, content: () => <MotionPage /> },
-  { id: "space", label: "空间", icon: SquaresFour, content: () => <SpaceThemePage /> },
   { id: "assistant", label: "助手", icon: ChatsCircle, content: () => <AssistantPage /> },
 ];
 

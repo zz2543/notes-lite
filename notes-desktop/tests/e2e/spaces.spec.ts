@@ -147,7 +147,7 @@ test("creating a space with no agent installed copies the prompt; spaces can be 
   await spaceList(page).getByRole("button", { name: "力量" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "删除空间…" }).click();
   await expect(spaceList(page).getByRole("button")).toHaveText(["✨日常"]);
-  expect((await readdir(join(root, ".notes/空间"))).sort()).toEqual(["日常.html", "编写说明.md", "顺序.json"].sort());
+  expect((await readdir(join(root, ".notes/空间"))).sort()).toEqual(["日常.html", "编写说明.md", "顺序.json", "风格"].sort());
   expect(await readFile(join(root, "健身/训练.md"), "utf8")).toBe(training);
   await app.close();
 });
@@ -200,6 +200,13 @@ test("creating a space opens 助手, which waits for 开始 with what the user w
   await expect(start.getByRole("checkbox", { name: "先给我看方案，确认后再写" })).toBeChecked();
   expect(await agent.runs()).toHaveLength(0);
   await start.getByRole("textbox", { name: "你希望主页上有什么？（可选）" }).fill("体重曲线");
+  // 风格: 不指定 at first; a 风格参考 picked shows larger, with its summary.
+  const styles = start.getByRole("radiogroup", { name: "风格（可选）" });
+  await expect(styles.getByRole("radio")).toHaveText(["不指定", "晴空", "暗夜", "玻璃", "便当", "大地", "活力", "自己描述"]);
+  await expect(styles.getByRole("radio", { name: "不指定" })).toHaveAttribute("aria-checked", "true");
+  await styles.getByRole("radio", { name: "晴空" }).click();
+  await expect(start.getByRole("img", { name: "晴空风格预览" })).toBeVisible();
+  await expect(start).toContainText("橙色胶囊进度条");
   await start.getByRole("button", { name: "开始" }).click();
 
   const conversation = column.getByRole("log", { name: "对话" });
@@ -213,6 +220,10 @@ test("creating a space opens 助手, which waits for 开始 with what the user w
   expect(run!.stdin).toContain(join(root, ".notes", "空间", "健身.html"));
   expect(run!.stdin).toContain("健身/训练.md#卧推：日期 | 重量");
   expect(run!.stdin).toContain("我希望主页上有：体重曲线");
+  await expect(conversation).toContainText("风格：晴空");
+  expect(run!.stdin).toContain("风格：用风格参考里的「晴空」。先完整阅读风格参考文件夹里的 晴空.md");
+  expect(run!.stdin).toContain(`- 风格参考：${join(root, ".notes", "空间", "风格")}`);
+  expect(await readFile(join(root, ".notes", "空间", "风格", "晴空.md"), "utf8")).toContain("胶囊进度条");
   expect(run!.stdin).toContain("先给方案、再动手");
   expect(run!.stdin).toContain("请先按“工作方式”给出方案并问我的偏好");
   // The space is told with its authoring guide, as the open one.
@@ -228,11 +239,14 @@ test("creating a space opens 助手, which waits for 开始 with what the user w
   await spaceList(page).getByRole("button", { name: "健身" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "让助手生成主页" }).click();
   await start.getByRole("checkbox", { name: "先给我看方案，确认后再写" }).uncheck();
+  await start.getByRole("radiogroup", { name: "风格（可选）" }).getByRole("radio", { name: "自己描述" }).click();
+  await start.getByRole("textbox", { name: "描述你想要的风格" }).fill("深蓝底、霓虹绿数字");
   await start.getByRole("button", { name: "开始" }).click();
   await expect.poll(async () => (await agent.runs()).length).toBe(2);
   const second = (await agent.runs())[1]!;
   expect(second.argv).not.toContain("--resume");
   expect(second.stdin).toContain("这次不用先给方案，直接写空间文件。");
+  expect(second.stdin).toContain("风格：我自己描述——深蓝底、霓虹绿数字。");
   await expect(conversation).toContainText("直接生成，不用先看方案");
 });
 

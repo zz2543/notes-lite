@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Preferences } from "../../shared/preferences";
-import { useAccent, useSpaceThemeChrome, useTypography } from "./appearance";
+import { useAccent, useTypography } from "./appearance";
 
 interface PreferencesState {
   preferences: Preferences;
@@ -22,7 +22,6 @@ export function PreferencesProvider({ children }: { children(preferences: Prefer
   // The look the page draws itself; light or dark is the main process's (nativeTheme).
   useAccent(preferences.accent);
   useTypography(preferences.typography);
-  useSpaceThemeChrome(preferences.spaceTheme, preferences.customSpaceTheme);
   // Changed in the other window (设置, or the main one): shown here at once.
   useEffect(() => window.notes.onPreferencesChanged(setPreferences), []);
   const change = (change: Partial<Preferences>) => {
