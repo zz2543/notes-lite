@@ -30,3 +30,17 @@
 - 规格轴：单独审查无缺漏或范围扩张；四个坐标值均转换，缩小及恢复也验证；未禁止缩放、不裁切内容，不修改主页数据与权限。
 - 子代理服务在本轮两路并行启动及单独重试均失败（`The tool capability failed unexpectedly`）；依仓库 skills README，由同一代理分别审查两轴，不冒称独立子代理结论。
 - 全量 e2e 与双平台 CI 仍待补充；实现不等于已完成跨平台验收。未改 CI/构建配置、启动速度或旧产品目录，未新增依赖。
+
+### 2026-10-24 全量验证补充（Notion AI）
+
+- 全量 `DISPLAY=:101 ELECTRON_DISABLE_SANDBOX=1 npm run test:e2e`：131 通过、8 失败（139 项），新增空间边界回归通过。失败为 design-system 系统强调色/变量 2 项、editing 权限拒写 2 项、external-changes 删除、interruption 时序、settings 系统强调色、space-refresh 刷新。
+- 对同一固定点的干净基线执行全量相同命令：129 通过、9 失败（138 项）；上述 8 项全部在未修改基线中失败，基线另有 caret 即时采样失败。没有新增失败项。所有原有测试保持不变。
+- 启动预算沿用既有测试，未做优化。Linux 10000 篇笔记冷启动测量中位数 1036 ms（904/1098/1036）；并行验证环境下的测量仅留作记录，不当作 macOS/Windows 的回归结论。
+- 双平台 CI：https://github.com/zz2543/notes-lite/actions/runs/40097467108 。当前 macOS、Windows 的安装、类型检查和核心测试均已通过，e2e/打包仍在运行，不能先称验收完成。
+
+### 2026-10-24 CI 阻塞记录（Notion AI）
+
+- Windows 首轮 CI 已失败：https://github.com/zz2543/notes-lite/actions/runs/40097467108/job/120882611025 。安装、typecheck、核心测试通过，失败发生在 e2e，未进入打包。
+- 注释列出既有 assistant-turn 超时/worker teardown、caret 即时采样、design-system --glass（期望 .72，实际 .88）、interruption、lists 两项坐标和 space-page 导航超时。没有修改这些旧断言，不将其失败掩盖为“全量通过”。Mac 同轮仍在运行。
+- Linux 的新增边界测试和相关 13 项全部通过；Linux 全量的所有 8 项失败均在干净基线复现。Windows CI 的其他旧路径失败尚不能由本次缩放修复擅自承接，需要另立任务或维护者确认扩大范围。
+- 维持 Draft 与 Progress: in-progress；不自行合并、不改 CI 配置、不为 CI 放宽或跳过旧测试。

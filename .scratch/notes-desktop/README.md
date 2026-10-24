@@ -50,4 +50,4 @@
 
 后续更新计划（2026-10-22）：35 强大的排版功能，用户要求先不做，写进计划；届时先用 hero-grill-with-docs 敲定工单里列的问题再动手。
 
-缺陷修复补充（2026-10-24）：[37：空间主页与卡片在页面缩放后对齐](issues/37-space-page-zoom-bounds.md) 实现完成、相关 e2e 13/13 通过，全量与双平台 CI 验证中。独立分支 `notion/fix-space-panel-bounds`，Draft PR 合并后才进入基线，不依赖 36。
+缺陷修复补充（2026-10-24）：[37：空间主页与卡片在页面缩放后对齐](issues/37-space-page-zoom-bounds.md) 实现完成、相关 e2e 13/13 通过；全量 131/139，8 项失败全部在干净基线复现，首轮 Windows CI 在旧 e2e 处失败，双平台验收未完成。独立分支 `notion/fix-space-panel-bounds`，Draft PR 合并后才进入基线，不依赖 36。
