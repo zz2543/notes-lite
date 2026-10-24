@@ -101,7 +101,7 @@ interface Hosted {
 }
 
 export interface SpacePages {
-  /** Lays the homepage of `name` over `bounds` (window coordinates), loading it the first time or when its file changed. */
+  /** Lays the homepage of `name` over `bounds` (window coordinates in CSS pixels), loading it the first time or when its file changed. */
   show(name: string, bounds: Rectangle): Promise<void>;
   /** Takes the homepage off the window; it keeps running, state intact, for when it comes back. */
   hide(): void;
@@ -294,7 +294,15 @@ export function spacePages(
       win.contentView.addChildView(page.view);
       shown = page;
     }
-    page.view.setBounds({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) });
+    // The renderer measures CSS pixels; native view bounds use device-independent window pixels.
+    // Page zoom changes their ratio (display scale does not), so convert at the native boundary.
+    const zoom = win.webContents.getZoomFactor();
+    page.view.setBounds({
+      x: Math.round(bounds.x * zoom),
+      y: Math.round(bounds.y * zoom),
+      width: Math.round(bounds.width * zoom),
+      height: Math.round(bounds.height * zoom),
+    });
   };
 
   /** The homepage that sent an IPC message from its own main frame; embedded frames have no say. */
