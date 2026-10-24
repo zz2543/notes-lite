@@ -41,9 +41,11 @@ function editedLines(view: EditorView): Set<number> {
   return lines;
 }
 
-/** Whether a caret or selection end sits within the first `length` characters of the line at `from`. */
+/** Whether a caret or selection end sits inside the marker, not at the start of the item's text. */
 function touchesPrefix(view: EditorView, from: number, length: number): boolean {
-  return view.state.selection.ranges.some((r) => [r.anchor, r.head].some((p) => p >= from && p <= from + length));
+  // At the text boundary keep the widget, even for an empty item. Otherwise the browser starts an IME
+  // composition in the right-aligned syntax span and growing pinyin pushes its start to the left.
+  return view.state.selection.ranges.some((r) => [r.anchor, r.head].some((p) => p >= from && p < from + length));
 }
 
 /** A list item's bullet, number or task box, drawn in place of its marker and indentation. */
