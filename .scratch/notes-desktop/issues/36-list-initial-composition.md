@@ -30,3 +30,11 @@
 - 规格轴审查：未发现缺漏或范围扩张；标记末端归入正文，标记内部仍可编辑；分别核对组合文本起点、右端与最终源码，未改动画开关和其他排版规则。
 - 已按要求尝试并行启动两路独立子代理，服务返回 `The tool capability failed unexpectedly`；随后单独重试仍失败。以上两轴由同一代理分开审查（遵循仓库 skill README 的降级规则），不是独立子代理结论。
 - 不优化启动、不修改 CI 或构建配置；不新增 npm 依赖。
+
+### 2026-10-24 验证补充（Notion AI）
+
+- 新增四类列表回归测试：4/4 通过，类型检查再次通过。
+- 全量 `DISPLAY=:99 ELECTRON_DISABLE_SANDBOX=1 npm run test:e2e`：133 通过、9 失败（142 项）。失败为 caret、design-system 2 项、editing 拒写 2 项、external-changes 删除、links-attachments 图片粘贴、settings 系统强调色、space-refresh 刷新。未修改旧测试。
+- 图片粘贴单独重跑：`npx playwright test tests/e2e/links-attachments.spec.ts -g 'pasted image' --reporter=list`，1/1 通过。干净基线的全量对照也复现了其余对应的旧失败；基线另有 interruption 时序失败，而本分支该项通过。不能把整套称为全绿。
+- 首轮双平台 CI：https://github.com/zz2543/notes-lite/actions/runs/40097012519 。两平台 npm ci / typecheck 通过，但 macOS 的 conversationHistory.test.ts:140（停止时出现部分文本）与 Windows 的 assistantTurns.test.ts:68（超时仍未 done）失败，因此 e2e 与打包未执行。这两份测试及其实现均未在本 PR 修改。不为变绿放宽断言或擅自扩展到助手修复。
+- 继续保持 Draft、Progress: in-progress；实现已完成，但双平台验收未完成。需维护者确认真实系统输入法，CI 阻塞另行处理或重跑后再验收。
